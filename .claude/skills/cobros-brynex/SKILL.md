@@ -95,8 +95,11 @@ tiene cálculo ni caja propios:
 - La **mora no se puede quitar** desde la calle.
 - **Sin caja aparte**: todo cae en la caja del día del usuario. Los registros
   de la pantalla llevan `observacion` "Cobro en visita · …".
-- **Recibo**: PDF tipo tirilla (`pdf/recibo_visita`) enviado con la plantilla
-  Meta `recibo_de_pago` (header DOCUMENT). La crea/consulta
+- **Recibo**: es el MISMO de la oficina (`FacturacionController::recibo` y
+  `AnticipoController::reciboAnticipo`, en vista simple con `modal=1&individual=1`),
+  impreso a PDF por el Chrome del servidor (`scripts/html-a-pdf.mjs`, recortado
+  al alto de `#recibo-print-area`); factura + anticipo van como dos páginas de un
+  PDF (FPDI). Sale con la plantilla Meta `recibo_de_pago` (header DOCUMENT). La crea/consulta
   `php artisan whatsapp:plantilla-recibo [--estado]` en la WABA de BryNex y en
   las de aliados con número propio.
 

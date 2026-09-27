@@ -2,25 +2,35 @@
 
 namespace App\Services;
 
+use App\Http\Controllers\Admin\AnticipoController;
+use App\Http\Controllers\Admin\FacturacionController;
 use App\Models\Aliado;
 use App\Models\Anticipo;
-use App\Models\Cliente;
 use App\Models\Contrato;
 use App\Models\Factura;
 use App\Models\WhatsappConfig;
 use App\Models\WhatsappConversacion;
 use App\Models\WhatsappMensaje;
 use App\Models\WhatsappPlantilla;
+use App\Services\ArlSura\ArlSuraSesionService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
+use setasign\Fpdi\Fpdi;
+use setasign\Fpdi\PdfParser\StreamReader;
 
 /**
- * Recibo del cobro en visita: un PDF corto con la factura y/o los anticipos
- * de un mismo cobro, que se le manda al cliente por WhatsApp.
+ * Recibo del cobro en visita, para mandarlo por WhatsApp.
+ *
+ * Es el MISMO recibo de facturación y de anticipos que se imprime en la
+ * oficina, en vista simple (sin separar seguridad social y administración):
+ * se renderizan esas vistas y el Chrome del servidor las imprime a PDF
+ * (scripts/html-a-pdf.mjs). No hay un diseño aparte que mantener.
  *
  * Un cobro puede dejar una factura, uno o dos anticipos (efectivo y
- * transferencia), o la factura más el anticipo de lo que sobró: el recibo los
- * junta en una sola hoja para que el cliente vea lo que pagó ese día.
+ * transferencia), o la factura más el anticipo de lo que sobró: cada recibo
+ * va en su página, dentro de un solo PDF.
  */
 class ReciboVisitaService
 {
@@ -33,90 +43,106 @@ class ReciboVisitaService
         'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
     /**
-     * Todo lo que el recibo muestra, ya filtrado por el aliado.
+     * Lo que forma el recibo de un cobro, ya filtrado por el aliado.
      *
      * @param  int[]  $anticipoIds
      */
     public function datos(int $aliadoId, ?int $facturaId, array $anticipoIds): array
     {
-        $factura = $facturaId
-            ? Factura::where('aliado_id', $aliadoId)->with(['consignaciones.bancoCuenta', 'usuario'])->findOrFail($facturaId)
-            : null;
+        $factura = $facturaId ? Factura::where('aliado_id', $aliadoId)->findOrFail($facturaId) : null;
 
         $anticipos = Anticipo::where('aliado_id', $aliadoId)
             ->whereIn('id', $anticipoIds ?: [0])
-            ->with(['bancoCuenta', 'usuario'])
             ->orderBy('id')
             ->get();
-
-        // La factura también puede haber consumido anticipos de antes: el
-        // cliente los ve en el recibo como parte de lo que la cubrió.
-        $anticiposAplicados = $factura
-            ? Anticipo::where('aliado_id', $aliadoId)->where('factura_id', $factura->id)->orderBy('fecha_pago')->get()
-            : collect();
 
         $contratoId = $factura?->contrato_id ?? $anticipos->first()?->contrato_id;
         abort_if(! $contratoId, 404);
 
-        $contrato = Contrato::where('aliado_id', $aliadoId)->with(['cliente', 'razonSocial', 'tipoModalidad'])->findOrFail($contratoId);
-        $aliado = Aliado::find($aliadoId);
+        $contrato = Contrato::where('aliado_id', $aliadoId)->with('cliente')->findOrFail($contratoId);
 
-        $pagadoHoy = $anticipos->sum('valor');
-        $favorAplicado = 0;
-        if ($factura) {
-            $pagadoHoy += (int) $factura->valor_efectivo + (int) $factura->valor_consignado;
-            // Lo que no cubrió la plata ni los anticipos lo cubrió el saldo a favor que traía.
-            $favorAplicado = max(0, (int) $factura->total - (int) $factura->valor_efectivo
-                - (int) $factura->valor_consignado - (int) $factura->anticipo_aplicado);
-        }
-
-        $usuario = $factura?->usuario ?? $anticipos->first()?->usuario ?? Auth::user();
+        $pagadoHoy = (int) $anticipos->sum('valor')
+            + (int) $factura?->valor_efectivo + (int) $factura?->valor_consignado;
 
         return [
-            'aliado' => $aliado,
-            'logo' => $this->logoDataUri($aliado),
+            'aliado' => Aliado::find($aliadoId),
             'contrato' => $contrato,
             'cliente' => $contrato->cliente,
             'factura' => $factura,
             'anticipos' => $anticipos,
-            'anticiposAplicados' => $anticiposAplicados,
-            'favorAplicado' => $favorAplicado,
-            'pagadoHoy' => (int) $pagadoHoy,
+            'pagadoHoy' => $pagadoHoy,
             'concepto' => $this->concepto($factura, $anticipos),
-            'numero' => $factura?->numero_factura ?: ('A-'.$anticipos->first()?->id),
-            // La hora en que se registró el pago, no la de abrir el recibo.
-            'fecha' => $factura?->created_at ?? $anticipos->first()?->created_at ?? now(),
-            'usuario' => $usuario?->nombre ?? $usuario?->name ?? '',
-            'saldoAnticipo' => Anticipo::saldoDisponible($aliadoId, $contrato->id),
+            'numero' => $factura?->numero_factura ?: ('ANT-'.$anticipos->first()?->id),
         ];
     }
 
+    /**
+     * El PDF del cobro: el recibo de la factura y el de cada anticipo, uno por
+     * página.
+     */
     public function pdf(array $datos): string
     {
-        return \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.recibo_visita', $datos)
-            // Formato de tirilla, ancho de celular: se lee sin hacer zoom. El
-            // alto sale de las filas que se pintan (medido: ~255 pt fijos y
-            // ~16 pt por fila), para que no quede media hoja en blanco.
-            ->setPaper([0, 0, 300, 275 + $this->filas($datos) * 16])
-            ->output();
+        $htmls = [];
+        if ($datos['factura']) {
+            $htmls[] = $this->vistaOficina(fn () => app(FacturacionController::class)->recibo($datos['factura']->id));
+        }
+        foreach ($datos['anticipos'] as $anticipo) {
+            $htmls[] = $this->vistaOficina(fn () => app(AnticipoController::class)->reciboAnticipo($anticipo->id));
+        }
+
+        $resultado = Process::path(base_path())
+            ->timeout(90)
+            ->input(json_encode(['htmls' => $htmls, 'recorte' => '#recibo-print-area'], JSON_UNESCAPED_UNICODE))
+            ->run(ArlSuraSesionService::binarioNode().' scripts/html-a-pdf.mjs');
+
+        $salida = json_decode(trim($resultado->output()), true) ?: [];
+        if (! ($salida['ok'] ?? false) || empty($salida['pdfs'])) {
+            throw new RuntimeException('No se pudo generar el PDF del recibo: '
+                .($salida['error'] ?? (trim($resultado->errorOutput()) ?: 'el proceso no respondió')));
+        }
+
+        $pdfs = array_map('base64_decode', $salida['pdfs']);
+
+        return count($pdfs) === 1 ? $pdfs[0] : $this->unir($pdfs);
     }
 
-    /** Filas de largo variable del recibo (ver pdf/recibo_visita). */
-    private function filas(array $datos): int
+    /**
+     * Renderiza un recibo tal como sale en el modal de la oficina: sin menú
+     * (modal), solo el contrato (individual), sin botón de anular y en su
+     * vista por defecto, que es la simple. Las vistas leen esas banderas de
+     * request(), así que se cambia la petición mientras se pinta.
+     */
+    private function vistaOficina(callable $vista): string
     {
-        $n = 1; // "Anticipos a tu favor"
-        if ($f = $datos['factura']) {
-            $conceptos = [$f->v_eps, $f->v_afp, $f->v_arl, $f->v_caja, $f->v_parafiscales, $f->afiliacion,
-                (int) $f->admon + (int) $f->admin_asesor, $f->seguro, $f->iva, $f->mora, (int) $f->otros + (int) $f->otros_admon];
-            $n += 4 + count(array_filter($conceptos, fn ($v) => (int) $v !== 0))
-                + ((int) $f->valor_efectivo ? 1 : 0) + $f->consignaciones->count()
-                + $datos['anticiposAplicados']->count() + ($datos['favorAplicado'] > 0 ? 1 : 0);
+        $original = app('request');
+        $copia = $original->duplicate(['modal' => 1, 'individual' => 1, 'no_anular' => 1]);
+        if ($original->hasSession()) {
+            $copia->setLaravelSession($original->session());
         }
-        if ($datos['anticipos']->isNotEmpty()) {
-            $n += 2 + $datos['anticipos']->count();
+        app()->instance('request', $copia);
+
+        try {
+            return $vista()->render();
+        } finally {
+            app()->instance('request', $original);
+        }
+    }
+
+    /** @param string[] $pdfs */
+    private function unir(array $pdfs): string
+    {
+        $fpdi = new Fpdi;
+        foreach ($pdfs as $contenido) {
+            $paginas = $fpdi->setSourceFile(StreamReader::createByString($contenido));
+            for ($i = 1; $i <= $paginas; $i++) {
+                $plantilla = $fpdi->importPage($i);
+                $tam = $fpdi->getTemplateSize($plantilla);
+                $fpdi->AddPage($tam['orientation'], [$tam['width'], $tam['height']]);
+                $fpdi->useTemplate($plantilla);
+            }
         }
 
-        return $n;
+        return $fpdi->Output('S');
     }
 
     public function nombreArchivo(array $datos): string
@@ -156,7 +182,13 @@ class ReciboVisitaService
 
         $archivo = $this->nombreArchivo($datos);
         $ruta = "whatsapp/recibos/{$aliadoId}/".uniqid().'_'.$archivo;
-        Storage::disk('local')->put($ruta, $this->pdf($datos));
+        try {
+            Storage::disk('local')->put($ruta, $this->pdf($datos));
+        } catch (RuntimeException $e) {
+            report($e);
+
+            return ['ok' => false, 'mensaje' => 'No se pudo generar el PDF del recibo. Intenta de nuevo.'];
+        }
 
         $api = app(WhatsappApiService::class);
         $valor = '$'.number_format($datos['pagadoHoy'], 0, ',', '.');
@@ -236,22 +268,6 @@ class ReciboVisitaService
         }
 
         return 'Anticipo (abono a tu próximo pago)';
-    }
-
-    /** El logo embebido: DomPDF no descarga imágenes remotas. */
-    private function logoDataUri(?Aliado $aliado): ?string
-    {
-        $ruta = $aliado?->logo ? storage_path('app/public/'.$aliado->logo) : null;
-        // DomPDF no pinta webp: ese logo cae al de BryNex.
-        if (! $ruta || ! is_file($ruta) || str_ends_with(strtolower($ruta), '.webp')) {
-            $ruta = public_path('img/logo-brynex.png');
-        }
-        if (! is_file($ruta)) {
-            return null;
-        }
-        $mime = mime_content_type($ruta) ?: 'image/png';
-
-        return 'data:'.$mime.';base64,'.base64_encode(file_get_contents($ruta));
     }
 
     public static function periodo(int $mes, int $anio): string
