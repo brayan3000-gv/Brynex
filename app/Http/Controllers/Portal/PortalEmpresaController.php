@@ -127,6 +127,7 @@ class PortalEmpresaController extends Controller
             'anio' => $anio,
             'discriminado' => $acceso->ver_discriminado,
             'hayIva' => $filas->sum('iva') > 0,
+            'hayParaf' => $filas->sum('parafiscales') > 0,
             'hayOtros' => $filas->sum('otros') > 0,
         ]);
     }
@@ -347,6 +348,10 @@ class PortalEmpresaController extends Controller
             'debe_cambiar_clave' => false,
         ])->save();
 
+        // auth.session compara la clave con la que quedó en la sesión: sin
+        // esto, la empresa se saldría sola por haber cambiado su propia clave.
+        $request->session()->put('password_hash_empresa', $acceso->getAuthPassword());
+
         return redirect()->route('portal.inicio')->with('ok', 'Listo, tu clave quedó guardada.');
     }
 
@@ -488,6 +493,9 @@ class PortalEmpresaController extends Controller
         $facturado = $fact && (int) $fact->numero_factura !== 0;
         $total = (int) $v['vTot'];
         $ss = (int) $v['vEps'] + (int) $v['vArl'] + (int) $v['vPen'] + (int) $v['vCaja'];
+        // La factura ya trae la mora dentro del total (aunque esté pagada, que
+        // es cuando el panel la oculta). Lo que falta por facturar la suma aparte.
+        $mora = $facturado ? (int) ($fact->mora ?? 0) : (int) $v['vMora'];
 
         $grupo = match (true) {
             $facturado => 'facturado',
@@ -529,13 +537,22 @@ class PortalEmpresaController extends Controller
             'arl_v' => (int) $v['vArl'],
             'afp_v' => (int) $v['vPen'],
             'caja_v' => (int) $v['vCaja'],
-            'parafiscales' => (int) $v['vParaf'],
+            // Con retiro pendiente la SS se cotiza por los días del retiro, pero
+            // vParaf viene del mes completo: se toma la de esos días para que
+            // el desglose sume lo mismo que el total.
+            'parafiscales' => ($v['tieneRetiroPendiente'] && ! $facturado && $v['cotizRetPend'])
+                ? (int) ($v['cotizRetPend']['parafiscales'] ?? 0)
+                : (int) $v['vParaf'],
             'admon' => (int) $v['vAdm'],
             'iva' => (int) $v['vIva'],
-            // Afiliación y seguro: lo que queda del total fuera de SS, admón e IVA.
-            'otros' => max(0, $total - (int) $v['vSS'] - (int) $v['vAdm'] - (int) $v['vIva']),
+            // Afiliación y seguro: lo que queda del total fuera de SS, admón, IVA
+            // y la mora ya facturada.
+            'otros' => max(0, $total - (int) $v['vSS'] - (int) $v['vAdm'] - (int) $v['vIva'] - ($facturado ? $mora : 0)),
             'total' => $total,
-            'mora' => (int) $v['vMora'],
+            'mora' => $mora,
+            // En lo facturado la mora ya va dentro del total; en lo que falta
+            // por facturar se suma aparte (el estimado no la trae).
+            'mora_incluida' => $facturado,
             // Factura
             'grupo' => $grupo,
             'factura_estado' => $facturado ? $fact->estado : null,

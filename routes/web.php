@@ -46,7 +46,9 @@ Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 // ─── Portal de empresas (brynex.co/portal) ─────────────────────────────────
 // Guard aparte (`empresa`): quien entra aquí nunca está autenticado en `web`,
 // así que ninguna ruta de /admin lo deja pasar. Solo lectura, salvo su clave.
-Route::prefix('portal')->name('portal.')->middleware(['auth:empresa', 'portal.empresa'])->group(function () {
+// auth.session: si el equipo le restablece la clave, las sesiones abiertas con
+// la anterior se cierran en la siguiente petición.
+Route::prefix('portal')->name('portal.')->middleware(['auth:empresa', 'auth.session', 'portal.empresa'])->group(function () {
     $pe = \App\Http\Controllers\Portal\PortalEmpresaController::class;
     Route::get('/', [$pe, 'inicio'])->name('inicio');
     Route::get('/planilla/{plano}', [$pe, 'planilla'])->whereNumber('plano')->name('planilla')

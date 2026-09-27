@@ -399,6 +399,10 @@ class TareaController extends Controller
             'fecha_alerta' => $fechaAlerta ?? $tarea->fecha_alerta,
         ]);
 
+        // Quien gestiona una solicitud del portal ya la vio: deja de ser nueva.
+        \App\Models\EmpresaSolicitud::where('tarea_id', $tarea->id)->whereNull('vista_at')
+            ->update(['vista_at' => now()]);
+
         return response()->json([
             'ok' => true,
             'message' => 'Gestión registrada.',

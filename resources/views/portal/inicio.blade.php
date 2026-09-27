@@ -141,7 +141,9 @@
                         <th>Ingreso</th>
                         <th class="der">Días</th>
                         @if($discriminado)
-                            <th class="der">EPS</th><th class="der">ARL</th><th class="der">Pensión</th><th class="der">Caja</th><th class="der">Admón.</th>
+                            <th class="der">EPS</th><th class="der">ARL</th><th class="der">Pensión</th><th class="der">Caja</th>
+                            @if($hayParaf)<th class="der" title="SENA 2 % + ICBF 3 %: aportes del empleador no exonerado">SENA/ICBF</th>@endif
+                            <th class="der">Admón.</th>
                             @if($hayIva)<th class="der">IVA</th>@endif
                             @if($hayOtros)<th class="der">Otros</th>@endif
                         @endif
@@ -169,13 +171,14 @@
                                 <td class="der num" x-text="m(f.arl_v)"></td>
                                 <td class="der num" x-text="m(f.afp_v)"></td>
                                 <td class="der num" x-text="m(f.caja_v)"></td>
+                                @if($hayParaf)<td class="der num" x-text="m(f.parafiscales)"></td>@endif
                                 <td class="der num" x-text="m(f.admon)"></td>
                                 @if($hayIva)<td class="der num" x-text="m(f.iva)"></td>@endif
                                 @if($hayOtros)<td class="der num" x-text="m(f.otros)"></td>@endif
                             @endif
                             <td class="der num">
                                 <b x-text="pesos(f.total)"></b>
-                                <template x-if="f.mora > 0"><div class="mora" x-text="'+ ' + pesos(f.mora) + ' mora'"></div></template>
+                                <template x-if="f.mora > 0"><div class="mora" x-text="(f.mora_incluida ? 'incluye ' : '+ ') + pesos(f.mora) + ' de mora'"></div></template>
                             </td>
                             <td>
                                 <template x-if="f.factura_label"><span class="chip" :class="f.factura_clase" x-text="f.factura_label"></span></template>
@@ -208,7 +211,7 @@
                         </div>
                         <div class="der">
                             <div class="num" style="font-weight:800" x-text="pesos(f.total)"></div>
-                            <template x-if="f.mora > 0"><div class="mora" x-text="'+ ' + pesos(f.mora) + ' mora'"></div></template>
+                            <template x-if="f.mora > 0"><div class="mora" x-text="(f.mora_incluida ? 'incluye ' : '+ ') + pesos(f.mora) + ' de mora'"></div></template>
                         </div>
                     </div>
                     <div class="trab-chips">
@@ -289,7 +292,10 @@
                             </template>
                             <div class="linea total"><span>Total</span><span class="num" x-text="pesos(sel.total)"></span></div>
                             <template x-if="sel.mora > 0">
-                                <div class="linea" style="color:#92400e"><span>Intereses de mora</span><span class="num" x-text="pesos(sel.mora)"></span></div>
+                                <div class="linea" style="color:#92400e">
+                                    <span x-text="sel.mora_incluida ? 'Intereses de mora (incluidos en el total)' : 'Intereses de mora (se suman al total)'"></span>
+                                    <span class="num" x-text="pesos(sel.mora)"></span>
+                                </div>
                             </template>
                             <template x-if="sel.grupo === 'por_facturar'">
                                 <p class="sub" style="margin:.4rem 0 0">Valor estimado: puede cambiar al facturar si hay novedades en el mes.</p>
