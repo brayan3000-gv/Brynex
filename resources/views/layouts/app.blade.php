@@ -890,6 +890,14 @@
             </a>
             @endcan
 
+            @can('facturacion.generar')
+            <a href="{{ route('admin.visita.index') }}"
+               class="menu-item {{ request()->routeIs('admin.visita*') ? 'activo' : '' }}">
+                <div class="icono">🛵</div>
+                <div class="label">Cobro visita</div>
+            </a>
+            @endcan
+
             @can('informes.ver')
             <div class="menu-sep"></div>
             <a href="{{ route('admin.informes.hub') }}"
@@ -1167,6 +1175,11 @@
             @can('cuadre_diario.ver')
             <a href="{{ route('admin.cuadre-diario.index') }}" class="drawer-item {{ request()->routeIs('admin.cuadre-diario*') ? 'activo' : '' }}">
                 <span class="di-icon">🧾</span> Cuadre Caja
+            </a>
+            @endcan
+            @can('facturacion.generar')
+            <a href="{{ route('admin.visita.index') }}" class="drawer-item {{ request()->routeIs('admin.visita*') ? 'activo' : '' }}">
+                <span class="di-icon">🛵</span> Cobro en visita
             </a>
             @endcan
             @can('cotizaciones.ver')

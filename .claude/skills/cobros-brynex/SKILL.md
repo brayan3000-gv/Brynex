@@ -74,6 +74,32 @@ El cuadre agrupa:
 // 4. Registrar SaldoBanco resultante
 ```
 
+## Cobro en visita (celular) — `/visita`
+
+Pantalla móvil para cobrar puesto por puesto en una empresa visitada
+(`VisitaCobroController`, `VisitaCobroService`, `ReciboVisitaService`). No
+tiene cálculo ni caja propios:
+
+- **Lo que debe** sale de `FacturacionController::mesPagado` (período, saldo a
+  favor, mora) + `CobroContratoService::calcular`, más los anticipos del
+  contrato. El período es el mismo que propone el modal al abrirse.
+- **Si alcanza, factura**: llama a `FacturacionController::facturar` con el
+  mismo cuerpo que arma `modal_facturar_v2.js` (tipo planilla, anticipos
+  previos, `aplicar_saldo`). La transferencia entra completa (no se parte: la
+  conciliación la casa por valor); el efectivo pone lo que falta y el
+  **sobrante queda como anticipo**. Si el backend responde
+  `PagoIncompletoException` por unos pesos, se reintenta una vez con el
+  efectivo sobrante.
+- **Si no alcanza** (o es mes de afiliación, contrato que inicia después, hueco
+  de meses), todo queda como anticipo, igual que `AnticipoController::store`.
+- La **mora no se puede quitar** desde la calle.
+- **Sin caja aparte**: todo cae en la caja del día del usuario. Los registros
+  de la pantalla llevan `observacion` "Cobro en visita · …".
+- **Recibo**: PDF tipo tirilla (`pdf/recibo_visita`) enviado con la plantilla
+  Meta `recibo_de_pago` (header DOCUMENT). La crea/consulta
+  `php artisan whatsapp:plantilla-recibo [--estado]` en la WABA de BryNex y en
+  las de aliados con número propio.
+
 ## BitacoraCobro
 
 Registra cada acción de cobro:

@@ -930,6 +930,20 @@ Route::middleware('auth')->group(function () {
             ->middleware('permiso:brynex_dian.configurar')->name('credenciales');
     });
 
+    // ── Cobro en visita (celular) ────────────────────────────────────
+    // Cobrar puesto por puesto: factura si alcanza, anticipo si no. Todo cae
+    // en la caja del día de quien cobra. Ver VisitaCobroService.
+    Route::prefix('visita')->name('admin.visita.')->middleware(['permiso:facturacion.generar', 'permiso.escritura:facturacion.generar'])->group(function () {
+        $vc = \App\Http\Controllers\Admin\VisitaCobroController::class;
+        Route::get('/', [$vc, 'index'])->name('index');
+        Route::get('/buscar', [$vc, 'buscar'])->name('buscar');
+        Route::get('/cliente/{cedula}', [$vc, 'cliente'])->name('cliente');
+        Route::get('/hoy', [$vc, 'hoy'])->name('hoy');
+        Route::get('/recibo', [$vc, 'recibo'])->name('recibo');
+        Route::post('/cobrar', [$vc, 'cobrar'])->name('cobrar');
+        Route::post('/recibo/enviar', [$vc, 'enviarRecibo'])->name('recibo.enviar');
+    });
+
     // ── Cuadre Diario ────────────────────────────────────────────────
 
     Route::prefix('cuadre-diario')->name('admin.cuadre-diario.')->middleware(['permiso:cuadre_diario.ver', 'permiso.escritura:cuadre_diario.gestionar'])->group(function () {
