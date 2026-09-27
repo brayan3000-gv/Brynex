@@ -15,7 +15,7 @@
 <div class="pt-titulo aparece">
     <div>
         <h1>Facturas</h1>
-        <p>Lo que se te ha facturado mes a mes y tu saldo con nosotros.</p>
+        <p>Lo facturado mes a mes, en lote o a cada trabajador, y tu saldo con nosotros.</p>
     </div>
 </div>
 
@@ -49,7 +49,11 @@
                     <div class="fac-num">
                         <div style="font-weight:800">N.º {{ $f['numero'] }}</div>
                         <div class="sub">
-                            {{ $f['personas'] }} {{ $f['personas'] === 1 ? 'persona' : 'personas' }}
+                            @if($f['individual'])
+                                <span class="chip chip-gris" style="margin-right:.2rem">Individual</span> {{ $f['individual'] }}
+                            @else
+                                {{ $f['personas'] }} {{ $f['personas'] === 1 ? 'persona' : 'personas' }}
+                            @endif
                             @if($f['fecha_pago']) · {{ \Illuminate\Support\Carbon::parse($f['fecha_pago'])->format('d/m/Y') }} @endif
                         </div>
                     </div>

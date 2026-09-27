@@ -83,6 +83,7 @@ class PlanillaWhatsappService
                 'rs.razon_social AS razon_social_nombre',
                 'rs.es_independiente',
                 'p.contrato_id',
+                'p.factura_id',
             ]);
 
         $planos = $planosQuery->get()->map(function ($plano) {

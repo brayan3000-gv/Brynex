@@ -75,9 +75,11 @@ class PortalEmpresaController extends Controller
 
         $datos = $this->periodo->datosPeriodo($acceso->empresa_id, $mes, $anio, $acceso->aliado_id);
 
-        $planillas = app(PlanillaWhatsappService::class)
-            ->obtenerPlanosPagados($acceso->aliado_id, $mes, $anio, $this->subconsultaCedulas($acceso))
-            ->groupBy('cedula');
+        $planillas = $this->sinLotesAjenos(
+            $acceso,
+            app(PlanillaWhatsappService::class)
+                ->obtenerPlanosPagados($acceso->aliado_id, $mes, $anio, $this->subconsultaCedulas($acceso))
+        )->groupBy('cedula');
 
         // El dependiente cotiza a la ARL de su razón social, no a una propia:
         // cuando el contrato no la trae, se muestra la que dice el plano PILA.
@@ -144,6 +146,10 @@ class PortalEmpresaController extends Controller
             ->whereNotNull('numero_planilla')
             ->where('numero_planilla', '!=', '')
             ->whereIn('no_identifi', $this->subconsultaCedulas($acceso))
+            // La de un lote de otro cliente no: es de cuando el trabajador
+            // estaba con otra empresa (ver sinLotesAjenos()).
+            ->where(fn ($q) => $q->whereNull('factura_id')
+                ->orWhereIn('factura_id', $this->subconsultaFacturasPropias($acceso)))
             ->firstOrFail();
 
         // Mes en que se pagó: el del plano si es mes actual, el siguiente si
@@ -180,28 +186,41 @@ class PortalEmpresaController extends Controller
     {
         $acceso = $this->acceso();
 
+        // Las de lote de la empresa y las individuales de sus trabajadores: la
+        // empresa ve lo que se les cobra aunque se facture a cada uno. Las de
+        // lote de otro cliente no (de cuando la persona estaba en otra empresa).
         $facturas = Factura::where('aliado_id', $acceso->aliado_id)
-            ->where('empresa_id', $acceso->empresa_id)
+            ->whereIn('id', $this->subconsultaFacturasPropias($acceso))
             ->where('numero_factura', '>', 0)
             ->orderByDesc('anio')
             ->orderByDesc('mes')
             ->orderByDesc('id')
-            ->get(['id', 'numero_factura', 'mes', 'anio', 'fecha_pago', 'estado', 'tipo', 'total', 'mora', 'cedula']);
+            ->get(['id', 'numero_factura', 'mes', 'anio', 'fecha_pago', 'estado', 'tipo', 'total', 'mora', 'cedula', 'empresa_id']);
 
-        // Una factura de lote es una fila por trabajador con el mismo número.
-        $grupos = $facturas->groupBy('numero_factura')->map(function ($g) {
-            $f = $g->first();
+        $nombres = $this->nombres($acceso, $facturas->whereNull('empresa_id')->pluck('cedula'));
 
-            return [
-                'numero' => $f->numero_factura,
-                'mes' => (int) $f->mes,
-                'anio' => (int) $f->anio,
-                'fecha_pago' => $f->fecha_pago,
-                'estado' => $f->estado,
-                'total' => (int) $g->sum('total'),
-                'personas' => $g->pluck('cedula')->unique()->count(),
-            ];
-        })->values();
+        // Un lote es una fila por trabajador con el mismo número. El número
+        // solo no identifica una factura (se repite entre años en lo que vino
+        // del sistema viejo): se agrupa por número y período.
+        $grupos = $facturas
+            ->groupBy(fn ($f) => $f->empresa_id
+                ? "L{$f->numero_factura}-{$f->anio}-{$f->mes}"
+                : "I{$f->id}")
+            ->map(function ($g) use ($nombres) {
+                $f = $g->first();
+
+                return [
+                    'numero' => $f->numero_factura,
+                    'mes' => (int) $f->mes,
+                    'anio' => (int) $f->anio,
+                    'fecha_pago' => $f->fecha_pago,
+                    'estado' => $f->estado,
+                    'total' => (int) $g->sum('total'),
+                    'personas' => $g->pluck('cedula')->unique()->count(),
+                    // Individual: a nombre de un trabajador, no del lote.
+                    'individual' => $f->empresa_id ? null : ($nombres[$f->cedula] ?? $f->cedula),
+                ];
+            })->values();
 
         $porMes = $grupos->groupBy(fn ($g) => $g['anio'] * 100 + $g['mes'])
             ->map(fn ($gs) => [
@@ -369,6 +388,45 @@ class PortalEmpresaController extends Controller
         return fn ($q) => $q->select('cedula')->from('clientes')
             ->where('aliado_id', $acceso->aliado_id)
             ->where('cod_empresa', $acceso->empresa_id);
+    }
+
+    /**
+     * Ids de las facturas que la empresa puede ver: las de su lote y las
+     * individuales (sin empresa) de sus trabajadores.
+     */
+    private function subconsultaFacturasPropias(EmpresaAcceso $acceso): \Closure
+    {
+        return fn ($q) => $q->select('id')->from('facturas')
+            ->where('aliado_id', $acceso->aliado_id)
+            ->whereNull('deleted_at')
+            ->where(fn ($w) => $w->where('empresa_id', $acceso->empresa_id)
+                ->orWhere(fn ($i) => $i->whereNull('empresa_id')
+                    ->whereIn('cedula', $this->subconsultaCedulas($acceso))));
+    }
+
+    /**
+     * Quita las planillas que salieron del lote de otro cliente: la persona
+     * trabajó antes con otra empresa del mismo aliado y esa planilla es de
+     * esa relación, no de esta. Las que no tienen factura se quedan.
+     */
+    private function sinLotesAjenos(EmpresaAcceso $acceso, Collection $planos): Collection
+    {
+        $facturaIds = $planos->pluck('factura_id')->filter()->unique()->values();
+        if ($facturaIds->isEmpty()) {
+            return $planos;
+        }
+
+        $ajenas = collect();
+        foreach ($facturaIds->chunk(1000) as $lote) {
+            $ajenas = $ajenas->merge(DB::table('facturas')
+                ->whereIn('id', $lote->all())
+                ->whereNotNull('empresa_id')
+                ->where('empresa_id', '!=', $acceso->empresa_id)
+                ->pluck('id'));
+        }
+        $ajenas = $ajenas->map(fn ($id) => (int) $id)->flip();
+
+        return $planos->reject(fn ($p) => $p->factura_id && $ajenas->has((int) $p->factura_id))->values();
     }
 
     /** Nombre completo por cédula, solo de trabajadores de la empresa. */
