@@ -17,11 +17,14 @@ class SetAlidoContext
      */
     public function handle(Request $request, Closure $next)
     {
-        if (!Auth::check()) {
+        // Siempre el guard `web`: en /portal, `auth:empresa` corre antes que este
+        // middleware y cambia el guard por defecto, y la empresa no tiene aliado
+        // activo que poner en sesión.
+        if (!Auth::guard('web')->check()) {
             return $next($request);
         }
 
-        $user = Auth::user();
+        $user = Auth::guard('web')->user();
 
         // Cambio de aliado solo permitido a usuarios BryNex
         if ($user->es_brynex && $request->has('aliado')) {

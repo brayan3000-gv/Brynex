@@ -85,6 +85,10 @@
     </div>
 </form>
 
+@can('facturacion.portal_empresas')
+    @include('admin.facturacion.partials.portal_empresa')
+@endcan
+
 </div>
 
 {{-- Panel Claves y Accesos de la Empresa --}}

@@ -139,465 +139,38 @@ class FacturacionController extends Controller
     }
 
     /**
-     * Gente que estuvo con la empresa y ya no sale en la tabla del período.
-     *
-     * Una fila por persona —la de su último retiro—, porque la misma cédula
-     * puede haber entrado y salido varias veces y la lista es para saber quién
-     * estuvo, no cuántas veces. Quien ya aparece arriba no se repite acá: puede
-     * tener un retiro viejo y un contrato vigente al mismo tiempo.
-     *
-     * Va aparte de getDatosEmpresaPeriodo() a propósito: esa la comparte el
-     * Excel, que no lleva esta lista y no tiene por qué pagar la consulta.
+     * Ver EmpresaPeriodoService::retiradosPrevios(): la comparte con el portal.
      */
     private function retiradosPreviosEmpresa(int $empresaId, int $aliadoId, $cedulasVisibles)
     {
-        return $this->queryRetiradosPrevios($empresaId, $aliadoId, $cedulasVisibles)
-            // DESC deja los retiros sin fecha de últimos, que es donde estorban
-            // menos: son fichas viejas sin la fecha diligenciada.
-            ->orderByDesc('ct.fecha_retiro')
-            ->orderByDesc('ct.id')
-            ->get([
-                'ct.cedula', 'ct.fecha_ingreso', 'ct.fecha_retiro',
-                'cl.id as cliente_id', 'cl.tipo_doc', 'cl.primer_nombre', 'cl.primer_apellido',
-                'rs.razon_social',
-            ])
-            // La misma cédula puede tener más de una ficha de cliente y el join
-            // la duplicaría; el unique cubre eso y el «una fila por persona».
-            ->unique('cedula')
-            ->values();
+        return app(\App\Services\EmpresaPeriodoService::class)
+            ->retiradosPrevios($empresaId, $aliadoId, $cedulasVisibles);
     }
 
-    /**
-     * El tronco de esa consulta, que comparten la lista y el conteo.
-     */
     private function queryRetiradosPrevios(int $empresaId, int $aliadoId, $cedulasVisibles)
     {
-        return DB::table('contratos as ct')
-            ->join('clientes as cl', function ($j) use ($aliadoId) {
-                $j->on('cl.cedula', '=', 'ct.cedula')->where('cl.aliado_id', $aliadoId);
-            })
-            ->leftJoin('razones_sociales as rs', 'rs.id', '=', 'ct.razon_social_id')
-            ->where('ct.aliado_id', $aliadoId)
-            ->where('cl.cod_empresa', $empresaId)
-            ->where('ct.estado', 'retirado')
-            ->when(
-                $cedulasVisibles->isNotEmpty(),
-                fn ($q) => $q->whereNotIn('ct.cedula', $cedulasVisibles)
-            );
+        return app(\App\Services\EmpresaPeriodoService::class)
+            ->queryRetiradosPrevios($empresaId, $aliadoId, $cedulasVisibles);
     }
 
     /**
-     * Los contratos que la planilla del período muestra: los que siguen
-     * activos y los retiros que todavía se facturan ese mes.
-     *
-     * Vive aparte porque también hace falta saber a quién NO repetir en la
-     * lista de retirados, y ahí solo se necesitan las cédulas: pedir la
-     * planilla entera para eso costaría el cálculo completo de cotizaciones.
+     * Ver EmpresaPeriodoService::contratosDelPeriodo(): vive allá para que el
+     * portal de empresas use la misma regla.
      */
     private function contratosDelPeriodo(int $aliadoId, $cedulasEmpresa, int $mes, int $anio)
     {
-        $mesAnterior = $mes === 1 ? 12 : $mes - 1;
-        $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
-
-        return Contrato::where('aliado_id', $aliadoId)
-            ->whereIn('cedula', $cedulasEmpresa)
-            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                $q->whereIn('estado', ['vigente', 'activo'])
-                    ->orWhere(function ($q2) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                        $q2->where('estado', 'retirado')
-                            ->where(function ($q3) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                                $q3->where(function ($qa) use ($mes, $anio) {
-                                    // Mes actual: el retiro se factura en el MES del retiro
-                                    $qa->where('paga_mes_actual', 1)
-                                        ->whereMonth('fecha_retiro', $mes)
-                                        ->whereYear('fecha_retiro', $anio);
-                                })
-                                    ->orWhere(function ($qb) use ($mesAnterior, $anioAnterior) {
-                                        // Otros: retiro del mes anterior se factura este mes
-                                        $qb->where('paga_mes_actual', 0)
-                                            ->whereMonth('fecha_retiro', $mesAnterior)
-                                            ->whereYear('fecha_retiro', $anioAnterior);
-                                    })
-                                    ->orWhere(function ($qc) use ($mes, $anio) {
-                                        // Otros: retiro en el mes actual (se factura en el mismo mes)
-                                        // Ej: ingresó julio, se retira agosto → aparece en agosto
-                                        $qc->where('paga_mes_actual', 0)
-                                            ->whereMonth('fecha_retiro', $mes)
-                                            ->whereYear('fecha_retiro', $anio);
-                                    })
-                                    ->orWhere(function ($qd) use ($mes, $anio) {
-                                        // Retirado que ingresó este mes: mostrar afiliación
-                                        // aunque el retiro sea en un mes futuro
-                                        // Ej: ingresó julio, retiro agosto → aparece en julio como afiliación
-                                        $qd->whereMonth('fecha_ingreso', $mes)
-                                            ->whereYear('fecha_ingreso', $anio);
-                                    });
-                            });
-                    });
-            });
+        return app(\App\Services\EmpresaPeriodoService::class)
+            ->contratosDelPeriodo($aliadoId, $cedulasEmpresa, $mes, $anio);
     }
 
     /**
-     * Obtiene y pre-calcula los datos de facturación para los contratos de una empresa en un período dado.
+     * Ver EmpresaPeriodoService::datosPeriodo(): lo comparten esta pantalla,
+     * el Excel y el portal de empresas.
      */
     private function getDatosEmpresaPeriodo(int $empresaId, int $mes, int $anio, int $aliadoId): array
     {
-        $empresa = Empresa::where('aliado_id', $aliadoId)->findOrFail($empresaId);
-
-        // Pre-cargar configuración global en 1 query (evita N+1 en calcularCotizacion)
-        \App\Models\ConfiguracionBrynex::precargar();
-
-        // Traer todos los contratos vigentes cuyos clientes pertenecen a esta empresa
-        $cedulasEmpresa = DB::table('clientes')
-            ->where('aliado_id', $aliadoId)
-            ->where('cod_empresa', $empresaId)
-            ->pluck('cedula');
-
-        // El período anterior lo usa también el chequeo de facturas faltantes,
-        // más abajo; contratosDelPeriodo() lo calcula por su cuenta.
-        $mesAnterior = $mes === 1 ? 12 : $mes - 1;
-        $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
-
-        $contratos = $this->contratosDelPeriodo($aliadoId, $cedulasEmpresa, $mes, $anio)
-            ->with([
-                'cliente', 'tipoModalidad', 'razonSocial', 'eps', 'arl', 'pension', 'caja', 'asesor',
-                'plan',
-            ])
-            ->orderBy('cedula')
-            ->get()
-            // El listado se lee por nombre, no por cédula. El nombre vive en
-            // clientes (relación por cédula), así que el orden se hace aquí.
-            ->sortBy(
-                fn ($c) => mb_strtolower(trim(
-                    ($c->cliente?->primer_nombre ?? '').' '.
-                    ($c->cliente?->primer_apellido ?? '').' '.
-                    ($c->cliente?->segundo_apellido ?? '')
-                )),
-                SORT_NATURAL
-            )
-            ->values();
-
-        $facturasExistentes = Factura::where('aliado_id', $aliadoId)
-            ->periodo($mes, $anio)
-            ->whereIn('tipo', ['planilla', 'afiliacion'])
-            ->whereIn('cedula', $contratos->pluck('cedula'))
-            ->whereNotNull('contrato_id')
-            ->where('numero_factura', '>', 0)
-            ->get()
-            ->keyBy('contrato_id');
-
-        $facturasRetiro0 = Factura::where('aliado_id', $aliadoId)
-            ->whereIn('contrato_id', $contratos->pluck('id'))
-            ->where('numero_factura', 0)
-            ->whereNull('deleted_at')
-            ->get()
-            ->keyBy('contrato_id');
-
-        $contratoIds = $contratos->pluck('id')->all();
-
-        $saldosTotales = DB::table('facturas')
-            ->where('aliado_id', $aliadoId)
-            ->whereIn('contrato_id', $contratoIds)
-            ->whereNotNull('saldo_proximo')
-            ->whereIn('estado', ['pagada', 'prestamo', 'abono'])
-            ->whereNull('deleted_at')
-            ->groupBy('contrato_id')
-            ->select('contrato_id', DB::raw('SUM(saldo_proximo) as suma'))
-            ->pluck('suma', 'contrato_id');
-
-        $saldosPrevios = DB::table('facturas')
-            ->where('aliado_id', $aliadoId)
-            ->whereIn('contrato_id', $contratoIds)
-            ->whereNull('empresa_id')
-            ->whereNotNull('saldo_proximo')
-            ->whereIn('estado', ['pagada', 'prestamo', 'abono'])
-            ->whereNull('deleted_at')
-            ->where(fn ($q) => $q->where('anio', '<', $anio)
-                ->orWhere(fn ($q2) => $q2->where('anio', $anio)->where('mes', '<', $mes)))
-            ->groupBy('contrato_id')
-            ->select('contrato_id', DB::raw('SUM(saldo_proximo) as suma'))
-            ->pluck('suma', 'contrato_id');
-
-        // IVA: todos estos clientes pertenecen a esta empresa, así que manda la
-        // marca de la empresa — la del cliente no cuenta aquí (ver IvaService).
-        $empresaTieneIva = \App\Services\IvaService::bandera($empresa->iva);
-        $ivaClientes = DB::table('clientes')
-            ->where('aliado_id', $aliadoId)
-            ->where('cod_empresa', $empresaId)
-            ->pluck('iva', 'cedula')
-            ->map(fn ($v) => $empresaTieneIva)
-            ->toArray();
-
-        // ── Contratos a los que les falta el mes anterior ──────────────────
-        // Quien estuvo activo el mes pasado y no tiene factura de ese período se
-        // le pasó a alguien: el listado del mes en curso no lo delataba por
-        // ningún lado, porque cada mes se mira solo. Se resuelve con una
-        // consulta, no una por fila.
-        $facturasMesAnterior = DB::table('facturas')
-            ->where('aliado_id', $aliadoId)
-            ->whereIn('contrato_id', $contratoIds)
-            ->where('mes', $mesAnterior)
-            ->where('anio', $anioAnterior)
-            // La factura 0 es el retiro pendiente de cobrar, no un cobro del mes.
-            ->where(fn ($q) => $q->whereNull('numero_factura')->orWhere('numero_factura', '!=', 0))
-            ->whereNull('deleted_at')
-            ->pluck('contrato_id')
-            ->flip();
-
-        $inicioMesAnterior = \Carbon\Carbon::create($anioAnterior, $mesAnterior, 1)->startOfDay();
-        $finMesAnterior = $inicioMesAnterior->copy()->endOfMonth();
-
-        $hoy = now();
-
-        $contratos = $contratos->map(function ($c) use ($mes, $anio, $facturasExistentes, $facturasRetiro0, $saldosTotales, $saldosPrevios, $ivaClientes, $facturasMesAnterior, $inicioMesAnterior, $finMesAnterior) {
-            // ¿Le correspondía factura el mes pasado y no la tiene? Solo cuenta si
-            // el contrato ya existía entonces y no se había retirado antes de que
-            // empezara el mes; un ingreso de este mes no debe nada de atrás.
-            $c->falta_mes_anterior = ! $facturasMesAnterior->has($c->id)
-                && $c->fecha_ingreso
-                && $c->fecha_ingreso->lte($finMesAnterior)
-                && (! $c->fecha_retiro || $c->fecha_retiro->gte($inicioMesAnterior))
-                // Gestión ARL y seguros no generan planilla mensual.
-                && ! in_array((int) $c->tipo_modalidad_id, [15, \App\Models\Contrato::MODALIDAD_SEGUROS], true);
-
-            $diasCotizar = 30;
-            $esIndActPrimerMes = false;
-
-            $esArlModalidad = (int) ($c->tipo_modalidad_id) === 15;
-            // Solo seguro: no cotiza, no paga administración y no genera planilla.
-            $esSoloSeguro = (int) ($c->tipo_modalidad_id) === \App\Models\Contrato::MODALIDAD_SEGUROS;
-            if ($esSoloSeguro) {
-                // No hay días que cotizar: se cobra el seguro completo cada mes.
-                $diasCotizar = 0;
-            } elseif ($esArlModalidad) {
-                $fArl = $c->fecha_arl ?? $c->fecha_ingreso;
-                if ($fArl) {
-                    $mesArl = (int) $fArl->month;
-                    $anioArl = (int) $fArl->year;
-                    if ($mesArl === $mes && $anioArl === $anio) {
-                        $diasCotizar = 0;
-                    } else {
-                        $diasCotizar = 0;
-                    }
-                } else {
-                    $diasCotizar = 0;
-                }
-            } elseif ($c->fecha_ingreso) {
-                $fIng = $c->fecha_ingreso;
-                $mesIngreso = (int) $fIng->month;
-                $anioIngreso = (int) $fIng->year;
-                $esIndAct = (bool) ($c->paga_mes_actual ?? false);
-
-                $periodoIngreso = $anioIngreso * 100 + $mesIngreso;
-                $periodoActual = $anio * 100 + $mes;
-
-                if ($periodoIngreso > $periodoActual) {
-                    // Ingreso en mes futuro: el contrato aún no inicia en este período
-                    $diasCotizar = 0;
-                } elseif ($mesIngreso === $mes && $anioIngreso === $anio) {
-                    if ($esIndAct) {
-                        $esIndActPrimerMes = true;
-                        $diasCotizar = max(1, 30 - $fIng->day + 1);
-                    } else {
-                        $diasCotizar = 0;
-                    }
-                } else {
-                    $mesAnterior = $mes === 1 ? 12 : $mes - 1;
-                    $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
-
-                    if ($mesIngreso === $mesAnterior && $anioIngreso === $anioAnterior) {
-                        $diasCotizar = max(1, 30 - $fIng->day + 1);
-                    }
-                }
-            }
-            $c->dias_cotizar = $diasCotizar;
-            $c->es_ind_act_primer_mes = $esIndActPrimerMes;
-
-            // ── Retiro Pendiente (registrado desde vista empresa, aún no facturado) ──
-            // Si el contrato vigente tiene fecha_retiro_pendiente, los días cotizables
-            // son los días del mes hasta esa fecha (ej: día 20 = 20 días).
-            if ($c->estado === 'vigente' && $c->fecha_retiro_pendiente) {
-                $c->dias_cotizar = (int) $c->fecha_retiro_pendiente->day;
-                $c->tiene_retiro_pendiente = true;
-            } else {
-                $c->tiene_retiro_pendiente = false;
-            }
-
-            $c->factura_exist = $facturasExistentes->get($c->id);
-
-            $facturaRetiro0 = $facturasRetiro0->get($c->id);
-            $c->factura_retiro_0 = $facturaRetiro0;
-            $c->tiene_retiro_facturable = $c->estado === 'retirado'
-                && $facturaRetiro0 !== null
-                && $c->factura_exist === null;
-
-            $ivaFlag = $ivaClientes[$c->cedula] ?? null;
-            $c->tiene_iva = (bool) $ivaFlag;
-            $c->cotizacion_calc = $c->calcularCotizacion($diasCotizar, $ivaFlag);
-
-            $sumaPrev = (int) ($saldosPrevios[$c->id] ?? 0);
-            $c->saldo_a_favor_facturar = $sumaPrev > 0 ? $sumaPrev : 0;
-            $c->saldo_pendiente_facturar = $sumaPrev < 0 ? abs($sumaPrev) : 0;
-
-            $sumaTotal = (int) ($saldosTotales[$c->id] ?? 0);
-            $c->saldo_a_favor = $sumaTotal > 0 ? $sumaTotal : 0;
-            $c->saldo_pendiente = $sumaTotal < 0 ? abs($sumaTotal) : 0;
-
-            $sp = $c->factura_exist ? (int) ($c->factura_exist->saldo_proximo ?? 0) : 0;
-            $c->saldo_proximo_favor = $sp > 0 ? $sp : 0;
-            $c->saldo_proximo_pendiente = $sp < 0 ? abs($sp) : 0;
-
-            return $c;
-        });
-
-        $filasMora = [];
-        foreach ($contratos as $c) {
-            if ($c->factura_exist) {
-                continue;
-            }
-            if ($c->estado === 'retirado') {
-                continue;
-            }
-            if ($c->es_ind_act_primer_mes === false && $c->cotizacion_calc['ss'] == 0) {
-                continue;
-            }
-            if ((int) $c->tipo_modalidad_id === 15) {
-                continue;
-            }
-            $rsNit = $c->nitParaMora();
-            if (! $rsNit) {
-                continue;
-            }
-            $vSS = (int) ($c->cotizacion_calc['ss'] ?? 0);
-            if ($vSS <= 0) {
-                continue;
-            }
-            $filasMora[$c->id] = [
-                'contrato_id' => $c->id,
-                'rs_nit' => $rsNit,
-                'rs_dia_habil' => $c->diaHabilParaMora(),
-                'total_ss' => $vSS,
-                // Desglose por entidad para mora exacta (igual que módulo planos)
-                'eps' => (int) ($c->cotizacion_calc['eps'] ?? 0),
-                'arl' => (int) ($c->cotizacion_calc['arl'] ?? 0),
-                'pen' => (int) ($c->cotizacion_calc['pen'] ?? 0),
-                'caja' => (int) ($c->cotizacion_calc['caja'] ?? 0),
-                'mes' => $mes,
-                'anio' => $anio,
-            ];
-        }
-        $moraPorContrato = [];
-        if (! empty($filasMora)) {
-            $resultadosMora = \App\Services\MoraClienteService::calcularLote($aliadoId, array_values($filasMora));
-            foreach ($resultadosMora as $fila) {
-                $moraPorContrato[$fila['contrato_id']] = (int) ($fila['mora'] ?? 0);
-            }
-        }
-
-        $bancos = BancoCuenta::paraFacturacion($aliadoId);
-        $asesores = \App\Models\Asesor::where('aliado_id', $aliadoId)
-            ->orderBy('nombre')
-            ->get(['id', 'nombre']);
-
-        $planosActuales = DB::table('planos')
-            ->where('aliado_id', $aliadoId)
-            ->where('mes_plano', $mes)->where('anio_plano', $anio)
-            ->select('razon_social', DB::raw('MAX(n_plano) as n_plano_max'))
-            ->groupBy('razon_social')
-            ->get()->keyBy('razon_social');
-
-        $saldoNetoEmpresa = Factura::where('aliado_id', $aliadoId)
-            ->where('empresa_id', $empresa->id)
-            ->whereNotNull('saldo_proximo')
-            ->whereIn('estado', ['pagada', 'prestamo', 'abono'])
-            ->whereNull('deleted_at')
-            ->sum('saldo_proximo');
-
-        // Los abonos son pagos posteriores que NO tocan `saldo_proximo`, asi que
-        // el pendiente hay que bajarlo con ellos o se le cobra al cliente algo
-        // que ya pago: 18 empresas venian mostrando $21,1 millones de mas.
-        // Solo se descuentan contra deuda: nunca convierten un pendiente en
-        // saldo a favor.
-        $abonosEmpresa = (int) DB::table('abonos')
-            ->join('facturas', 'facturas.id', '=', 'abonos.factura_id')
-            ->where('facturas.aliado_id', $aliadoId)
-            ->where('facturas.empresa_id', $empresa->id)
-            ->whereNull('facturas.deleted_at')
-            ->sum('abonos.valor');
-
-        // El crédito que el aliado ya dio por consumido no se vuelve a ofrecer
-        // (ver SaldoAjuste): se descuenta del saldo a favor, nunca del pendiente.
-        $ajustesEmpresa = \App\Models\SaldoAjuste::totalDeEmpresa($aliadoId, (int) $empresa->id);
-
-        $saldoEmpresaFavor = $saldoNetoEmpresa > 0
-            ? max(0, (int) $saldoNetoEmpresa - $ajustesEmpresa)
-            : 0;
-        $saldoEmpresaPendiente = $saldoNetoEmpresa < 0
-            ? max(0, (int) abs($saldoNetoEmpresa) - $abonosEmpresa)
-            : 0;
-
-        // Las facturas que arman ese saldo neto, para poder ver de dónde sale.
-        // Mismas condiciones que la suma de arriba, sin las que quedaron en cero.
-        $facturasSaldoEmpresa = collect();
-        if ($saldoEmpresaFavor > 0 || $saldoEmpresaPendiente > 0) {
-            $facturasSaldoEmpresa = Factura::where('aliado_id', $aliadoId)
-                ->where('empresa_id', $empresa->id)
-                ->whereNotNull('saldo_proximo')
-                ->where('saldo_proximo', '!=', 0)
-                ->whereIn('estado', ['pagada', 'prestamo', 'abono'])
-                ->whereNull('deleted_at')
-                ->with('contrato.cliente')
-                ->orderByDesc('anio')
-                ->orderByDesc('mes')
-                ->orderByDesc('id')
-                ->get();
-        }
-
-        $anticiposEmpresa = \App\Models\Anticipo::disponiblesParaEmpresa($aliadoId, $empresa->id);
-        $totalAnticipoDisponible = (int) $anticiposEmpresa->sum('valor_disponible');
-
-        $anticiposPorContrato = \App\Models\Anticipo::aliado($aliadoId)
-            ->whereIn('contrato_id', $contratoIds)
-            ->conSaldo()
-            ->get()
-            ->groupBy('contrato_id');
-
-        $saldoAnticipoPorContrato = $anticiposPorContrato->map(fn ($group) => $group->sum('valor_disponible'));
-        $hayAnticipos = $saldoAnticipoPorContrato->isNotEmpty() || $totalAnticipoDisponible > 0;
-
-        // ¿Alguien tiene mora este período? Si no, la columna se oculta.
-        // Misma regla que la fila: lo ya pagado no muestra mora (ver empresa.blade).
-        $hayMora = $contratos->contains(function ($c) use ($moraPorContrato) {
-            $fact = $c->factura_exist;
-            if ($fact && in_array($fact->estado, ['pagada', 'prestamo'])) {
-                return false;
-            }
-
-            return $fact
-                ? (int) ($fact->mora ?? 0) > 0
-                : (int) ($moraPorContrato[$c->id] ?? 0) > 0;
-        });
-
-        $cobrosAdicionales = \App\Models\CobrosAdicionalEmpresa::where('aliado_id', $aliadoId)
-            ->where('empresa_id', $empresa->id)
-            ->where('activo', true)
-            ->orderBy('tipo')
-            ->orderBy('descripcion')
-            ->get();
-        $cobrosRecurrentes = $cobrosAdicionales->where('tipo', 'recurrente')->values();
-
-        $meses = [
-            1 => 'Enero', 2 => 'Febrero', 3 => 'Marzo', 4 => 'Abril',
-            5 => 'Mayo', 6 => 'Junio', 7 => 'Julio', 8 => 'Agosto',
-            9 => 'Septiembre', 10 => 'Octubre', 11 => 'Noviembre', 12 => 'Diciembre',
-        ];
-
-        return compact(
-            'empresa', 'contratos', 'facturasExistentes', 'bancos', 'planosActuales', 'asesores',
-            'saldoEmpresaFavor', 'saldoEmpresaPendiente', 'facturasSaldoEmpresa', 'moraPorContrato',
-            'anticiposEmpresa', 'totalAnticipoDisponible', 'saldoAnticipoPorContrato', 'hayAnticipos',
-            'hayMora', 'cobrosAdicionales', 'cobrosRecurrentes', 'meses'
-        );
+        return app(\App\Services\EmpresaPeriodoService::class)
+            ->datosPeriodo($empresaId, $mes, $anio, $aliadoId);
     }
 
     /**
@@ -4941,7 +4514,9 @@ class FacturacionController extends Controller
 
         $departamentos = \App\Models\Departamento::orderBy('nombre')->get(['id', 'nombre']);
 
-        return view('admin.facturacion.empresa_edit', compact('empresa', 'asesores', 'departamentos'));
+        $accesoPortal = \App\Models\EmpresaAcceso::where('empresa_id', $empresa->id)->first();
+
+        return view('admin.facturacion.empresa_edit', compact('empresa', 'asesores', 'departamentos', 'accesoPortal'));
     }
 
     // ─── Actualizar empresa ──────────────────────────────────────────

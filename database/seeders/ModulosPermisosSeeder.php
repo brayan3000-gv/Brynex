@@ -135,6 +135,9 @@ class ModulosPermisosSeeder extends Seeder
                 'anular' => ['Anular / eliminar facturas', ['A']],
                 'exportar' => ['Exportar a Excel/PDF',      ['A', 'C']],
                 'cobros_adicionales' => ['Cobros adicionales',        ['A', 'U']],
+                // Sin rol: el superadmin lo tiene por el Gate::before y a los
+                // demás se les da a mano. La empresa ve sus datos con esa clave.
+                'portal_empresas' => ['Dar acceso al portal a empresas', []],
             ]],
             ['facturacion_electronica', 'Facturación electrónica (DIAN)', 'financiero', '📤', null, [
                 'ver' => ['Ver documentos electrónicos', ['A', 'C']],

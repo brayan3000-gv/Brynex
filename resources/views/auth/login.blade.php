@@ -184,7 +184,7 @@
             @csrf
 
             <div class="form-group">
-                <label for="cedula">Cédula</label>
+                <label for="cedula">Cédula o NIT</label>
                 <div class="input-wrap">
                     <span class="icon">👤</span>
                     <input
@@ -192,7 +192,7 @@
                         id="cedula"
                         name="cedula"
                         value="{{ old('cedula') }}"
-                        placeholder="Número de cédula"
+                        placeholder="Cédula, o NIT si eres empresa"
                         autocomplete="username"
                         autofocus
                     >

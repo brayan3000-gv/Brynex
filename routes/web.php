@@ -43,6 +43,22 @@ Route::post('/login', [LoginController::class, 'login'])->name('login.submit')
     ->middleware('throttle:5,1');
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
+// ─── Portal de empresas (brynex.co/portal) ─────────────────────────────────
+// Guard aparte (`empresa`): quien entra aquí nunca está autenticado en `web`,
+// así que ninguna ruta de /admin lo deja pasar. Solo lectura, salvo su clave.
+Route::prefix('portal')->name('portal.')->middleware(['auth:empresa', 'portal.empresa'])->group(function () {
+    $pe = \App\Http\Controllers\Portal\PortalEmpresaController::class;
+    Route::get('/', [$pe, 'inicio'])->name('inicio');
+    Route::get('/planilla/{plano}', [$pe, 'planilla'])->whereNumber('plano')->name('planilla')
+        ->middleware('throttle:30,1');
+    Route::get('/facturas', [$pe, 'facturas'])->name('facturas');
+    Route::get('/incapacidades', [$pe, 'incapacidades'])->name('incapacidades');
+    Route::get('/retirados', [$pe, 'retirados'])->name('retirados');
+    Route::get('/clave', [$pe, 'clave'])->name('clave');
+    Route::post('/clave', [$pe, 'guardarClave'])->name('clave.guardar')->middleware('throttle:10,1');
+    Route::post('/salir', [$pe, 'salir'])->name('salir');
+});
+
 // ─── Ruta pública: subida de documentos por token (cliente) ───────────────
 // No requiere auth — solo verificación de cédula dentro del controller.
 // Throttle: la verificación es por cédula (dato de bajo secreto), así que sin
@@ -495,6 +511,13 @@ Route::middleware('auth')->group(function () {
             Route::get('empresa/{id}/retirados', [$fc, 'retiradosEmpresa'])->name('empresa.retirados');
             Route::get('empresa/{id}/editar', [$fc, 'editEmpresa'])->name('empresa.edit')->middleware('permiso:facturacion.editar');
             Route::put('empresa/{id}/editar', [$fc, 'updateEmpresa'])->name('empresa.update')->middleware('permiso:facturacion.editar');
+            // Acceso de la empresa a su portal (brynex.co/portal).
+            Route::middleware('permiso:facturacion.portal_empresas')->group(function () {
+                $ea = \App\Http\Controllers\Admin\EmpresaAccesoController::class;
+                Route::post('empresa/{id}/portal', [$ea, 'store'])->whereNumber('id')->name('empresa.portal.store');
+                Route::post('empresa/{id}/portal/restablecer', [$ea, 'restablecer'])->whereNumber('id')->name('empresa.portal.restablecer');
+                Route::patch('empresa/{id}/portal', [$ea, 'update'])->whereNumber('id')->name('empresa.portal.update');
+            });
             Route::post('facturar', [$fc, 'facturar'])->name('facturar')->middleware('permiso:facturacion.generar');
             Route::post('abonar/{id}', [$fc, 'abonar'])->name('abonar')->middleware('permiso:facturacion.generar');
             Route::get('recibo/{id}', [$fc, 'recibo'])->name('recibo');

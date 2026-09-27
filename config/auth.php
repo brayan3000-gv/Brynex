@@ -40,6 +40,14 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Portal de empresas (brynex.co/portal). Guard aparte para que una
+        // empresa con sesión no cuente como autenticada en `web`: así ninguna
+        // ruta de /admin la deja pasar. Ver App\Models\EmpresaAcceso.
+        'empresa' => [
+            'driver' => 'session',
+            'provider' => 'empresa_accesos',
+        ],
     ],
 
     /*
@@ -63,6 +71,11 @@ return [
         'users' => [
             'driver' => 'brynex',   // custom provider — maneja sesiones con identifier de cédula
             'model'  => App\Models\User::class,
+        ],
+
+        'empresa_accesos' => [
+            'driver' => 'eloquent',
+            'model' => App\Models\EmpresaAcceso::class,
         ],
     ],
 

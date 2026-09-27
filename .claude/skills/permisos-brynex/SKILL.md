@@ -35,7 +35,8 @@ usuario    → trabajador del aliado: día a día completo (clientes, contratos,
              marketing, publicidad). Sin informes ni comisiones.
 asesor     → HOY solo lectura. Pendiente: no existe vínculo users↔asesores,
              así que no se puede filtrar "solo sus clientes".
-cliente    → sin permisos. El portal del cliente no está construido.
+cliente    → sin permisos y sin uso. Las EMPRESAS cliente entran por otro lado:
+             el portal de empresas (ver sección abajo), que no usa roles.
 ```
 
 ### `asignable`: qué se ve en la pantalla de permisos
@@ -161,6 +162,26 @@ Tres casos dependen del registro, no de la URL, y viven en el controlador:
 
 `php artisan permisos:aplicar-inicial` (en seco) y `--ejecutar` para aplicar:
 asigna rol `usuario` a los activos sin rol y entrega los restringidos al dueño.
+
+## Portal de empresas: guard aparte, no un rol
+
+Una empresa cliente entra a `brynex.co/portal` con su NIT por el MISMO login
+(`LoginController` prueba primero `users.cedula` y, si no, `empresa_accesos`).
+Se autentica en el guard **`empresa`** (modelo `EmpresaAcceso`, tabla
+`empresa_accesos`), nunca en `web`:
+
+- Ninguna ruta de `/admin` la deja pasar: todas usan `auth` = guard `web`.
+- `auth:empresa` corre ANTES que los middleware del grupo `web` (prioridad de
+  Authenticate) y cambia el guard por defecto. Por eso `SetAlidoContext` y
+  `ExigirAvisoTratamiento` usan `Auth::guard('web')` explícito. **Un middleware
+  nuevo del grupo `web` que lea el usuario debe hacer lo mismo**, o tratará a la
+  empresa como si fuera del equipo.
+- No tiene aliado en sesión: el portal filtra con `aliado_id`/`empresa_id` del
+  acceso y las cédulas de `clientes.cod_empresa` (`EmpresaAcceso::cedulas()`).
+- Crear, restablecer clave o desactivar: tarjeta en «Editar empresa», permiso
+  `facturacion.portal_empresas` (sin rol; el superadmin lo tiene por Gate::before).
+- Los valores salen de `EmpresaPeriodoService`, el mismo que pinta
+  `admin/facturacion/empresa/{id}`: si cambia un cálculo, cambia en los dos.
 
 ## `es_brynex`: no es un rol, es un flag de identidad
 

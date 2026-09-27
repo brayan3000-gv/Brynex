@@ -78,5 +78,7 @@ class Kernel extends HttpKernel
         'permiso' => \App\Http\Middleware\VerificarPermiso::class,
         // Igual, pero solo se exige en POST/PUT/PATCH/DELETE
         'permiso.escritura' => \App\Http\Middleware\VerificarPermisoEscritura::class,
+        // Portal de empresas: acceso activo y clave propia (va tras auth:empresa)
+        'portal.empresa' => \App\Http\Middleware\PortalEmpresa::class,
     ];
 }

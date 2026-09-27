@@ -27,8 +27,11 @@ class PlanillaWhatsappService
      * Consulta las planillas pagadas en el periodo para el aliado y detecta su operador.
      * Retorna TODOS los planos con gasto registrado; el campo `es_operador_autorizado`
      * indica si el operador tiene plantilla PDF habilitada para envío.
+     *
+     * Con `$cedulas` se limita a esas personas: el portal de empresas pide
+     * solo las de sus trabajadores en vez de todo el aliado.
      */
-    public function obtenerPlanosPagados(int $aliadoId, int $mes, int $anio)
+    public function obtenerPlanosPagados(int $aliadoId, int $mes, int $anio, $cedulas = null)
     {
         $mesVencido = $mes > 1 ? $mes - 1 : 12;
         $anioVencido = $mes > 1 ? $anio : $anio - 1;
@@ -55,6 +58,12 @@ class PlanillaWhatsappService
             ->whereNotNull('p.numero_planilla')
             ->where('p.numero_planilla', '!=', '')
             ->where($wherePeriodo)
+            // Acepta una lista o una subconsulta (Closure): con una lista larga
+            // SQL Server se queda sin parámetros (tope de 2100).
+            ->when($cedulas !== null, fn ($q) => $q->whereIn(
+                'p.no_identifi',
+                $cedulas instanceof \Closure ? $cedulas : collect($cedulas)->all()
+            ))
             ->select([
                 'p.id',
                 'p.no_identifi AS cedula',

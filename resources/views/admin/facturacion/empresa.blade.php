@@ -394,170 +394,50 @@ $fechaPredeterminada = \Carbon\Carbon::create((int)($anio ?? now()->year), (int)
 
 @forelse($contratos as $c)
 @php
-$fact  = $c->factura_exist;
-$factRetiroPreview = (!$fact && ($c->tiene_retiro_facturable ?? false)) ? ($c->factura_retiro_0 ?? null) : null;
-// Para retiro facturable usamos la factura_0 como fuente de valores de preview
-$yaP   = $fact && in_array($fact->estado,['pagada','prestamo']);
-// Nombre: primer nombre + inicial del segundo + primer apellido (Candida R. Sierra)
-$nombre = nombre_con_inicial($c->cliente?->primer_nombre, $c->cliente?->segundo_nombre, $c->cliente?->primer_apellido);
-if(!$nombre) $nombre = $c->cliente?->nombre_completo ?? '—';
-// Tipo: campo tipo_modalidad directo (ej: 'E', 'I')
-$tipoMod    = $c->tipoModalidad?->tipo_modalidad ?? '—';
-$tipoNom    = $c->tipoModalidad?->nombre ?? '—';  // tooltip
-$rs         = $c->razonSocial?->razon_social ?? '—';
-$esRetirado = $c->estado === 'retirado';
-$esIngRet   = (int)($c->tipo_modalidad_id) === 12;
-$fIng       = $c->fecha_ingreso ? $c->fecha_ingreso->format('d/m/Y') : '—';
-$fRet       = ($esRetirado && $c->fecha_retiro) ? $c->fecha_retiro->format('d/m/Y') : null;
-// Retiro pendiente (nuevo flujo desde vista empresa)
-$tieneRetiroPendiente = $c->tiene_retiro_pendiente ?? false; // seteado por controller
-$fechaRetiroPendienteStr = $tieneRetiroPendiente && $c->fecha_retiro_pendiente ? $c->fecha_retiro_pendiente->format('Y-m-d') : '';
-$diasRetiroPendiente = $tieneRetiroPendiente ? (int) ($c->fecha_retiro_pendiente?->day ?? 0) : 0;
-$cobrarAdmonRetiroPendiente = $tieneRetiroPendiente ? (bool) ($c->retiro_pendiente_cobrar_admon ?? false) : false;
-$dias = $fact
-    ? (int)$fact->dias_cotizados
-    : ($factRetiroPreview
-        ? (int)$factRetiroPreview->dias_cotizados  // usar días reales del retiro marcado
-        : ($c->dias_cotizar ?? 30));
-// Detectar si este período debe ser afiliación pura (I VENC, empresa, ARL)
-// vs I ACT primer mes (viene del controlador como es_ind_act_primer_mes)
-$esIndep          = $c->tipoModalidad?->esIndependiente() ?? false;
-$esIndActPrimerMes = $c->es_ind_act_primer_mes ?? false; // flag del controller
-$esArlModalidad   = (int)($c->tipo_modalidad_id) === 15;
-$esAfil = false;
-$esIngresoFuturo = false;
-if ($esArlModalidad) {
-    // Gestión ARL siempre es cobro de afiliación, no planilla
-    $esAfil = true;
-} elseif ($c->fecha_ingreso) {
-    $fIngC = $c->fecha_ingreso;
-    $periodoIngresoVista = (int)$fIngC->year * 100 + (int)$fIngC->month;
-    $periodoActualVista  = $anio * 100 + $mes;
-    if ($periodoIngresoVista > $periodoActualVista) {
-        // Ingreso en mes futuro: no facturable en este período
-        $esIngresoFuturo = true;
-    } elseif ((int)$fIngC->month === $mes && (int)$fIngC->year === $anio) {
-        // I ACT: NO es afiliación pura (cobra SS también)
-        // I VENC y empresa: sí es afiliación pura
-        if (!$esIndActPrimerMes) {
-            $esAfil = true;
-        }
-    }
-}
-// Si ya hay factura, usar su tipo (planilla o afiliacion)
-if ($fact) {
-    // I ACT primer mes puede tener tipo='planilla' con afiliación incluida
-    $esAfil = $fact->tipo === 'afiliacion' && !($fact->afiliacion > 0 && $fact->total_ss > 0);
-}
-// Corrección: si es mes de afiliación (ingresó este mes), ignorar los días del retiro preview
-if ($esAfil && !$fact) {
-    $dias = 0;
-}
-// Tiempo Parcial: detectar y obtener días por entidad
-$esTP     = $c->tipoModalidad?->esTiempoParcial() ?? false;
-$diasTP   = $esTP ? $c->tipoModalidad->diasPorEntidad() : null;
-// Valores: si hay factura usar los reales; si es retirado facturable → usar factura_0;
-// Si es retiro pendiente → calcular SS proporcional con los días del retiro pendiente;
-// si activo sin factura → estimar
-$vEps  = $fact ? $r100($fact->v_eps)  : 0;
-$vArl  = $fact ? $r100($fact->v_arl)  : 0;
-$vCaja = $fact ? $r100($fact->v_caja) : 0;
-$vPen  = $fact ? $r100($fact->v_afp)  : 0;
-$vAdm  = $fact ? (int)($fact->admon + $fact->admin_asesor) : (($esRetirado && !$esAfil) ? 0 : (int)(($c->administracion??0) + ($c->admon_asesor??0)));
-$vIva  = $fact ? $rIva($fact->iva)    : 0;
-// Total y SS
-$cotiz = $c->cotizacion_calc ?? $c->calcularCotizacion($dias); // pre-calculado en controller
-if (!$fact) {
-    if ($esRetirado && $factRetiroPreview && !$esAfil) {
-        // Retiro facturable: mostrar valores reales de la factura_0
-        $vEps  = $r100($factRetiroPreview->v_eps);
-        $vArl  = $r100($factRetiroPreview->v_arl);
-        $vPen  = $r100($factRetiroPreview->v_afp);
-        $vCaja = $r100($factRetiroPreview->v_caja);
-        $vSS   = $r100($factRetiroPreview->total_ss);
-        // Admon: el valor base de contrato (30 días); se recalculará por JS según el checkbox
-        $vAdm  = (int)(($c->administracion??0) + ($c->admon_asesor??0));
-        $vAdmProporcional = (int)(($vAdm / 30) * $dias); // proporcional a días de retiro
-        // El IVA del retiro grava la admon que se cobre; la factura_0 la guarda en 0
-        // porque aún no se sabe si se cobrará (lo decide el checkbox de admon).
-        $vIva  = \App\Services\IvaService::calcular($vAdm, (bool)($c->tiene_iva ?? false));
-        $vTot  = $vSS + $vAdm + $vIva; // total con admon completa (JS ajusta si es proporcional)
-    } elseif ($tieneRetiroPendiente) {
-        // Retiro pendiente nuevo: calcular SS proporcional con los días del retiro
-        $cotizRetPend = $c->calcularCotizacion($diasRetiroPendiente);
-        $vEps  = $r100($cotizRetPend['eps']  ?? 0);
-        $vArl  = $r100($cotizRetPend['arl']  ?? 0);
-        $vPen  = $r100($cotizRetPend['pen']  ?? 0);
-        $vCaja = $r100($cotizRetPend['caja'] ?? 0);
-        $vIva  = $rIva($cotizRetPend['iva']  ?? 0);
-        $vSS   = $r100($cotizRetPend['ss']   ?? 0);
-        $vAdm  = $cobrarAdmonRetiroPendiente
-            ? (int)(($c->administracion??0) + ($c->admon_asesor??0))
-            : 0;
-        $vTot  = $vSS + $vAdm + $vIva;
-    } elseif ($esRetirado && !$factRetiroPreview) {
-        // Retirado sin retiro facturable — ya fue cobrado o es retiro masivo → 0
-        $vEps = $vArl = $vPen = $vCaja = $vIva = $vAdm = $vSS = 0;
-        $vTot = 0;
-    } elseif ($esArlModalidad && !$esAfil) {
-        // ARL fuera de su mes de ARL → cobro es 0, no paga planilla
-        $vEps = $vArl = $vPen = $vCaja = $vIva = $vAdm = $vSS = 0;
-        $vTot = 0;
-    } elseif ($esIndActPrimerMes) {
-        // I ACT primer mes: SS reales (días del mes) + afiliación + admon
-        $vEps  = $r100($cotiz['eps']??0);
-        $vArl  = $r100($cotiz['arl']??0);
-        $vPen  = $r100($cotiz['pen']??0);
-        $vCaja = $r100($cotiz['caja']??0);
-        // IVA: admon (ya viene en $cotiz) + costo de afiliación
-        $vIva  = $rIva($cotiz['iva']??0)
-               + \App\Services\IvaService::calcular((int)($c->costo_afiliacion ?? 0), (bool)($c->tiene_iva ?? false));
-        $vSS   = $r100($cotiz['ss']);
-        // admon ya calculado arriba desde contrato
-        $vTot  = $vSS + $vAdm + $vIva + (int)(($c->costo_afiliacion ?? 0) + ($c->seguro ?? 0));
-    } elseif ($esAfil) {
-        // Afiliación pura (I VENC, empresa): SS=0, admon=0 — el IVA grava el costo de afiliación
-        $vEps  = 0; $vArl  = 0; $vPen  = 0; $vCaja = 0;
-        $vSS   = 0; $vAdm  = 0;
-        $vIva  = \App\Services\IvaService::calcular((int)($c->costo_afiliacion ?? 0), (bool)($c->tiene_iva ?? false));
-        $vTot  = (int)(($c->costo_afiliacion ?? 0) + ($c->seguro ?? 0)) + $vIva;
-    } elseif ($esIngresoFuturo) {
-        // Ingreso en mes futuro: el contrato aún no inicia → todo en 0
-        $vEps = $vArl = $vPen = $vCaja = $vIva = $vAdm = $vSS = 0;
-        $vTot = 0;
-    } else {
-        $vEps  = $r100($cotiz['eps']??0);
-        $vArl  = $r100($cotiz['arl']??0);
-        $vPen  = $r100($cotiz['pen']??0);
-        $vCaja = $r100($cotiz['caja']??0);
-        $vIva  = $rIva($cotiz['iva']??0);
-        $vSS   = $r100($cotiz['ss']);
-        $vTot  = $vSS + $vAdm + $vIva;
-    }
-} else {
-    $vSS = $r100($fact->total_ss);
-    $vTot = (int)$fact->total;
-}
-// SENA e ICBF del aportante no exonerado. Ya van dentro de $vSS y del total; se
-// sacan aparte solo para poder cuadrar la fila contra la planilla del operador,
-// donde son dos aportes con su propia tarifa.
-$vParaf = $fact
-    ? (int)($fact->v_parafiscales ?? 0)
-    : ($vSS > 0 ? (int)($cotiz['parafiscales'] ?? 0) : 0);
-// Mora: solo mostrar si el contrato NO está pagado aún
-// - Con factura pendiente → usar mora guardada en la factura
-// - Sin factura → usar mora estimada del batch pre-calculado
-// - Ya pagado ($yaP) → ocultar mora (ya fue liquidada, no hay alerta pendiente)
-$vMora = 0;
-if (!$yaP) {
-    if ($fact && ($fact->mora ?? 0) > 0) {
-        $vMora = (int)$fact->mora;
-    } elseif (!$fact) {
-        $vMora = (int)($moraPorContrato[$c->id] ?? 0);
-    }
-}
-// Costo de afiliación para data-* (lo necesita el modal)
-$vAfiliacion = ($esAfil || $esIndActPrimerMes) ? (int)($c->costo_afiliacion ?? 0) : 0;
+// El cálculo de la fila vive en EmpresaPeriodoService::valoresFila(), que
+// comparte con el portal de empresas. Llegan las mismas variables de siempre.
+[
+    'fact' => $fact,
+    'factRetiroPreview' => $factRetiroPreview,
+    'yaP' => $yaP,
+    'nombre' => $nombre,
+    'tipoMod' => $tipoMod,
+    'tipoNom' => $tipoNom,
+    'rs' => $rs,
+    'esRetirado' => $esRetirado,
+    'esIngRet' => $esIngRet,
+    'fIng' => $fIng,
+    'fRet' => $fRet,
+    'tieneRetiroPendiente' => $tieneRetiroPendiente,
+    'fechaRetiroPendienteStr' => $fechaRetiroPendienteStr,
+    'diasRetiroPendiente' => $diasRetiroPendiente,
+    'cobrarAdmonRetiroPendiente' => $cobrarAdmonRetiroPendiente,
+    'dias' => $dias,
+    'esIndep' => $esIndep,
+    'esIndActPrimerMes' => $esIndActPrimerMes,
+    'esArlModalidad' => $esArlModalidad,
+    'esAfil' => $esAfil,
+    'esIngresoFuturo' => $esIngresoFuturo,
+    'fIngC' => $fIngC,
+    'periodoIngresoVista' => $periodoIngresoVista,
+    'periodoActualVista' => $periodoActualVista,
+    'esTP' => $esTP,
+    'diasTP' => $diasTP,
+    'vEps' => $vEps,
+    'vArl' => $vArl,
+    'vCaja' => $vCaja,
+    'vPen' => $vPen,
+    'vAdm' => $vAdm,
+    'vIva' => $vIva,
+    'cotiz' => $cotiz,
+    'vSS' => $vSS,
+    'vAdmProporcional' => $vAdmProporcional,
+    'vTot' => $vTot,
+    'cotizRetPend' => $cotizRetPend,
+    'vParaf' => $vParaf,
+    'vMora' => $vMora,
+    'vAfiliacion' => $vAfiliacion,
+] = app(\App\Services\EmpresaPeriodoService::class)->valoresFila($c, (int) $mes, (int) $anio, $moraPorContrato);
 $totEps+=$vEps;$totArl+=$vArl;$totCaja+=$vCaja;$totPen+=$vPen;
 $totAdmon+=$vAdm;$totIva+=$vIva;$totTotal+=$vTot;$totMora+=$vMora;
 

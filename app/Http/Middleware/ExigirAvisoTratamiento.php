@@ -18,7 +18,9 @@ class ExigirAvisoTratamiento
 {
     public function handle(Request $request, Closure $next)
     {
-        $user = Auth::user();
+        // El guard `web` explícito: en /portal el guard por defecto es el de la
+        // empresa (auth:empresa corre antes), y el aviso es para el equipo.
+        $user = Auth::guard('web')->user();
 
         if (! $user) {
             return $next($request);
