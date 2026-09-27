@@ -851,8 +851,12 @@
             @endcan
 
             @can('tareas.ver')
-            <a href="{{ route('admin.tareas.index') }}" class="menu-item {{ request()->routeIs('admin.tareas*') ? 'activo' : '' }}">
-                <div class="icono">📌</div>
+            <a href="{{ route('admin.tareas.index') }}" class="menu-item {{ request()->routeIs('admin.tareas*') ? 'activo' : '' }}" style="position:relative">
+                <div class="icono" style="position:relative">
+                    📌
+                    {{-- Solicitudes nuevas del portal de empresas (ver portalBadge abajo) --}}
+                    <span id="portal-badge" title="Solicitudes nuevas de empresas" style="display:none;position:absolute;top:-5px;right:-5px;background:#2563eb;color:#fff;font-size:.55rem;font-weight:700;padding:.08rem .35rem;border-radius:999px;min-width:16px;text-align:center"></span>
+                </div>
                 <div class="label">Tareas</div>
             </a>
             @endcan
@@ -1410,8 +1414,74 @@
             });
         })();
         @endcan
+        @can('tareas.ver')
+        // Solicitudes nuevas del portal de empresas: el globo en «Tareas» y un
+        // aviso emergente la primera vez que se ve cada una. Mismo cuidado que
+        // el de WhatsApp: solo pregunta con la pestaña a la vista.
+        (function portalBadge() {
+            const badge = document.getElementById('portal-badge');
+            let ultimaConsulta = 0;
+            const clave = 'brynex_portal_visto_{{ auth()->id() }}';
+            let vistoHasta = 0;
+            try { vistoHasta = parseInt(localStorage.getItem(clave) || '0', 10); } catch (e) {}
+
+            function avisar(s) {
+                const el = document.createElement('a');
+                el.href = '{{ route('admin.tareas.index') }}?tarea=' + s.tarea_id;
+                el.className = 'aviso-portal';
+                el.innerHTML = '<span class="ap-ico">🌐</span><span><b></b><small></small></span><span class="ap-x" title="Cerrar">×</span>';
+                el.querySelector('b').textContent = 'Nueva solicitud de ' + s.empresa;
+                el.querySelector('small').textContent = s.tipo + ' · Toca para abrirla';
+                el.querySelector('.ap-x').addEventListener('click', (ev) => { ev.preventDefault(); el.remove(); });
+                document.body.appendChild(el);
+                setTimeout(() => el.classList.add('ap-sale'), 12000);
+                setTimeout(() => el.remove(), 12600);
+            }
+
+            async function consultar() {
+                ultimaConsulta = Date.now();
+                try {
+                    const r = await fetch('{{ route('admin.portal_solicitudes.nuevas') }}', { headers: { 'Accept': 'application/json' } });
+                    if (!r.ok) return;
+                    const d = await r.json();
+                    if (badge) {
+                        badge.textContent = d.total > 99 ? '99+' : d.total;
+                        badge.style.display = d.total > 0 ? 'inline-block' : 'none';
+                    }
+                    const nuevas = (d.ultimas || []).filter(s => s.id > vistoHasta);
+                    nuevas.slice(0, 3).reverse().forEach(avisar);
+                    if (nuevas.length) {
+                        vistoHasta = Math.max(...nuevas.map(s => s.id));
+                        try { localStorage.setItem(clave, String(vistoHasta)); } catch (e) {}
+                    }
+                } catch (e) { /* silencioso */ }
+            }
+
+            function siEstaVisible() { if (!document.hidden) consultar(); }
+            siEstaVisible();
+            setInterval(siEstaVisible, 60000);
+            document.addEventListener('visibilitychange', function () {
+                if (!document.hidden && Date.now() - ultimaConsulta > 5000) consultar();
+            });
+        })();
+        @endcan
         @endauth
     </script>
+    <style>
+        .aviso-portal { position: fixed; right: 18px; bottom: 18px; z-index: 9999; display: flex; align-items: center; gap: .7rem;
+            background: linear-gradient(135deg, #0a1628, #1e40af); color: #fff; text-decoration: none; border-radius: 14px;
+            padding: .8rem 1rem; box-shadow: 0 12px 34px rgba(10,22,40,.35); max-width: 340px;
+            animation: ap-entra .45s cubic-bezier(.2,.8,.2,1); transition: opacity .5s, transform .5s; }
+        .aviso-portal + .aviso-portal { bottom: 92px; }
+        .aviso-portal .ap-ico { font-size: 1.4rem; animation: ap-late 1.4s ease-in-out 2; }
+        .aviso-portal b { display: block; font-size: .85rem; }
+        .aviso-portal small { display: block; font-size: .72rem; color: #93c5fd; }
+        .aviso-portal .ap-x { margin-left: .4rem; font-size: 1.1rem; opacity: .7; cursor: pointer; }
+        .aviso-portal.ap-sale { opacity: 0; transform: translateY(12px); }
+        @keyframes ap-entra { from { opacity: 0; transform: translateY(20px) scale(.96); } to { opacity: 1; transform: none; } }
+        @keyframes ap-late { 50% { transform: scale(1.2) rotate(-8deg); } }
+        @media (prefers-reduced-motion: reduce) { .aviso-portal, .aviso-portal .ap-ico { animation: none; } }
+    </style>
 
     @auth
         @php($__iaAlidoId = session('aliado_id_activo'))

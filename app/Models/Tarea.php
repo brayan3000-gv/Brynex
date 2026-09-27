@@ -15,7 +15,7 @@ class Tarea extends BaseModel
     protected $table = 'tareas';
 
     protected $fillable = [
-        'aliado_id', 'tipo', 'estado', 'resultado',
+        'aliado_id', 'empresa_id', 'tipo', 'estado', 'resultado',
         'cedula', 'contrato_id', 'razon_social_id', 'entidad',
         'tarea', 'observacion',
         'encargado_id', 'creado_por',
@@ -43,6 +43,17 @@ class Tarea extends BaseModel
         'devolucion_aportes' => '💵 Devolución de Aportes',
         'solicitud_documentos' => '📋 Solicitud Documentos',
         'otros' => '📝 Otros',
+    ];
+
+    /**
+     * Las que abre una empresa desde su portal (ver EmpresaSolicitud). Van
+     * aparte de TIPOS para que no salgan al crear una tarea a mano.
+     */
+    const TIPOS_PORTAL = [
+        'portal_ingreso' => '🌐 Ingreso (portal)',
+        'portal_retiro' => '🌐 Retiro (portal)',
+        'portal_incapacidad' => '🌐 Incapacidad (portal)',
+        'portal_solicitud' => '🌐 Solicitud (portal)',
     ];
 
     // ── Constantes de Estado ────────────────────────────────────────────────
@@ -82,6 +93,12 @@ class Tarea extends BaseModel
     public function razonSocial(): BelongsTo
     {
         return $this->belongsTo(RazonSocial::class, 'razon_social_id');
+    }
+
+    /** La solicitud del portal que abrió esta tarea, si la abrió una empresa. */
+    public function solicitudEmpresa(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(EmpresaSolicitud::class, 'tarea_id');
     }
 
     public function gestiones(): HasMany
@@ -164,7 +181,7 @@ class Tarea extends BaseModel
 
     public function tipoLabel(): string
     {
-        return self::TIPOS[$this->tipo] ?? ucfirst($this->tipo);
+        return self::TIPOS[$this->tipo] ?? self::TIPOS_PORTAL[$this->tipo] ?? ucfirst($this->tipo);
     }
 
     public function estadoLabel(): string

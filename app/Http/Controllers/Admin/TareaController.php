@@ -44,13 +44,16 @@ class TareaController extends Controller
         // Empresa del cliente (clientes.cod_empresa). La tarea guarda la cédula,
         // así que se resuelve con una subconsulta scopeada por aliado: la
         // relación cliente() cruza solo por cédula y no filtra por aliado.
+        // También las que abrió la empresa desde su portal (tareas.empresa_id),
+        // que pueden no tener cédula.
         if ($request->filled('empresa_id')) {
-            $query->whereIn('tareas.cedula', function ($sub) use ($request, $alidoId) {
-                $sub->from('clientes')
-                    ->select('cedula')
-                    ->where('aliado_id', $alidoId)
-                    ->where('cod_empresa', $request->empresa_id);
-            });
+            $query->where(fn ($q) => $q->where('tareas.empresa_id', (int) $request->empresa_id)
+                ->orWhereIn('tareas.cedula', function ($sub) use ($request, $alidoId) {
+                    $sub->from('clientes')
+                        ->select('cedula')
+                        ->where('aliado_id', $alidoId)
+                        ->where('cod_empresa', $request->empresa_id);
+                }));
         }
 
         // Orden: si el usuario hizo clic en un encabezado manda su criterio;
@@ -328,9 +331,15 @@ class TareaController extends Controller
             ->select('id', 'cedula', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido', 'celular', 'correo')
             ->first();
 
+        $portal = app(\App\Services\EmpresaSolicitudPanel::class)->paraTarea($tarea, $alidoId);
+
         return response()->json([
             'tarea' => $tarea,
             'cliente' => $cliente,
+            // Solicitud de la empresa (si la abrió desde su portal) y si hay una
+            // empresa con portal que vería los avances marcados como visibles.
+            'solicitud' => $portal['solicitud'],
+            'empresa_portal' => $portal['empresa'],
             // Fecha de creación ya formateada: evita ambigüedad de zona horaria en el front
             'creada' => $tarea->created_at?->format('d/m/Y h:i a'),
             'semaforo' => $tarea->colorSemaforo(),
@@ -377,6 +386,7 @@ class TareaController extends Controller
             'user_id' => Auth::id(),
             'tipo_accion' => $request->tipo_accion,
             'observacion' => $request->observacion,
+            'visible_empresa' => $request->boolean('visible_empresa'),
             'recordar_dias' => $recordarDias,
             'fecha_alerta' => $fechaAlerta,
             'estado_tarea' => $nuevoEstado,
@@ -442,6 +452,7 @@ class TareaController extends Controller
             'user_id' => Auth::id(),
             'tipo_accion' => 'cambio_estado',
             'observacion' => '🏁 Tarea cerrada ('.($request->resultado === 'positivo' ? '✅ Positiva' : '❌ Negativa').'): '.$request->observacion,
+            'visible_empresa' => $request->boolean('visible_empresa'),
             'estado_tarea' => Tarea::ESTADO_CERRADA,
             'created_at' => now(),
         ]);
@@ -450,6 +461,10 @@ class TareaController extends Controller
             'estado' => Tarea::ESTADO_CERRADA,
             'resultado' => $request->resultado,
         ]);
+
+        // Si la abrió una empresa desde su portal, su solicitud queda
+        // aprobada o rechazada con el mismo resultado.
+        app(\App\Services\EmpresaSolicitudService::class)->alCerrarTarea($tarea, $request->resultado);
 
         return response()->json(['ok' => true, 'message' => 'Tarea cerrada.']);
     }

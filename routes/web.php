@@ -57,6 +57,15 @@ Route::prefix('portal')->name('portal.')->middleware(['auth:empresa', 'portal.em
     Route::get('/clave', [$pe, 'clave'])->name('clave');
     Route::post('/clave', [$pe, 'guardarClave'])->name('clave.guardar')->middleware('throttle:10,1');
     Route::post('/salir', [$pe, 'salir'])->name('salir');
+
+    // Trámites: lo que la empresa pide. Nada se ejecuta solo, abre una tarea.
+    $pt = \App\Http\Controllers\Portal\PortalTramitesController::class;
+    Route::get('/tramites', [$pt, 'index'])->name('tramites');
+    Route::get('/tramites/nuevo', [$pt, 'nuevo'])->name('tramites.nuevo');
+    Route::post('/tramites/{tipo}', [$pt, 'guardar'])->whereIn('tipo', ['ingreso', 'retiro', 'incapacidad', 'otra'])
+        ->name('tramites.guardar')->middleware('throttle:20,1');
+    Route::get('/tramites/{solicitud}/archivo/{i}', [$pt, 'archivo'])->whereNumber(['solicitud', 'i'])
+        ->name('tramites.archivo');
 });
 
 // ─── Ruta pública: subida de documentos por token (cliente) ───────────────
@@ -1097,6 +1106,19 @@ Route::middleware('auth')->group(function () {
         Route::get('/documento/{docId}', [$tc, 'descargarDocumento'])->name('documento.download');
         Route::get('/api/clientes', [$tc, 'buscarCliente'])->name('api.clientes');
         Route::get('/api/contratos', [$tc, 'contratosPorCedula'])->name('api.contratos');
+    });
+
+    // ── Solicitudes del portal de empresas (se trabajan desde la tarea) ─────
+    Route::prefix('admin/portal-solicitudes')->name('admin.portal_solicitudes.')->middleware(['permiso:tareas.ver', 'permiso.escritura:tareas.gestionar'])->group(function () {
+        $es = \App\Http\Controllers\Admin\EmpresaSolicitudController::class;
+        Route::get('/nuevas', [$es, 'nuevas'])->name('nuevas');
+        Route::get('/{id}/archivo/{i}', [$es, 'archivo'])->whereNumber(['id', 'i'])->name('archivo');
+        Route::get('/{id}/ruaf', [$es, 'ruaf'])->whereNumber('id')->name('ruaf');
+        Route::post('/{id}/retiro', [$es, 'retiro'])->whereNumber('id')->name('retiro')
+            ->middleware('permiso:facturacion.generar');
+        Route::post('/{id}/incapacidad', [$es, 'incapacidad'])->whereNumber('id')->name('incapacidad')
+            ->middleware('permiso:incapacidades.gestionar');
+        Route::post('/{id}/rechazar', [$es, 'rechazar'])->whereNumber('id')->name('rechazar');
     });
 
     // ── Traslado Masivo de Razón Social ─────────────────────────────────────

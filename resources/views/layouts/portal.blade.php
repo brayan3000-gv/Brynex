@@ -10,6 +10,7 @@
     }
     $menu = [
         ['portal.inicio', 'inicio', 'Mi mes'],
+        ['portal.tramites', 'tramites', 'Trámites'],
         ['portal.facturas', 'facturas', 'Facturas'],
         ['portal.incapacidades', 'incapacidades', 'Incapacidades'],
         ['portal.retirados', 'retirados', 'Retirados'],
@@ -180,10 +181,10 @@
 
         /* ── Navegación inferior (celular) ─────────────────────── */
         .pt-abajo { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; background: rgba(255,255,255,.96);
-            backdrop-filter: blur(10px); border-top: 1px solid var(--borde); display: grid; grid-template-columns: repeat(4, 1fr);
+            backdrop-filter: blur(10px); border-top: 1px solid var(--borde); display: grid; grid-template-columns: repeat(5, 1fr);
             height: calc(var(--alto-barra) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); }
         .pt-abajo a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .2rem;
-            text-decoration: none; color: #94a3b8; font-size: .66rem; font-weight: 700; position: relative; transition: color .15s; }
+            text-decoration: none; color: #94a3b8; font-size: .62rem; font-weight: 700; position: relative; transition: color .15s; }
         .pt-abajo a .ic { transition: transform .2s; }
         .pt-abajo a.activo { color: var(--azul-btn); }
         .pt-abajo a.activo .ic { transform: translateY(-2px) scale(1.08); }
@@ -242,7 +243,7 @@
 
             <nav class="pt-nav" aria-label="Secciones">
                 @foreach($menu as [$ruta, $icono, $texto])
-                    <a href="{{ route($ruta) }}" class="{{ request()->routeIs($ruta) ? 'activo' : '' }}">
+                    <a href="{{ route($ruta) }}" class="{{ request()->routeIs($ruta, $ruta.'.*') ? 'activo' : '' }}">
                         @include('portal._icono', ['n' => $icono, 'clase' => 'ic-sm']) {{ $texto }}
                     </a>
                 @endforeach
@@ -278,7 +279,7 @@
     </main>
 
     <footer class="pt-pie">
-        <span>Este portal es solo de consulta. Para ingresos, retiros o cambios, escríbele a tu asesor.</span>
+        <span>Para ingresos, retiros, incapacidades o cambios, usa <a href="{{ route('portal.tramites') }}" style="font-weight:700">Trámites</a>: nosotros los revisamos y ejecutamos.</span>
         @if($whatsAliado)
             <a class="pt-wa" href="https://wa.me/{{ $whatsAliado }}" target="_blank" rel="noopener">
                 @include('portal._icono', ['n' => 'whatsapp', 'clase' => 'ic-sm']) Escribir a {{ $aliadoPortal->nombre }}
@@ -288,7 +289,7 @@
 
     <nav class="pt-abajo" aria-label="Secciones">
         @foreach($menu as [$ruta, $icono, $texto])
-            <a href="{{ route($ruta) }}" class="{{ request()->routeIs($ruta) ? 'activo' : '' }}">
+            <a href="{{ route($ruta) }}" class="{{ request()->routeIs($ruta, $ruta.'.*') ? 'activo' : '' }}">
                 @include('portal._icono', ['n' => $icono]) {{ $texto }}
             </a>
         @endforeach

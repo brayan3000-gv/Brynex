@@ -131,6 +131,17 @@
   @if($esEdicion) @method('PUT') @endif
   <input type="hidden" name="cedula" value="{{ old('cedula', $cliente->cedula ?? $contrato->cedula ?? '') }}">
   <input type="hidden" name="back_url" value="{{ $backUrl ?? '' }}">
+  @if(!empty($solicitudPortal))
+    {{-- Ingreso pedido por la empresa desde su portal: al guardar queda aprobado. --}}
+    <input type="hidden" name="empresa_solicitud_id" value="{{ $solicitudPortal->id }}">
+    <div style="background:linear-gradient(135deg,#eff6ff,#e0f2fe);border:1px solid #93c5fd;border-radius:12px;padding:.8rem 1rem;margin-bottom:1rem;font-size:.82rem;color:#1e3a8a;">
+      <div style="font-weight:800;margin-bottom:.25rem;">🌐 Ingreso pedido por {{ $solicitudPortal->empresa?->empresa }} desde su portal</div>
+      Plan pedido: <b>{{ $solicitudPortal->datos['plan_nombre'] ?? '—' }}</b>
+      · Ingreso: <b>{{ !empty($solicitudPortal->datos['fecha_ingreso']) ? \Illuminate\Support\Carbon::parse($solicitudPortal->datos['fecha_ingreso'])->format('d/m/Y') : '—' }}</b>
+      · Cargo: <b>{{ $solicitudPortal->datos['cargo'] ?? '—' }}</b>
+      <div style="font-size:.74rem;color:#475569;margin-top:.25rem;">Escoge razón social, modalidad y plan, y pon salario y nivel de riesgo. Al guardar, la empresa ve el ingreso aprobado.</div>
+    </div>
+  @endif
   @if(request()->has('iframe'))
   <input type="hidden" name="iframe" value="1">
   @endif

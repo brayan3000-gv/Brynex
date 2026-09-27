@@ -155,6 +155,41 @@ body {
 .autocomplete-item:hover { background:#f0f9ff; }
 .autocomplete-wrap { position:relative; }
 
+/* Solicitud del portal de empresas */
+.sol-portal { background:#fff; border:1px solid #bfdbfe; border-radius:12px; padding:1rem 1.1rem; margin-bottom:1rem; box-shadow:0 2px 10px rgba(37,99,235,.06); }
+.sp-cab { display:flex; justify-content:space-between; align-items:center; gap:.6rem; margin-bottom:.7rem; font-size:.85rem; color:#1e3a8a; }
+.sp-sub { color:#64748b; font-weight:500; font-size:.75rem; }
+.sp-estado { border-radius:999px; padding:.15rem .6rem; font-size:.68rem; font-weight:700; white-space:nowrap; }
+.sp-warn { background:#fef3c7; color:#92400e; } .sp-ok { background:#dcfce7; color:#15803d; } .sp-err { background:#fee2e2; color:#b91c1c; }
+.sp-datos { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:.4rem; }
+.sp-dato { background:#f8fafc; border-radius:8px; padding:.4rem .55rem; }
+.sp-dato small { display:block; font-size:.62rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.03em; }
+.sp-dato div { font-size:.8rem; color:#0f172a; font-weight:600; white-space:pre-wrap; overflow-wrap:anywhere; }
+.sp-archivos { display:flex; flex-wrap:wrap; gap:.35rem; margin-top:.6rem; }
+.sp-archivo { font-size:.72rem; font-weight:600; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:7px; padding:.25rem .55rem; text-decoration:none; }
+.sp-acciones { border-top:1px dashed #cbd5e1; margin-top:.8rem; padding-top:.8rem; }
+.sp-ruaf { font-size:.78rem; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:8px; padding:.45rem .65rem; margin-bottom:.6rem; }
+.sp-pasos { display:grid; gap:.5rem; }
+.sp-pasos > div { display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+.sp-pasos small { color:#64748b; font-size:.7rem; }
+.sp-num { width:20px; height:20px; border-radius:50%; background:#1e40af; color:#fff; font-size:.68rem; font-weight:800; display:grid; place-items:center; }
+.sp-btn { display:inline-flex; align-items:center; gap:.3rem; background:#2563eb; color:#fff; border:none; border-radius:8px; padding:.4rem .8rem; font-size:.76rem; font-weight:700; cursor:pointer; text-decoration:none; transition:background .15s, transform .1s; }
+.sp-btn:hover { background:#3b82f6; transform:translateY(-1px); color:#fff; }
+.sp-btn:disabled { opacity:.6; cursor:wait; transform:none; }
+.sp-sec { background:#f1f5f9; color:#334155; } .sp-sec:hover { background:#e2e8f0; color:#334155; }
+.sp-rojo { background:#dc2626; } .sp-rojo:hover { background:#ef4444; }
+.sp-fila { display:flex; align-items:flex-end; gap:.6rem; flex-wrap:wrap; font-size:.75rem; color:#475569; font-weight:600; }
+.sp-fila label { display:flex; flex-direction:column; gap:.2rem; }
+.sp-fila .sp-check { flex-direction:row; align-items:center; gap:.3rem; padding-bottom:.45rem; }
+.sp-fila input[type=date], .sp-fila select { padding:.35rem .5rem; border:1px solid #cbd5e1; border-radius:7px; font-size:.78rem; }
+.sp-nota { display:block; color:#64748b; font-size:.7rem; margin-top:.4rem; }
+.sp-alerta { flex-basis:100%; font-size:.72rem; color:#92400e; background:#fffbeb; border:1px solid #fde68a; border-radius:7px; padding:.35rem .55rem; }
+.sp-rechazo { margin-top:.7rem; font-size:.75rem; }
+.sp-rechazo summary { cursor:pointer; color:#b91c1c; font-weight:700; }
+.sp-rechazo textarea { width:100%; min-height:55px; margin:.5rem 0; border:1px solid #cbd5e1; border-radius:7px; padding:.4rem .55rem; font-size:.78rem; box-sizing:border-box; }
+.visible-empresa { align-items:center; gap:.4rem; font-size:.75rem; font-weight:600; color:#1d4ed8; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:.4rem .6rem; margin-top:.4rem; cursor:pointer; }
+.ve-pill { display:inline-block; margin-left:.35rem; font-size:.6rem; font-weight:700; color:#1d4ed8; background:#dbeafe; border-radius:999px; padding:.05rem .45rem; vertical-align:middle; }
+
 /* Timeline gestiones */
 .timeline { padding:.5rem 0; }
 .tl-item  { display:flex; gap:.85rem; margin-bottom:1rem; align-items:flex-start; }
@@ -302,6 +337,9 @@ body {
 @section('contenido')
 @php
     $tipos = \App\Models\Tarea::TIPOS;
+    // Filtro y edición también conocen las que abre una empresa desde su
+    // portal; crear a mano sigue ofreciendo solo las de siempre ($tipos).
+    $tiposTodos = $tipos + \App\Models\Tarea::TIPOS_PORTAL;
     $estados = \App\Models\Tarea::ESTADOS;
 @endphp
 
@@ -352,7 +390,7 @@ body {
         
         <select name="tipo" onchange="this.form.submit()" style="padding:0.3rem 0.5rem; font-size:0.75rem; height:28px; box-sizing:border-box;">
             <option value="">📋 Todos los tipos</option>
-            @foreach($tipos as $key => $label)
+            @foreach($tiposTodos as $key => $label)
                 @php $cnt = $resumenTipos[$key] ?? 0; @endphp
                 <option value="{{ $key }}" {{ request('tipo') === $key ? 'selected' : '' }}>
                     {{ $label }} {{ $cnt > 0 ? "($cnt)" : '' }}
@@ -660,6 +698,9 @@ body {
                 </div>
             </div>
 
+            {{-- Solicitud del portal de empresas (si la tarea la abrió una empresa) --}}
+            <div id="detSolicitud" class="sol-portal" style="display:none;"></div>
+
             {{-- Formulario de Edición (Habilitable inline) --}}
             <div id="contenedorFormEditar" class="detalle-tarea-container" style="background:#f0f9ff; border:1px solid #bae6fd; border-radius:12px; padding:1.25rem; margin-bottom:1rem; display:none; box-shadow: 0 1px 4px rgba(59,130,246,0.05);">
                 <form id="formEditar" method="POST" action="">
@@ -670,7 +711,7 @@ body {
                             <label>Tipo de Tarea *</label>
                             <select name="tipo" id="editTipo" required>
                                 <option value="">— Seleccionar —</option>
-                                @foreach($tipos as $k => $v)
+                                @foreach($tiposTodos as $k => $v)
                                     <option value="{{ $k }}">{{ $v }}</option>
                                 @endforeach
                             </select>
@@ -783,6 +824,9 @@ body {
                             <textarea id="uniGestionObservacion" placeholder="Describa detalladamente el trámite o la nota..." style="min-height:75px;"></textarea>
                         </div>
                     </div>
+                    <label class="visible-empresa" style="display:none;">
+                        <input type="checkbox" id="uniGestionVisible"> 🌐 Que la vea <span class="ve-nombre">la empresa</span> en su portal
+                    </label>
                     {{-- Ocultar campo de recordatorio a petición del usuario --}}
                     <input type="hidden" id="uniGestionRecordarDias" value="0">
                     <div style="display:flex; justify-content:flex-end; gap:0.4rem; margin-top:0.5rem;">
@@ -875,6 +919,9 @@ body {
                             <textarea id="uniCerrarObservacion" placeholder="Describa el resultado final..." style="min-height:80px;"></textarea>
                         </div>
                     </div>
+                    <label class="visible-empresa" style="display:none;">
+                        <input type="checkbox" id="uniCerrarVisible" checked> 🌐 Que la vea <span class="ve-nombre">la empresa</span> en su portal
+                    </label>
                     <div style="display:flex;justify-content:flex-end;margin-top:.5rem;">
                         <button class="btn-danger" onclick="enviarCerrarUnificado()">🏁 Cerrar Tarea Definitivamente</button>
                     </div>
@@ -1224,6 +1271,15 @@ function abrirModalUnico(id) {
                 mostrarSubAccion('traslado');
             }
             
+            // Solicitud del portal y casilla «visible para la empresa»
+            pintarSolicitudPortal(data.solicitud);
+            document.querySelectorAll('.visible-empresa').forEach(el => {
+                el.style.display = data.empresa_portal ? 'flex' : 'none';
+                el.querySelector('.ve-nombre').textContent = data.empresa_portal?.nombre ?? 'la empresa';
+            });
+            document.getElementById('uniGestionVisible').checked = false;
+            document.getElementById('uniCerrarVisible').checked = !!data.empresa_portal;
+
             // Llenar Documentos Adjuntos
             let docsHtml = '';
             (t.documentos ?? []).forEach(d => {
@@ -1231,8 +1287,8 @@ function abrirModalUnico(id) {
                 <div class="doc-item" style="padding: 0.45rem 0.6rem; margin-bottom:0.35rem; border-radius:8px; display:flex; align-items:center; gap:0.5rem; border: 1px solid #e2e8f0; background:#f8fafc;">
                     <div class="doc-icon" style="font-size:1.1rem; line-height:1;">📎</div>
                     <div class="doc-info" style="flex:1; min-width:0;">
-                        <div class="doc-name" style="font-size:0.75rem; font-weight:600; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${d.nombre}">${d.nombre}</div>
-                        <div class="doc-meta" style="font-size:0.62rem; color:#94a3b8;">Subido por ${d.user?.nombre ?? '?'}</div>
+                        <div class="doc-name" style="font-size:0.75rem; font-weight:600; color:#1e293b; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${esc(d.nombre)}">${esc(d.nombre)}</div>
+                        <div class="doc-meta" style="font-size:0.62rem; color:#94a3b8;">Subido por ${esc(d.user?.nombre ?? '?')}</div>
                     </div>
                     <a href="/admin/tareas/documento/${d.id}" class="btn-download" style="padding:0.25rem 0.5rem; font-size:0.68rem; font-weight:700; border-radius:6px; background:rgba(37,99,235,0.1); color:#2563eb;" target="_blank">⬇ Descargar</a>
                 </div>`;
@@ -1273,11 +1329,12 @@ function abrirModalUnico(id) {
                 <tr style="border-bottom:1px solid #f1f5f9;">
                     <td style="padding:0.6rem 0.75rem; vertical-align:top;">${pastilla}</td>
                     <td style="padding:0.6rem 0.75rem; vertical-align:top; font-size:0.78rem; color:#334155; font-weight:500; word-break:break-word;">
-                        ${g.observacion}
+                        ${esc(g.observacion)}
+                        ${g.visible_empresa ? '<span class="ve-pill" title="La empresa la ve en su portal">🌐 Visible para la empresa</span>' : ''}
                         ${trasladoDetalle}
                     </td>
                     <td style="padding:0.6rem 0.75rem; vertical-align:top; color:#475569; font-size:0.7rem;">
-                        <div style="font-weight:700; color:#1e293b;">${g.user?.nombre ?? '?'}</div>
+                        <div style="font-weight:700; color:#1e293b;">${esc(g.user?.nombre ?? '?')}</div>
                         <div style="color:#94a3b8; font-size:0.65rem;">${fecha}</div>
                     </td>
                     <td style="padding:0.6rem 0.75rem; vertical-align:top; font-size:0.72rem;">${recordatorioHtml}</td>
@@ -1381,6 +1438,7 @@ function enviarGestionUnificada() {
         tipo_accion: document.getElementById('uniGestionTipoAccion').value,
         observacion: obs,
         recordar_dias: document.getElementById('uniGestionRecordarDias').value,
+        visible_empresa: document.getElementById('uniGestionVisible').checked ? 1 : 0,
         nuevo_estado: document.getElementById('uniGestionNuevoEstado')?.value,
         _token: '{{ csrf_token() }}'
     };
@@ -1451,7 +1509,7 @@ function enviarCerrarUnificado() {
             'Content-Type': 'application/json',
             'X-CSRF-TOKEN': '{{ csrf_token() }}'
         },
-        body: JSON.stringify({ resultado, observacion: obs })
+        body: JSON.stringify({ resultado, observacion: obs, visible_empresa: document.getElementById('uniCerrarVisible').checked ? 1 : 0 })
     })
     .then(r => r.json())
     .then(d => {
@@ -1501,6 +1559,144 @@ function subirDocumentoUnificado(input) {
 function actualizarLimiteTipo(tipo) {
     // El backend calcula la fecha límite al crear
 }
+
+// ── Solicitudes del portal de empresas ─────────────────────────────────────
+// Texto que llega del portal o de un usuario: nunca se pinta como HTML.
+function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function postPortal(url, body) {
+    return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+        body: JSON.stringify(body || {}),
+    }).then(async r => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || d.ok === false) throw new Error(d.mensaje || d.message || 'No se pudo completar.');
+        return d;
+    });
+}
+
+function trasAccionPortal(d) {
+    mostrarToast('✅ ' + (d.mensaje || 'Listo'));
+    if (d.url) window.open(d.url, '_blank');
+    abrirModalUnico(tareaIdActivo);
+    setTimeout(() => location.reload(), 1500);
+}
+
+function pintarSolicitudPortal(sol) {
+    const cont = document.getElementById('detSolicitud');
+    if (!sol) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+
+    const colorEstado = { pendiente: 'sp-warn', aprobada: 'sp-ok', rechazada: 'sp-err' }[sol.estado] || 'sp-warn';
+    const datos = sol.datos.map(f => `<div class="sp-dato"><small>${esc(f.etiqueta)}</small><div>${esc(f.valor)}</div></div>`).join('');
+    const archivos = sol.archivos.length
+        ? sol.archivos.map(a => `<a class="sp-archivo" href="${a.url}" target="_blank" rel="noopener">📎 ${esc(a.nombre)}</a>`).join('')
+        : '';
+
+    let acciones = '';
+    const a = sol.acciones;
+    if (a) {
+        if (sol.tipo === 'ingreso') {
+            const ficha = a.ficha.existe
+                ? `<a class="sp-btn sp-sec" href="${a.ficha.url}" target="_blank">👤 Abrir ficha existente</a>
+                   ${a.ficha.otra_empresa ? `<div class="sp-alerta">⚠️ Esta persona ya tiene ficha y está ligada a otra empresa. Cámbiale la empresa en la ficha antes de crear el contrato, o no le saldrá a ${esc(sol.empresa)}.</div>` : ''}`
+                : `<a class="sp-btn" id="spLinkFicha" href="${a.ficha.url}" target="_blank">👤 Crear ficha con estos datos</a>`;
+            acciones = `
+                <div class="sp-ruaf" id="spRuaf">⏳ Consultando el RUAF…</div>
+                <div class="sp-pasos">
+                    <div><span class="sp-num">1</span> ${ficha}</div>
+                    <div><span class="sp-num">2</span> <a class="sp-btn" href="${a.contrato_url}" target="_blank">📄 Crear contrato</a>
+                        <small>Al guardarlo, la solicitud queda aprobada.</small></div>
+                </div>`;
+            fetch(a.ruaf_url, { headers: { 'Accept': 'application/json' } }).then(r => r.json()).then(r => {
+                const box = document.getElementById('spRuaf');
+                if (!box) return;
+                if (!r.ok) { box.textContent = '⚠️ ' + (r.mensaje || 'El RUAF no respondió.'); return; }
+                if (!r.encontrado) { box.textContent = 'ℹ️ No aparece en el RUAF: no tiene afiliación vigente. EPS y fondo se escogen en la ficha.'; return; }
+                box.innerHTML = `🩺 RUAF · EPS: <b>${esc(r.eps_nombre || '—')}</b> · Pensión: <b>${esc(r.pension_nombre || '—')}</b>${r.estado ? ' · ' + esc(r.estado) : ''}`;
+                const link = document.getElementById('spLinkFicha');
+                if (link) {
+                    const u = new URL(link.href);
+                    if (r.eps_id) u.searchParams.set('eps_id', r.eps_id);
+                    if (r.pension_id) u.searchParams.set('pension_id', r.pension_id);
+                    link.href = u.toString();
+                }
+            }).catch(() => {
+                const box = document.getElementById('spRuaf');
+                if (box) box.textContent = '⚠️ No se pudo consultar el RUAF.';
+            });
+        }
+        if (sol.tipo === 'retiro') {
+            acciones = `
+                <div class="sp-fila">
+                    <label>Fecha de retiro <input type="date" id="spFechaRetiro" value="${esc(a.fecha_retiro || '')}"></label>
+                    <label class="sp-check"><input type="checkbox" id="spCobrarAdmon" checked> Cobrar administración del mes</label>
+                    <button type="button" class="sp-btn" id="spBtnRetiro">✅ Registrar retiro</button>
+                    ${a.contrato_url ? `<a class="sp-btn sp-sec" href="${a.contrato_url}" target="_blank">📄 Ver contrato</a>` : ''}
+                </div>
+                <small class="sp-nota">Queda como retiro pendiente del contrato y sale en la facturación de la empresa de ese mes.</small>`;
+        }
+        if (sol.tipo === 'incapacidad') {
+            const esLaboral = sol.datos.some(f => f.etiqueta === 'Tipo' && /laboral/i.test(f.valor));
+            acciones = `
+                <div class="sp-fila">
+                    <label>Se cobra a
+                        <select id="spTipoEntidad">
+                            <option value="eps" ${esLaboral ? '' : 'selected'}>EPS</option>
+                            <option value="arl" ${esLaboral ? 'selected' : ''}>ARL</option>
+                        </select>
+                    </label>
+                    <button type="button" class="sp-btn" id="spBtnIncap">🏥 Registrar incapacidad</button>
+                </div>
+                <small class="sp-nota">Se crea en Incapacidades con los documentos que subió la empresa. Después la completas allá (radicado, diagnóstico…).</small>`;
+        }
+        acciones += `
+            <details class="sp-rechazo">
+                <summary>✋ No se puede tramitar</summary>
+                <textarea id="spMotivo" placeholder="Explícale a la empresa por qué (lo va a leer)"></textarea>
+                <button type="button" class="sp-btn sp-rojo" id="spBtnRechazar">Rechazar solicitud</button>
+            </details>`;
+    }
+
+    cont.innerHTML = `
+        <div class="sp-cab">
+            <div><b>🌐 ${esc(sol.tipo_label)}</b> <span class="sp-sub">· ${esc(sol.empresa)} · ${esc(sol.recibida)}</span></div>
+            <span class="sp-estado ${colorEstado}">${esc(sol.estado_label)}</span>
+        </div>
+        <div class="sp-datos">${datos}</div>
+        ${archivos ? `<div class="sp-archivos">${archivos}</div>` : ''}
+        ${acciones ? `<div class="sp-acciones">${acciones}</div>` : ''}`;
+    cont.style.display = 'block';
+
+    const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+    bind('spBtnRetiro', (e) => {
+        e.target.disabled = true;
+        postPortal(a.retiro_url, {
+            fecha_retiro: document.getElementById('spFechaRetiro').value,
+            cobrar_admon: document.getElementById('spCobrarAdmon').checked ? 1 : 0,
+        }).then(trasAccionPortal).catch(err => { mostrarToast('❌ ' + err.message); e.target.disabled = false; });
+    });
+    bind('spBtnIncap', (e) => {
+        e.target.disabled = true;
+        postPortal(a.incapacidad_url, { tipo_entidad: document.getElementById('spTipoEntidad').value })
+            .then(trasAccionPortal).catch(err => { mostrarToast('❌ ' + err.message); e.target.disabled = false; });
+    });
+    bind('spBtnRechazar', (e) => {
+        const motivo = document.getElementById('spMotivo').value.trim();
+        if (!motivo) { mostrarToast('⚠️ Escribe el motivo'); return; }
+        e.target.disabled = true;
+        postPortal(a.rechazar_url, { motivo }).then(trasAccionPortal)
+            .catch(err => { mostrarToast('❌ ' + err.message); e.target.disabled = false; });
+    });
+}
+
+// Enlace directo a una tarea (?tarea=ID): lo usa el aviso de solicitudes nuevas.
+document.addEventListener('DOMContentLoaded', () => {
+    const id = new URLSearchParams(location.search).get('tarea');
+    if (id && /^\d+$/.test(id)) abrirModalUnico(parseInt(id, 10));
+});
 
 function mostrarToast(msg) {
     const t = document.getElementById('toast');

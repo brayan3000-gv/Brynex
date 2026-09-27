@@ -52,10 +52,26 @@ class FacturacionController extends Controller
             ->whereColumn('cl.cod_empresa', 'empresas.id')
             ->selectRaw('COUNT(DISTINCT c.id)');
 
+        // Trámites que las empresas abrieron desde su portal: los que siguen
+        // abiertos y, de esos, los que nadie ha mirado todavía.
+        $subPortalAbiertas = DB::table('tareas')
+            ->whereColumn('tareas.empresa_id', 'empresas.id')
+            ->where('tareas.aliado_id', $aliadoId)
+            ->where('tareas.estado', '!=', \App\Models\Tarea::ESTADO_CERRADA)
+            ->whereNull('tareas.deleted_at')
+            ->selectRaw('COUNT(*)');
+        $subPortalNuevas = DB::table('empresa_solicitudes')
+            ->whereColumn('empresa_solicitudes.empresa_id', 'empresas.id')
+            ->where('empresa_solicitudes.estado', 'pendiente')
+            ->whereNull('empresa_solicitudes.vista_at')
+            ->selectRaw('COUNT(*)');
+
         $empresas = Empresa::where('aliado_id', $aliadoId)
             ->where('id', '>', 1)
             ->select(['id', 'empresa', 'nit', 'contacto', 'telefono', 'celular', 'iva'])
             ->selectSub($subContratos, 'contratos_activos_count')
+            ->selectSub($subPortalAbiertas, 'portal_abiertas')
+            ->selectSub($subPortalNuevas, 'portal_nuevas')
             ->get()
             ->sortBy([
                 // Las que tienen contratos activos van primero

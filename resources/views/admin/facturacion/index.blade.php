@@ -114,6 +114,7 @@
                 <div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.45rem;">
                     <span style="font-size:1.4rem;line-height:1;">🏢</span>
                     <h3 style="margin:0;font-size:0.95rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:0.02em;">{{ $emp->empresa }}</h3>
+                    @include('admin.facturacion.partials.portal_chip', ['emp' => $emp])
                 </div>
                 {{-- Fila 2: badge + contacto + celular --}}
                 <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap;font-size:0.78rem;color:#475569;">
@@ -143,6 +144,7 @@
                 <div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.45rem;">
                     <span style="font-size:1.4rem;line-height:1;">🏢</span>
                     <h3 style="margin:0;font-size:0.95rem;font-weight:800;color:#0f172a;text-transform:uppercase;letter-spacing:0.02em;">{{ $emp->empresa }}</h3>
+                    @include('admin.facturacion.partials.portal_chip', ['emp' => $emp])
                 </div>
                 {{-- Fila 2: badge + contacto + celular --}}
                 <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap;font-size:0.78rem;color:#475569;">

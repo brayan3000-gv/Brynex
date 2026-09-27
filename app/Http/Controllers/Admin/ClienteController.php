@@ -134,7 +134,10 @@ class ClienteController extends Controller
         // Pre-llenado desde el modal "Nuevo Cliente" del listado: ya consultó
         // BDUA/RUAF y el usuario confirmó que la persona es la correcta.
         // Deliberadamente no se toca "observacion" aquí.
-        $campos = ['cedula', 'tipo_doc', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido', 'eps_id', 'pension_id'];
+        // El resto viene de una solicitud de ingreso del portal de empresas
+        // (EmpresaSolicitudPanel): la ficha nace ya ligada a la empresa.
+        $campos = ['cedula', 'tipo_doc', 'primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido', 'eps_id', 'pension_id',
+            'fecha_nacimiento', 'genero', 'celular', 'correo', 'departamento_id', 'municipio_id', 'direccion_vivienda', 'cod_empresa'];
         foreach (request()->only($campos) as $campo => $valor) {
             if ($valor !== null && $valor !== '') {
                 $cliente->{$campo} = $valor;

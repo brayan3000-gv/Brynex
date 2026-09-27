@@ -14,11 +14,14 @@ class TareaGestion extends BaseModel
         'tarea_id', 'user_id', 'tipo_accion',
         'observacion', 'recordar_dias', 'fecha_alerta',
         'encargado_anterior', 'encargado_nuevo', 'estado_tarea',
+        // La ve la empresa en su portal como un avance. Ver EmpresaSolicitud.
+        'visible_empresa',
     ];
 
     protected $casts = [
         'created_at'  => 'datetime',
         'fecha_alerta'=> 'date',
+        'visible_empresa' => 'boolean',
     ];
 
     const TIPOS_ACCION = [

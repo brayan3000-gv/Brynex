@@ -251,6 +251,17 @@
                             </button>
                         </div>
 
+                        <template x-if="!sel.retirado">
+                            <div class="panel-acciones">
+                                <a class="btn btn-sec" :href="`{{ route('portal.tramites.nuevo') }}?tipo=incapacidad&contrato=${sel.contrato_id}`">
+                                    @include('portal._icono', ['n' => 'incapacidades', 'clase' => 'ic-sm']) Reportar incapacidad
+                                </a>
+                                <a class="btn btn-sec" :href="`{{ route('portal.tramites.nuevo') }}?tipo=retiro&contrato=${sel.contrato_id}`">
+                                    @include('portal._icono', ['n' => 'retirados', 'clase' => 'ic-sm']) Solicitar retiro
+                                </a>
+                            </div>
+                        </template>
+
                         <div class="panel-sec">
                             <h3>Afiliación</h3>
                             <div class="datos">
@@ -325,6 +336,8 @@
 
 @push('estilos')
 <style>
+    .panel-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: 1rem; }
+    .panel-acciones .btn { font-size: .8rem; padding: .55rem .6rem; }
     .selector-mes { display: flex; align-items: center; gap: .4rem; }
     .selector-form { display: flex; gap: .4rem; }
     .selector-form select { font: inherit; font-size: .88rem; font-weight: 600; border: 1.5px solid var(--borde); border-radius: 9px;

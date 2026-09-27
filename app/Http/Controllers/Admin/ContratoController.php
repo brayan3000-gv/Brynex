@@ -67,10 +67,34 @@ class ContratoController extends Controller
         $cliente = $cedula ? Cliente::where('cedula', $cedula)
             ->where('aliado_id', $alidoId)->first() : null;
 
+        // Viene de una solicitud de ingreso del portal de empresas: la fecha y
+        // el cargo que pidió la empresa llegan puestos, y el plan se muestra
+        // arriba para escogerlo junto con la razón social y la modalidad.
+        $solicitudPortal = $this->solicitudIngresoPendiente($request->integer('solicitud'), $alidoId, $cedula);
+        $contrato = new Contrato;
+        if ($solicitudPortal) {
+            $contrato->fecha_ingreso = $solicitudPortal->datos['fecha_ingreso'] ?? null;
+            $contrato->cargo = $solicitudPortal->datos['cargo'] ?? null;
+        }
+
         return view('admin.contratos.form', array_merge(
             $this->datosFormulario($alidoId, $cliente, null, null),
-            ['contrato' => new Contrato, 'cliente' => $cliente]
+            ['contrato' => $contrato, 'cliente' => $cliente, 'solicitudPortal' => $solicitudPortal]
         ));
+    }
+
+    /** La solicitud de ingreso del portal que está pendiente para esa cédula. */
+    private function solicitudIngresoPendiente(int $id, $alidoId, ?string $cedula): ?\App\Models\EmpresaSolicitud
+    {
+        if (! $id || ! $cedula) {
+            return null;
+        }
+
+        return \App\Models\EmpresaSolicitud::where('aliado_id', $alidoId)
+            ->where('tipo', 'ingreso')
+            ->where('estado', 'pendiente')
+            ->where('cedula', $cedula)
+            ->find($id);
     }
 
     // ─── Guardar nuevo contrato ───────────────────────────────────────
@@ -120,6 +144,18 @@ class ContratoController extends Controller
                         ->update(['operador_planilla_id' => $operadorId]);
                 }
             }
+        }
+
+        // Si nació de una solicitud de ingreso del portal, la empresa ve que
+        // quedó aprobada y la tarea se cierra.
+        if ($solicitud = $this->solicitudIngresoPendiente($request->integer('empresa_solicitud_id'), $alidoId, $nuevoContrato->cedula)) {
+            app(\App\Services\EmpresaSolicitudService::class)->resolver(
+                $solicitud,
+                'aprobada',
+                'Afiliamos a '.($solicitud->datos['nombre'] ?? $nuevoContrato->cedula).' con ingreso el '
+                    .$nuevoContrato->fecha_ingreso?->format('d/m/Y').'. Ya sale en «Mi mes».',
+                (int) $nuevoContrato->id
+            );
         }
 
         // Redirigir al cliente del contrato creado

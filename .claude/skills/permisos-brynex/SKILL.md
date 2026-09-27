@@ -182,6 +182,13 @@ Se autentica en el guard **`empresa`** (modelo `EmpresaAcceso`, tabla
   `facturacion.portal_empresas` (sin rol; el superadmin lo tiene por Gate::before).
 - Los valores salen de `EmpresaPeriodoService`, el mismo que pinta
   `admin/facturacion/empresa/{id}`: si cambia un cálculo, cambia en los dos.
+- **Trámites** (`/portal/tramites`): la empresa pide ingresos, retiros,
+  incapacidades u otras cosas. Nada se ejecuta solo: cada envío crea una
+  `EmpresaSolicitud` y una tarea (`tareas.empresa_id`, tipos `portal_*`) para el
+  encargado de la empresa. El equipo la resuelve desde el detalle de la tarea
+  (`EmpresaSolicitudController`); el ingreso se aprueba al crear el contrato con
+  `?solicitud=`. La empresa solo ve las gestiones con `visible_empresa = 1` y
+  no ve la descripción de las tareas internas. Los adjuntos van al disco `local`.
 
 ## `es_brynex`: no es un rol, es un flag de identidad
 
