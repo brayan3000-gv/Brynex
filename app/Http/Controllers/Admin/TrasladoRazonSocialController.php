@@ -234,7 +234,7 @@ class TrasladoRazonSocialController extends Controller
             $contratos = Contrato::where('aliado_id', $aliadoId)
                 ->whereIn('id', $validated['contrato_ids'])
                 ->where('estado', 'vigente')
-                ->with(['plan', 'eps', 'pension', 'arl', 'caja', 'cliente'])
+                ->with(['plan', 'eps', 'pension', 'arl', 'caja', 'cliente', 'razonSocial'])
                 ->get();
 
             foreach ($contratos as $contratoOrigen) {
@@ -274,7 +274,10 @@ class TrasladoRazonSocialController extends Controller
                         'costo_afiliacion'        => $contratoOrigen->costo_afiliacion,
                         'seguro'                  => $contratoOrigen->seguro,
                         'asesor_id'               => $contratoOrigen->asesor_id,
-                        'motivo_afiliacion_id'    => $contratoOrigen->motivo_afiliacion_id,
+                        // El contrato nuevo no es una afiliación nueva: es la misma
+                        // persona que cambia de razón social.
+                        'motivo_afiliacion_id'    => $this->motivoCambioRazonSocial('motivos_afiliacion')
+                            ?? $contratoOrigen->motivo_afiliacion_id,
                         'actividad_economica_id'  => $contratoOrigen->actividad_economica_id,
                         'envio_planilla'          => $contratoOrigen->envio_planilla,
                         'fecha_probable_pago'     => $contratoOrigen->fecha_probable_pago,
@@ -282,7 +285,8 @@ class TrasladoRazonSocialController extends Controller
                         'cobra_planilla_primer_mes' => $contratoOrigen->cobra_planilla_primer_mes,
                         'np'                      => $contratoOrigen->np,
                         'observacion'             => $contratoOrigen->observacion,
-                        'observacion_afiliacion'  => "Traslado desde RS #{$contratoOrigen->razon_social_id}. Contrato origen #{$contratoOrigen->id}.",
+                        'observacion_afiliacion'  => 'Traslado desde ' . ($contratoOrigen->razonSocial?->razon_social ?? "RS #{$contratoOrigen->razon_social_id}")
+                            . " (contrato #{$contratoOrigen->id}).",
                         'fecha_created'           => now(),
                     ]);
 
@@ -675,8 +679,9 @@ class TrasladoRazonSocialController extends Controller
                     ]);
 
                     $contrato->update([
-                        'estado'       => 'retirado',
-                        'fecha_retiro' => $fechaRet,
+                        'estado'           => 'retirado',
+                        'fecha_retiro'     => $fechaRet,
+                        'motivo_retiro_id' => $this->motivoCambioRazonSocial('motivos_retiro') ?? $contrato->motivo_retiro_id,
                     ]);
 
                     return $plano;
@@ -870,8 +875,9 @@ class TrasladoRazonSocialController extends Controller
 
                     // Marcar contrato anterior como retirado
                     $contrato->update([
-                        'estado'       => 'retirado',
-                        'fecha_retiro' => $fechaRet,
+                        'estado'           => 'retirado',
+                        'fecha_retiro'     => $fechaRet,
+                        'motivo_retiro_id' => $this->motivoCambioRazonSocial('motivos_retiro') ?? $contrato->motivo_retiro_id,
                     ]);
 
                     $procesados[] = [
@@ -1056,6 +1062,14 @@ class TrasladoRazonSocialController extends Controller
         } catch (\Exception $e) {
             abort(500, 'Error al generar la planilla: ' . $e->getMessage());
         }
+    }
+
+    /** Id del motivo "Cambio Razón Social" (de afiliación o de retiro), si existe. */
+    private function motivoCambioRazonSocial(string $tabla): ?int
+    {
+        static $cache = [];
+
+        return $cache[$tabla] ??= (DB::table($tabla)->where('nombre', 'like', 'Cambio Raz%n Social')->value('id') ?: null);
     }
 
     // ─── API: Lista de n_plano disponibles de una RS ──────────────────────────
