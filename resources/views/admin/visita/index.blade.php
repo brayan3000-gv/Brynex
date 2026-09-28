@@ -243,7 +243,7 @@
                         <div class="fila" x-show="k.resumen.desglose.mora"><span>Mora</span><span class="num" x-text="plata(k.resumen.desglose.mora)"></span></div>
                         <div class="fila" style="font-weight:700"><span>Total del mes</span><span class="num" x-text="plata(k.resumen.total_mes)"></span></div>
                         <div class="fila resta" x-show="k.resumen.saldo_favor"><span>Saldo a favor</span><span class="num" x-text="'− ' + plata(k.resumen.saldo_favor)"></span></div>
-                        <div class="fila resta" x-show="k.resumen.anticipos"><span>Anticipos de este contrato</span><span class="num" x-text="'− ' + plata(k.resumen.anticipos)"></span></div>
+                        <div class="fila resta" x-show="k.resumen.anticipos"><span>Anticipos a su favor</span><span class="num" x-text="'− ' + plata(k.resumen.anticipos)"></span></div>
                         <div class="sep"></div>
                         <div class="falta"><span style="font-weight:700">Falta pagar</span><b class="num" x-text="plata(k.resumen.falta)"></b></div>
                         <div style="color:var(--tenue);font-size:.72rem" x-show="k.resumen.mora_info" x-text="k.resumen.mora_info"></div>

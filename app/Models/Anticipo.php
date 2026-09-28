@@ -198,13 +198,26 @@ class Anticipo extends BaseModel
     }
 
     /**
-     * Anticipos disponibles para un contrato (lista completa para el modal facturar).
+     * Anticipos que puede consumir la factura de un contrato (modal facturar
+     * y cobro en visita).
+     *
+     * El anticipo es de quien pagó —la cédula—, no del contrato donde se
+     * registró: entran los de la persona en cualquiera de sus contratos,
+     * primero los del mismo contrato. También las partes de un anticipo de
+     * empresa ya repartidas a esa cédula. Decisión del dueño, 28-sep-2026:
+     * antes una persona con dos contratos veía su anticipo en uno y en el
+     * otro le cobraban completo.
      */
     public static function disponiblesParaContrato(int $aliadoId, int $contratoId): \Illuminate\Support\Collection
     {
+        $cedula = Contrato::where('aliado_id', $aliadoId)->whereKey($contratoId)->value('cedula');
+
         return static::aliado($aliadoId)
-            ->porContrato($contratoId)
             ->conSaldo()
+            ->where('estado', '!=', self::ESTADO_DISTRIBUIDO)
+            ->where(fn ($q) => $q->where('contrato_id', $contratoId)
+                ->when($cedula, fn ($q2) => $q2->orWhere('cedula', (string) $cedula)))
+            ->orderByRaw('CASE WHEN contrato_id = ? THEN 0 ELSE 1 END', [$contratoId])
             ->orderBy('fecha_pago')
             ->get();
     }

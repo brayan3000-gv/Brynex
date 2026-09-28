@@ -46,6 +46,7 @@ class VisitaCobroService
         $mora = (int) ($mp['mora_cliente'] ?? 0);
         $totalMes = (int) $calc['total'] - (int) $calc['mora'] + $mora;
         $saldoFavor = (int) ($mp['saldo_a_favor'] ?? 0);
+        // Los de la cédula en cualquier contrato (ver Anticipo::disponiblesParaContrato).
         $anticipos = Anticipo::disponiblesParaContrato($aliadoId, $contrato->id);
         $totalAnticipos = (int) $anticipos->sum('valor_disponible');
         $falta = max(0, $totalMes - $saldoFavor - $totalAnticipos);
