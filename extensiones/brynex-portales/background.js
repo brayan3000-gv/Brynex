@@ -1546,37 +1546,41 @@ async function cfdEntrar(tab, d) {
   // y un clic sintético no la despliega —solo uno de verdad—. Con `focus()` sí
   // se abre, y escribirle "NIT" la deja en una sola opción, que ya acepta el
   // clic. Pulsar el combo, como se hacía antes, no elegía nada.
-  await esperarQue(tab, () => {
+  // Escribir y elegir, en la misma espera.
+  //
+  // Antes eran dos esperas encadenadas y la primera no podía cumplirse nunca:
+  // se quedaba mirando el campo oculto, que solo cambia con el clic de la
+  // SEGUNDA. Así que durante veinte segundos reescribía "NIT" en el buscador y
+  // volvía a abrir la lista una y otra vez —lo que se veía en pantalla era el
+  // desplegable abierto y el trámite parado— y solo al agotarse pasaba a
+  // pulsar. Ahora, cada vuelta: si el oculto ya dice NIT, listo; si la opción
+  // está en pantalla, se pulsa; y si no, se escribe (una sola vez, no en cada
+  // vuelta).
+  const tipoOk = await esperarQue(tab, () => {
     const oculto = document.querySelector('input[name=identification_type_up]');
     if (!oculto) return false;
     if (oculto.value === 'NIT') return true;
 
-    const caja = [...document.querySelectorAll('input')].find(e => /tipo de documento/i.test(e.placeholder || ''));
+    const li = [...document.querySelectorAll('li')].find(e => e.offsetParent && /^\s*NIT\b/i.test(e.innerText || ''));
+    if (li) {
+      const destino = li.querySelector('button,a,span') || li;
+      ['pointerdown', 'mousedown', 'mouseup', 'click']
+        .forEach(t => destino.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+      return false;                                          // se confirma leyendo el oculto en la vuelta siguiente
+    }
+
+    const caja = document.getElementById('identification_type_search')
+      || [...document.querySelectorAll('input')].find(e => /tipo de documento/i.test(e.placeholder || ''));
     if (!caja) return false;
 
-    caja.focus();
-    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    set.call(caja, 'NIT');
-    caja.dispatchEvent(new Event('input', { bubbles: true }));
-    return false;                                            // se elige en la vuelta siguiente
-  }, [], 20000);
-
-  await esperarQue(tab, () => {
-    if (document.querySelector('input[name=identification_type_up]')?.value === 'NIT') return true;
-
-    const li = [...document.querySelectorAll('li')].filter(e => e.offsetParent && /^\s*NIT\b/i.test(e.innerText || ''))[0];
-    if (!li) return false;
-
-    const destino = li.querySelector('button,a,span') || li;
-    ['pointerdown', 'mousedown', 'mouseup', 'click']
-      .forEach(t => destino.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+    if (caja.value !== 'NIT') {
+      caja.focus();
+      const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      set.call(caja, 'NIT');
+      caja.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     return false;
-  }, [], 20000);
-
-  // Se comprueba esperando: leerlo una sola vez daba "no se pudo" cuando el
-  // campo aún no había recogido la elección, con el NIT ya puesto en pantalla.
-  const tipoOk = await esperarQue(tab,
-    () => document.querySelector('input[name=identification_type_up]')?.value === 'NIT', [], 8000);
+  }, [], 25000);
 
   if (!tipoOk) {
     return { ok: false, abierta: true, avisoTipo: 'No se pudo escoger "NIT" en Tipo de documento: el portal cambió el formulario.' };
