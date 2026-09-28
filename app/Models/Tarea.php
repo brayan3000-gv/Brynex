@@ -95,6 +95,12 @@ class Tarea extends BaseModel
         return $this->belongsTo(RazonSocial::class, 'razon_social_id');
     }
 
+    /** La empresa que abrió la tarea desde su portal (tareas.empresa_id). */
+    public function empresa(): BelongsTo
+    {
+        return $this->belongsTo(Empresa::class, 'empresa_id');
+    }
+
     /** La solicitud del portal que abrió esta tarea, si la abrió una empresa. */
     public function solicitudEmpresa(): \Illuminate\Database\Eloquent\Relations\HasOne
     {

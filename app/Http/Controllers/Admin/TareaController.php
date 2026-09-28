@@ -34,7 +34,7 @@ class TareaController extends Controller
         $alidoId = session('aliado_id_activo') ?? Auth::user()->aliado_id;
         $user = Auth::user();
 
-        $query = Tarea::with(['encargado', 'creadoPor', 'razonSocial', 'cliente', 'ultimaGestion.user'])
+        $query = Tarea::with(['encargado', 'creadoPor', 'razonSocial', 'cliente', 'ultimaGestion.user', 'empresa:id,empresa'])
             ->withCount(['documentos', 'gestiones'])
             ->where('aliado_id', $alidoId);
 
@@ -339,6 +339,8 @@ class TareaController extends Controller
             // Solicitud de la empresa (si la abrió desde su portal) y si hay una
             // empresa con portal que vería los avances marcados como visibles.
             'solicitud' => $portal['solicitud'],
+            // «🔄 Traslado EPS» en vez de «traslado_eps».
+            'tipo_label' => $tarea->tipoLabel(),
             'empresa_portal' => $portal['empresa'],
             // Fecha de creación ya formateada: evita ambigüedad de zona horaria en el front
             'creada' => $tarea->created_at?->format('d/m/Y h:i a'),

@@ -83,10 +83,16 @@ class ContratoController extends Controller
         ));
     }
 
-    /** La solicitud de ingreso del portal que está pendiente para esa cédula. */
+    /**
+     * La solicitud de ingreso del portal que está pendiente para esa cédula.
+     *
+     * Sin id se busca la más reciente: el equipo suele crear el contrato con
+     * «+ Nuevo Contrato» desde la ficha, no desde la tarea, y si no se liga la
+     * empresa nunca vería su ingreso aprobado.
+     */
     private function solicitudIngresoPendiente(int $id, $alidoId, ?string $cedula): ?\App\Models\EmpresaSolicitud
     {
-        if (! $id || ! $cedula) {
+        if (! $cedula) {
             return null;
         }
 
@@ -94,7 +100,8 @@ class ContratoController extends Controller
             ->where('tipo', 'ingreso')
             ->where('estado', 'pendiente')
             ->where('cedula', $cedula)
-            ->find($id);
+            ->when($id, fn ($q) => $q->whereKey($id), fn ($q) => $q->latest('id'))
+            ->first();
     }
 
     // ─── Guardar nuevo contrato ───────────────────────────────────────
@@ -148,7 +155,8 @@ class ContratoController extends Controller
 
         // Si nació de una solicitud de ingreso del portal, la empresa ve que
         // quedó aprobada y la tarea se cierra.
-        if ($solicitud = $this->solicitudIngresoPendiente($request->integer('empresa_solicitud_id'), $alidoId, $nuevoContrato->cedula)) {
+        if ($request->filled('empresa_solicitud_id')
+            && $solicitud = $this->solicitudIngresoPendiente($request->integer('empresa_solicitud_id'), $alidoId, $nuevoContrato->cedula)) {
             app(\App\Services\EmpresaSolicitudService::class)->resolver(
                 $solicitud,
                 'aprobada',

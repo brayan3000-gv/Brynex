@@ -1433,7 +1433,10 @@
                 el.querySelector('b').textContent = 'Nueva solicitud de ' + s.empresa;
                 el.querySelector('small').textContent = s.tipo + ' · Toca para abrirla';
                 el.querySelector('.ap-x').addEventListener('click', (ev) => { ev.preventDefault(); el.remove(); });
-                document.body.appendChild(el);
+                // En una pila: varios avisos quedan uno encima del otro sin taparse.
+                let pila = document.getElementById('avisos-portal');
+                if (!pila) { pila = document.createElement('div'); pila.id = 'avisos-portal'; document.body.appendChild(pila); }
+                pila.appendChild(el);
                 setTimeout(() => el.classList.add('ap-sale'), 12000);
                 setTimeout(() => el.remove(), 12600);
             }
@@ -1468,11 +1471,11 @@
         @endauth
     </script>
     <style>
-        .aviso-portal { position: fixed; right: 18px; bottom: 18px; z-index: 9999; display: flex; align-items: center; gap: .7rem;
+        #avisos-portal { position: fixed; right: 18px; bottom: 18px; z-index: 9999; display: flex; flex-direction: column; gap: .6rem; align-items: flex-end; }
+        .aviso-portal { position: relative; display: flex; align-items: center; gap: .7rem;
             background: linear-gradient(135deg, #0a1628, #1e40af); color: #fff; text-decoration: none; border-radius: 14px;
             padding: .8rem 1rem; box-shadow: 0 12px 34px rgba(10,22,40,.35); max-width: 340px;
             animation: ap-entra .45s cubic-bezier(.2,.8,.2,1); transition: opacity .5s, transform .5s; }
-        .aviso-portal + .aviso-portal { bottom: 92px; }
         .aviso-portal .ap-ico { font-size: 1.4rem; animation: ap-late 1.4s ease-in-out 2; }
         .aviso-portal b { display: block; font-size: .85rem; }
         .aviso-portal small { display: block; font-size: .72rem; color: #93c5fd; }

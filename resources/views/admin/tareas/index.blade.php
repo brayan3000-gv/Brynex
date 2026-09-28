@@ -485,6 +485,13 @@ body {
             {{-- Cliente: nombre y cédula en el mismo bloque para no gastar
                  una línea entera solo con el número --}}
             <td style="max-width:185px;">
+                @if($t->cedula === '' && $t->empresa_id)
+                {{-- Solicitud general del portal: no es de un trabajador sino de la empresa. --}}
+                <div style="font-size:.76rem;font-weight:600;color:#1e293b;line-height:1.25;">
+                    🏢 {{ $t->empresa?->empresa ?? 'Empresa' }}
+                    <span style="display:block;font-weight:500;color:#94a3b8;">Solicitud general</span>
+                </div>
+                @else
                 <div style="display:flex;align-items:flex-start;gap:.3rem;">
                     <button type="button" class="btn-ficha-cliente"
                             data-cedula="{{ $t->cedula }}"
@@ -496,6 +503,7 @@ body {
                         <span style="font-weight:500;color:#94a3b8;white-space:nowrap;">{{ $t->cliente?->tipo_doc ?: 'CC' }} {{ $t->cedula }}</span>
                     </div>
                 </div>
+                @endif
             </td>
             <td style="max-width:340px;">
                 <div style="font-size:.78rem;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;" title="{{ $t->tarea }}">{{ Str::limit($t->tarea, 75) }}</div>
@@ -1198,15 +1206,18 @@ function abrirModalUnico(id) {
             const t = data.tarea;
             const c = data.cliente;
             
-            const clienteNombre = c ? nombreOracion(c.primer_nombre + ' ' + (c.segundo_nombre ?? '') + ' ' + c.primer_apellido + ' ' + (c.segundo_apellido ?? '')).replace(/\s+/g, ' ') : t.cedula;
-            document.getElementById('modalUnificadoTitulo').innerHTML = `⚙️ Tarea: <span style="color: #fbbf24; font-weight:700;">${t.tipo}</span> <span style="font-size:0.75rem; opacity:0.85; margin-left:0.5rem; font-weight:normal;">(${clienteNombre})</span>`;
+            // Una solicitud general del portal no tiene cédula: es de la empresa.
+            const clienteNombre = c ? nombreOracion(c.primer_nombre + ' ' + (c.segundo_nombre ?? '') + ' ' + c.primer_apellido + ' ' + (c.segundo_apellido ?? '')).replace(/\s+/g, ' ')
+                : (t.cedula || (data.empresa_portal ? '🏢 ' + data.empresa_portal.nombre : '—'));
+            const tipoLabel = data.tipo_label || t.tipo;
+            document.getElementById('modalUnificadoTitulo').innerHTML = `⚙️ Tarea: <span style="color: #fbbf24; font-weight:700;">${esc(tipoLabel)}</span> <span style="font-size:0.75rem; opacity:0.85; margin-left:0.5rem; font-weight:normal;">(${esc(clienteNombre)})</span>`;
             
             // Llenar Ficha de Detalles (Solo Lectura)
-            document.getElementById('detTipo').textContent = t.tipo;
+            document.getElementById('detTipo').textContent = tipoLabel;
             document.getElementById('detCreada').textContent = data.creada ? `Creada: ${data.creada}` : '—';
             document.getElementById('detEncargado').textContent = t.encargado ? t.encargado.nombre : '—';
             document.getElementById('detClienteNombre').textContent = clienteNombre;
-            document.getElementById('detClienteCedula').textContent = `C.C. ${t.cedula}`;
+            document.getElementById('detClienteCedula').textContent = t.cedula ? `C.C. ${t.cedula}` : 'Solicitud general';
             document.getElementById('detEntidad').textContent = t.entidad ? t.entidad : '—';
             document.getElementById('detTarea').textContent = t.tarea;
             

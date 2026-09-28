@@ -60,19 +60,51 @@
         @php
             $mensajePortal = "Portal BryNex de {$empresa->empresa}\n".url('/')."\nUsuario (NIT): {$clave['usuario']}\nClave temporal: {$clave['clave']}\nAl entrar te pedirá cambiarla.";
         @endphp
-        <div class="pe-clave" x-data="{ copiado: false }">
+        <div class="pe-clave" x-data="copiarMensajePortal(@js($mensajePortal))">
             <div style="font-weight:800">🔐 Entrégale estos datos a la empresa</div>
             <div style="font-size:.75rem;color:#cbd5e1">La clave no se vuelve a mostrar. Si se pierde, se restablece.</div>
             <div class="fila">
                 <div><small>Usuario (NIT)</small><code>{{ $clave['usuario'] }}</code></div>
                 <div><small>Clave temporal</small><code>{{ $clave['clave'] }}</code></div>
             </div>
-            <button type="button" class="pe-btn"
-                    @click="navigator.clipboard.writeText(@js($mensajePortal)).then(() => { copiado = true; setTimeout(() => copiado = false, 2000) })">
+            <button type="button" class="pe-btn" @click="copiar()">
                 <span x-show="!copiado">📋 Copiar mensaje para enviar</span>
                 <span x-show="copiado" x-cloak>✅ Copiado</span>
             </button>
+            {{-- Si el navegador no deja copiar, el mensaje queda seleccionado para Ctrl+C. --}}
+            <div x-show="manual" x-cloak style="margin-top:.6rem">
+                <div style="font-size:.72rem;color:#fde68a;margin-bottom:.25rem">No se pudo copiar solo: el mensaje quedó seleccionado, cópialo con Ctrl+C (⌘+C en Mac).</div>
+                <textarea x-ref="texto" readonly rows="5" style="width:100%;box-sizing:border-box;border-radius:8px;border:0;padding:.5rem;font-size:.78rem;color:#0f172a" x-text="mensaje"></textarea>
+            </div>
         </div>
+        @once
+        <script>
+            function copiarMensajePortal(mensaje) {
+                return {
+                    mensaje, copiado: false, manual: false,
+                    async copiar() {
+                        let ok = false;
+                        try { await navigator.clipboard.writeText(this.mensaje); ok = true; } catch (e) {}
+                        if (!ok) {
+                            // Respaldo para navegadores que no dejan usar el portapapeles moderno.
+                            const t = document.createElement('textarea');
+                            t.value = this.mensaje; t.style.position = 'fixed'; t.style.opacity = '0';
+                            document.body.appendChild(t); t.select();
+                            try { ok = document.execCommand('copy'); } catch (e) {}
+                            t.remove();
+                        }
+                        if (ok) {
+                            this.copiado = true;
+                            setTimeout(() => this.copiado = false, 2000);
+                        } else {
+                            this.manual = true;
+                            this.$nextTick(() => { this.$refs.texto.focus(); this.$refs.texto.select(); });
+                        }
+                    },
+                };
+            }
+        </script>
+        @endonce
     @endif
 
     @if(! $accesoPortal)
