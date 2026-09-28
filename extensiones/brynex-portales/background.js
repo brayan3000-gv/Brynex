@@ -1826,7 +1826,16 @@ async function atenderCfd(accion, d = {}) {
  */
 async function cfdConsultar(pestana, d) {
   const tab = pestana.id;
-  const est = await ejecutar(tab, pCfdEstado);
+  let est = await ejecutar(tab, pCfdEstado);
+
+  // «Sin sesión» y «con la sesión abierta pero sin empresa escogida» se ven
+  // igual desde fuera: en los dos casos falta el «actualmente estás en». Y lo
+  // segundo pasa cada pocas afiliaciones. Antes de rendirse, se intenta
+  // escoger la empresa, que es lo que de verdad suele faltar.
+  if (!est.sesion && await cfdEmpresaSiLaPide(tab, d.nit, d.empresa)) {
+    est = await ejecutar(tab, pCfdEstado);
+  }
+
   if (!est.sesion) return { ok: false, error: 'El portal no tiene la sesión iniciada. Entra con el NIT de la empresa y selecciona la empresa.' };
 
   const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -1842,7 +1851,7 @@ async function cfdConsultar(pestana, d) {
   // documento», que no dice nada de lo que pasó.
   await cfdEmpresaSiLaPide(tab, d.nit, d.empresa);
 
-  if (!await cfdIr(tab, 'workers')) {
+  if (!await cfdIr(tab, 'workers', d.nit, d.empresa)) {
     return { ok: false, error: 'No se pudo abrir «Gestión de trabajadores» en el portal.' };
   }
   const ya = await ejecutar(tab, (doc) => {
@@ -2191,7 +2200,7 @@ async function cfdTabla(tab, columnas, limitePaginas = 80) {
  * (`/affiliations`) cuando la navegación no viene de dentro. Por eso se pulsa
  * el enlace del menú lateral, y solo si no está se cae a la URL.
  */
-async function cfdIr(tab, ruta) {
+async function cfdIr(tab, ruta, nit, empresa) {
   const destino = `/sakaar/${ruta}`;
 
   const pulsado = await ejecutar(tab, (d) => {
@@ -2208,7 +2217,21 @@ async function cfdIr(tab, ruta) {
   }
 
   // Llegó cuando la ruta es la pedida; si rebotó al inicio, se reintenta desde allí.
-  const llego = await esperarQue(tab, (d) => location.pathname === d, [destino], 25000);
+  let llego = await esperarQue(tab, (d) => location.pathname === d, [destino], 25000);
+
+  // El rebote casi siempre es que el portal volvió a pedir la empresa: pasa
+  // cada pocas afiliaciones, sin avisar y con la sesión abierta. Se elige y se
+  // vuelve a intentar una vez.
+  if (!llego && await cfdEmpresaSiLaPide(tab, nit, empresa)) {
+    await ejecutar(tab, (d) => {
+      const a = document.querySelector(`a[href="${d}"]`);
+      if (a) ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(t => a.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+      return !!a;
+    }, [destino]).catch(() => false);
+
+    llego = await esperarQue(tab, (d) => location.pathname === d, [destino], 25000);
+  }
+
   await esperar(2500);
 
   return !!llego;
@@ -2360,7 +2383,7 @@ async function cfdAbrirIndividual(tab, nit, empresa) {
 
   await cfdEmpresaSiLaPide(tab, nit, empresa);
 
-  if (!await cfdIr(tab, 'workers')) return false;
+  if (!await cfdIr(tab, 'workers', nit, empresa)) return false;
 
   await esperarQue(tab, () => {
     if (location.pathname === '/sakaar/individual') return true;
@@ -2417,7 +2440,16 @@ async function cfdNitEmpresa(tab) {
 /** Listado de trabajadores + Radicados, para conciliar los radicados de caja. */
 async function cfdTrabajadores(pestana) {
   const tab = pestana.id;
-  const est = await ejecutar(tab, pCfdEstado);
+  let est = await ejecutar(tab, pCfdEstado);
+
+  // «Sin sesión» y «con la sesión abierta pero sin empresa escogida» se ven
+  // igual desde fuera: en los dos casos falta el «actualmente estás en». Y lo
+  // segundo pasa cada pocas afiliaciones. Antes de rendirse, se intenta
+  // escoger la empresa, que es lo que de verdad suele faltar.
+  if (!est.sesion && await cfdEmpresaSiLaPide(tab, d.nit, d.empresa)) {
+    est = await ejecutar(tab, pCfdEstado);
+  }
+
   if (!est.sesion) return { ok: false, error: 'El portal no tiene la sesión iniciada. Entra con el NIT de la empresa y selecciona la empresa.' };
 
   const empresa = await cfdNitEmpresa(tab);
@@ -2662,7 +2694,16 @@ async function cfdFilaListado(tab) {
  */
 async function cfdSubsidios(pestana, d = {}) {
   const tab = pestana.id;
-  const est = await ejecutar(tab, pCfdEstado);
+  let est = await ejecutar(tab, pCfdEstado);
+
+  // «Sin sesión» y «con la sesión abierta pero sin empresa escogida» se ven
+  // igual desde fuera: en los dos casos falta el «actualmente estás en». Y lo
+  // segundo pasa cada pocas afiliaciones. Antes de rendirse, se intenta
+  // escoger la empresa, que es lo que de verdad suele faltar.
+  if (!est.sesion && await cfdEmpresaSiLaPide(tab, d.nit, d.empresa)) {
+    est = await ejecutar(tab, pCfdEstado);
+  }
+
   if (!est.sesion) return { ok: false, error: 'El portal no tiene la sesión iniciada. Entra con el NIT de la empresa y selecciona la empresa.' };
 
   const empresa = await cfdNitEmpresa(tab);
