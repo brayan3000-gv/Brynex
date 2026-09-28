@@ -550,7 +550,7 @@ class TrasladoRazonSocialController extends Controller
         ]);
 
         $contratos = $this->contratosPermitidos($validated['contrato_ids'])
-            ->with('razonSocial:id,razon_social')
+            ->with(['razonSocial:id,razon_social', 'cliente'])
             ->get(['id', 'cedula', 'estado', 'razon_social_id', 'aliado_id']);
 
         $aliados   = DB::table('aliados')->whereIn('id', $contratos->pluck('aliado_id')->unique())->pluck('nombre', 'id');
@@ -569,7 +569,11 @@ class TrasladoRazonSocialController extends Controller
             return [
                 'contrato_id'  => (int) $c->id,
                 'cedula'       => (string) $c->cedula,
-                'nombre'       => $plano ? trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}") : '',
+                // Sin planilla el nombre sale de la ficha del cliente.
+                'nombre'       => $plano
+                    ? trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}")
+                    : trim(preg_replace('/\s+/', ' ', ($c->cliente?->primer_nombre ?? '') . ' ' . ($c->cliente?->segundo_nombre ?? '') . ' '
+                        . ($c->cliente?->primer_apellido ?? '') . ' ' . ($c->cliente?->segundo_apellido ?? ''))),
                 'razon_social' => $plano->razon_social ?? $c->razonSocial?->razon_social,
                 'aliado'       => $aliados[$c->aliado_id] ?? null,
                 'estado'       => $info['estado'],
@@ -1206,6 +1210,13 @@ class TrasladoRazonSocialController extends Controller
             $fila['mes_pagos']   = null;
             $fila['anio_pagos']  = null;
             $fila['id_legacy']   = null;
+            // La sucursal es del aliado ante el operador (Elites: 01 BRYGAR,
+            // 02 Fecop, 03 Luis Lopez): la del modelo aquí sería la de otro.
+            // Queda vacía hasta crearla en el operador.
+            $fila['codigo_sucursal'] = null;
+            $fila['nombre_sucursal'] = null;
+            $fila['datos_operador']  = null;
+            $fila['datos_operador_at'] = null;
             $fila['observacion'] = trim(($fila['observacion'] ?? '') . " Creada por traslado de razón social desde el aliado {$modelo->aliado_id}.");
             DB::table('razones_sociales')->insert($fila);
 
