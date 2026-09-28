@@ -204,6 +204,19 @@ class TrasladoRazonSocialController extends Controller
             'rs_origen'      => $rsOrigen->razon_social,
             'total'          => $contratos->count(),
             'varios_aliados' => $contratos->pluck('aliado_id')->unique()->count() > 1,
+            // Cada aliado tiene su gente: el encargado se elige por aliado, con
+            // su usuario "Brynex" sugerido donde exista.
+            'encargados_por_aliado' => $contratos->pluck('aliado_id')->unique()->values()
+                ->map(function ($aid) use ($contratos) {
+                    $usuarios = User::where('aliado_id', $aid)->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']);
+
+                    return [
+                        'aliado_id' => (int) $aid,
+                        'aliado'    => $contratos->firstWhere('aliado_id', $aid)->aliado_nombre,
+                        'usuarios'  => $usuarios,
+                        'sugerido'  => optional($usuarios->first(fn ($u) => mb_strtolower(trim($u->nombre)) === 'brynex'))->id,
+                    ];
+                }),
         ]);
     }
 
@@ -218,6 +231,9 @@ class TrasladoRazonSocialController extends Controller
             'contrato_ids.*'         => 'integer',
             'razon_social_destino_id'=> 'required|integer',
             'encargado_id'           => 'required|integer',
+            // aliado_id => user_id, para los contratos de otros aliados (BryNex)
+            'encargados'             => 'nullable|array',
+            'encargados.*'           => 'integer',
         ]);
 
         $rsDestino = RazonSocial::where('aliado_id', $aliadoId)
@@ -255,6 +271,7 @@ class TrasladoRazonSocialController extends Controller
                     // copia de la razón social destino (se crea si no la tiene).
                     $aliadoC   = (int) $contratoOrigen->aliado_id;
                     $rsDestinoC = $this->razonSocialEnAliado($rsDestino, $aliadoC);
+                    $encargadoC = $this->encargadoDelAliado($aliadoC, $validated['encargados'] ?? [], $encargado);
 
                     // ── Crear nuevo contrato copiando todos los campos relevantes ──
                     $nuevoContrato = Contrato::create([
@@ -264,7 +281,7 @@ class TrasladoRazonSocialController extends Controller
                         // Nueva RS, encargado y fecha de ingreso
                         'razon_social_id'         => $rsDestinoC->id,
                         'razon_social_bloqueada'  => false,
-                        'encargado_id'            => $encargado->id,
+                        'encargado_id'            => $encargadoC->id,
                         'fecha_ingreso'           => $fechaIngreso,
                         // Datos copiados del contrato original
                         'plan_id'                 => $contratoOrigen->plan_id,
@@ -1111,6 +1128,25 @@ class TrasladoRazonSocialController extends Controller
     private function esBrynex(): bool
     {
         return (bool) Auth::user()?->es_brynex;
+    }
+
+    /**
+     * Encargado de los contratos de un aliado: el elegido para ese aliado (tiene
+     * que ser de ese aliado), o el general si no se eligió uno.
+     */
+    private function encargadoDelAliado(int $aliadoId, array $porAliado, User $general): User
+    {
+        $id = $porAliado[$aliadoId] ?? $porAliado[(string) $aliadoId] ?? null;
+        if (! $id) {
+            return $general;
+        }
+
+        $usuario = User::where('aliado_id', $aliadoId)->find((int) $id);
+        if (! $usuario) {
+            throw new \RuntimeException("El encargado elegido para el aliado {$aliadoId} no es de ese aliado.");
+        }
+
+        return $usuario;
     }
 
     /** Ids de la razón social de origen: para BryNex, todas las del mismo NIT. */

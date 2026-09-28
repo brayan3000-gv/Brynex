@@ -194,7 +194,7 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
                     @endforeach
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group" id="grupo-encargado-unico">
                 <label>Encargado de la Afiliación *</label>
                 <select class="form-control" id="encargado-sel">
                     <option value="">— Seleccionar encargado —</option>
@@ -210,6 +210,9 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
                        readonly style="background:#f8fafc;color:#64748b">
             </div>
         </div>
+
+        {{-- BryNex con personas de varios aliados: un encargado por aliado --}}
+        <div id="encargados-por-aliado" style="display:none;margin-top:.25rem"></div>
 
         <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-top:.5rem">
             <button class="btn btn-ghost" onclick="volverPaso1()">← Volver</button>
@@ -480,6 +483,7 @@ async function validarCedulas() {
         }
 
         renderTablaContratos(resp.contratos);
+        renderEncargadosPorAliado(resp.encargados_por_aliado || [], resp.varios_aliados);
         document.getElementById('paso2').style.display = 'block';
 
         // Cargar n_planos disponibles de la RS origen
@@ -549,6 +553,33 @@ function volverPaso1() {
     setStep(1);
 }
 
+// Con personas de varios aliados, cada aliado tiene su propio encargado (su
+// usuario "Brynex" sugerido); el selector general queda para el aliado activo.
+let encargadosPorAliado = [];
+function renderEncargadosPorAliado(lista, varios) {
+    encargadosPorAliado = varios ? lista : [];
+    const cont = document.getElementById('encargados-por-aliado');
+    document.getElementById('grupo-encargado-unico').style.display = varios ? 'none' : '';
+    if (!varios) { cont.style.display = 'none'; cont.innerHTML = ''; return; }
+    cont.style.display = 'block';
+    cont.innerHTML = `
+        <div style="font-size:.74rem;color:#475569;margin-bottom:.4rem"><strong>Encargado de la afiliación por aliado *</strong> — cada contrato nuevo queda con el de su aliado.</div>
+        <div class="form-row">${lista.map(a => `
+            <div class="form-group">
+                <label>${a.aliado}</label>
+                <select class="form-control sel-encargado-aliado" data-aliado="${a.aliado_id}">
+                    <option value="">— Seleccionar —</option>
+                    ${a.usuarios.map(u => `<option value="${u.id}" ${u.id == a.sugerido ? 'selected' : ''}>${u.nombre}</option>`).join('')}
+                </select>
+            </div>`).join('')}
+        </div>`;
+}
+function encargadosElegidos() {
+    const mapa = {};
+    document.querySelectorAll('.sel-encargado-aliado').forEach(s => { if (s.value) mapa[s.dataset.aliado] = parseInt(s.value); });
+    return mapa;
+}
+
 // ── PASO 3: MOSTRAR CONFIRMACIÓN ───────────────────────────────────────────
 function mostrarConfirmacion() {
     actualizarContador();
@@ -558,10 +589,19 @@ function mostrarConfirmacion() {
     const encargadoSel = document.getElementById('encargado-sel');
 
     if (!rsDestinoSel.value) { alert('Selecciona la Razón Social de destino.'); return; }
-    if (!encargadoSel.value) { alert('Selecciona el encargado de la afiliación.'); return; }
+    const porAliado = encargadosElegidos();
+    if (encargadosPorAliado.length) {
+        const falta = encargadosPorAliado.find(a => !porAliado[a.aliado_id]);
+        if (falta) { alert(`Selecciona el encargado de ${falta.aliado}.`); return; }
+    } else if (!encargadoSel.value) { alert('Selecciona el encargado de la afiliación.'); return; }
 
     const rsDestNome = rsDestinoSel.options[rsDestinoSel.selectedIndex].text;
-    const encNome    = encargadoSel.options[encargadoSel.selectedIndex].text;
+    const encNome    = encargadosPorAliado.length
+        ? encargadosPorAliado.map(a => {
+            const sel = document.querySelector(`.sel-encargado-aliado[data-aliado="${a.aliado_id}"]`);
+            return `${a.aliado}: ${sel.options[sel.selectedIndex].text}`;
+          }).join('<br>')
+        : encargadoSel.options[encargadoSel.selectedIndex].text;
 
     document.getElementById('confirm-total').textContent = contratosSeleccionados.length;
     document.getElementById('confirm-resumen').innerHTML = `
@@ -592,7 +632,10 @@ function mostrarConfirmacion() {
 // ── EJECUTAR TRASLADO ──────────────────────────────────────────────────────
 async function ejecutarTraslado() {
     const rsDestinoId = document.getElementById('rs-destino-sel').value;
-    const encargadoId = document.getElementById('encargado-sel').value;
+    // Con varios aliados el general es el del aliado activo (o el primero elegido).
+    const porAliado   = encargadosElegidos();
+    const encargadoId = document.getElementById('encargado-sel').value
+        || porAliado[{{ (int) session('aliado_id_activo') }}] || Object.values(porAliado)[0];
     const contratoIds = contratosSeleccionados.map(c => c.contrato_id);
 
     cerrarModal('modalConfirmar');
@@ -603,6 +646,7 @@ async function ejecutarTraslado() {
             contrato_ids:            contratoIds,
             razon_social_destino_id: rsDestinoId,
             encargado_id:            encargadoId,
+            encargados:              porAliado,
         });
 
         if (!resp.ok && resp.nuevos_contratos?.length === 0) {
