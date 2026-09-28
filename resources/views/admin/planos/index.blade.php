@@ -1890,6 +1890,9 @@ const CTX = {
     ) !!},
     esIndependiente: {{ $esIndependiente ? 'true' : 'false' }},
     planoPagado   : {{ $planoPagado ? 'true' : 'false' }},
+    // Lo pendiente de la tanda son solo correcciones N (se pueden confirmar en $0).
+    esCorreccionN : {{ ($pendientesTanda = $planos->filter(fn ($p) => trim((string) $p->numero_planilla) === ''))->isNotEmpty()
+        && $pendientesTanda->every(fn ($p) => (int) $p->tipo_p === \App\Services\CorreccionNovedadesService::TIPO_P) ? 'true' : 'false' }},
     rsNit         : {{ $rsNit ?? 'null' }},
     rsDiaHabil    : {{ $rsDiaHabil ?? 'null' }},
     csrfToken     : '{{ csrf_token() }}',
@@ -3827,8 +3830,10 @@ async function ejecutarConfirmarPago() {
     // Validaciones obligatorias
     if (!operador) { resaltarError('pago-operador', 'Seleccione el operador.'); return; }
     if (!numero)   { resaltarError('pago-numero',   'Ingrese el número de planilla.'); return; }
-    if (!valor || valor < 1) { resaltarError('pago-valor', 'Ingrese un valor pagado válido.'); return; }
-    if (!banco)    { resaltarError('pago-banco',    'Seleccione la cuenta bancaria.'); return; }
+    // Una planilla N de corrección se envía en $0: se confirma sin valor ni banco.
+    const correccionEnCero = CTX.esCorreccionN && valor === 0;
+    if (!correccionEnCero && (!valor || valor < 1)) { resaltarError('pago-valor', 'Ingrese un valor pagado válido.'); return; }
+    if (!banco && !correccionEnCero) { resaltarError('pago-banco', 'Seleccione la cuenta bancaria.'); return; }
     if (!_planoIdActual && !CTX.razonSocialId) { mostrarToast('Seleccione una razón social.','error'); return; }
 
     const btn = document.getElementById('btn-confirmar-pago');

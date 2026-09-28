@@ -1008,10 +1008,11 @@ class PlanoPagoController extends Controller
             'tipos_modalidad'  => 'nullable|array',
             'operador'         => 'required|string|max:100',
             'numero_planilla'  => 'required|string|max:80',
-            'valor'            => 'required|integer|min:1',
+            // $0 solo para una planilla N de corrección (ver más abajo).
+            'valor'            => 'required|integer|min:0',
             'forma_pago'       => 'required|in:transferencia,efectivo',
-            // banco_id solo requerido cuando la forma NO es efectivo
-            'banco_id'         => 'required_unless:forma_pago,efectivo|nullable|integer',
+            // banco_id solo requerido cuando la forma NO es efectivo (y hay plata)
+            'banco_id'         => 'nullable|integer',
             'observacion'      => 'nullable|string|max:1000',
             'soporte'          => 'nullable|file|mimes:jpg,jpeg,png,pdf,webp|max:5120', // 5MB
             // Confirmación individual (RS independiente): ID del plano específico
@@ -1026,6 +1027,43 @@ class PlanoPagoController extends Controller
 
         $rs = RazonSocial::where('aliado_id', $aliadoId)
             ->findOrFail($validated['razon_social_id']);
+
+        // ── Planilla N de corrección en $0 ─────────────────────────────
+        // El retiro que se le agrega a una planilla ya pagada no cambia
+        // valores: el operador la envía sin cobrar nada. Solo esa tanda —toda
+        // de correcciones— se confirma en $0 y sin banco; a las demás se les
+        // sigue exigiendo lo de siempre. Ver CorreccionNovedadesService.
+        $esCorreccionN = false;
+        if ((int) $validated['valor'] === 0) {
+            $tiposIds = array_map('intval', (array) ($validated['tipos_modalidad'] ?? []));
+            $correcciones = empty($validated['plano_id'])
+                ? \App\Services\CorreccionNovedadesService::pendientes(
+                    (int) $aliadoId, (int) $rs->id, (int) $validated['mes_plano'],
+                    (int) $validated['anio_plano'], (int) $validated['n_plano'], $tiposIds)
+                : collect();
+            $otrosPendientes = $correcciones->isEmpty() ? 0 : DB::table('planos AS p')
+                ->where('p.aliado_id', $aliadoId)
+                ->where('p.razon_social_id', $rs->id)
+                ->where('p.n_plano', $validated['n_plano'])
+                ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
+                ->whereRaw('ISNULL(p.num_dias, 0) > 0')
+                ->whereNull('p.deleted_at')
+                ->whereRaw('ISNULL(p.tipo_p, 0) <> ?', [\App\Services\CorreccionNovedadesService::TIPO_P])
+                ->where(fn ($q) => $q->whereNull('p.numero_planilla')->orWhere('p.numero_planilla', ''))
+                ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, (int) $validated['mes_plano'], (int) $validated['anio_plano']))
+                ->when($tiposIds, fn ($q) => $q->whereIn('p.tipo_modalidad_id', $tiposIds))
+                ->count();
+
+            if ($correcciones->isEmpty() || $otrosPendientes > 0) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'El valor pagado debe ser mayor a $0. Solo una planilla N de corrección se confirma en $0.',
+                ], 422);
+            }
+            $esCorreccionN = true;
+        } elseif ($validated['forma_pago'] !== 'efectivo' && empty($validated['banco_id'])) {
+            return response()->json(['ok' => false, 'mensaje' => 'Seleccione la cuenta bancaria.'], 422);
+        }
 
         // Validar si ya existe un pago de planilla confirmado con este número de planilla para el aliado
         $existeGasto = Gasto::where('aliado_id', $aliadoId)
@@ -1062,7 +1100,7 @@ class PlanoPagoController extends Controller
                 'descripcion'       => $descripcion,
                 'pagado_a'          => $validated['operador'],
                 'forma_pago'        => $validated['forma_pago'],
-                'banco_origen_id'   => $validated['forma_pago'] !== 'efectivo'
+                'banco_origen_id'   => $validated['forma_pago'] !== 'efectivo' && ! $esCorreccionN
                     ? ($validated['banco_id'] ?? null)
                     : null,
                 'valor'             => $validated['valor'],
@@ -1129,6 +1167,12 @@ class PlanoPagoController extends Controller
                     ->where('razon_social_id', $validated['razon_social_id'])
                     ->where('n_plano', $validated['n_plano'])
                     ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, $mesPago, $anioPago, null));
+
+                // La corrección se anota solo a las correcciones pendientes.
+                if ($esCorreccionN) {
+                    $queryUpdate->where('tipo_p', \App\Services\CorreccionNovedadesService::TIPO_P)
+                        ->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''));
+                }
 
                 if (!empty($validated['tipos_modalidad'])) {
                     // Castear a int para que SQL Server compare correctamente
