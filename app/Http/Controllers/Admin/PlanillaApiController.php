@@ -1508,6 +1508,28 @@ class PlanillaApiController extends Controller
 
     private function credencial(int $aliadoId, int $operadorId, ?int $razonSocialId): ?OperadorCredencial
     {
-        return OperadorCredencial::paraOperador($aliadoId, $operadorId, $razonSocialId)->first();
+        $propia = OperadorCredencial::paraOperador($aliadoId, $operadorId, $razonSocialId)->first();
+        if ($propia) {
+            return $propia;
+        }
+
+        // Sin credencial propia, un usuario de BryNex usa la de su aliado, pero
+        // solo para las empresas de BryNex (la misma razón social, por NIT, en
+        // su aliado): la planilla es del aportante, y su usuario ya está
+        // autorizado sobre él. Para empresas ajenas no: autorizaría al usuario
+        // de BryNex sobre el aportante de otro.
+        $usuario = \Illuminate\Support\Facades\Auth::user();
+        $casa    = (int) ($usuario?->aliado_id);
+        if (! $usuario?->es_brynex || ! $razonSocialId || ! $casa || $casa === $aliadoId) {
+            return null;
+        }
+
+        $nit = RazonSocial::whereKey($razonSocialId)->value('nit');
+        $rsCasa = $nit ? RazonSocial::where('aliado_id', $casa)->where('nit', $nit)->value('id') : null;
+        if (! $rsCasa) {
+            return null;
+        }
+
+        return OperadorCredencial::paraOperador($casa, $operadorId, (int) $rsCasa)->first();
     }
 }
