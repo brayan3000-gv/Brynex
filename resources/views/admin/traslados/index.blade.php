@@ -754,7 +754,12 @@ function renderCorrecciones(correcciones) {
     document.getElementById('botones-descarga-periodo').style.display = 'none';
     cont.style.display = 'block';
     cont.innerHTML = `
-        <div style="font-size:.78rem;color:#475569;margin-bottom:.5rem">Cada planilla corregida quedó en su propio número de plano como planilla N. Se liquida por API desde Planos SS (en el mismo operador donde se pagó la original) o se descarga el TXT aquí:</div>
+        <div class="alert alert-info" style="margin-bottom:.75rem;font-size:.8rem">
+            📌 <strong>Los retiros quedaron en Planos SS como planilla N</strong>, en
+            ${rsOrigenNome}: ${correcciones.map(c => `<strong>P${c.n_plano}</strong> (corrige la ${c.planilla})`).join(', ')}.
+            No hay que hacer nada más aquí: se liquidan cuando quieran desde Planos SS, en el
+            mismo operador donde se pagó la planilla original, se envían en $0 y se confirman en $0.
+        </div>
         ${correcciones.map((c, i) => `
             <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:.4rem">
                 <div style="font-size:.8rem;flex:1;min-width:220px">

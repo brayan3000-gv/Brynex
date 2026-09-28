@@ -92,6 +92,9 @@ class RazonSocialController extends Controller
         $data['id']              = $nextId;
         $data['aliado_id']       = $aliadoId;
         $data['es_independiente'] = $request->boolean('es_independiente');
+        // Arranca en el plano 1: sin número, Planos SS no muestra el plano
+        // actual aunque facturación y afiliaciones ya usen el 1.
+        $data['n_plano']         = 1;
 
         DB::table('razones_sociales')->insert($data);
 

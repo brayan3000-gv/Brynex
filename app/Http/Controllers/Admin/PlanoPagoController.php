@@ -1168,10 +1168,15 @@ class PlanoPagoController extends Controller
                     ->where('n_plano', $validated['n_plano'])
                     ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, $mesPago, $anioPago, null));
 
-                // La corrección se anota solo a las correcciones pendientes.
+                // Solo lo que sigue pendiente: un registro que ya tiene número
+                // se pagó en otra planilla, y pisárselo lo dejaba apuntando a
+                // un pago que no lo incluye. Para volver a confirmar se borra
+                // el gasto, que le quita el número (ver Gasto::liberarPlanos).
+                $queryUpdate->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''));
+
+                // La corrección se anota solo a las correcciones.
                 if ($esCorreccionN) {
-                    $queryUpdate->where('tipo_p', \App\Services\CorreccionNovedadesService::TIPO_P)
-                        ->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''));
+                    $queryUpdate->where('tipo_p', \App\Services\CorreccionNovedadesService::TIPO_P);
                 }
 
                 if (!empty($validated['tipos_modalidad'])) {
