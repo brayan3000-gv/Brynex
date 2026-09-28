@@ -91,6 +91,8 @@
 
 <script>
 let cfdContratoId = null, cfdPrep = {}, cfdReloj = null, cfdFinal = null, cfdAvisoPortal = '';
+// Para no pulsar Finalizar dos veces en el mismo trámite.
+let cfdEnviado = false;
 const CFD_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const cfdEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cfdEl = id => document.getElementById(id);
@@ -130,7 +132,7 @@ function cfdOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfandi(contratoId) {
-    cfdContratoId = contratoId; cfdFinal = null; clearInterval(cfdReloj);
+    cfdContratoId = contratoId; cfdFinal = null; cfdEnviado = false; clearInterval(cfdReloj);
     ['cfdContenido', 'cfdResultado', 'cfdPasos', 'cfdRadicado', 'cfdBtnAbrir', 'cfdBtnIniciar', 'cfdAvisos'].forEach(id => cfdEl(id).style.display = 'none');
     cfdEl('cfdCargando').style.display = 'block';
     cfdEl('cfdModal').classList.add('open');
@@ -282,10 +284,10 @@ async function iniciarCajaComfandi() {
             ? `<div class="cfd-aviso">⚠️ <strong>${cfdEsc(r.nombre || 'El trabajador')}</strong> ya aparece en el listado de trabajadores de la empresa` +
               (r.desde ? ` desde el <strong>${cfdEsc(r.desde)}</strong>` : '') + '. No hay que afiliarlo: cierra esto y marca el radicado en OK.</div>'
             : `<div class="cfd-info">👤 ${cfdEsc(r.nombre || '')}${r.precargado ? ' (nombre y fecha de nacimiento los trajo la Registraduría)' : ''}</div>`) +
-        '<div class="cfd-aviso">👉 BryNex ya llenó el formulario. <strong>Revísalo de arriba a abajo</strong> y pulsa <strong>Finalizar</strong>. ' +
-        'La fecha de ingreso la escoge BryNex en el calendario; si quedó vacía, ábrelo y selecciónala tú.<br>' +
-        'Después de Finalizar sale una ventana que te pide <strong>verificar el sueldo</strong>: revísalo y pulsa Confirmar. ' +
-        'Si el portal se queja de algo, el mensaje sale <strong>arriba en el formulario</strong>, no donde estás mirando — súbelo antes de volver a intentar.</div>' +
+        '<div class="cfd-aviso">👉 BryNex llena el formulario, pulsa <strong>Finalizar</strong>, confirma el sueldo y guarda aquí el radicado. ' +
+        'Puedes seguirlo abajo; si algo falta, se dice y ahí se detiene.<br>' +
+        'El portal deja en pantalla «La fecha de ingreso es obligatoria» aunque la fecha esté puesta: ese cartel no impide nada. ' +
+        'Si Comfandi se queja de algo de verdad, el mensaje sale <strong>arriba en el formulario</strong>.</div>' +
         '<div id="cfdPasoActual" class="cfd-texto">Esperando el formulario…</div>';
 
     clearInterval(cfdReloj);
@@ -302,6 +304,27 @@ async function iniciarCajaComfandi() {
             (p.hecho?.length ? '<br>✅ ' + p.hecho.map(cfdEsc).join('<br>✅ ') : '') +
             (p.falta?.length ? '<br>⚠️ ' + p.falta.map(cfdEsc).join('<br>⚠️ ') : '') +
             (p.errores?.length ? '<br>❗ ' + p.errores.map(cfdEsc).join('<br>❗ ') : '');
+
+        // Con el formulario completo se radica: Finalizar y confirmar el sueldo.
+        //
+        // Manda `falta`, que es lo que BryNex no pudo llenar. `errores` no
+        // sirve de guía: el portal deja «La fecha de ingreso es obligatoria» en
+        // pantalla aunque la fecha esté puesta, y esperar a que se limpie sería
+        // esperar para siempre.
+        //
+        // Una sola vez: enviar dos veces no duplica —el portal responde que esa
+        // cédula ya tiene un radicado en proceso— pero enreda la lectura.
+        if (!cfdEnviado && !p.falta?.length) {
+            cfdEnviado = true;
+            cfdEl('cfdPasoActual').innerHTML += '<br>📨 Formulario completo: pulsando <strong>Finalizar</strong> y confirmando el sueldo…';
+
+            const env = await cfdExt('cfdFinalizar', {}, 120);
+
+            if (!env.ok) {
+                cfdEnviado = false;                          // se reintenta en la vuelta siguiente
+                cfdEl('cfdPasoActual').innerHTML += `<br>❌ ${cfdEsc(env.error || 'No se pudo finalizar.')}`;
+            }
+        }
     }, 4000);
 }
 
@@ -329,16 +352,32 @@ function mostrarRadicadoComfandi(fin) {
         : '📨 El portal respondió, pero no se encontró el número: cópialo de la pantalla o de la pestaña Radicados.';
     cfdEl('cfdRadicadoTexto').style.display = fin.texto ? 'block' : 'none';
     cfdEl('cfdRadicadoTexto').textContent = (fin.texto || '').slice(0, 1200);
+
+    // Con el número en la mano no hay nada que decidir: el radicado se guarda
+    // solo y queda en trámite. El botón sigue ahí para los casos en que el
+    // número haya que escribirlo a mano.
+    if (fin.numero) guardarCajaComfandi();
 }
 
 async function guardarCajaComfandi() {
     const numero = cfdEl('cfdNumero').value.trim();
-    if (!numero) { alert('Escribe el número de radicado que dio el portal.'); return; }
     const btn = cfdEl('cfdBtnGuardar');
+
+    if (!numero) {
+        cfdEl('cfdRadicadoInfo').innerHTML += '<br>⚠️ Escribe el número de radicado que dio el portal.';
+        return;
+    }
+
     btn.disabled = true; btn.textContent = '⏳ Registrando...';
     const r = await cfdPedir('aplicar', 'POST', { numero, texto: cfdFinal?.texto || '' });
     btn.disabled = false; btn.textContent = '💾 Registrar en BryNex';
-    if (!r.ok) { alert(r.error || r.mensaje || 'No se pudo registrar.'); return; }
+
+    // Sin alert: congela la página y este paso corre solo, sin nadie mirando.
+    if (!r.ok) {
+        cfdEl('cfdRadicadoInfo').innerHTML += `<br>❌ ${cfdEsc(r.error || r.mensaje || 'No se pudo registrar.')}`;
+        return;
+    }
+
     cfdTerminar(`✅ ${cfdEsc(r.mensaje)}`);
 }
 

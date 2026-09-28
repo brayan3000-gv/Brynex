@@ -47,6 +47,7 @@
  *  cfdAbrir {usuario, contrasena, empresa} → entra a la Sucursal Virtual: clave, 2FA omitido y empresa
  *  cfdConsultar {…datos}               → abre Afiliación individual y consulta al trabajador
  *  cfdLlenar {…datos}                  → llena el formulario; Finalizar lo pulsa la persona
+ *  cfdFinalizar                        → pulsa Finalizar y confirma el sueldo (radica)
  *  cfdResultado                        → {radicado, numero, texto} tras Finalizar
  *  cfdTrabajadores                     → {nit, empresa, filas, radicados} para la conciliación
  *  cfdListado                          → {nit, empresa, archivoUrl} del Excel del portal (listado + beneficiarios)
@@ -1800,6 +1801,7 @@ async function atenderCfd(accion, d = {}) {
   }
   if (accion === 'cfdConsultar') return cfdConsultar(pestana, d);
   if (accion === 'cfdLlenar') return { ok: true, ...(await ejecutar(pestana.id, pCfdLlenar, [d])) };
+  if (accion === 'cfdFinalizar') return cfdFinalizar(pestana.id);
   if (accion === 'cfdResultado') {
     const r = await ejecutar(pestana.id, pCfdResultado);
     if (!r.buscarEnRadicados) return { ok: true, ...r };
@@ -2154,6 +2156,55 @@ async function cfdIr(tab, ruta) {
   await esperar(2500);
 
   return !!llego;
+}
+
+/**
+ * Pulsa Finalizar y confirma el sueldo, que son los dos clics con los que el
+ * portal radica de verdad.
+ *
+ * Va aparte de `cfdLlenar` a propósito: llenar es reversible y esto no. Solo se
+ * llama cuando BryNex ya dio el formulario por completo.
+ *
+ * Ojo con el cartel «La fecha de ingreso es obligatoria»: el portal lo deja en
+ * pantalla aunque la fecha esté puesta y no impide nada. Quien manda es si
+ * Finalizar abre la ventana de verificación del sueldo.
+ */
+async function cfdFinalizar(tab) {
+  const pulsar = (texto) => esperarQue(tab, (t) => {
+    const b = [...document.querySelectorAll('button,input[type=submit]')]
+      .find(e => e.offsetParent && new RegExp('^\\s*' + t + '\\s*$', 'i').test((e.innerText || e.value || '').trim()));
+    if (!b || b.disabled) return false;
+    b.click();
+    return true;
+  }, [texto], 20000);
+
+  if (!await pulsar('finalizar')) {
+    return { ok: false, error: 'No se encontró el botón Finalizar en el formulario.' };
+  }
+
+  // La ventana del sueldo no siempre sale: si el portal se queja de algo, se
+  // queda en el formulario con el mensaje arriba.
+  const confirmo = await pulsar('confirmar');
+
+  if (!confirmo) {
+    const pantalla = await ejecutar(tab, () => ({
+      texto: (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 400),
+    })).catch(() => null);
+
+    return {
+      ok: false,
+      error: 'Se pulsó Finalizar pero el portal no pidió confirmar el sueldo.'
+        + (pantalla ? ` Quedó en: "${pantalla.texto}"` : ''),
+    };
+  }
+
+  await esperar(6000);
+
+  // Se espera a que deje de procesar, para que quien lea el resultado no lo
+  // pille a medias.
+  await esperarQue(tab, () => !/procesando tu solicitud/i.test(document.body.innerText || ''), [], 60000);
+
+  return { ok: true, enviado: true };
 }
 
 /**
