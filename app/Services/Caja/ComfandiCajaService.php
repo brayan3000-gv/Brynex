@@ -232,14 +232,36 @@ class ComfandiCajaService
      * aquí van los que se llaman de otra manera.
      */
     private const OCUPACIONES = [
-        'CONFECCIONES' => 'OPERARIOS DE MAQUINAS DE COSER',
-        'CONFECCION' => 'OPERARIOS DE MAQUINAS DE COSER',
+        // Confección. El portal dice «Operadores», no «Operarios»: buscar
+        // «OPERARIO» a secas llevaba a «Operarios en cemento armado», que es lo
+        // primero que sale con esa palabra (Daniela Ariza, 28-sep-2026).
+        'CONFECCIONES' => 'OPERADORES DE MAQUINAS DE COSER',
+        'CONFECCION' => 'OPERADORES DE MAQUINAS DE COSER',
+        'OPERARIO DE CONFECCION' => 'OPERADORES DE MAQUINAS DE COSER',
+        'OPERARIA DE CONFECCION' => 'OPERADORES DE MAQUINAS DE COSER',
+        'OPERARIO CONFECCION' => 'OPERADORES DE MAQUINAS DE COSER',
+        'COSTURERA' => 'OPERADORES DE MAQUINAS DE COSER',
+        'COSTURERO' => 'OPERADORES DE MAQUINAS DE COSER',
+        'MODISTA' => 'OPERADORES DE MAQUINAS DE COSER',
+        'SATINADORA' => 'OPERADORES DE MAQUINAS DE COSER',
+        'CORTADOR' => 'OPERADORES DE MAQUINAS DE COSER',
+
+        // Venta en local, no en la calle: «VENDEDOR» a secas caía en
+        // «Vendedores de quioscos y de puestos de mercado», que es otro oficio.
+        'VENDEDOR' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
+        'VENDEDORA' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
+        'VENDEDOR EXTERNO' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
+        'ASESOR COMERCIAL' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
+
+        'COCINA' => 'COCINEROS',
+        'COCINERA' => 'COCINEROS',
         'DOMICILIARIO' => 'MENSAJEROS',
         'DOMICILIARIA' => 'MENSAJEROS',
         'ADMON' => 'ADMINISTRATIVO',
         'TODERO' => 'OTRAS OCUPACIONES ELEMENTALES',
         'VARIOS' => 'OTRAS OCUPACIONES ELEMENTALES',
         'OFICIOS VARIOS' => 'OTRAS OCUPACIONES ELEMENTALES',
+        'SERVICIOS GENERALES' => 'OTRAS OCUPACIONES ELEMENTALES',
     ];
 
     /** Traduce el cargo del contrato al nombre que usa la lista del portal. */

@@ -1945,17 +1945,30 @@ function pCfdLlenar(d) {
     const q = norm(t);
 
     // El cargo de BryNex está en singular y en el género de la persona
-    // («SECRETARIA»), y la lista CIUO del portal en masculino plural
-    // («4120 - Secretarios generales»): sin recortar la terminación no se
-    // encontraban ni los cargos más comunes. Se prueba de lo más exacto a lo
-    // más laxo, y la raíz solo si queda algo con lo que buscar.
+    // («SECRETARIA») y la lista CIUO en masculino plural («4120 - Secretarios
+    // generales»), así que hay que recortar la terminación para encontrarlo.
+    //
+    // Pero solo con la PRIMERA palabra no vale: «OPERARIO DE CONFECCION» caía
+    // en «Operarios en cemento armado», el primer CIUO que dice «operario», y
+    // así se afiliaba a una costurera como obrera de construcción (Daniela
+    // Ariza, 28-sep-2026, visto antes de enviar). Una palabra genérica
+    // —operario, auxiliar, técnico…— no identifica un oficio.
+    //
+    // Por eso, cuando el cargo tiene varias palabras, se exige que la opción
+    // case con la parte que de verdad lo distingue; y si no hay nada claro se
+    // para y se pide ayuda, que es preferible a radicar un oficio falso.
     const raiz = (p) => p.replace(/(ES|AS|OS|A|O|E)$/, '');
-    const primera = q.split(' ')[0];
+    const VAGAS = /^(OPERARIO|OPERARIA|OPERARIOS|AUXILIAR|AYUDANTE|TECNICO|TECNICA|ASISTENTE|OPERADOR|OPERADORA|JEFE|SUPERVISOR|TRABAJADOR|EMPLEADO|PERSONAL)$/;
+
+    const palabras = q.split(' ').filter(p => p.length > 3 && !/^(DE|DEL|LA|LAS|LOS|EN|Y|PARA)$/.test(p));
+    const clave = palabras.find(p => !VAGAS.test(p)) || palabras[0] || q;
+
+    const busca = (p) => [...s.options].find(o => o.value && norm(o.text).includes(p));
 
     const op = [...s.options].find(o => norm(o.text) === q)
       || [...s.options].find(o => o.value && norm(o.text).includes(q))
-      || [...s.options].find(o => o.value && primera.length > 3 && norm(o.text).includes(primera))
-      || [...s.options].find(o => o.value && raiz(primera).length > 4 && norm(o.text).includes(raiz(primera)));
+      || (clave.length > 3 ? busca(clave) : null)
+      || (raiz(clave).length > 4 ? busca(raiz(clave)) : null);
 
     if (!op) { falta.push(`${nombre}: no se encontró "${t}" en la lista, escógelo tú`); return; }
     set(s, op.value) && hecho.push(`${nombre}: ${op.text.trim()}`);
