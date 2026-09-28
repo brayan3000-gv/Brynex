@@ -97,20 +97,58 @@ class VisitaCobroService
             'anticipo_ids' => $anticipos->pluck('id')->all(),
             // Cada anticipo con su recibo: el cliente suele preguntar cuáles
             // fueron cuando tiene dos o tres.
-            'anticipos_detalle' => $anticipos->load('usuario:id,nombre')->map(fn ($a) => [
-                'id' => $a->id,
-                'fecha' => $a->fecha_pago?->format('d/m/Y'),
-                'forma' => Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago,
-                'valor' => (int) $a->valor,
-                'disponible' => (int) $a->valor_disponible,
-                'recibio' => $a->usuario?->nombre,
-                'recibo_url' => route('admin.visita.recibo', ['a' => [$a->id]]),
-            ])->values()->all(),
+            'anticipos_detalle' => $this->detalleAnticipos($anticipos),
             'falta' => $falta,
             'facturable' => $motivoNoFactura === null,
             'motivo_no_factura' => $motivoNoFactura,
             'cartera' => (int) collect($mp['prestamos_pendientes'] ?? [])->sum('saldo'),
         ];
+    }
+
+    /**
+     * Los anticipos con saldo de una persona, en todos sus contratos. El
+     * anticipo es de quien pagó (la cédula), no del contrato: quien cobra
+     * tiene que verlos todos antes de escoger contrato.
+     */
+    public function anticiposDeCedula(int $aliadoId, string $cedula): array
+    {
+        $anticipos = Anticipo::aliado($aliadoId)->conSaldo()
+            ->where('cedula', $cedula)
+            ->where('estado', '!=', Anticipo::ESTADO_DISTRIBUIDO)
+            ->with('contrato.razonSocial')
+            ->orderBy('fecha_pago')->get();
+
+        return $this->detalleAnticipos($anticipos);
+    }
+
+    /**
+     * Los anticipos con saldo que pagó la empresa (por NIT) y todavía no se
+     * han repartido a ningún contrato.
+     */
+    public function anticiposDeEmpresa(int $aliadoId, int $empresaId): array
+    {
+        $anticipos = Anticipo::aliado($aliadoId)->conSaldo()
+            ->where('empresa_id', $empresaId)
+            ->whereNull('contrato_id')
+            ->where('estado', '!=', Anticipo::ESTADO_DISTRIBUIDO)
+            ->orderBy('fecha_pago')->get();
+
+        return $this->detalleAnticipos($anticipos);
+    }
+
+    /** Cada anticipo con lo que el cliente pregunta: cuándo, cómo, quién y su recibo. */
+    private function detalleAnticipos($anticipos): array
+    {
+        return $anticipos->load('usuario:id,nombre')->map(fn ($a) => [
+            'id' => $a->id,
+            'fecha' => $a->fecha_pago?->format('d/m/Y'),
+            'forma' => Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago,
+            'valor' => (int) $a->valor,
+            'disponible' => (int) $a->valor_disponible,
+            'recibio' => $a->usuario?->nombre,
+            'contrato' => $a->contrato_id ? ($a->contrato?->razonSocial?->razon_social ?? 'Contrato '.$a->contrato_id) : null,
+            'recibo_url' => route('admin.visita.recibo', ['a' => [$a->id]]),
+        ])->values()->all();
     }
 
     /**

@@ -95,6 +95,12 @@ class VisitaCobroController extends Controller
             ->where('estado', 'vigente')
             ->selectRaw('cedula, COUNT(*) as n')->groupBy('cedula')->pluck('n', 'cedula');
 
+        // Lo que cada persona tiene en anticipos, para verlo desde la lista.
+        $aFavor = Anticipo::aliado($aliadoId)->conSaldo()
+            ->whereIn('cedula', $clientes->pluck('cedula')->map(fn ($c) => (string) $c))
+            ->where('estado', '!=', Anticipo::ESTADO_DISTRIBUIDO)
+            ->selectRaw('cedula, SUM(valor - valor_aplicado) as saldo')->groupBy('cedula')->pluck('saldo', 'cedula');
+
         return response()->json(['clientes' => $clientes->map(fn ($c) => [
             'cedula' => (string) $c->cedula,
             'nombre' => $c->nombre_completo,
@@ -102,6 +108,7 @@ class VisitaCobroController extends Controller
             'empresa' => $c->empresa?->empresa,
             'de_la_empresa' => $empresaId && (int) $c->cod_empresa === $empresaId,
             'vigentes' => (int) ($vigentes[(string) $c->cedula] ?? 0),
+            'anticipos' => (int) ($aFavor[(string) $c->cedula] ?? 0),
         ])->values()]);
     }
 
@@ -109,7 +116,7 @@ class VisitaCobroController extends Controller
     public function cliente(string $cedula)
     {
         $aliadoId = (int) session('aliado_id_activo');
-        $cliente = Cliente::where('aliado_id', $aliadoId)->where('cedula', $cedula)->with('empresa:id,empresa')->firstOrFail();
+        $cliente = Cliente::where('aliado_id', $aliadoId)->where('cedula', $cedula)->with('empresa:id,empresa,nit')->firstOrFail();
 
         $contratos = Contrato::where('aliado_id', $aliadoId)
             ->where('cedula', $cedula)
@@ -124,7 +131,12 @@ class VisitaCobroController extends Controller
                 'nombre' => $cliente->nombre_completo,
                 'celular' => $cliente->celular,
                 'empresa' => $cliente->empresa?->empresa,
+                'empresa_nit' => $cliente->empresa?->nit,
             ],
+            'anticipos' => $this->cobros->anticiposDeCedula($aliadoId, (string) $cliente->cedula),
+            'anticipos_empresa' => $cliente->cod_empresa > 1
+                ? $this->cobros->anticiposDeEmpresa($aliadoId, (int) $cliente->cod_empresa)
+                : [],
             'contratos' => $contratos->map(fn ($c) => $this->fichaContrato($c))->values(),
         ]);
     }

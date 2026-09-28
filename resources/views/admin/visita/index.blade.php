@@ -58,6 +58,7 @@
         .item .sub { color: var(--tenue); font-size: .78rem; }
         .chip { display: inline-block; font-size: .68rem; font-weight: 700; padding: 1px 7px; border-radius: 99px; background: var(--azul-suave); color: var(--azul); }
         .chip.gris { background: #f1f5f9; color: var(--tenue); }
+        .chip.verde { background: var(--verde-suave); color: var(--verde); }
 
         /* Hoja (panel a pantalla completa en celular) */
         .hoja-fondo { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 40; }
@@ -160,7 +161,10 @@
                         <span x-show="c.empresa" x-text="' · ' + c.empresa"></span>
                     </div>
                 </div>
-                <span class="chip" :class="c.vigentes ? '' : 'gris'" x-text="c.vigentes ? (c.vigentes + (c.vigentes > 1 ? ' contratos' : ' contrato')) : 'sin vigente'"></span>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+                    <span class="chip" :class="c.vigentes ? '' : 'gris'" x-text="c.vigentes ? (c.vigentes + (c.vigentes > 1 ? ' contratos' : ' contrato')) : 'sin vigente'"></span>
+                    <span class="chip verde" x-show="c.anticipos" x-text="'💰 ' + plata(c.anticipos)"></span>
+                </div>
             </button>
         </template>
     </div>
@@ -182,6 +186,39 @@
             </div>
             <button class="cerrar" @click="cerrarCliente()">✕</button>
         </div>
+
+        {{-- Anticipos de la persona (cédula) y de su empresa (NIT), antes de escoger contrato --}}
+        <template x-for="g in gruposAnticipos()" :key="g.titulo">
+            <div class="tarjeta" style="border:1.5px solid #6ee7b7">
+                <button type="button" class="fila-toque" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px" @click="g.abierto = !g.abierto; abiertos[g.titulo] = g.abierto">
+                    <span>
+                        <span style="font-weight:800" x-text="'💰 ' + g.titulo"></span>
+                        <span style="display:block;color:var(--tenue);font-size:.75rem" x-text="g.sub + ' · ' + g.items.length + (g.items.length === 1 ? ' anticipo' : ' anticipos') + ' ' + (abiertos[g.titulo] ? '▴' : '▾ ver cuáles')"></span>
+                    </span>
+                    <b class="num" style="color:var(--verde);font-size:1.15rem" x-text="plata(g.items.reduce((t, a) => t + a.disponible, 0))"></b>
+                </button>
+                <div class="anticipos" x-show="abiertos[g.titulo]" x-cloak>
+                    <template x-for="a in g.items" :key="a.id">
+                        <div class="anticipo">
+                            <div style="flex:1;min-width:0">
+                                <div style="font-weight:700" x-text="a.fecha + ' · ' + a.forma"></div>
+                                <div style="color:var(--tenue);font-size:.74rem">
+                                    <span x-text="'N.º ANT-' + a.id"></span>
+                                    <span x-show="a.contrato" x-text="' · ' + a.contrato"></span>
+                                    <span x-show="a.recibio" x-text="' · recibió ' + a.recibio"></span>
+                                    <span x-show="a.disponible < a.valor" x-text="' · de ' + plata(a.valor) + ', ya se usó ' + plata(a.valor - a.disponible)"></span>
+                                </div>
+                            </div>
+                            <b class="num" x-text="plata(a.disponible)"></b>
+                            <div class="anticipo-btns">
+                                <a :href="a.recibo_url" target="_blank" title="Ver recibo">📄</a>
+                                <button type="button" title="Enviar recibo por WhatsApp" :disabled="a.enviando" @click="reenviarAnticipo(a)" x-text="a.enviado ? '✓' : (a.enviando ? '…' : '📲')"></button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </template>
 
         <div class="ayuda" x-show="!contratos.length">Este cliente no tiene contratos.</div>
 
@@ -206,29 +243,7 @@
                         <div class="fila" x-show="k.resumen.desglose.mora"><span>Mora</span><span class="num" x-text="plata(k.resumen.desglose.mora)"></span></div>
                         <div class="fila" style="font-weight:700"><span>Total del mes</span><span class="num" x-text="plata(k.resumen.total_mes)"></span></div>
                         <div class="fila resta" x-show="k.resumen.saldo_favor"><span>Saldo a favor</span><span class="num" x-text="'− ' + plata(k.resumen.saldo_favor)"></span></div>
-                        <button type="button" class="fila resta fila-toque" x-show="k.resumen.anticipos" @click="k.verAnticipos = !k.verAnticipos">
-                            <span x-text="'Anticipos que ya dio (' + k.resumen.anticipos_detalle.length + ') ' + (k.verAnticipos ? '▴' : '▾')"></span>
-                            <span class="num" x-text="'− ' + plata(k.resumen.anticipos)"></span>
-                        </button>
-                        <div class="anticipos" x-show="k.verAnticipos" x-cloak>
-                            <template x-for="a in k.resumen.anticipos_detalle" :key="a.id">
-                                <div class="anticipo">
-                                    <div style="flex:1;min-width:0">
-                                        <div style="font-weight:700" x-text="a.fecha + ' · ' + a.forma"></div>
-                                        <div style="color:var(--tenue);font-size:.74rem">
-                                            <span x-text="'N.º ANT-' + a.id"></span>
-                                            <span x-show="a.recibio" x-text="' · recibió ' + a.recibio"></span>
-                                            <span x-show="a.disponible < a.valor" x-text="' · de ' + plata(a.valor) + ', ya se usó ' + plata(a.valor - a.disponible)"></span>
-                                        </div>
-                                    </div>
-                                    <b class="num" x-text="plata(a.disponible)"></b>
-                                    <div class="anticipo-btns">
-                                        <a :href="a.recibo_url" target="_blank" title="Ver recibo">📄</a>
-                                        <button type="button" title="Enviar recibo por WhatsApp" :disabled="a.enviando" @click="reenviarAnticipo(a)" x-text="a.enviado ? '✓' : (a.enviando ? '…' : '📲')"></button>
-                                    </div>
-                                </div>
-                            </template>
-                        </div>
+                        <div class="fila resta" x-show="k.resumen.anticipos"><span>Anticipos de este contrato</span><span class="num" x-text="'− ' + plata(k.resumen.anticipos)"></span></div>
                         <div class="sep"></div>
                         <div class="falta"><span style="font-weight:700">Falta pagar</span><b class="num" x-text="plata(k.resumen.falta)"></b></div>
                         <div style="color:var(--tenue);font-size:.72rem" x-show="k.resumen.mora_info" x-text="k.resumen.mora_info"></div>
@@ -391,6 +406,7 @@ function visita() {
         empresaTexto: '', empresaId: null,
         texto: '', resultados: [], buscando: false,
         cliente: null, contratos: [], cargandoCliente: false,
+        anticipos: [], anticiposEmpresa: [], abiertos: {},
         cobro: null, guardando: false, error: '', resultado: null,
         envio: { texto: '', clase: '', enviando: false, ok: false, intentado: false },
         verHoy: false,
@@ -451,10 +467,18 @@ function visita() {
             try {
                 const d = await this.pedir(URL.cliente + '/' + encodeURIComponent(cedula));
                 this.cliente = d.cliente; this.contratos = d.contratos;
+                this.anticipos = d.anticipos || []; this.anticiposEmpresa = d.anticipos_empresa || [];
             } catch (e) { alert(e.message); this.cliente = null; }
             finally { this.cargandoCliente = false; }
         },
-        cerrarCliente() { this.cliente = null; this.contratos = []; },
+        cerrarCliente() { this.cliente = null; this.contratos = []; this.anticipos = []; this.anticiposEmpresa = []; this.abiertos = {}; },
+        gruposAnticipos() {
+            const g = [];
+            if (this.anticipos.length) g.push({ titulo: 'Anticipos a su favor', sub: 'CC ' + this.cliente.cedula, items: this.anticipos });
+            if (this.anticiposEmpresa.length) g.push({ titulo: 'Anticipos de ' + (this.cliente.empresa || 'la empresa'),
+                sub: 'NIT ' + (this.cliente.empresa_nit || '—') + ' · sin repartir', items: this.anticiposEmpresa });
+            return g;
+        },
 
         abrirCobro(k) {
             this.error = ''; this.resultado = null;
