@@ -266,7 +266,14 @@ async function iniciarCajaComfandi() {
     btn.disabled = true; btn.textContent = '⏳ Consultando al trabajador...';
     const r = await cfdExt('cfdConsultar', cfdDatosPortal(), 120);
     btn.disabled = false; btn.textContent = '🔎 Consultar al trabajador y llenar';
-    if (!r.ok) { alert(r.error || 'No se pudo consultar al trabajador.'); return; }
+    // El aviso va dentro del modal, no en un alert(): el alert congela la página
+    // entera —y con ella el resto del trámite— hasta que alguien le da Aceptar.
+    if (!r.ok) {
+        const caja = cfdEl('cfdPasos');
+        caja.style.display = 'block';
+        caja.innerHTML = `<div class="cfd-aviso">❌ ${cfdEsc(r.error || 'No se pudo consultar al trabajador.')}</div>`;
+        return;
+    }
 
     const caja = cfdEl('cfdPasos');
     caja.style.display = 'block';

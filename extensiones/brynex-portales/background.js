@@ -1814,9 +1814,14 @@ async function cfdConsultar(pestana, d) {
   }
 
   // ¿Ya está en el listado de trabajadores?
-  await chrome.tabs.update(tab, { url: `${CFD_BASE}/workers` });
-  await esperarCarga(tab);
-  await esperar(3500);
+  //
+  // Por el menú, no por la URL: las guardas de Next.js rebotan al inicio
+  // cualquier navegación que no venga de dentro, y entonces el formulario no
+  // aparecía y todo terminaba en «No apareció el cuadro de tipo y número de
+  // documento», que no dice nada de lo que pasó.
+  if (!await cfdIr(tab, 'workers')) {
+    return { ok: false, error: 'No se pudo abrir «Gestión de trabajadores» en el portal.' };
+  }
   const ya = await ejecutar(tab, (doc) => {
     const f = [...document.querySelectorAll('tr')].find(e => (e.innerText || '').replace(/\s/g, '').includes(doc));
     if (!f) return null;
@@ -1825,9 +1830,9 @@ async function cfdConsultar(pestana, d) {
   }, [String(d.documento)]).catch(() => null);
   if (ya) return { ok: true, yaAfiliado: true, nombre: ya.nombre, desde: ya.desde };
 
-  await chrome.tabs.update(tab, { url: `${CFD_BASE}/individual` });
-  await esperarCarga(tab);
-  await esperar(3000);
+  if (!await cfdAbrirIndividual(tab)) {
+    return { ok: false, error: 'No se pudo abrir «Afiliar trabajador» en el portal: quedó en otra pantalla.' };
+  }
 
   const puesto = await esperarQue(tab, (tipo, doc) => {
     const s = document.getElementById('selectdocument'), i = document.getElementById('inputdocument');
@@ -2108,6 +2113,37 @@ async function cfdIr(tab, ruta) {
 
   // Llegó cuando la ruta es la pedida; si rebotó al inicio, se reintenta desde allí.
   const llego = await esperarQue(tab, (d) => location.pathname === d, [destino], 25000);
+  await esperar(2500);
+
+  return !!llego;
+}
+
+/**
+ * Deja la pestaña en el formulario de afiliación individual.
+ *
+ * `/sakaar/individual` no cuelga del menú lateral: se llega desde Gestión de
+ * trabajadores, con el botón «Afiliar trabajador». Pedir la URL a pelo rebota
+ * al inicio.
+ */
+async function cfdAbrirIndividual(tab) {
+  const yaEsta = await ejecutar(tab, () => location.pathname === '/sakaar/individual').catch(() => false);
+  if (yaEsta) return true;
+
+  if (!await cfdIr(tab, 'workers')) return false;
+
+  await esperarQue(tab, () => {
+    if (location.pathname === '/sakaar/individual') return true;
+
+    const b = [...document.querySelectorAll('button,a,[role=button]')]
+      .find(e => e.offsetParent && /afiliar trabajador/i.test((e.innerText || '').replace(/\s+/g, ' ')));
+    if (!b) return false;
+
+    ['pointerdown', 'mousedown', 'mouseup', 'click']
+      .forEach(t => b.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+    return false;                                            // se confirma por la ruta
+  }, [], 25000);
+
+  const llego = await esperarQue(tab, () => location.pathname === '/sakaar/individual', [], 20000);
   await esperar(2500);
 
   return !!llego;
