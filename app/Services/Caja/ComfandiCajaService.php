@@ -217,8 +217,41 @@ class ComfandiCajaService
             'correo' => $correo,
             'fechaIngreso' => $contrato->fecha_ingreso->format('Y-m-d'),
             'salario' => (int) round((float) ($contrato->salario ?: $contrato->ibc)),
-            'ocupacionTexto' => mb_strtoupper(trim((string) $contrato->cargo)) ?: self::PREDETERMINADOS['ocupacion'],
+            'ocupacionTexto' => $this->ocupacion((string) $contrato->cargo),
         ] + array_diff_key(self::PREDETERMINADOS, ['ocupacion' => null])];
+    }
+
+    /**
+     * Cómo se llama el cargo en la lista CIUO del portal.
+     *
+     * El cargo de BryNex lo escribe quien crea el contrato y no tiene por qué
+     * coincidir con el CIUO: «CONFECCIONES» no existe ahí (es «Operarios de
+     * máquinas de coser») y «DOMICILIARIO» tampoco («Mensajeros, mandaderos,
+     * maleteros y repartidores»). Lo que solo cambia de género o número —
+     * SECRETARIA → Secretarios— lo resuelve la extensión buscando por la raíz;
+     * aquí van los que se llaman de otra manera.
+     */
+    private const OCUPACIONES = [
+        'CONFECCIONES' => 'OPERARIOS DE MAQUINAS DE COSER',
+        'CONFECCION' => 'OPERARIOS DE MAQUINAS DE COSER',
+        'DOMICILIARIO' => 'MENSAJEROS',
+        'DOMICILIARIA' => 'MENSAJEROS',
+        'ADMON' => 'ADMINISTRATIVO',
+        'TODERO' => 'OTRAS OCUPACIONES ELEMENTALES',
+        'VARIOS' => 'OTRAS OCUPACIONES ELEMENTALES',
+        'OFICIOS VARIOS' => 'OTRAS OCUPACIONES ELEMENTALES',
+    ];
+
+    /** Traduce el cargo del contrato al nombre que usa la lista del portal. */
+    private function ocupacion(string $cargo): string
+    {
+        $cargo = mb_strtoupper(trim($cargo));
+
+        if ($cargo === '') {
+            return self::PREDETERMINADOS['ocupacion'];
+        }
+
+        return self::OCUPACIONES[$cargo] ?? $cargo;
     }
 
     /** Usuario (y clave, según permiso) del portal de la razón social. */
