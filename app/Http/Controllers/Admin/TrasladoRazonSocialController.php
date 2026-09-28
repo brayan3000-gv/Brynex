@@ -108,12 +108,18 @@ class TrasladoRazonSocialController extends Controller
             return response()->json(['ok' => false, 'mensaje' => 'No se encontraron cédulas válidas.'], 422);
         }
 
+        // BryNex busca en todos los aliados: sus razones sociales (Elites,
+        // Construtech…) las usan varios aliados, cada uno con su propia copia
+        // con el mismo NIT. Los demás, solo en el aliado activo.
+        $rsOrigenIds = $this->razonesSocialesOrigen($rsOrigen);
+
         // Buscar contratos VIGENTES de esas cédulas en la RS origen
         $contratos = DB::table('contratos AS c')
-            ->leftJoin('clientes AS cl', function ($j) use ($aliadoId) {
+            ->leftJoin('clientes AS cl', function ($j) {
                 $j->on(DB::raw('CAST(cl.cedula AS VARCHAR(20))'), '=', DB::raw('CAST(c.cedula AS VARCHAR(20))'))
-                  ->where('cl.aliado_id', $aliadoId);
+                  ->on('cl.aliado_id', '=', 'c.aliado_id');
             })
+            ->leftJoin('aliados AS al', 'al.id', '=', 'c.aliado_id')
             ->leftJoin('razones_sociales AS rs', 'rs.id', '=', 'c.razon_social_id')
             ->leftJoin('eps AS e',         'e.id',  '=', 'c.eps_id')
             ->leftJoin('pensiones AS p',   'p.id',  '=', 'c.pension_id')
@@ -122,12 +128,15 @@ class TrasladoRazonSocialController extends Controller
             ->leftJoin('tipo_modalidad AS tm', 'tm.id', '=', 'c.tipo_modalidad_id')
             ->leftJoin('planes_contrato AS pc', 'pc.id', '=', 'c.plan_id')
             ->leftJoin('users AS uc',      'uc.id', '=', 'c.encargado_id')
-            ->where('c.aliado_id', $aliadoId)
-            ->where('c.razon_social_id', $rsOrigenId)
+            ->whereIn('c.razon_social_id', $rsOrigenIds)
+            ->when(! $this->esBrynex(), fn ($q) => $q->where('c.aliado_id', $aliadoId))
             ->where('c.estado', 'vigente')
             ->whereIn(DB::raw('CAST(c.cedula AS VARCHAR(20))'), $cedulas)
+            ->orderBy('c.aliado_id')
             ->select([
                 'c.id AS contrato_id',
+                'c.aliado_id',
+                'al.nombre AS aliado_nombre',
                 DB::raw('CAST(c.cedula AS VARCHAR(20)) AS cedula'),
                 'c.plan_id',
                 'c.tipo_modalidad_id',
@@ -194,6 +203,7 @@ class TrasladoRazonSocialController extends Controller
             'no_encontradas' => $noEncontradas,
             'rs_origen'      => $rsOrigen->razon_social,
             'total'          => $contratos->count(),
+            'varios_aliados' => $contratos->pluck('aliado_id')->unique()->count() > 1,
         ]);
     }
 
@@ -216,7 +226,10 @@ class TrasladoRazonSocialController extends Controller
             return response()->json(['ok' => false, 'mensaje' => 'Razón Social destino no encontrada.'], 404);
         }
 
-        $encargado = User::where('aliado_id', $aliadoId)->find($validated['encargado_id']);
+        // El encargado que se elige vale para todo el traslado, también para
+        // los contratos de otros aliados (solo BryNex los trae).
+        $encargado = User::when(! $this->esBrynex(), fn ($q) => $q->where('aliado_id', $aliadoId))
+            ->find($validated['encargado_id']);
         if (!$encargado) {
             return response()->json(['ok' => false, 'mensaje' => 'Encargado no encontrado.'], 404);
         }
@@ -231,21 +244,25 @@ class TrasladoRazonSocialController extends Controller
             $validated, $aliadoId, $usuarioId, $rsDestino, $encargado,
             $fechaIngreso, &$nuevosContratos, &$errores
         ) {
-            $contratos = Contrato::where('aliado_id', $aliadoId)
-                ->whereIn('id', $validated['contrato_ids'])
+            $contratos = $this->contratosPermitidos($validated['contrato_ids'])
                 ->where('estado', 'vigente')
                 ->with(['plan', 'eps', 'pension', 'arl', 'caja', 'cliente', 'razonSocial'])
                 ->get();
 
             foreach ($contratos as $contratoOrigen) {
                 try {
+                    // El contrato nuevo queda en el aliado de la persona, en SU
+                    // copia de la razón social destino (se crea si no la tiene).
+                    $aliadoC   = (int) $contratoOrigen->aliado_id;
+                    $rsDestinoC = $this->razonSocialEnAliado($rsDestino, $aliadoC);
+
                     // ── Crear nuevo contrato copiando todos los campos relevantes ──
                     $nuevoContrato = Contrato::create([
-                        'aliado_id'               => $aliadoId,
+                        'aliado_id'               => $aliadoC,
                         'cedula'                  => $contratoOrigen->cedula,
                         'estado'                  => 'vigente',
                         // Nueva RS, encargado y fecha de ingreso
-                        'razon_social_id'         => $rsDestino->id,
+                        'razon_social_id'         => $rsDestinoC->id,
                         'razon_social_bloqueada'  => false,
                         'encargado_id'            => $encargado->id,
                         'fecha_ingreso'           => $fechaIngreso,
@@ -259,7 +276,7 @@ class TrasladoRazonSocialController extends Controller
                         'arl_modo'                => $contratoOrigen->arl_modo,
                         // ARL NIT cotizante: si era por RS, usar la nueva RS
                         'arl_nit_cotizante'       => ($contratoOrigen->arl_modo === 'razon_social')
-                            ? (int) $rsDestino->id
+                            ? (int) $rsDestinoC->id
                             : $contratoOrigen->arl_nit_cotizante,
                         'caja_id'                 => $contratoOrigen->caja_id,
                         'cargo'                   => $contratoOrigen->cargo,
@@ -293,7 +310,7 @@ class TrasladoRazonSocialController extends Controller
                     // ── Crear factura de afiliación con costo 0 ──
                     $cliente  = $contratoOrigen->cliente;
                     $arl      = $contratoOrigen->arl;
-                    $rs       = $rsDestino;
+                    $rs       = $rsDestinoC;
 
                     $arlSnapshot = \App\Models\Plano::resolverArlSnapshot($contratoOrigen, $rs);
                     $codArl = $arlSnapshot['cod_arl'];
@@ -304,12 +321,12 @@ class TrasladoRazonSocialController extends Controller
                     $caja = $contratoOrigen->caja;
 
                     $facturaAfil = Factura::create([
-                        'aliado_id'        => $aliadoId,
+                        'aliado_id'        => $aliadoC,
                         'numero_factura'   => 0,
                         'tipo'             => 'afiliacion',
                         'cedula'           => $nuevoContrato->cedula,
                         'contrato_id'      => $nuevoContrato->id,
-                        'razon_social_id'  => $rsDestino->id,
+                        'razon_social_id'  => $rsDestinoC->id,
                         'empresa_id'       => null,
                         'mes'              => now()->month,
                         'anio'             => now()->year,
@@ -326,8 +343,8 @@ class TrasladoRazonSocialController extends Controller
                         'mensajeria' => 0, 'otros' => 0, 'mora' => 0, 'iva' => 0,
                         'total'       => 0,
                         'saldo_proximo'=> 0,
-                        'n_plano'     => $rsDestino->n_plano ?? 1,
-                        'razon_social_id' => $rsDestino->id,
+                        'n_plano'     => $rsDestinoC->n_plano ?? 1,
+                        'razon_social_id' => $rsDestinoC->id,
                         'usuario_id'  => $usuarioId,
                         'observacion' => "Afiliación por traslado de RS. Contrato #{$nuevoContrato->id}.",
                     ]);
@@ -341,7 +358,7 @@ class TrasladoRazonSocialController extends Controller
                     Plano::create([
                         'factura_id'        => $facturaAfil->id,
                         'contrato_id'       => $nuevoContrato->id,
-                        'aliado_id'         => $aliadoId,
+                        'aliado_id'         => $aliadoC,
                         'numero_factura'    => 0,
                         'tipo_reg'          => 'afiliacion',
                         'tipo_doc'          => strtoupper(trim($cliente?->tipo_doc ?? 'CC')) ?: 'CC',
@@ -363,11 +380,11 @@ class TrasladoRazonSocialController extends Controller
                         'nombre_caja'       => $caja?->nombre ?? null,
                         'nivel_riesgo'      => $nuevoContrato->n_arl ?? 1,
                         'salario_basico'    => (int)($nuevoContrato->salario ?? 0),
-                        'n_plano'           => $rsDestino->n_plano ?? 1,
+                        'n_plano'           => $rsDestinoC->n_plano ?? 1,
                         'mes_plano'         => now()->month,
                         'anio_plano'        => now()->year,
-                        'razon_social'      => $rsDestino->razon_social,
-                        'razon_social_id'   => $rsDestino->id,
+                        'razon_social'      => $rsDestinoC->razon_social,
+                        'razon_social_id'   => $rsDestinoC->id,
                         'tipo_p'            => $nuevoContrato->tipo_modalidad_id,
                         'tipo_modalidad_id' => $nuevoContrato->tipo_modalidad_id,
                         'usuario_id'        => $usuarioId,
@@ -380,6 +397,7 @@ class TrasladoRazonSocialController extends Controller
                     $nuevosContratos[] = [
                         'contrato_id_nuevo'   => $nuevoContrato->id,
                         'contrato_id_origen'  => $contratoOrigen->id,
+                        'aliado_id'           => $aliadoC,
                         'cedula'              => $nuevoContrato->cedula,
                         'factura_afil_id'     => $facturaAfil->id,
                     ];
@@ -425,11 +443,12 @@ class TrasladoRazonSocialController extends Controller
      *   'pendiente' | 'ya_retirado'), mensaje, el plano base y los datos de la
      *   planilla asociada (número y fecha de pago).
      */
-    private function planillasACorregir(int $aliadoId, array $contratoIds): array
+    private function planillasACorregir(array $contratoIds): array
     {
+        // Los ids ya vienen filtrados por contratosPermitidos(): cada plano es
+        // del aliado de su contrato.
         $planos = DB::table('planos AS p')
             ->leftJoin('facturas AS f', 'f.id', '=', 'p.factura_id')
-            ->where('p.aliado_id', $aliadoId)
             ->whereIn('p.contrato_id', $contratoIds)
             ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
             ->whereRaw('ISNULL(p.num_dias, 0) > 0')
@@ -447,12 +466,12 @@ class TrasladoRazonSocialController extends Controller
         // La fecha de pago de la planilla vive en el gasto que la pagó.
         $fechasPago = $numeros
             ? DB::table('gastos')
-                ->where('aliado_id', $aliadoId)
+                ->whereIn('aliado_id', $planos->flatten(1)->pluck('aliado_id')->unique()->values())
                 ->where('tipo', 'pago_planilla')
                 ->whereIn('numero_planilla', $numeros)
-                ->selectRaw('numero_planilla, CONVERT(VARCHAR(10), MIN(fecha), 23) AS fecha')
-                ->groupBy('numero_planilla')
-                ->pluck('fecha', 'numero_planilla')
+                ->selectRaw("CAST(aliado_id AS VARCHAR(10)) + '|' + numero_planilla AS llave, CONVERT(VARCHAR(10), MIN(fecha), 23) AS fecha")
+                ->groupBy('aliado_id', 'numero_planilla')
+                ->pluck('fecha', 'llave')
             : collect();
 
         $resultado = [];
@@ -493,7 +512,7 @@ class TrasladoRazonSocialController extends Controller
                 'fecha_ret'  => Carbon::create((int) $ultimo->anio_plano, (int) $ultimo->mes_plano, 1)
                     ->endOfMonth()->toDateString(),
                 'planilla'   => $numero ?: null,
-                'fecha_pago' => $numero ? ($fechasPago[$numero] ?? null) : null,
+                'fecha_pago' => $numero ? ($fechasPago[((int) $ultimo->aliado_id) . '|' . $numero] ?? null) : null,
             ];
         }
 
@@ -509,14 +528,14 @@ class TrasladoRazonSocialController extends Controller
             'contrato_ids.*' => 'integer',
         ]);
 
-        $contratos = Contrato::where('aliado_id', $aliadoId)
-            ->whereIn('id', $validated['contrato_ids'])
+        $contratos = $this->contratosPermitidos($validated['contrato_ids'])
             ->with('razonSocial:id,razon_social')
-            ->get(['id', 'cedula', 'estado', 'razon_social_id']);
+            ->get(['id', 'cedula', 'estado', 'razon_social_id', 'aliado_id']);
 
-        $planillas = $this->planillasACorregir($aliadoId, $contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
+        $aliados   = DB::table('aliados')->whereIn('id', $contratos->pluck('aliado_id')->unique())->pluck('nombre', 'id');
+        $planillas = $this->planillasACorregir($contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
 
-        $filas = $contratos->map(function ($c) use ($planillas) {
+        $filas = $contratos->map(function ($c) use ($planillas, $aliados) {
             $info  = $planillas[(int) $c->id];
             $plano = $info['plano'];
 
@@ -531,6 +550,7 @@ class TrasladoRazonSocialController extends Controller
                 'cedula'       => (string) $c->cedula,
                 'nombre'       => $plano ? trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}") : '',
                 'razon_social' => $plano->razon_social ?? $c->razonSocial?->razon_social,
+                'aliado'       => $aliados[$c->aliado_id] ?? null,
                 'estado'       => $info['estado'],
                 'mensaje'      => $info['mensaje'],
                 'periodo'      => $info['periodo'] ?? null,
@@ -559,29 +579,36 @@ class TrasladoRazonSocialController extends Controller
         $omitidos   = [];
         $errores    = [];
 
-        $contratos = Contrato::where('aliado_id', $aliadoId)
-            ->whereIn('id', $validated['contrato_ids'])
+        $contratos = $this->contratosPermitidos($validated['contrato_ids'])
             ->where('estado', 'vigente')
             ->get();
 
-        $planillas = $this->planillasACorregir($aliadoId, $contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
+        $aliados   = DB::table('aliados')->whereIn('id', $contratos->pluck('aliado_id')->unique())->pluck('nombre', 'id');
+        $planillas = $this->planillasACorregir($contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
 
         // Cada planilla corregida va en su propio número de plano: una N
         // corrige una sola planilla, y así Planos SS la liquida y la confirma
         // sin tocar a quienes ya la pagaron.
+        // La llave lleva el aliado: cada uno liquida sus planillas aparte.
         $nPlanoPorPlanilla = [];
+        $ocupados = [];
         foreach ($planillas as $info) {
-            if ($info['estado'] !== 'ok' || isset($nPlanoPorPlanilla[$info['planilla']])) {
+            if ($info['estado'] !== 'ok') {
                 continue;
             }
-            $base = $info['plano'];
-            $nPlanoPorPlanilla[$info['planilla']] = CorreccionNovedadesService::siguienteNPlano(
-                $aliadoId,
+            $base  = $info['plano'];
+            $llave = ((int) $base->aliado_id) . '|' . $info['planilla'];
+            if (isset($nPlanoPorPlanilla[$llave])) {
+                continue;
+            }
+            $tanda = ((int) $base->aliado_id) . '|' . ((int) $base->razon_social_id) . '|' . $base->mes_plano . '|' . $base->anio_plano;
+            $nPlanoPorPlanilla[$llave] = $ocupados[$tanda][] = CorreccionNovedadesService::siguienteNPlano(
+                (int) $base->aliado_id,
                 (int) ($base->razon_social_id ?: 0),
                 (int) $base->mes_plano,
                 (int) $base->anio_plano,
                 (bool) $base->paga_mes_actual,
-                array_values($nPlanoPorPlanilla)
+                $ocupados[$tanda] ?? []
             );
         }
 
@@ -595,18 +622,19 @@ class TrasladoRazonSocialController extends Controller
 
             $base     = $info['plano'];
             $fechaRet = $info['fecha_ret'];
-            $nPlano   = $nPlanoPorPlanilla[$info['planilla']];
+            $aliadoC  = (int) $contrato->aliado_id;
+            $nPlano   = $nPlanoPorPlanilla[$aliadoC . '|' . $info['planilla']];
 
             // Una transacción por persona: si algo falla no queda la factura sin
             // su plano ni el contrato retirado sin la corrección.
             try {
-                $plano = DB::transaction(function () use ($contrato, $base, $fechaRet, $nPlano, $info, $aliadoId, $usuarioId) {
+                $plano = DB::transaction(function () use ($contrato, $base, $fechaRet, $nPlano, $info, $aliadoC, $usuarioId) {
                     $rsId = $base->razon_social_id ?: $contrato->razon_social_id;
 
                     // Factura en $0 con el mismo mes de cobro de la que se corrige:
                     // la factura es el mes en que se cobra y el plano el de servicio.
                     $facturaRet = Factura::create([
-                        'aliado_id'        => $aliadoId,
+                        'aliado_id'        => $aliadoC,
                         'numero_factura'   => 0,
                         'tipo'             => 'planilla',
                         'cedula'           => $contrato->cedula,
@@ -639,7 +667,7 @@ class TrasladoRazonSocialController extends Controller
                     $plano = Plano::create([
                         'factura_id'        => $facturaRet->id,
                         'contrato_id'       => $contrato->id,
-                        'aliado_id'         => $aliadoId,
+                        'aliado_id'         => $aliadoC,
                         'numero_factura'    => 0,
                         'tipo_reg'          => 'retiro',
                         'tipo_doc'          => $base->tipo_doc,
@@ -696,6 +724,9 @@ class TrasladoRazonSocialController extends Controller
                     'periodo'     => $info['periodo'],
                     'fecha_ret'   => $fechaRet,
                     'n_plano'     => $nPlano,
+                    'aliado_id'   => $aliadoC,
+                    'aliado'      => $aliados[$aliadoC] ?? null,
+                    'razon_social'=> $base->razon_social,
                     'rs_id'       => (int) ($base->razon_social_id ?: $contrato->razon_social_id),
                     'paga_mes_actual' => (bool) $base->paga_mes_actual,
                     'mes_plano'   => (int) $base->mes_plano,
@@ -708,9 +739,13 @@ class TrasladoRazonSocialController extends Controller
 
         // Una corrección N por planilla corregida.
         $correcciones = collect($procesados)
-            ->groupBy('planilla')
-            ->map(fn ($g, $numero) => [
-                'planilla'   => (string) $numero,
+            ->groupBy(fn ($p) => $p['aliado_id'] . '|' . $p['planilla'])
+            ->map(fn ($g) => [
+                'planilla'   => (string) $g->first()['planilla'],
+                'aliado'     => $g->first()['aliado'],
+                'razon_social' => $g->first()['razon_social'],
+                // Planos SS muestra el aliado activo: el enlace solo sirve en este.
+                'mismo_aliado' => $g->first()['aliado_id'] === (int) session('aliado_id_activo'),
                 'fecha_pago' => $g->first()['fecha_pago'],
                 'periodo'    => $g->first()['periodo'],
                 'plano_ids'  => $g->pluck('plano_id')->all(),
@@ -762,8 +797,7 @@ class TrasladoRazonSocialController extends Controller
             $validated, $aliadoId, $usuarioId, $mesRetiro, $anioRetiro, $nPlano,
             $fechaIngresoNuevo, &$procesados, &$errores
         ) {
-            $contratos = Contrato::where('aliado_id', $aliadoId)
-                ->whereIn('id', $validated['contrato_ids'])
+            $contratos = $this->contratosPermitidos($validated['contrato_ids'])
                 ->where('estado', 'vigente')
                 ->with(['eps', 'pension', 'arl', 'caja', 'razonSocial', 'cliente'])
                 ->get();
@@ -807,7 +841,7 @@ class TrasladoRazonSocialController extends Controller
 
                     // Nueva factura de retiro (numero_factura=0, costo=0)
                     $facturaRet = Factura::create([
-                        'aliado_id'        => $aliadoId,
+                        'aliado_id'        => (int) $contrato->aliado_id,
                         'numero_factura'   => 0,
                         'tipo'             => 'planilla',
                         'cedula'           => $contrato->cedula,
@@ -838,7 +872,7 @@ class TrasladoRazonSocialController extends Controller
                     Plano::create([
                         'factura_id'        => $facturaRet->id,
                         'contrato_id'       => $contrato->id,
-                        'aliado_id'         => $aliadoId,
+                        'aliado_id'         => (int) $contrato->aliado_id,
                         'numero_factura'    => 0,
                         'tipo_reg'          => 'retiro',
                         'tipo_doc'          => strtoupper(trim($cliente?->tipo_doc ?? 'CC')) ?: 'CC',
@@ -960,18 +994,21 @@ class TrasladoRazonSocialController extends Controller
     private function descargarCorreccion(int $aliadoId, array $planoIds, string $codigoOperador)
     {
         $retiros = DB::table('planos')
-            ->where('aliado_id', $aliadoId)
             ->whereIn('id', $planoIds)
+            ->when(! $this->esBrynex(), fn ($q) => $q->where('aliado_id', $aliadoId))
             ->where('tipo_reg', 'retiro')
             ->where('tipo_p', 16)
             ->whereNull('deleted_at')
-            ->get(['id', 'contrato_id', 'razon_social_id', 'n_plano', 'mes_plano', 'anio_plano', 'paga_mes_actual']);
+            ->get(['id', 'aliado_id', 'contrato_id', 'razon_social_id', 'n_plano', 'mes_plano', 'anio_plano', 'paga_mes_actual']);
 
         if ($retiros->count() !== count($planoIds)) {
             abort(422, 'Algunos de los retiros ya no existen o no son correcciones de este aliado.');
         }
 
-        $llaves = $retiros->map(fn ($p) => "{$p->razon_social_id}|{$p->n_plano}|{$p->mes_plano}|{$p->anio_plano}|" . (int) (bool) $p->paga_mes_actual)->unique();
+        // BryNex puede bajar la de otro aliado: el archivo es del aliado de los retiros.
+        $aliadoId = (int) $retiros->first()->aliado_id;
+
+        $llaves = $retiros->map(fn ($p) => "{$p->aliado_id}|{$p->razon_social_id}|{$p->n_plano}|{$p->mes_plano}|{$p->anio_plano}|" . (int) (bool) $p->paga_mes_actual)->unique();
         if ($llaves->count() > 1) {
             abort(422, 'Los retiros son de planillas distintas: se descarga una corrección por planilla.');
         }
@@ -1062,6 +1099,78 @@ class TrasladoRazonSocialController extends Controller
         } catch (\Exception $e) {
             abort(500, 'Error al generar la planilla: ' . $e->getMessage());
         }
+    }
+
+    // ─── Traslados entre aliados (solo BryNex) ────────────────────────────────
+    //
+    // Las razones sociales de BryNex (Elites, Construtech, Gavi…) las usan
+    // varios aliados, cada uno con su propia copia con el mismo NIT. Un usuario
+    // de BryNex —que ya puede entrar a cualquier aliado— traslada de una vez a
+    // todos los que están en esa empresa; cada contrato sigue en su aliado.
+
+    private function esBrynex(): bool
+    {
+        return (bool) Auth::user()?->es_brynex;
+    }
+
+    /** Ids de la razón social de origen: para BryNex, todas las del mismo NIT. */
+    private function razonesSocialesOrigen(RazonSocial $rs): array
+    {
+        if (! $this->esBrynex() || trim((string) $rs->nit) === '') {
+            return [(int) $rs->id];
+        }
+
+        return RazonSocial::where('nit', $rs->nit)->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /** Contratos que esta sesión puede tocar: del aliado activo, o de cualquiera si es BryNex. */
+    private function contratosPermitidos(array $ids)
+    {
+        return Contrato::whereIn('id', $ids)
+            ->when(! $this->esBrynex(), fn ($q) => $q->where('aliado_id', session('aliado_id_activo')));
+    }
+
+    /**
+     * La razón social destino dentro del aliado del contrato: la misma si es el
+     * aliado activo, la suya con el mismo NIT si ya la tiene, o una copia de la
+     * del aliado activo (plano 1) si no.
+     */
+    private function razonSocialEnAliado(RazonSocial $modelo, int $aliadoId): RazonSocial
+    {
+        static $cache = [];
+
+        if ((int) $modelo->aliado_id === $aliadoId) {
+            return $modelo;
+        }
+
+        return $cache["{$modelo->id}|{$aliadoId}"] ??= (function () use ($modelo, $aliadoId) {
+            if (trim((string) $modelo->nit) === '') {
+                throw new \RuntimeException("La razón social {$modelo->razon_social} no tiene NIT: no se puede ubicar en otro aliado.");
+            }
+
+            $existente = RazonSocial::where('aliado_id', $aliadoId)
+                ->where('nit', $modelo->nit)
+                ->orderByRaw("CASE WHEN estado = 'Activa' THEN 0 ELSE 1 END")
+                ->first();
+            if ($existente) {
+                return $existente;
+            }
+
+            // `razones_sociales.id` no es IDENTITY (tabla legacy): el siguiente a mano.
+            $fila = (array) DB::table('razones_sociales')->where('id', $modelo->id)->first();
+            $fila['id']          = (int) DB::table('razones_sociales')->max('id') + 1;
+            $fila['aliado_id']   = $aliadoId;
+            $fila['estado']      = 'Activa';
+            $fila['n_plano']     = 1;
+            $fila['encargado_id'] = null;
+            $fila['mes_pagos']   = null;
+            $fila['anio_pagos']  = null;
+            $fila['id_legacy']   = null;
+            $fila['observacion'] = trim(($fila['observacion'] ?? '') . " Creada por traslado de razón social desde el aliado {$modelo->aliado_id}.");
+            DB::table('razones_sociales')->insert($fila);
+
+            return RazonSocial::find($fila['id']);
+        })();
     }
 
     /** Id del motivo "Cambio Razón Social" (de afiliación o de retiro), si existe. */

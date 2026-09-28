@@ -500,10 +500,11 @@ function renderTablaContratos(contratos) {
     }
     tbody.innerHTML = contratos.map(c => `
         <tr>
-            <td class="check-col"><input type="checkbox" class="chk-contrato" value="${c.contrato_id}" data-cedula="${c.cedula}" checked onchange="actualizarContador()"></td>
+            <td class="check-col"><input type="checkbox" class="chk-contrato" value="${c.contrato_id}" data-cedula="${c.cedula}" data-aliado="${c.aliado_nombre || ''}" checked onchange="actualizarContador()"></td>
             <td style="font-family:monospace;font-size:.75rem">${c.cedula}</td>
             <td style="font-weight:600;color:#1e293b">${nombreOracion(c.nombre_completo) || '—'}</td>
-            <td style="font-size:.73rem;color:#475569">${c.rs_nombre || '—'}</td>
+            <td style="font-size:.73rem;color:#475569">${c.rs_nombre || '—'}
+                ${c.aliado_nombre ? `<div style="font-size:.65rem;color:#7c3aed;font-weight:700">${c.aliado_nombre}</div>` : ''}</td>
             <td><span class="badge badge-blue">${c.plan_nombre || '—'}</span></td>
             <td style="font-size:.72rem">${c.modalidad_nombre || '—'}</td>
             <td style="font-size:.72rem">${c.eps_nombre || '—'}</td>
@@ -523,6 +524,7 @@ function actualizarContador() {
     contratosSeleccionados = Array.from(checks).map(c => ({
         contrato_id: parseInt(c.value),
         cedula: c.dataset.cedula,
+        aliado: c.dataset.aliado,
     }));
 }
 
@@ -566,9 +568,17 @@ function mostrarConfirmacion() {
             <div><strong style="color:#64748b;font-size:.68rem;text-transform:uppercase">Encargado:</strong><br>${encNome}</div>
             <div><strong style="color:#64748b;font-size:.68rem;text-transform:uppercase">Fecha ingreso:</strong><br>1° del mes actual</div>
         </div>
+        ${(() => {
+            const porAliado = contratosSeleccionados.reduce((a, c) => { a[c.aliado || '—'] = (a[c.aliado || '—'] || 0) + 1; return a; }, {});
+            const aliados = Object.keys(porAliado);
+            return aliados.length > 1 ? `<div class="alert alert-info" style="font-size:.76rem;margin-bottom:.6rem">
+                Son de <strong>${aliados.length} aliados</strong>: ${aliados.map(a => `${a} (${porAliado[a]})`).join(', ')}.
+                Cada contrato nuevo queda en el aliado de la persona, en su ${rsDestNome}; si ese aliado no la tiene, se crea copiando esta (plano 1).
+            </div>` : '';
+        })()}
         <div style="font-size:.78rem;color:#64748b;margin-bottom:.5rem"><strong>Personas a trasladar (${contratosSeleccionados.length}):</strong></div>
         <div style="max-height:160px;overflow-y:auto;background:#f8fafc;border-radius:8px;padding:.6rem">
-            ${contratosSeleccionados.map(c => `<div style="font-size:.78rem;padding:.2rem 0;border-bottom:1px solid #f1f5f9">${c.cedula}</div>`).join('')}
+            ${contratosSeleccionados.map(c => `<div style="font-size:.78rem;padding:.2rem 0;border-bottom:1px solid #f1f5f9">${c.cedula}${c.aliado ? ` <span style="color:#7c3aed;font-size:.68rem">· ${c.aliado}</span>` : ''}</div>`).join('')}
         </div>
     `;
 
@@ -693,7 +703,7 @@ async function previsualizarRetiroA() {
         <tr style="${fondo}">
             <td style="font-family:monospace;font-size:.75rem">${f.cedula}</td>
             <td style="font-weight:600;color:#1e293b">${nombreOracion(f.nombre) || '—'}</td>
-            <td style="font-size:.72rem">${f.razon_social || '—'}</td>
+            <td style="font-size:.72rem">${f.razon_social || '—'}${f.aliado ? `<div style="font-size:.65rem;color:#7c3aed;font-weight:700">${f.aliado}</div>` : ''}</td>
             <td style="font-size:.75rem">${f.periodo || '—'}</td>
             <td style="font-size:.75rem">${f.n_plano ? 'P' + f.n_plano : '—'}</td>
             <td style="font-size:.75rem">${f.num_dias ?? '—'}</td>
@@ -755,22 +765,25 @@ function renderCorrecciones(correcciones) {
     cont.style.display = 'block';
     cont.innerHTML = `
         <div class="alert alert-info" style="margin-bottom:.75rem;font-size:.8rem">
-            📌 <strong>Los retiros quedaron en Planos SS como planilla N</strong>, en
-            ${rsOrigenNome}: ${correcciones.map(c => `<strong>P${c.n_plano}</strong> (corrige la ${c.planilla})`).join(', ')}.
+            📌 <strong>Los retiros quedaron en Planos SS como planilla N</strong>:
+            ${correcciones.map(c => `<strong>${c.aliado || ''} · ${c.razon_social || rsOrigenNome} · P${c.n_plano}</strong> (corrige la ${c.planilla})`).join('; ')}.
+            Las de otro aliado se liquidan entrando a ese aliado.
             No hay que hacer nada más aquí: se liquidan cuando quieran desde Planos SS, en el
             mismo operador donde se pagó la planilla original, se envían en $0 y se confirman en $0.
         </div>
         ${correcciones.map((c, i) => `
             <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:.4rem">
                 <div style="font-size:.8rem;flex:1;min-width:220px">
-                    <strong>Plano P${c.n_plano}</strong> · planilla N que corrige la
+                    ${c.aliado ? `<span style="color:#7c3aed;font-weight:700">${c.aliado}</span> · ` : ''}<strong>Plano P${c.n_plano}</strong> · planilla N que corrige la
                     <strong style="font-family:monospace">${c.planilla}</strong>
                     · período ${c.periodo}
                     · pagada ${fechaCorta(c.fecha_pago)}
                     · <strong>${c.cantidad}</strong> retiro(s)
                     ${c.fecha_pago ? '' : '<div style="color:#dc2626;font-size:.7rem">Sin fecha de pago registrada: la N la exige. Registra el gasto de esa planilla.</div>'}
                 </div>
-                <a class="btn btn-ghost" href="${c.url_planos}" target="_blank" rel="noopener">Abrir en Planos SS →</a>
+                ${c.mismo_aliado
+                    ? `<a class="btn btn-ghost" href="${c.url_planos}" target="_blank" rel="noopener">Abrir en Planos SS →</a>`
+                    : `<span style="font-size:.72rem;color:#7c3aed;font-weight:700">Entrar a ${c.aliado} para liquidarla</span>`}
                 <button class="btn btn-primary" onclick="descargarCorreccion(${i})">📄 TXT corrección N</button>
             </div>`).join('')}
     `;
