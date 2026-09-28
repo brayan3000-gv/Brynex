@@ -1681,14 +1681,41 @@ async function cfdDespuesDeEntrar(tab, d) {
       const continuar = botones.find(e => /^\s*continuar\s*$/i.test((e.innerText || e.value || '').trim()));
       if (continuar) { golpe(continuar); return { paso: '2fa-continuar' }; }
 
-      // La empresa: su tarjeta lleva el NIT o el nombre. Con una sola, esa.
-      const candidatos = [...document.querySelectorAll('button,[role=button],li,div[class*=card]')]
+      // La empresa. Ya no es una rejilla de tarjetas con el NIT: es un
+      // desplegable «Selecciona tu empresa» y dentro un botón con el nombre —y
+      // solo el nombre—. Buscar el NIT ahí no encontraba nada y el portal se
+      // quedaba con el aviso «Aún no tiene permisos para gestionar
+      // afiliaciones», que no es de permisos: es que falta elegir la empresa.
+      const MENU = /^(inicio|ir al inicio|gesti[oó]n de trabajadores|radicados|certificados de empresa|actualizar datos de empresa|administraci[oó]n de usuarios|cerrar sesi[oó]n|selecciona tu empresa|aceptar)$/i;
+
+      const opciones = () => [...document.querySelectorAll('button,[role=button],li,div[class*=card]')]
         .filter(e => {
-          const t = (e.innerText || '').trim();
-          return t && t.length < 200 && (t.replace(/\D/g, '').includes(nitBuscado.slice(0, 9))
-            || (nombre && t.toUpperCase().includes(String(nombre).toUpperCase().slice(0, 12))));
+          const t = (e.innerText || '').replace(/\s+/g, ' ').trim();
+          return e.offsetParent && t && t.length < 200 && !MENU.test(t);
         });
-      if (candidatos.length) { golpe(candidatos[candidatos.length - 1]); return { paso: 'empresa' }; }
+
+      const suya = (e) => {
+        const t = (e.innerText || '').trim();
+        return t.replace(/\D/g, '').includes(nitBuscado.slice(0, 9))
+          || (nombre && t.toUpperCase().includes(String(nombre).toUpperCase().slice(0, 12)));
+      };
+
+      const abridor = [...document.querySelectorAll('button,[role=button]')]
+        .find(e => e.offsetParent && /selecciona tu empresa/i.test(e.innerText || ''));
+
+      let lista = opciones();
+
+      // Cerrado no hay nada que pulsar: primero se abre.
+      if (abridor && !lista.length) { golpe(abridor); return { paso: 'empresa-abrir' }; }
+
+      // Con el nombre o el NIT se acierta; con una sola opción, esa es.
+      const elegida = lista.find(suya) || (lista.length === 1 ? lista[0] : null);
+      if (elegida) { golpe(elegida); return { paso: 'empresa' }; }
+
+      // Algunos portales piden confirmar después de elegir.
+      const aceptar = [...document.querySelectorAll('button,input[type=submit]')]
+        .find(e => e.offsetParent && /^\s*aceptar\s*$/i.test((e.innerText || e.value || '').trim()));
+      if (aceptar) { golpe(aceptar); return { paso: 'empresa-aceptar' }; }
 
       return { paso: 'esperando', pagina: location.pathname };
     }, [nit, d.empresa || ''], []).catch(() => ({ paso: 'cargando' }));

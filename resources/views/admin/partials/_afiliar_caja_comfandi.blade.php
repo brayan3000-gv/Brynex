@@ -90,7 +90,7 @@
 </div>
 
 <script>
-let cfdContratoId = null, cfdPrep = {}, cfdReloj = null, cfdFinal = null;
+let cfdContratoId = null, cfdPrep = {}, cfdReloj = null, cfdFinal = null, cfdAvisoPortal = '';
 const CFD_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const cfdEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cfdEl = id => document.getElementById(id);
@@ -184,9 +184,11 @@ async function revisarSesionComfandi() {
         caja.innerHTML = `1️⃣ Abre la <strong>Sucursal Virtual Empresas</strong> e inicia sesión con el NIT de <strong>${cfdEsc(cfdPrep.portal.empresa)}</strong>` +
             (cfdPrep.resumen?.usuario_portal ? ` (<strong>${cfdEsc(cfdPrep.resumen.usuario_portal)}</strong>)` : '') +
             '. BryNex deja escrito el usuario; tú pones la clave. Si te ofrece la verificación en dos pasos, pulsa <strong>Omitir por ahora</strong>, y después selecciona la empresa.';
+        caja.innerHTML += cfdAvisoPortal;
         cfdEl('cfdBtnAbrir').style.display = 'block';
         return;
     }
+    cfdAvisoPortal = '';
     caja.innerHTML = `✅ Portal abierto${e.empresa ? ' con <strong>' + cfdEsc(e.empresa) + '</strong>' : ''}.`;
     cfdEl('cfdBtnIniciar').style.display = 'block';
 }
@@ -205,7 +207,13 @@ async function abrirPortalComfandi() {
         caja.innerHTML += '<br>🔑 En BryNex no hay clave de Comfandi para esta empresa: se abre el portal y la escribes tú.';
     }
 
-    const r = await cfdExt('cfdAbrir', { usuario: cred.usuario || '', contrasena: cred.contrasena || '' }, 90);
+    const r = await cfdExt('cfdAbrir', {
+        usuario: cred.usuario || '',
+        contrasena: cred.contrasena || '',
+        // El portal lista las empresas por nombre, sin el NIT: sin esto la
+        // extensión no sabe cuál pulsar y se queda en «selecciona tu empresa».
+        empresa: cfdPrep.portal?.empresa || '',
+    }, 120);
 
     btn.disabled = false;
     btn.textContent = antes;
@@ -214,13 +222,14 @@ async function abrirPortalComfandi() {
     // CC: con el NIT en el campo, el portal responde "Documento o contraseña
     // incorrectos" aunque la clave esté bien. Mejor avisarlo que dejarlo
     // descubrir a punta de intentos.
-    if (r?.avisoTipo) caja.innerHTML += `<br>⚠️ ${cfdEsc(r.avisoTipo)}`;
+    // El aviso se guarda, no se escribe encima: el reloj repinta este bloque
+    // cada 3 segundos y antes se comía el motivo del fallo al instante.
+    cfdAvisoPortal = '';
+    if (r?.avisoTipo) cfdAvisoPortal += `<br>⚠️ ${cfdEsc(r.avisoTipo)}`;
+    if (r && r.ok === false && r.error) cfdAvisoPortal += `<br>❌ ${cfdEsc(r.error)}`;
+    if (!r) cfdAvisoPortal += '<br>❌ El portal no respondió a tiempo. Mira la pestaña de Comfandi para ver en qué pantalla quedó.';
 
-    // Sin esto el fallo era mudo: la pestaña se quedaba en la pantalla del
-    // portal y en BryNex no aparecía nada que explicara por qué.
-    if (r && r.ok === false && r.error) caja.innerHTML += `<br>❌ ${cfdEsc(r.error)}`;
-
-    if (r?.sesion) revisarSesionComfandi();
+    revisarSesionComfandi();
 }
 
 // Comfandi exige que el sueldo declarado sea proporcional a la jornada: 240
