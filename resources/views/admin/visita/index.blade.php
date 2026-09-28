@@ -72,6 +72,13 @@
         .fila { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: .87rem; }
         .fila span:first-child { color: var(--tinta-2); }
         .fila.resta span:last-child { color: var(--verde); }
+        .fila-toque { width: 100%; background: none; border: 0; padding: 3px 0; cursor: pointer; text-align: left; }
+        .anticipos { background: #f8fafc; border: 1px solid var(--borde); border-radius: 10px; padding: 2px 10px; margin: 4px 0 6px; }
+        .anticipo { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--borde); font-size: .82rem; }
+        .anticipo:last-child { border-bottom: 0; }
+        .anticipo-btns { display: flex; gap: 4px; }
+        .anticipo-btns a, .anticipo-btns button { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px;
+            border: 1px solid var(--borde); background: #fff; text-decoration: none; font-size: 1rem; cursor: pointer; }
         .sep { border-top: 1px dashed var(--borde); margin: 8px 0; }
         .falta { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
         .falta b { font-size: 1.5rem; }
@@ -199,7 +206,29 @@
                         <div class="fila" x-show="k.resumen.desglose.mora"><span>Mora</span><span class="num" x-text="plata(k.resumen.desglose.mora)"></span></div>
                         <div class="fila" style="font-weight:700"><span>Total del mes</span><span class="num" x-text="plata(k.resumen.total_mes)"></span></div>
                         <div class="fila resta" x-show="k.resumen.saldo_favor"><span>Saldo a favor</span><span class="num" x-text="'− ' + plata(k.resumen.saldo_favor)"></span></div>
-                        <div class="fila resta" x-show="k.resumen.anticipos"><span>Anticipos que ya dio</span><span class="num" x-text="'− ' + plata(k.resumen.anticipos)"></span></div>
+                        <button type="button" class="fila resta fila-toque" x-show="k.resumen.anticipos" @click="k.verAnticipos = !k.verAnticipos">
+                            <span x-text="'Anticipos que ya dio (' + k.resumen.anticipos_detalle.length + ') ' + (k.verAnticipos ? '▴' : '▾')"></span>
+                            <span class="num" x-text="'− ' + plata(k.resumen.anticipos)"></span>
+                        </button>
+                        <div class="anticipos" x-show="k.verAnticipos" x-cloak>
+                            <template x-for="a in k.resumen.anticipos_detalle" :key="a.id">
+                                <div class="anticipo">
+                                    <div style="flex:1;min-width:0">
+                                        <div style="font-weight:700" x-text="a.fecha + ' · ' + a.forma"></div>
+                                        <div style="color:var(--tenue);font-size:.74rem">
+                                            <span x-text="'N.º ANT-' + a.id"></span>
+                                            <span x-show="a.recibio" x-text="' · recibió ' + a.recibio"></span>
+                                            <span x-show="a.disponible < a.valor" x-text="' · de ' + plata(a.valor) + ', ya se usó ' + plata(a.valor - a.disponible)"></span>
+                                        </div>
+                                    </div>
+                                    <b class="num" x-text="plata(a.disponible)"></b>
+                                    <div class="anticipo-btns">
+                                        <a :href="a.recibo_url" target="_blank" title="Ver recibo">📄</a>
+                                        <button type="button" title="Enviar recibo por WhatsApp" :disabled="a.enviando" @click="reenviarAnticipo(a)" x-text="a.enviado ? '✓' : (a.enviando ? '…' : '📲')"></button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
                         <div class="sep"></div>
                         <div class="falta"><span style="font-weight:700">Falta pagar</span><b class="num" x-text="plata(k.resumen.falta)"></b></div>
                         <div style="color:var(--tenue);font-size:.72rem" x-show="k.resumen.mora_info" x-text="k.resumen.mora_info"></div>
@@ -520,6 +549,19 @@ function visita() {
             } catch (e) {
                 this.envio = { texto: e.message, clase: 'rojo', enviando: false, ok: false, intentado: true };
             }
+        },
+
+        async reenviarAnticipo(a) {
+            const celular = this.cliente.celular;
+            if (!celular) { alert('El cliente no tiene celular en la ficha.'); return; }
+            if (!confirm('¿Enviar el recibo ANT-' + a.id + ' al WhatsApp ' + celular + '?')) return;
+            a.enviando = true;
+            try {
+                await this.pedir(URL.enviar, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ anticipo_ids: [a.id], celular }) });
+                a.enviado = true;
+            } catch (e) { alert(e.message); }
+            finally { a.enviando = false; }
         },
 
         async compartir() {

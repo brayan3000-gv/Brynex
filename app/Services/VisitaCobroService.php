@@ -95,6 +95,17 @@ class VisitaCobroService
             'saldo_favor' => $saldoFavor,
             'anticipos' => $totalAnticipos,
             'anticipo_ids' => $anticipos->pluck('id')->all(),
+            // Cada anticipo con su recibo: el cliente suele preguntar cuáles
+            // fueron cuando tiene dos o tres.
+            'anticipos_detalle' => $anticipos->load('usuario:id,nombre')->map(fn ($a) => [
+                'id' => $a->id,
+                'fecha' => $a->fecha_pago?->format('d/m/Y'),
+                'forma' => Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago,
+                'valor' => (int) $a->valor,
+                'disponible' => (int) $a->valor_disponible,
+                'recibio' => $a->usuario?->nombre,
+                'recibo_url' => route('admin.visita.recibo', ['a' => [$a->id]]),
+            ])->values()->all(),
             'falta' => $falta,
             'facturable' => $motivoNoFactura === null,
             'motivo_no_factura' => $motivoNoFactura,
