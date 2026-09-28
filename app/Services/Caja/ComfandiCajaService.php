@@ -127,16 +127,35 @@ class ComfandiCajaService
             $avisos[] = 'El cliente no tiene género en BryNex: escógelo abajo, el portal lo exige.';
         }
 
+        // El portal exige celular y dirección, y sin ellos no se puede radicar.
+        // Cuando el cliente no los tiene se usan los del aliado, que es quien
+        // hace el trámite y quien recibe lo que la caja mande: preferible eso a
+        // dejar a la persona sin afiliar. Va como aviso, no en silencio, para
+        // que se complete el dato de verdad cuando se sepa.
+        $aliado = $contrato->aliado;
+
         $celular = collect([$cliente?->celular, $cliente?->telefono])
             ->flatMap(fn ($t) => preg_split('/[,;\/|]| - /', (string) $t))
             ->map(fn ($t) => preg_replace('/\D/', '', $t))->first(fn ($t) => strlen($t) === 10) ?: null;
+
         if (! $celular) {
-            $problemas[] = 'El cliente no tiene celular de 10 dígitos: el portal lo exige.';
+            $celular = collect([$aliado?->celular, $aliado?->telefono])
+                ->flatMap(fn ($t) => preg_split('/[,;\/|]| - /', (string) $t))
+                ->map(fn ($t) => preg_replace('/\D/', '', $t))->first(fn ($t) => strlen($t) === 10) ?: null;
+
+            $celular
+                ? $avisos[] = "El cliente no tiene celular: se usa el de {$aliado->nombre} ({$celular})."
+                : $problemas[] = 'El cliente no tiene celular de 10 dígitos y el aliado tampoco: el portal lo exige.';
         }
 
         $direccion = $this->direccion((string) $cliente?->direccion_vivienda);
+
         if (! $direccion) {
-            $problemas[] = 'El cliente no tiene dirección: el portal la exige (mira la "Última dirección registrada" que muestra Comfandi).';
+            $direccion = $this->direccion((string) $aliado?->direccion);
+
+            $direccion
+                ? $avisos[] = "El cliente no tiene dirección: se usa la de {$aliado->nombre} ({$direccion})."
+                : $problemas[] = 'El cliente no tiene dirección y el aliado tampoco: el portal la exige (mira la "Última dirección registrada" que muestra Comfandi).';
         }
 
         $ciudad = (string) ($cliente?->municipio_id ?: '');
