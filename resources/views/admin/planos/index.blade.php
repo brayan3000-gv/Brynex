@@ -935,9 +935,15 @@
                 @if($p->contrato_id ?? null)
                 <a href="{{ url('/admin/contratos/'.$p->contrato_id.'/edit') }}" style="text-decoration:none" title="Ver contrato">
                     <span class="chip-tipo {{ $tipoClass }}">{{ $p->tipo_modal_nombre ?? $p->tipo_p }}</span>
+                @if((int) $p->tipo_p === \App\Services\CorreccionNovedadesService::TIPO_P)
+                    <span class="chip-tipo" style="background:#e0e7ff;color:#3730a3" title="Corrección: va en planilla N sobre una planilla ya pagada">N</span>
+                @endif
                 </a>
                 @else
                 <span class="chip-tipo {{ $tipoClass }}">{{ $p->tipo_modal_nombre ?? $p->tipo_p }}</span>
+                @if((int) $p->tipo_p === \App\Services\CorreccionNovedadesService::TIPO_P)
+                    <span class="chip-tipo" style="background:#e0e7ff;color:#3730a3" title="Corrección: va en planilla N sobre una planilla ya pagada">N</span>
+                @endif
                 @endif
                 @if($p->paga_mes_actual ?? false)
                 <span class="chip-mesact" title="Cotiza el mes en curso — esta fila cubre {{ $periodoFila }}">MES ACT</span>
@@ -2780,10 +2786,27 @@ async function cargarEstadoEnlace() {
             valor   : corr ? corr.valor_total : null,
         } : null;
 
+        // Tanda de correcciones de novedades (retiros del traslado de razón
+        // social): planilla N sobre una planilla ya pagada, y solo en el
+        // operador donde se pagó. Ver CorreccionNovedadesService.
+        const corrN = data.correccion;
+        if (corrN) {
+            cont.insertAdjacentHTML('beforeend', corrN.error
+                ? avisoEnlace('#fef2f2', '#fecaca', '#991b1b', '⚠️ <strong>Planilla N</strong> · ' + corrN.error)
+                : avisoEnlace('#eef2ff', '#c7d2fe', '#3730a3',
+                    `🧾 <strong>Planilla N (corrección)</strong> · ${corrN.cantidad} novedad(es) sobre la planilla `
+                    + `<strong>${corrN.numero}</strong>, pagada el ${corrN.fecha_pago}`
+                    + (corrN.operador ? ` en <strong>${corrN.operador}</strong>` : '') + '. '
+                    + 'Solo va esta gente; quienes ya pagaron esa planilla no se tocan.'));
+        }
+
         data.operadores.forEach(op => {
             // Motivos por los que no se puede liquidar con ese operador.
             let bloqueo = null;
             if (CTX.planoPagado)   bloqueo = 'Este plano ya fue confirmado como pagado.';
+            else if (corrN && corrN.error) bloqueo = corrN.error;
+            else if (corrN && corrN.operador_planilla_id && op.id !== corrN.operador_planilla_id)
+                bloqueo = `La planilla ${corrN.numero} se pagó en ${corrN.operador}: su corrección solo se puede liquidar allá.`;
             else if (opPagado && op.id !== opPagado.id)
                 bloqueo = `El paso 1 se pagó en ${opPagado.nombre}: la corrección solo se puede hacer allá.`;
             else if (op.clave_vencida) bloqueo = `La clave secreta de ${op.nombre} venció. Genere una nueva desde el tablero del operador.`;
@@ -2904,7 +2927,7 @@ async function cargarEstadoEnlace() {
                     cont.appendChild(aviso);
                 }
             } else {
-                crearBoton(`🚀 Liquidar en ${op.nombre}`, 1, null);
+                crearBoton(corrN ? `🚀 Liquidar corrección N en ${op.nombre}` : `🚀 Liquidar en ${op.nombre}`, 1, null);
             }
 
             if (bloqueo && !CTX.planoPagado) {

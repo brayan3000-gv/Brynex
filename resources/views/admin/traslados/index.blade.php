@@ -289,7 +289,7 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
                             <th>Nombre</th>
                             <th>Razón social</th>
                             <th>Período</th>
-                            <th>Plano</th>
+                            <th>Plano pagado</th>
                             <th>Días</th>
                             <th>Planilla</th>
                             <th>Pagada</th>
@@ -754,16 +754,18 @@ function renderCorrecciones(correcciones) {
     document.getElementById('botones-descarga-periodo').style.display = 'none';
     cont.style.display = 'block';
     cont.innerHTML = `
-        <div style="font-size:.78rem;color:#475569;margin-bottom:.5rem">Una planilla de corrección (N) por cada planilla corregida:</div>
+        <div style="font-size:.78rem;color:#475569;margin-bottom:.5rem">Cada planilla corregida quedó en su propio número de plano como planilla N. Se liquida por API desde Planos SS (en el mismo operador donde se pagó la original) o se descarga el TXT aquí:</div>
         ${correcciones.map((c, i) => `
             <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:.4rem">
                 <div style="font-size:.8rem;flex:1;min-width:220px">
-                    Planilla <strong style="font-family:monospace">${c.planilla}</strong>
+                    <strong>Plano P${c.n_plano}</strong> · planilla N que corrige la
+                    <strong style="font-family:monospace">${c.planilla}</strong>
                     · período ${c.periodo}
                     · pagada ${fechaCorta(c.fecha_pago)}
                     · <strong>${c.cantidad}</strong> retiro(s)
                     ${c.fecha_pago ? '' : '<div style="color:#dc2626;font-size:.7rem">Sin fecha de pago registrada: la N la exige. Registra el gasto de esa planilla.</div>'}
                 </div>
+                <a class="btn btn-ghost" href="${c.url_planos}" target="_blank" rel="noopener">Abrir en Planos SS →</a>
                 <button class="btn btn-primary" onclick="descargarCorreccion(${i})">📄 TXT corrección N</button>
             </div>`).join('')}
     `;

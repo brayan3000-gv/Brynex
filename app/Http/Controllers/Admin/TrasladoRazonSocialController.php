@@ -8,6 +8,7 @@ use App\Models\Factura;
 use App\Models\Plano;
 use App\Models\RazonSocial;
 use App\Models\User;
+use App\Services\CorreccionNovedadesService;
 use App\Services\PlanoPilaTxtService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -561,6 +562,25 @@ class TrasladoRazonSocialController extends Controller
 
         $planillas = $this->planillasACorregir($aliadoId, $contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
 
+        // Cada planilla corregida va en su propio número de plano: una N
+        // corrige una sola planilla, y así Planos SS la liquida y la confirma
+        // sin tocar a quienes ya la pagaron.
+        $nPlanoPorPlanilla = [];
+        foreach ($planillas as $info) {
+            if ($info['estado'] !== 'ok' || isset($nPlanoPorPlanilla[$info['planilla']])) {
+                continue;
+            }
+            $base = $info['plano'];
+            $nPlanoPorPlanilla[$info['planilla']] = CorreccionNovedadesService::siguienteNPlano(
+                $aliadoId,
+                (int) ($base->razon_social_id ?: 0),
+                (int) $base->mes_plano,
+                (int) $base->anio_plano,
+                (bool) $base->paga_mes_actual,
+                array_values($nPlanoPorPlanilla)
+            );
+        }
+
         foreach ($contratos as $contrato) {
             $info = $planillas[(int) $contrato->id];
 
@@ -571,11 +591,12 @@ class TrasladoRazonSocialController extends Controller
 
             $base     = $info['plano'];
             $fechaRet = $info['fecha_ret'];
+            $nPlano   = $nPlanoPorPlanilla[$info['planilla']];
 
             // Una transacción por persona: si algo falla no queda la factura sin
             // su plano ni el contrato retirado sin la corrección.
             try {
-                $plano = DB::transaction(function () use ($contrato, $base, $fechaRet, $info, $aliadoId, $usuarioId) {
+                $plano = DB::transaction(function () use ($contrato, $base, $fechaRet, $nPlano, $info, $aliadoId, $usuarioId) {
                     $rsId = $base->razon_social_id ?: $contrato->razon_social_id;
 
                     // Factura en $0 con el mismo mes de cobro de la que se corrige:
@@ -603,7 +624,7 @@ class TrasladoRazonSocialController extends Controller
                         'mensajeria' => 0, 'otros' => 0, 'mora' => 0, 'iva' => 0,
                         'total'        => 0,
                         'saldo_proximo'=> 0,
-                        'n_plano'      => $base->n_plano,
+                        'n_plano'      => $nPlano,
                         'usuario_id'   => $usuarioId,
                         'observacion'  => "Corrección de la planilla {$info['planilla']} ({$info['periodo']}): "
                             . "retiro por traslado de razón social. Fecha retiro: {$fechaRet}.",
@@ -636,7 +657,7 @@ class TrasladoRazonSocialController extends Controller
                         'nombre_caja'       => $base->nombre_caja,
                         'nivel_riesgo'      => $base->nivel_riesgo,
                         'salario_basico'    => $base->salario_basico,
-                        'n_plano'           => $base->n_plano,
+                        'n_plano'           => $nPlano,
                         'mes_plano'         => $base->mes_plano,
                         'anio_plano'        => $base->anio_plano,
                         'razon_social'      => $base->razon_social,
@@ -666,6 +687,11 @@ class TrasladoRazonSocialController extends Controller
                     'fecha_pago'  => $info['fecha_pago'],
                     'periodo'     => $info['periodo'],
                     'fecha_ret'   => $fechaRet,
+                    'n_plano'     => $nPlano,
+                    'rs_id'       => (int) ($base->razon_social_id ?: $contrato->razon_social_id),
+                    'paga_mes_actual' => (bool) $base->paga_mes_actual,
+                    'mes_plano'   => (int) $base->mes_plano,
+                    'anio_plano'  => (int) $base->anio_plano,
                 ];
             } catch (\Throwable $e) {
                 $errores[] = ['cedula' => (string) $contrato->cedula, 'mensaje' => $e->getMessage()];
@@ -681,6 +707,14 @@ class TrasladoRazonSocialController extends Controller
                 'periodo'    => $g->first()['periodo'],
                 'plano_ids'  => $g->pluck('plano_id')->all(),
                 'cantidad'   => $g->count(),
+                'n_plano'    => $g->first()['n_plano'],
+                // Filtro de Planos SS (mes de PAGO) donde queda esta tanda.
+                'url_planos' => route('admin.planos.index', [
+                    'razon_social_id' => $g->first()['rs_id'],
+                    'n_plano'         => $g->first()['n_plano'],
+                    'mes'             => $g->first()['paga_mes_actual'] ? $g->first()['mes_plano'] : ($g->first()['mes_plano'] % 12) + 1,
+                    'anio'            => ! $g->first()['paga_mes_actual'] && $g->first()['mes_plano'] === 12 ? $g->first()['anio_plano'] + 1 : $g->first()['anio_plano'],
+                ]),
             ])->values();
 
         return response()->json([
@@ -931,40 +965,13 @@ class TrasladoRazonSocialController extends Controller
 
         $primero = $retiros->first();
 
-        // La planilla corregida es la que pagó esa línea: el plano del mismo
-        // contrato y período que tiene número de planilla.
-        $numeros = DB::table('planos')
-            ->where('aliado_id', $aliadoId)
-            ->whereIn('contrato_id', $retiros->pluck('contrato_id'))
-            ->where('mes_plano', $primero->mes_plano)
-            ->where('anio_plano', $primero->anio_plano)
-            ->where('n_plano', $primero->n_plano)
-            ->whereIn('tipo_reg', ['planilla', 'retiro'])
-            ->whereNull('deleted_at')
-            ->whereRaw('ISNULL(tipo_p, 0) <> 16')   // ni esta ni otras correcciones
-            ->whereNotNull('numero_planilla')
-            ->where('numero_planilla', '<>', '')
-            ->distinct()
-            ->pluck('numero_planilla')
-            ->map(fn ($n) => trim((string) $n))
-            ->unique();
-
-        if ($numeros->count() !== 1) {
-            abort(422, $numeros->isEmpty()
-                ? 'No se encontró la planilla pagada que corrigen estos retiros.'
-                : 'Estos retiros corrigen planillas distintas (' . $numeros->implode(', ') . '): se descarga una por planilla.');
+        try {
+            $asociada = CorreccionNovedadesService::planillaAsociada($aliadoId, $retiros);
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
         }
-
-        $numero    = $numeros->first();
-        $fechaPago = DB::table('gastos')
-            ->where('aliado_id', $aliadoId)
-            ->where('tipo', 'pago_planilla')
-            ->where('numero_planilla', $numero)
-            ->min('fecha');
-
-        if (! $fechaPago) {
-            abort(422, "No se encontró la fecha de pago de la planilla {$numero} (el gasto que la pagó). La corrección N la exige.");
-        }
+        $numero    = $asociada['numero'];
+        $fechaPago = $asociada['fecha_pago'];
 
         // El TXT pide el mes de PAGO y de ahí saca el período: quien cotiza el
         // mes en curso paga el mismo mes del plano, el resto el siguiente.

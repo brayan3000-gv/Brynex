@@ -215,6 +215,8 @@ class PlanoPilaTxtService
             ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, $mesPago, $anioPago))
             ->select([
                 'p.tipo_doc', 'p.no_identifi', 'p.tipo_modalidad_id', 'p.tipo_p', 'p.paga_mes_actual',
+                // Para ubicar la planilla que corrige una línea de tipo_p 16.
+                'p.contrato_id', 'p.mes_plano', 'p.anio_plano', 'p.n_plano',
                 'p.primer_nombre', 'p.segundo_nombre', 'p.primer_ape', 'p.segundo_ape',
                 'p.cod_eps', 'p.cod_afp', 'p.cod_arl', 'p.cod_caja',
                 'p.salario_basico', 'p.num_dias', 'p.nivel_riesgo',
@@ -258,7 +260,7 @@ class PlanoPilaTxtService
         if ($planoIdsFiltro) {
             $query->whereIn('p.id', $planoIdsFiltro);
         }
-        $planos =$query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
+        $planos = $query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
 
         Plano::validarPeriodoUnico($planos);
 
@@ -297,6 +299,26 @@ class PlanoPilaTxtService
             $todosK = ! $tieneN && $planos->count() > 0 && $planos->every(fn ($p) => (int) $p->tipo_modalidad_id === -1);
             $tieneY = ! $tieneN && ! $todosK && $planos->count() > 0 && $planos->contains(fn ($p) => (int) $p->tipo_modalidad_id === 8);
             $tipoPlanilla = $tieneN ? 'N' : ($todosK ? 'K' : ($tieneY ? 'Y' : ($esRsIndependiente ? 'I' : 'E')));
+        }
+
+        // Correcciones de novedades (retiro del traslado de razón social):
+        // van solas en su número de plano y el archivo tiene que decir qué
+        // planilla corrigen. Ver CorreccionNovedadesService.
+        if ($tipoPlanilla === 'N' && ! $planillaAsociada) {
+            $correcciones = $planos->filter(fn ($p) => (int) ($p->tipo_p ?? 0) === CorreccionNovedadesService::TIPO_P);
+
+            if ($correcciones->isNotEmpty()) {
+                if ($correcciones->count() !== $planos->count()) {
+                    throw new \RuntimeException(
+                        "Esta tanda mezcla {$correcciones->count()} corrección(es) de planilla N con "
+                        .($planos->count() - $correcciones->count()).' registro(s) normales, y la N solo puede llevar las '
+                        .'correcciones. Mueva las correcciones a su propio número de plano.'
+                    );
+                }
+
+                $asociada = CorreccionNovedadesService::planillaAsociada((int) $aliadoId, $correcciones);
+                $planillaAsociada = ['numero' => $asociada['numero'], 'fecha_pago' => $asociada['fecha_pago']];
+            }
         }
 
         // El aportante 15 (Contratante) solo cabe si TODOS los cotizantes son
@@ -415,7 +437,7 @@ class PlanoPilaTxtService
         $filename = "{$nombreRs}_{$mesPago}_{$anioPago}_P{$nPlano}.txt";
         $contenido = implode("\r\n", $lineas);
 
-        return ['filename' => $filename, 'contenido' => $contenido];
+        return ['filename' => $filename, 'contenido' => $contenido, 'planilla_asociada' => $planillaAsociada];
     }
 
     // ── Registro Tipo 1 — 359 chars, 22 campos (Resolución 2388) ─────────────

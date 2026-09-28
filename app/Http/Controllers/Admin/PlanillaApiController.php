@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\{OperadorCredencial, OperadorPlanilla, OperadorPlanillaApi, RazonSocial};
 use App\Services\CorreccionEnlaceService;
+use App\Services\CorreccionNovedadesService;
 use App\Services\CorreccionPensionFaltanteService;
 use App\Services\PlanillaE1Service;
 use App\Services\PlanillaDosPasosService;
@@ -60,6 +61,26 @@ class PlanillaApiController extends Controller
             (int) $validated['n_plano'],
             $validated['tipos_modalidad'] ?? []
         );
+
+        // Tanda de correcciones de novedades: la pantalla la marca como planilla
+        // N, dice qué planilla corrige y deja solo el operador donde se pagó.
+        $correccion = null;
+        $pendientesN = CorreccionNovedadesService::pendientes(
+            (int) $aliadoId,
+            (int) $validated['razon_social_id'],
+            (int) $validated['mes'],
+            (int) $validated['anio'],
+            (int) $validated['n_plano'],
+            $validated['tipos_modalidad'] ?? []
+        );
+        if ($pendientesN->isNotEmpty()) {
+            try {
+                $correccion = CorreccionNovedadesService::planillaAsociada((int) $aliadoId, $pendientesN)
+                    + ['cantidad' => $pendientesN->count(), 'error' => null];
+            } catch (\RuntimeException $e) {
+                $correccion = ['cantidad' => $pendientesN->count(), 'error' => $e->getMessage()];
+            }
+        }
 
         $operadores = [];
 
@@ -140,6 +161,7 @@ class PlanillaApiController extends Controller
             'disponible' => count($operadores) > 0,
             'motivo'     => $operadores ? null : 'Ninguna razón social tiene credenciales de operador configuradas.',
             'mezcla_extraordinaria' => $mezclada,
+            'correccion' => $correccion,
             'operadores' => $operadores,
             'pendientes' => $this->pendientesDelPeriodo(
                 $aliadoId, (int) $validated['razon_social_id'],
@@ -369,6 +391,37 @@ class PlanillaApiController extends Controller
             ], 422);
         }
 
+        // ── Corrección de novedades (planilla N) ─────────────────────────
+        // Una tanda de correcciones —el retiro del traslado de razón social—
+        // sale N con la planilla que corrige, y solo se liquida en el operador
+        // donde esa planilla se pagó. Ver CorreccionNovedadesService.
+        $correccionNovedades = null;
+        $pendientesN = CorreccionNovedadesService::pendientes(
+            (int) $aliadoId,
+            (int) $rs->id,
+            (int) $validated['mes'],
+            (int) $validated['anio'],
+            (int) $validated['n_plano'],
+            $validated['tipos_modalidad'] ?? []
+        );
+
+        if ($pendientesN->isNotEmpty()) {
+            try {
+                $correccionNovedades = CorreccionNovedadesService::planillaAsociada((int) $aliadoId, $pendientesN);
+            } catch (\RuntimeException $e) {
+                return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+            }
+
+            if ($correccionNovedades['operador_planilla_id']
+                && $correccionNovedades['operador_planilla_id'] !== (int) $operador->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "La planilla {$correccionNovedades['numero']} se pagó en {$correccionNovedades['operador']}: "
+                        .'su corrección solo se puede liquidar allá.',
+                ], 422);
+            }
+        }
+
         // ── 1. ¿Esta tanda ya tiene planilla? ────────────────────────────
         // Se pregunta ANTES de tocar nada: si el usuario cancela en el 409, no
         // se corrigieron datos ni se generó archivo por una liquidación que
@@ -521,7 +574,8 @@ class PlanillaApiController extends Controller
         // la haya cobrado. Se corrige aquí, antes de armar el TXT, para que la
         // planilla salga bien de una vez en lugar de liquidar de menos y tener
         // que anularla en el operador — ver CorreccionPensionFaltanteService.
-        $pensionCorregida = (new CorreccionPensionFaltanteService())->corregir([
+        // En una corrección no: la línea A tiene que repetir lo que ya se pagó.
+        $pensionCorregida = $correccionNovedades ? ['aplicadas' => []] : (new CorreccionPensionFaltanteService())->corregir([
             'aliado_id'       => $aliadoId,
             'razon_social_id' => (int) $rs->id,
             'mes'             => (int) $validated['mes'],
@@ -535,6 +589,13 @@ class PlanillaApiController extends Controller
                 'n_plano'         => $validated['n_plano'],
                 'correcciones'    => $pensionCorregida['aplicadas'],
             ]);
+        }
+
+        if ($correccionNovedades) {
+            $opcionesPlano['planilla_asociada'] = [
+                'numero'     => $correccionNovedades['numero'],
+                'fecha_pago' => $correccionNovedades['fecha_pago'],
+            ];
         }
 
         // ── 3. Generar el archivo plano en memoria ───────────────────────
@@ -577,7 +638,8 @@ class PlanillaApiController extends Controller
         ]);
 
         $opcionesApi = [
-            'planillaNSoloNovedades' => (bool) ($validated['solo_novedades'] ?? false),
+            // La corrección de un retiro no cambia valores: solo reporta la novedad.
+            'planillaNSoloNovedades' => (bool) ($validated['solo_novedades'] ?? false) || (bool) $correccionNovedades,
             'tipoArchivo'            => 'I',
         ];
 
@@ -588,7 +650,7 @@ class PlanillaApiController extends Controller
         // no devuelve la real. Si era otra, el rechazo la dice
         // (`eo.val.1.043`): se rearma el archivo con ella y se reintenta una
         // sola vez. Ver PlanillaDosPasosService.
-        if ($paso === 2 && $esDosPasos
+        if ((($paso === 2 && $esDosPasos) || $correccionNovedades)
             && ($resultado['success'] ?? false) && ! ($resultado['liquidada'] ?? false)) {
 
             $fechaReal = PlanillaDosPasosService::fechaPagoDelError(
