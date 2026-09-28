@@ -644,7 +644,10 @@ class TrasladoRazonSocialController extends Controller
                         'segundo_ape'       => $base->segundo_ape,
                         'primer_nombre'     => $base->primer_nombre,
                         'segundo_nombre'    => $base->segundo_nombre,
-                        'fecha_ing'         => null,
+                        // La novedad de ingreso de la línea pagada se repite:
+                        // el operador exige que la C traiga las mismas de la A
+                        // (eo.val.2.090.14) más el retiro.
+                        'fecha_ing'         => $base->fecha_ing,
                         'fecha_ret'         => $fechaRet,
                         'num_dias'          => $base->num_dias,
                         'cod_eps'           => $base->cod_eps,
