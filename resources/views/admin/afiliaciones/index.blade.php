@@ -141,6 +141,14 @@ body {
 .ceps-head h3 { font-size:0.95rem; font-weight:800; color:#fff; margin:0; }
 .ceps-head .modal-close { color:rgba(255,255,255,0.65); font-size:1.15rem; }
 .ceps-head .modal-close:hover { color:#fca5a5; }
+.ceps-ext-btn {
+    background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.35); color:#93c5fd;
+    border-radius:8px; padding:0.3rem 0.7rem; font-size:0.72rem; font-weight:600;
+    font-family:inherit; cursor:pointer; white-space:nowrap; transition:background .12s;
+}
+.ceps-ext-btn:hover { background:rgba(59,130,246,0.3); }
+.ceps-ext-btn.falta { background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.4); color:#fca5a5; }
+.ceps-ext-btn.vieja { background:rgba(234,179,8,0.15); border-color:rgba(234,179,8,0.4); color:#fde047; }
 .ceps-head label { display:block; font-size:0.68rem; font-weight:700; color:#93c5fd; margin:0.7rem 0 0.25rem; }
 .ceps-head select {
     width:100%; background:rgba(255,255,255,0.08); border:1px solid rgba(59,130,246,0.35);
@@ -1115,7 +1123,14 @@ function sortClass($col, $currSort, $currDir) {
         <div class="ceps-head">
             <div class="ceps-head-fila">
                 <h3 id="ceps-titulo">🩺 Conciliar radicados con el portal</h3>
-                <button class="modal-close" onclick="cerrarModal('modalConciliacionEps')">✕</button>
+                <div style="display:flex;align-items:center;gap:0.6rem;">
+                    {{-- La extensión estorba en pantalla cuando ya está puesta: aquí solo
+                         queda el botón, que avisa con su color si falta o está vieja. --}}
+                    <button type="button" id="ceps-ext-btn" class="ceps-ext-btn" onclick="verTarjetaExtension()">
+                        🧩 Extensión
+                    </button>
+                    <button class="modal-close" onclick="cerrarModal('modalConciliacionEps')">✕</button>
+                </div>
             </div>
 
             <label for="ceps-razon">Razón social a validar ({{ $alidoActivo->nombre ?? 'aliado activo' }})</label>
@@ -1143,6 +1158,40 @@ function sortClass($col, $currSort, $currDir) {
         </div>
 
         <div class="ceps-cuerpo">
+        {{-- Extensión BryNex Portales: S.O.S., Sanitas y las dos cajas no se pueden
+             conciliar sin ella, así que su estado va a la vista en el mismo modal. --}}
+        <div class="ceps-ext" id="ceps-ext-card" style="display:none;">
+            <div class="ceps-ext-txt">
+                <b>🧩 Extensión BryNex Portales</b>
+                <div id="ceps-ext-estado">Comprobando si está instalada en este navegador…</div>
+            </div>
+            <a href="{{ route('admin.afiliaciones.extension-portales') }}" class="ceps-btn azul">⬇️ Descargar</a>
+            <button type="button" class="ceps-btn gris" onclick="recargarExtensionPortales()"
+                    title="Cuando BryNex publica una versión nueva, esto la pone al día sin ir a chrome://extensions">
+                🔄 Actualizar
+            </button>
+            <button type="button" class="ceps-btn ghost" onclick="verPasosExtension()">❓ Cómo se instala</button>
+
+            <div class="ceps-pasos" id="ceps-ext-pasos">
+                Chrome solo instala de un clic lo que está en su tienda, y esta extensión no puede estar ahí:
+                opera los portales con <b>la sesión que abre la persona</b>. Se instala a mano, una vez por equipo,
+                y son dos minutos.
+                <ol>
+                    <li><b>Descarga</b> el archivo con el botón de arriba y <b>descomprímelo</b>
+                        (clic derecho → Extraer todo). Queda una carpeta <code>brynex-portales</code>.</li>
+                    <li>Déjala en un sitio fijo del equipo —por ejemplo <code>Documentos</code>—:
+                        si la borras o la mueves, Chrome apaga la extensión.</li>
+                    <li>Abre <code>chrome://extensions</code> (cópialo en la barra de direcciones).</li>
+                    <li>Arriba a la derecha, activa el <b>Modo de desarrollador</b>.</li>
+                    <li>Pulsa <b>Cargar descomprimida</b> y elige la carpeta <code>brynex-portales</code>.</li>
+                    <li>Vuelve a BryNex y <b>recarga la página</b>. Aquí arriba debe decir «instalada».</li>
+                </ol>
+                Para <b>actualizarla</b> no repitas todo: basta el botón <b>🔄 Actualizar</b>.
+                Si BryNex cambió archivos de la extensión, descarga otra vez, reemplaza la carpeta
+                con la nueva y pulsa <b>Actualizar</b>.
+            </div>
+        </div>
+
         <div id="ceps-descripcion-sura" class="ceps-panel">
             Consulta en el portal de empleadores de EPS SURA los radicados de EPS <strong>pendientes, en trámite o con error</strong>
             de contratos vigentes de dependientes. Si Sura confirma que ya es cotizante con derecho a cobertura en esa empresa
@@ -1255,40 +1304,6 @@ function sortClass($col, $currSort, $currDir) {
                 Revisar también los que ya están en OK (detecta traslados de fondo)
             </label>
             <div style="margin-top:0.3rem;color:#64748b;">Tarda unos 2 segundos por persona: con toda la cartera vigente, unos minutos.</div>
-        </div>
-
-        {{-- Extensión BryNex Portales: S.O.S., Sanitas y las dos cajas no se pueden
-             conciliar sin ella, así que su estado va a la vista en el mismo modal. --}}
-        <div class="ceps-ext">
-            <div class="ceps-ext-txt">
-                <b>🧩 Extensión BryNex Portales</b>
-                <div id="ceps-ext-estado">Comprobando si está instalada en este navegador…</div>
-            </div>
-            <a href="{{ route('admin.afiliaciones.extension-portales') }}" class="ceps-btn azul">⬇️ Descargar</a>
-            <button type="button" class="ceps-btn gris" onclick="recargarExtensionPortales()"
-                    title="Cuando BryNex publica una versión nueva, esto la pone al día sin ir a chrome://extensions">
-                🔄 Actualizar
-            </button>
-            <button type="button" class="ceps-btn ghost" onclick="verPasosExtension()">❓ Cómo se instala</button>
-
-            <div class="ceps-pasos" id="ceps-ext-pasos" style="display:none;">
-                Chrome solo instala de un clic lo que está en su tienda, y esta extensión no puede estar ahí:
-                opera los portales con <b>la sesión que abre la persona</b>. Se instala a mano, una vez por equipo,
-                y son dos minutos.
-                <ol>
-                    <li><b>Descarga</b> el archivo con el botón de arriba y <b>descomprímelo</b>
-                        (clic derecho → Extraer todo). Queda una carpeta <code>brynex-portales</code>.</li>
-                    <li>Déjala en un sitio fijo del equipo —por ejemplo <code>Documentos</code>—:
-                        si la borras o la mueves, Chrome apaga la extensión.</li>
-                    <li>Abre <code>chrome://extensions</code> (cópialo en la barra de direcciones).</li>
-                    <li>Arriba a la derecha, activa el <b>Modo de desarrollador</b>.</li>
-                    <li>Pulsa <b>Cargar descomprimida</b> y elige la carpeta <code>brynex-portales</code>.</li>
-                    <li>Vuelve a BryNex y <b>recarga la página</b>. Aquí arriba debe decir «instalada».</li>
-                </ol>
-                Para <b>actualizarla</b> no repitas todo: basta el botón <b>🔄 Actualizar</b>.
-                Si BryNex cambió archivos de la extensión, descarga otra vez, reemplaza la carpeta
-                con la nueva y pulsa <b>Actualizar</b>.
-            </div>
         </div>
 
         <div id="ceps-acciones" style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
@@ -2773,14 +2788,34 @@ function verPasosExtension() {
     if (c) c.style.display = c.style.display === 'none' ? 'block' : 'none';
 }
 
+/** El botón de la cabecera muestra y esconde la tarjeta. */
+function verTarjetaExtension() {
+    const c = document.getElementById('ceps-ext-card');
+    if (!c) return;
+    const abrir = c.style.display === 'none';
+    c.style.display = abrir ? 'flex' : 'none';
+    if (abrir) c.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
 async function revisarExtensionPortales() {
     const caja = document.getElementById('ceps-ext-estado');
+    const btn  = document.getElementById('ceps-ext-btn');
     if (!caja) return;
+
+    // El botón lleva el estado a la cabecera para no ocupar sitio con la
+    // tarjeta cuando la extensión ya está puesta y al día.
+    const marcar = (clase, texto) => {
+        if (!btn) return;
+        btn.classList.remove('falta', 'vieja');
+        if (clase) btn.classList.add(clase);
+        btn.textContent = texto;
+    };
 
     // puente.js la escribe en el <html> apenas carga la página.
     const instalada = document.documentElement.dataset.brynexPortales || null;
 
     if (!instalada) {
+        marcar('falta', '🧩 Falta la extensión');
         caja.innerHTML = '<span style="color:#fca5a5;font-weight:700;">No está instalada en este navegador.</span> '
             + 'Sin ella no se pueden conciliar S.O.S., Sanitas ni las cajas: descárgala y sigue los pasos.';
         const pasos = document.getElementById('ceps-ext-pasos');
@@ -2788,11 +2823,13 @@ async function revisarExtensionPortales() {
         return;
     }
 
+    marcar(null, '🧩 Extensión ' + instalada);
     caja.innerHTML = '<span style="color:#4ade80;font-weight:700;">Instalada</span> · versión ' + instalada;
 
     try {
         const { version } = await (await fetch(EXT_URL_VERSION, { headers: { Accept: 'application/json' } })).json();
         if (version && version !== instalada) {
+            marcar('vieja', '🧩 Extensión ' + instalada + ' → ' + version);
             caja.innerHTML = '<span style="color:#fde047;font-weight:700;">Hay una versión más nueva.</span> '
                 + 'Tienes la ' + instalada + ' y BryNex publica la ' + version
                 + ': pulsa 🔄 Actualizar, y si sigue igual descarga y reemplaza la carpeta.';
@@ -3320,6 +3357,9 @@ async function recargarExtensionPortales() {
     // El aviso va en la barra de la extensión, que se ve desde cualquier pestaña.
     const est = document.getElementById('ceps-ext-estado');
     const antes = document.documentElement.dataset.brynexPortales || '—';
+
+    const card = document.getElementById('ceps-ext-card');
+    if (card) card.style.display = 'flex';
 
     if (!document.documentElement.dataset.brynexPortales) {
         if (est) est.innerHTML = '<span style="color:#fca5a5;font-weight:700;">No está instalada en este navegador.</span> Descárgala primero.';
