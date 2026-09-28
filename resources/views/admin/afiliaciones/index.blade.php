@@ -129,6 +129,69 @@ body {
 .modal-title { font-size:1rem;font-weight:800;color:#0f172a;margin-bottom:1rem;padding-bottom:0.6rem;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;justify-content:space-between; }
 .modal-close { background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;padding:0;line-height:1; }
 .modal-close:hover { color:#ef4444; }
+
+/* ── Conciliar EPS: el modal tiene ocho entidades y cada una su explicación,
+      así que se arma como una página chica y no como un cuadro de diálogo. ── */
+.ceps-box { padding:0; max-width:900px; overflow:hidden; display:flex; flex-direction:column; background:#f8fafc; }
+.ceps-head {
+    background:linear-gradient(135deg,#0a1628 0%,#0d2550 60%,#1e40af 100%);
+    padding:1rem 1.25rem; flex-shrink:0;
+}
+.ceps-head-fila { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.ceps-head h3 { font-size:0.95rem; font-weight:800; color:#fff; margin:0; }
+.ceps-head .modal-close { color:rgba(255,255,255,0.65); font-size:1.15rem; }
+.ceps-head .modal-close:hover { color:#fca5a5; }
+.ceps-head label { display:block; font-size:0.68rem; font-weight:700; color:#93c5fd; margin:0.7rem 0 0.25rem; }
+.ceps-head select {
+    width:100%; background:rgba(255,255,255,0.08); border:1px solid rgba(59,130,246,0.35);
+    color:#e2e8f0; border-radius:8px; padding:0.38rem 0.55rem; font-size:0.78rem; font-family:inherit;
+}
+.ceps-head select option { background:#0d2550; color:#e2e8f0; }
+.ceps-head .ceps-nota { font-size:0.68rem; color:rgba(226,232,240,0.6); margin-top:0.3rem; }
+
+.ceps-tabs { display:flex; flex-wrap:wrap; gap:0.35rem; padding:0.7rem 1.25rem 0; background:#f8fafc; }
+.ceps-tab {
+    padding:0.32rem 0.75rem; border-radius:7px; border:1px solid #e2e8f0; background:#fff;
+    color:#475569; font-size:0.74rem; font-weight:600; font-family:inherit; cursor:pointer;
+    transition:background .12s, color .12s, border-color .12s;
+}
+.ceps-tab:hover { border-color:var(--acento,#3b82f6); color:#1e40af; }
+.ceps-tab.activo { background:var(--azul-btn,#2563eb); border-color:var(--azul-btn,#2563eb); color:#fff; }
+
+.ceps-cuerpo { padding:0.9rem 1.25rem 1.25rem; background:#f8fafc; overflow-y:auto; flex:1; }
+.ceps-panel {
+    background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:0.85rem 1rem;
+    font-size:0.76rem; color:#475569; line-height:1.5; margin-bottom:0.8rem;
+    box-shadow:0 2px 8px rgba(0,0,0,0.04);
+}
+.ceps-panel strong { color:#1e293b; }
+.ceps-sub { margin-top:0.7rem; padding-top:0.65rem; border-top:1px solid #f1f5f9; }
+.ceps-check { display:flex; align-items:center; gap:0.4rem; margin-top:0.5rem; font-weight:600; color:#334155; cursor:pointer; }
+
+/* Barra de la extensión, al pie: sirve a S.O.S., Sanitas y las dos cajas. */
+.ceps-ext {
+    background:#0f172a; border-radius:12px; padding:0.7rem 0.9rem; margin-bottom:0.8rem;
+    display:flex; align-items:center; gap:0.7rem; flex-wrap:wrap;
+}
+.ceps-ext-txt { flex:1; min-width:200px; font-size:0.72rem; color:rgba(226,232,240,0.75); line-height:1.4; }
+.ceps-ext-txt b { color:#e2e8f0; font-size:0.78rem; }
+.ceps-btn {
+    border:none; border-radius:8px; padding:0.35rem 0.8rem; font-size:0.74rem; font-weight:600;
+    font-family:inherit; cursor:pointer; color:#fff; text-decoration:none;
+    display:inline-flex; align-items:center; gap:0.3rem; transition:filter .12s;
+}
+.ceps-btn:hover { filter:brightness(1.12); }
+.ceps-btn.azul  { background:var(--azul-btn,#2563eb); }
+.ceps-btn.gris  { background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.18); }
+.ceps-btn.ghost { background:rgba(59,130,246,0.15); border:1px solid rgba(59,130,246,0.35); color:#93c5fd; }
+.ceps-pasos { margin:0.7rem 0 0; padding:0.75rem 0.9rem; background:rgba(255,255,255,0.05);
+    border:1px solid rgba(255,255,255,0.1); border-radius:10px; width:100%; font-size:0.73rem;
+    color:rgba(226,232,240,0.8); line-height:1.65; }
+.ceps-pasos ol { margin:0.35rem 0 0; padding-left:1.1rem; }
+.ceps-pasos li { margin-bottom:0.3rem; }
+.ceps-pasos code { background:rgba(255,255,255,0.12); padding:0.05rem 0.35rem; border-radius:4px;
+    font-size:0.7rem; color:#93c5fd; }
+.ceps-pasos b { color:#e2e8f0; }
 .form-row { display:grid;grid-template-columns:1fr 1fr;gap:0.8rem;margin-bottom:0.8rem; }
 .form-group { display:flex;flex-direction:column;gap:0.25rem; }
 .form-group label { font-size:0.72rem;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.04em; }
@@ -1048,61 +1111,51 @@ function sortClass($col, $currSort, $currDir) {
 
 {{-- ══ MODAL CONCILIACIÓN EPS SURA ══ --}}
 <div class="modal-bg" id="modalConciliacionEps">
-    <div class="modal-box" style="max-width:860px;">
-        <div class="modal-title">
-            <span id="ceps-titulo">🩺 Conciliar radicados con el portal</span>
-            <button class="modal-close" onclick="cerrarModal('modalConciliacionEps')">✕</button>
-        </div>
+    <div class="modal-box ceps-box">
+        <div class="ceps-head">
+            <div class="ceps-head-fila">
+                <h3 id="ceps-titulo">🩺 Conciliar radicados con el portal</h3>
+                <button class="modal-close" onclick="cerrarModal('modalConciliacionEps')">✕</button>
+            </div>
 
-        <div style="margin-bottom:0.7rem;">
-            <label for="ceps-razon" style="display:block;font-size:0.72rem;color:#475569;font-weight:700;margin-bottom:0.2rem;">
-                Razón social a validar ({{ $alidoActivo->nombre ?? 'aliado activo' }})
-            </label>
-            <select id="ceps-razon" onchange="cambiarRazonConciliacion()"
-                style="width:100%;border:1px solid #cbd5e1;border-radius:7px;padding:0.32rem 0.5rem;font-size:0.8rem;font-family:inherit;">
+            <label for="ceps-razon">Razón social a validar ({{ $alidoActivo->nombre ?? 'aliado activo' }})</label>
+            <select id="ceps-razon" onchange="cambiarRazonConciliacion()">
                 <option value="">— Todas las que encuentre el portal —</option>
                 @foreach($razonesConciliar as $rs)
                     <option value="{{ $rs->nit }}" data-nombre="{{ $rs->razon_social }}">{{ $rs->razon_social }} — NIT {{ $rs->nit }}</option>
                 @endforeach
             </select>
-            <div id="ceps-razon-aviso" style="font-size:0.7rem;color:#64748b;margin-top:0.25rem;">
+            <div id="ceps-razon-aviso" class="ceps-nota">
                 Escoge con cuál empresa vas a conciliar: BryNex comprueba que la sesión abierta en el portal sea esa.
             </div>
         </div>
 
         {{-- Con ocho entidades ya no caben en una línea del modal. --}}
-        <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.7rem;">
-            <button type="button" class="ceps-tab" data-entidad="sura" onclick="elegirEntidadConciliacion('sura')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #0033a0;font-size:0.78rem;font-weight:700;cursor:pointer;">EPS SURA</button>
-            <button type="button" class="ceps-tab" data-entidad="nueva_eps" onclick="elegirEntidadConciliacion('nueva_eps')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #be123c;font-size:0.78rem;font-weight:700;cursor:pointer;">Nueva EPS</button>
-            <button type="button" class="ceps-tab" data-entidad="salud_total" onclick="elegirEntidadConciliacion('salud_total')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #15803d;font-size:0.78rem;font-weight:700;cursor:pointer;">Salud Total</button>
-            <button type="button" class="ceps-tab" data-entidad="sos" onclick="elegirEntidadConciliacion('sos')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #b45309;font-size:0.78rem;font-weight:700;cursor:pointer;">S.O.S.</button>
-            <button type="button" class="ceps-tab" data-entidad="sanitas" onclick="elegirEntidadConciliacion('sanitas')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #0e7490;font-size:0.78rem;font-weight:700;cursor:pointer;">Sanitas</button>
-            <button type="button" class="ceps-tab" data-entidad="caja_comfenalco" onclick="elegirEntidadConciliacion('caja_comfenalco')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #047857;font-size:0.78rem;font-weight:700;cursor:pointer;">Caja Comfenalco</button>
-            <button type="button" class="ceps-tab" data-entidad="caja_comfandi" onclick="elegirEntidadConciliacion('caja_comfandi')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #1e3a8a;font-size:0.78rem;font-weight:700;cursor:pointer;">Caja Comfandi</button>
-            <button type="button" class="ceps-tab" data-entidad="pension" onclick="elegirEntidadConciliacion('pension')"
-                style="padding:0.3rem 0.8rem;border-radius:7px;border:1px solid #7c3aed;font-size:0.78rem;font-weight:700;cursor:pointer;">Pensión (RUAF)</button>
+        <div class="ceps-tabs">
+            <button type="button" class="ceps-tab" data-entidad="sura" onclick="elegirEntidadConciliacion('sura')">EPS SURA</button>
+            <button type="button" class="ceps-tab" data-entidad="nueva_eps" onclick="elegirEntidadConciliacion('nueva_eps')">Nueva EPS</button>
+            <button type="button" class="ceps-tab" data-entidad="salud_total" onclick="elegirEntidadConciliacion('salud_total')">Salud Total</button>
+            <button type="button" class="ceps-tab" data-entidad="sos" onclick="elegirEntidadConciliacion('sos')">S.O.S.</button>
+            <button type="button" class="ceps-tab" data-entidad="sanitas" onclick="elegirEntidadConciliacion('sanitas')">Sanitas</button>
+            <button type="button" class="ceps-tab" data-entidad="caja_comfenalco" onclick="elegirEntidadConciliacion('caja_comfenalco')">Caja Comfenalco</button>
+            <button type="button" class="ceps-tab" data-entidad="caja_comfandi" onclick="elegirEntidadConciliacion('caja_comfandi')">Caja Comfandi</button>
+            <button type="button" class="ceps-tab" data-entidad="pension" onclick="elegirEntidadConciliacion('pension')">Pensión (RUAF)</button>
         </div>
 
-        <div id="ceps-descripcion-sura" style="font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div class="ceps-cuerpo">
+        <div id="ceps-descripcion-sura" class="ceps-panel">
             Consulta en el portal de empleadores de EPS SURA los radicados de EPS <strong>pendientes, en trámite o con error</strong>
             de contratos vigentes de dependientes. Si Sura confirma que ya es cotizante con derecho a cobertura en esa empresa
             y el apellido coincide, el radicado pasa a <strong>OK</strong>. En Sura solo se consulta: no se afilia a nadie.
             <br>Tarda alrededor de un minuto por empresa.
         </div>
-        <div id="ceps-descripcion-nueva_eps" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-nueva_eps" class="ceps-panel" style="display:none;">
             Busca en Nueva EPS los reingresos de cada empresa y pone al día los radicados de EPS <strong>pendientes, en trámite o con error</strong>:
             si Nueva EPS ya lo <strong>procesó</strong> pasa a <strong>OK</strong>; si solo está <strong>radicado</strong> queda en trámite con su número.
             En ambos casos se adjunta el certificado del portal. Los que no tienen reingreso se tramitan desde el radicado (🏥 Reingreso Nueva EPS).
             <br>Tarda alrededor de un minuto por empresa.
         </div>
-        <div id="ceps-descripcion-salud_total" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-salud_total" class="ceps-panel" style="display:none;">
             Busca en el seguimiento de novedades de inicio laboral de Salud Total y pone al día los radicados de EPS <strong>pendientes, en trámite o con error</strong>:
             <strong>aprobada</strong> pasa a <strong>OK</strong> con el certificado; <strong>en validación</strong> queda en trámite con el número de formulario y el PDF;
             con <strong>inconsistencias</strong> queda en error con el motivo. Si no hay novedad pero ya está activo con la empresa, también pasa a OK.
@@ -1110,7 +1163,7 @@ function sortClass($col, $currSort, $currDir) {
             <br>Tarda unos segundos por empresa.
         </div>
 
-        <div id="ceps-descripcion-sos" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-sos" class="ceps-panel" style="display:none;">
             Busca en <strong>Novedades → Consultas y Envío/Firma</strong> de S.O.S., con la sesión abierta en este navegador
             (extensión BryNex Portales), solo a la gente que tiene el radicado de EPS <strong>abierto</strong>:
             <strong>Aprobado</strong> pasa a <strong>OK</strong>; lo que sigue en trámite queda con su número;
@@ -1122,7 +1175,7 @@ function sortClass($col, $currSort, $currDir) {
             <div id="ceps-sos-sesion" style="margin-top:0.45rem;"></div>
         </div>
 
-        <div id="ceps-descripcion-sanitas" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-sanitas" class="ceps-panel" style="display:none;">
             Baja el <strong>Estado de Afiliación</strong> de la Oficina Virtual de Empleadores de Sanitas con la sesión abierta en este navegador
             (extensión BryNex Portales) y lo cruza con los radicados de EPS de esa empresa: quien está <strong>HABILITADO</strong> y coincide el apellido
             pasa a <strong>OK confirmado</strong>; quien no aparece <strong>falta radicar</strong> (cambio de empleador). También lista a los habilitados
@@ -1130,7 +1183,7 @@ function sortClass($col, $currSort, $currDir) {
             <div id="ceps-sanitas-sesion" style="margin-top:0.45rem;"></div>
         </div>
 
-        <div id="ceps-descripcion-caja_comfenalco" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-caja_comfenalco" class="ceps-panel" style="display:none;">
             Baja la lista de <strong>Trabajadores por Empresa</strong> de la Sucursal Virtual de la caja Comfenalco Valle con la sesión
             abierta en este navegador (extensión BryNex Portales) y la cruza con los <strong>radicados de caja</strong> de esa empresa:
             quien ya aparece afiliado y coincide el apellido pasa a <strong>OK confirmado</strong>; quien no aparece <strong>falta afiliar</strong>
@@ -1146,7 +1199,7 @@ function sortClass($col, $currSort, $currDir) {
                 <div id="ceps-caja-familias" style="font-size:0.72rem;color:#475569;margin-top:0.3rem;"></div>
             </div>
 
-            <div style="margin-top:0.7rem;padding-top:0.6rem;border-top:1px dashed #cbd5e1;">
+            <div class="ceps-sub">
                 <strong>💰 Subsidios retenidos.</strong> Pregunta a Comfenalco por los trabajadores
                 <strong>morosos y con inexactitud</strong> de la empresa y abre una <strong>tarea</strong> por cada uno,
                 que se cierra sola cuando la caja deja de reportarlo. Aquí basta una consulta para toda la empresa,
@@ -1163,7 +1216,7 @@ function sortClass($col, $currSort, $currDir) {
             </div>
         </div>
 
-        <div id="ceps-descripcion-caja_comfandi" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-caja_comfandi" class="ceps-panel" style="display:none;">
             Pide al portal de Comfandi el <strong>Listado de trabajadores</strong> en Excel —que trae la empresa completa y
             <strong>los beneficiarios de cada trabajador</strong>, y que se guardan en BryNex— y lee la pestaña <strong>Radicados</strong>,
             con la sesión abierta en este navegador (extensión BryNex Portales). Los cruza con los <strong>radicados de caja</strong> de esa empresa:
@@ -1173,7 +1226,7 @@ function sortClass($col, $currSort, $currDir) {
             También lista a los afiliados de la caja que BryNex no tiene como contrato vigente con Comfandi.
             <div id="ceps-comfandi-sesion" style="margin-top:0.45rem;"></div>
 
-            <div style="margin-top:0.7rem;padding-top:0.6rem;border-top:1px dashed #cbd5e1;">
+            <div class="ceps-sub">
                 <strong>💰 Subsidios bloqueados.</strong> Consulta en el portal, trabajador por trabajador, los
                 <strong>bloqueos de subsidio monetario</strong> de esta empresa y abre una <strong>tarea</strong> por cada uno:
                 de tipo <em>Subsidios</em> cuando la caja espera los aportes, y de <em>Solicitud de documentos</em> cuando pide
@@ -1183,35 +1236,64 @@ function sortClass($col, $currSort, $currDir) {
                 y con <strong>Actualizar radicados y tareas</strong> se crean. Se revisan los sospechosos del día —pago con mora,
                 tarea abierta o afiliado nuevo—, y una vez al mes conviene marcar el barrido completo.
                 Tarda unos 10 segundos por persona.
-                <label style="display:flex;align-items:center;gap:0.35rem;margin-top:0.5rem;font-weight:700;color:#334155;">
+                <label class="ceps-check">
                     <input type="checkbox" id="ceps-comfandi-subsidios-todos">
                     Revisar a todos los afiliados de la empresa, no solo a los sospechosos (barrido mensual)
                 </label>
                 <div id="ceps-comfandi-subsidios-estado" style="margin-top:0.4rem;font-weight:700;color:#92400e;"></div>
-                <button type="button" onclick="recargarExtensionPortales()" class="btn-export"
-                        style="background:#475569;cursor:pointer;margin-top:0.5rem;"
-                        title="Cuando BryNex actualiza la extensión, esto la pone al día sin ir a chrome://extensions">
-                    🔄 Recargar la extensión
-                </button>
             </div>
         </div>
 
-        <div id="ceps-descripcion-pension" style="display:none;font-size:0.78rem;color:#475569;line-height:1.45;margin-bottom:0.8rem;">
+        <div id="ceps-descripcion-pension" class="ceps-panel" style="display:none;">
             En pensión el vínculo es <strong>persona ↔ fondo</strong>, no persona ↔ empresa: el empleador solo cotiza. Por eso no hay
             portal de empleador y la fuente oficial es el <strong>RUAF</strong>, que se consulta por el operador de planilla
             (el mismo de la consulta de clientes). Si el RUAF confirma que la persona está en el <strong>mismo fondo</strong> del contrato,
             el radicado pasa a <strong>OK confirmado</strong>; si figura en <strong>otro fondo</strong> queda para revisar el traslado
             —se está cotizando al fondo equivocado—; y si <strong>no tiene fondo</strong>, falta tramitar la vinculación.
-            <label style="display:flex;align-items:center;gap:0.35rem;margin-top:0.5rem;font-weight:700;color:#334155;">
+            <label class="ceps-check">
                 <input type="checkbox" id="ceps-pension-ok" checked>
                 Revisar también los que ya están en OK (detecta traslados de fondo)
             </label>
             <div style="margin-top:0.3rem;color:#64748b;">Tarda unos 2 segundos por persona: con toda la cartera vigente, unos minutos.</div>
         </div>
 
+        {{-- Extensión BryNex Portales: S.O.S., Sanitas y las dos cajas no se pueden
+             conciliar sin ella, así que su estado va a la vista en el mismo modal. --}}
+        <div class="ceps-ext">
+            <div class="ceps-ext-txt">
+                <b>🧩 Extensión BryNex Portales</b>
+                <div id="ceps-ext-estado">Comprobando si está instalada en este navegador…</div>
+            </div>
+            <a href="{{ route('admin.afiliaciones.extension-portales') }}" class="ceps-btn azul">⬇️ Descargar</a>
+            <button type="button" class="ceps-btn gris" onclick="recargarExtensionPortales()"
+                    title="Cuando BryNex publica una versión nueva, esto la pone al día sin ir a chrome://extensions">
+                🔄 Actualizar
+            </button>
+            <button type="button" class="ceps-btn ghost" onclick="verPasosExtension()">❓ Cómo se instala</button>
+
+            <div class="ceps-pasos" id="ceps-ext-pasos" style="display:none;">
+                Chrome solo instala de un clic lo que está en su tienda, y esta extensión no puede estar ahí:
+                opera los portales con <b>la sesión que abre la persona</b>. Se instala a mano, una vez por equipo,
+                y son dos minutos.
+                <ol>
+                    <li><b>Descarga</b> el archivo con el botón de arriba y <b>descomprímelo</b>
+                        (clic derecho → Extraer todo). Queda una carpeta <code>brynex-portales</code>.</li>
+                    <li>Déjala en un sitio fijo del equipo —por ejemplo <code>Documentos</code>—:
+                        si la borras o la mueves, Chrome apaga la extensión.</li>
+                    <li>Abre <code>chrome://extensions</code> (cópialo en la barra de direcciones).</li>
+                    <li>Arriba a la derecha, activa el <b>Modo de desarrollador</b>.</li>
+                    <li>Pulsa <b>Cargar descomprimida</b> y elige la carpeta <code>brynex-portales</code>.</li>
+                    <li>Vuelve a BryNex y <b>recarga la página</b>. Aquí arriba debe decir «instalada».</li>
+                </ol>
+                Para <b>actualizarla</b> no repitas todo: basta el botón <b>🔄 Actualizar</b>.
+                Si BryNex cambió archivos de la extensión, descarga otra vez, reemplaza la carpeta
+                con la nueva y pulsa <b>Actualizar</b>.
+            </div>
+        </div>
+
         <div id="ceps-acciones" style="display:flex;gap:0.5rem;margin-bottom:0.8rem;">
             <button type="button" onclick="iniciarConciliacionEpsSura(true)" class="btn-export" style="background:#475569;cursor:pointer;">🔎 Solo consultar</button>
-            <button type="button" onclick="iniciarConciliacionEpsSura(false)" class="btn-export" style="background:#0033a0;cursor:pointer;">✅ Consultar y actualizar radicados</button>
+            <button type="button" onclick="iniciarConciliacionEpsSura(false)" class="btn-export" style="background:var(--azul-btn,#2563eb);cursor:pointer;">✅ Consultar y actualizar radicados</button>
         </div>
 
         <div id="ceps-estado" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:0.55rem 0.75rem;font-size:0.8rem;color:#0c4a6e;margin-bottom:0.8rem;"></div>
@@ -1233,6 +1315,7 @@ function sortClass($col, $currSort, $currDir) {
             </table>
         </div>
         <div id="ceps-sobran" style="display:none;margin-top:0.8rem;font-size:0.74rem;"></div>
+        </div>
     </div>
 </div>
 
@@ -2681,23 +2764,57 @@ let _cepsTimer = null;
 let _cepsCorria = false;
 let _cepsEntidad = 'sura';
 
+// Versión que publica BryNex; se compara con la instalada para avisar cuando
+// la del navegador se quedó atrás.
+const EXT_URL_VERSION = @json(route('admin.afiliaciones.extension-portales.version'));
+
+function verPasosExtension() {
+    const c = document.getElementById('ceps-ext-pasos');
+    if (c) c.style.display = c.style.display === 'none' ? 'block' : 'none';
+}
+
+async function revisarExtensionPortales() {
+    const caja = document.getElementById('ceps-ext-estado');
+    if (!caja) return;
+
+    // puente.js la escribe en el <html> apenas carga la página.
+    const instalada = document.documentElement.dataset.brynexPortales || null;
+
+    if (!instalada) {
+        caja.innerHTML = '<span style="color:#fca5a5;font-weight:700;">No está instalada en este navegador.</span> '
+            + 'Sin ella no se pueden conciliar S.O.S., Sanitas ni las cajas: descárgala y sigue los pasos.';
+        const pasos = document.getElementById('ceps-ext-pasos');
+        if (pasos) pasos.style.display = 'block';
+        return;
+    }
+
+    caja.innerHTML = '<span style="color:#4ade80;font-weight:700;">Instalada</span> · versión ' + instalada;
+
+    try {
+        const { version } = await (await fetch(EXT_URL_VERSION, { headers: { Accept: 'application/json' } })).json();
+        if (version && version !== instalada) {
+            caja.innerHTML = '<span style="color:#fde047;font-weight:700;">Hay una versión más nueva.</span> '
+                + 'Tienes la ' + instalada + ' y BryNex publica la ' + version
+                + ': pulsa 🔄 Actualizar, y si sigue igual descarga y reemplaza la carpeta.';
+        }
+    } catch (e) { /* sin red, basta con saber que está instalada */ }
+}
+
 function abrirConciliacionEpsSura() {
     document.getElementById('modalConciliacionEps').classList.add('open');
+    revisarExtensionPortales();
     elegirEntidadConciliacion(_cepsEntidad);
 }
 
 function elegirEntidadConciliacion(entidad) {
     _cepsEntidad = entidad;
     _cepsCorria = false;
-    document.querySelectorAll('.ceps-tab').forEach(b => {
-        const activo = b.dataset.entidad === entidad;
-        b.style.background = activo ? ({ sura: '#0033a0', nueva_eps: '#be123c', salud_total: '#15803d', sos: '#b45309', sanitas: '#0e7490', caja_comfenalco: '#047857', caja_comfandi: '#1e3a8a', pension: '#7c3aed' }[entidad] || '#334155') : '#fff';
-        const t = document.getElementById('ceps-titulo');
-        if (t) t.textContent = entidad === 'pension'
-            ? '🏦 Conciliar radicados de pensión con el RUAF'
-            : (['caja_comfenalco', 'caja_comfandi'].includes(entidad) ? '🏢 Conciliar radicados de caja con ' : '🩺 Conciliar radicados de EPS con ') + (CEPS_NOMBRES[entidad] || 'el portal');
-        b.style.color = activo ? '#fff' : '#334155';
-    });
+    document.querySelectorAll('.ceps-tab').forEach(b =>
+        b.classList.toggle('activo', b.dataset.entidad === entidad));
+    const t = document.getElementById('ceps-titulo');
+    if (t) t.textContent = entidad === 'pension'
+        ? '🏦 Conciliar radicados de pensión con el RUAF'
+        : (['caja_comfenalco', 'caja_comfandi'].includes(entidad) ? '🏢 Conciliar radicados de caja con ' : '🩺 Conciliar radicados de EPS con ') + (CEPS_NOMBRES[entidad] || 'el portal');
     // En Comfandi el botón no solo mueve radicados: también abre y cierra las
     // tareas de subsidio bloqueado.
     const btnAplicar = document.querySelector('#ceps-acciones button:last-child');
@@ -3200,19 +3317,22 @@ async function revisarSubsidiosSiFalta() {
  * así que basta pedírselo desde aquí.
  */
 async function recargarExtensionPortales() {
-    const est = document.getElementById('ceps-comfandi-subsidios-estado');
+    // El aviso va en la barra de la extensión, que se ve desde cualquier pestaña.
+    const est = document.getElementById('ceps-ext-estado');
     const antes = document.documentElement.dataset.brynexPortales || '—';
 
     if (!document.documentElement.dataset.brynexPortales) {
-        if (est) est.textContent = 'La extensión BryNex Portales no está instalada en este navegador.';
+        if (est) est.innerHTML = '<span style="color:#fca5a5;font-weight:700;">No está instalada en este navegador.</span> Descárgala primero.';
+        const pasos = document.getElementById('ceps-ext-pasos');
+        if (pasos) pasos.style.display = 'block';
         return;
     }
 
-    if (est) est.textContent = 'Recargando la extensión…';
+    if (est) est.textContent = 'Actualizando la extensión…';
     const r = await brynexExt('sys', 'recargar', {}, 20);
 
     if (!r?.ok) {
-        if (est) est.textContent = '🧩 Esta versión de la extensión todavía no sabe recargarse sola: hazlo una última vez en chrome://extensions.';
+        if (est) est.innerHTML = 'Esta versión todavía no sabe actualizarse sola: hazlo una última vez en <code>chrome://extensions</code> (botón Actualizar).';
         return;
     }
 

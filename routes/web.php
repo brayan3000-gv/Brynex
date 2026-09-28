@@ -1021,6 +1021,11 @@ Route::middleware('auth')->group(function () {
         });
         // Automatización de portales, Conciliar EPS y Buzón: BryNex o aliado autorizado.
         Route::middleware('can:automatizar-portales')->group(function () {
+            // La extensión BryNex Portales, para instalarla en Chrome. Se arma
+            // desde el código desplegado, así que nunca queda una versión vieja.
+            $extc = \App\Http\Controllers\Admin\ExtensionPortalesController::class;
+            Route::get('/extension-portales', [$extc, 'descargar'])->name('extension-portales');
+            Route::get('/extension-portales/version', [$extc, 'version'])->name('extension-portales.version');
             // Conciliación de radicados de EPS SURA contra el portal (proceso en segundo plano).
             $esc = \App\Http\Controllers\Admin\EpsSuraConciliacionController::class;
             Route::post('/conciliar-eps-sura', [$esc, 'iniciar'])->name('conciliar-eps-sura');
