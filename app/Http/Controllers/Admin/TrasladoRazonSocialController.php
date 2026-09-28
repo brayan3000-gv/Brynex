@@ -859,7 +859,11 @@ class TrasladoRazonSocialController extends Controller
                         'mes_plano'         => $mesPlanoRetiro,
                         'anio_plano'        => $anioPlanoRetiro,
                         'razon_social'      => $rs?->razon_social ?? null,
-                        'tipo_p'            => 16,
+                        // Sin ella el retiro no aparece en Planos SS ni sale en el TXT.
+                        'razon_social_id'   => $contrato->razon_social_id,
+                        // Retiro normal de la próxima planilla, no una corrección:
+                        // tipo_p 16 lo haría salir como planilla N.
+                        'tipo_p'            => $contrato->tipo_modalidad_id,
                         'tipo_modalidad_id' => $contrato->tipo_modalidad_id,
                         'usuario_id'        => $usuarioId,
                     ]);
