@@ -1840,6 +1840,8 @@ async function cfdConsultar(pestana, d) {
   // cualquier navegación que no venga de dentro, y entonces el formulario no
   // aparecía y todo terminaba en «No apareció el cuadro de tipo y número de
   // documento», que no dice nada de lo que pasó.
+  await cfdEmpresaSiLaPide(tab, d.nit, d.empresa);
+
   if (!await cfdIr(tab, 'workers')) {
     return { ok: false, error: 'No se pudo abrir «Gestión de trabajadores» en el portal.' };
   }
@@ -1851,7 +1853,7 @@ async function cfdConsultar(pestana, d) {
   }, [String(d.documento)]).catch(() => null);
   if (ya) return { ok: true, yaAfiliado: true, nombre: ya.nombre, desde: ya.desde };
 
-  if (!await cfdAbrirIndividual(tab)) {
+  if (!await cfdAbrirIndividual(tab, d.nit, d.empresa)) {
     return { ok: false, error: 'No se pudo abrir «Afiliar trabajador» en el portal: quedó en otra pantalla.' };
   }
 
@@ -2234,15 +2236,75 @@ async function cfdRadicadoDe(tab, documento) {
 }
 
 /**
+ * Si el portal vuelve a pedir la empresa, la elige.
+ *
+ * No pasa solo al entrar: a mitad de sesión, al cambiar de pantalla, vuelve a
+ * la bienvenida con «Selecciona la empresa con la que deseas trabajar» y un
+ * «Aún no tiene permisos para gestionar afiliaciones» que asusta pero solo
+ * significa que falta escogerla. Sin esto, el trámite moría ahí.
+ */
+async function cfdEmpresaSiLaPide(tab, nit, nombre) {
+  const lapide = await ejecutar(tab, () =>
+    /selecciona la empresa con la que deseas trabajar|no tiene permisos para gestionar/i.test(document.body.innerText || '')
+    && !/actualmente est[aá]s en/i.test(document.body.innerText || '')
+  ).catch(() => false);
+
+  if (!lapide) return false;
+
+  const limite = Date.now() + 40000;
+
+  while (Date.now() < limite) {
+    const listo = await ejecutar(tab, (nitBuscado, nombreBuscado) => {
+      const golpe = (e) => ['pointerdown', 'mousedown', 'mouseup', 'click']
+        .forEach(t => e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+
+      if (/actualmente est[aá]s en/i.test(document.body.innerText || '')) return true;
+
+      const MENU = /^(inicio|ir al inicio|gesti[oó]n de trabajadores|radicados|certificados de empresa|actualizar datos de empresa|administraci[oó]n de usuarios|cerrar sesi[oó]n|selecciona tu empresa|aceptar)$/i;
+
+      const opciones = [...document.querySelectorAll('button,[role=button],li,div[class*=card]')]
+        .filter(e => {
+          const t = (e.innerText || '').replace(/\s+/g, ' ').trim();
+          return e.offsetParent && t && t.length < 200 && !MENU.test(t);
+        });
+
+      const abridor = [...document.querySelectorAll('button,[role=button]')]
+        .find(e => e.offsetParent && /selecciona tu empresa/i.test(e.innerText || ''));
+      if (abridor && !opciones.length) { golpe(abridor); return false; }
+
+      const suya = opciones.find(e => {
+        const t = (e.innerText || '').trim();
+        return t.replace(/\D/g, '').includes(String(nitBuscado).slice(0, 9))
+          || (nombreBuscado && t.toUpperCase().includes(String(nombreBuscado).toUpperCase().slice(0, 12)));
+      }) || (opciones.length === 1 ? opciones[0] : null);
+      if (suya) { golpe(suya); return false; }
+
+      const aceptar = [...document.querySelectorAll('button,input[type=submit]')]
+        .find(e => e.offsetParent && /^\s*aceptar\s*$/i.test((e.innerText || e.value || '').trim()));
+      if (aceptar) { golpe(aceptar); return false; }
+
+      return false;
+    }, [String(nit || ''), String(nombre || '')]).catch(() => false);
+
+    if (listo) return true;
+    await esperar(1500);
+  }
+
+  return false;
+}
+
+/**
  * Deja la pestaña en el formulario de afiliación individual.
  *
  * `/sakaar/individual` no cuelga del menú lateral: se llega desde Gestión de
  * trabajadores, con el botón «Afiliar trabajador». Pedir la URL a pelo rebota
  * al inicio.
  */
-async function cfdAbrirIndividual(tab) {
+async function cfdAbrirIndividual(tab, nit, empresa) {
   const yaEsta = await ejecutar(tab, () => location.pathname === '/sakaar/individual').catch(() => false);
   if (yaEsta) return true;
+
+  await cfdEmpresaSiLaPide(tab, nit, empresa);
 
   if (!await cfdIr(tab, 'workers')) return false;
 
