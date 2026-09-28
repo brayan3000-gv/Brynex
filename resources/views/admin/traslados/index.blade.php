@@ -249,6 +249,31 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
     </div>
 </div>
 
+{{-- Confirmación del retiro A: un modal de la página y no confirm(), que
+     algunos navegadores (el integrado de la app, entre ellos) bloquean y
+     responden "no" sin mostrar nada. --}}
+<div class="modal-overlay" id="modalRetiroA">
+    <div class="modal-box">
+        <div class="modal-head">
+            <div>
+                <h3>📤 Aplicar retiro</h3>
+                <div class="modal-head-sub">Corrección de la última planilla pagada</div>
+            </div>
+            <button class="modal-close" onclick="cerrarModal('modalRetiroA')">✕</button>
+        </div>
+        <div class="modal-body">
+            <div class="alert alert-warn" style="font-size:.8rem">
+                Se agrega el retiro a la última planilla de las <strong id="retiro-a-total">N</strong> persona(s)
+                marcadas "Se corrige", y su contrato anterior queda retirado. Las demás no se tocan.
+            </div>
+        </div>
+        <div class="modal-foot">
+            <button class="btn btn-ghost" onclick="cerrarModal('modalRetiroA')">Cancelar</button>
+            <button class="btn btn-success" id="btn-confirmar-retiro-a" onclick="aplicarRetiroA()">✅ Aplicar retiro</button>
+        </div>
+    </div>
+</div>
+
 {{-- ─── PASO 4: Gestión de Retiro ──────────────────────────────────────────── --}}
 <div id="paso4" style="display:none">
     <div class="card">
@@ -770,9 +795,15 @@ async function previsualizarRetiroA() {
         : 'Nadie tiene una planilla pagada que corregir';
 }
 
-async function ejecutarRetiroA() {
+function ejecutarRetiroA() {
+    const n = (document.getElementById('btn-retiro-a').innerText.match(/\d+/) || ['?'])[0];
+    document.getElementById('retiro-a-total').textContent = n;
+    document.getElementById('modalRetiroA').style.display = 'flex';
+}
+
+async function aplicarRetiroA() {
+    cerrarModal('modalRetiroA');
     const data = window._trasladoData;
-    if (!confirm('Se agrega el retiro a la última planilla de cada persona marcada "Se corrige" y su contrato anterior queda retirado. ¿Continuar?')) return;
 
     mostrarSpinner('Aplicando retiros como corrección...');
     try {
