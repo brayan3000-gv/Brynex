@@ -1150,6 +1150,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [$trs, 'index'])->name('index');
         Route::post('/validar', [$trs, 'validar'])->name('validar');
         Route::post('/ejecutar', [$trs, 'ejecutar'])->name('ejecutar');
+        Route::post('/retiro-opcion-a/previsualizar', [$trs, 'previsualizarOpcionA'])->name('retiro_a.previsualizar');
         Route::post('/retiro-opcion-a', [$trs, 'retirarOpcionA'])->name('retiro_a');
         Route::post('/retiro-opcion-b', [$trs, 'retirarOpcionB'])->name('retiro_b');
         Route::get('/descargar-plano', [$trs, 'descargarPlano'])->name('descargar_plano');

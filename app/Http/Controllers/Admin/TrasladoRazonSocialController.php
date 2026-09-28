@@ -404,155 +404,292 @@ class TrasladoRazonSocialController extends Controller
         ]);
     }
 
-    // ─── 4a. Retiro Opción A: duplicar plano con fecha_ret ───────────────────
-    // Crea nueva factura de retiro (numero_factura=0, costo=0) con plano que
-    // tiene la fecha_ret y duplica los datos del último plano de la planilla.
+    // ─── 4a. Retiro Opción A: corrección de la última planilla pagada ────────
+    //
+    // Cada persona se retira en SU última planilla, no en un período que se
+    // elige a mano para todos: quien pagó agosto en el plano 3 y quien pagó
+    // julio en el 5 no caben en la misma corrección. El plano de retiro es una
+    // copia del pagado —con su razón social, que sin ella no aparece en el
+    // módulo de planos ni sale en el TXT (así quedaron 280 retiros de Fecop en
+    // mayo-2026)— y la corrección N se descarga por planilla corregida.
+
+    /**
+     * Última planilla de cada contrato y si se le puede agregar el retiro.
+     *
+     * @return array<int, array> por contrato_id: estado ('ok' | 'sin_planilla' |
+     *   'pendiente' | 'ya_retirado'), mensaje, el plano base y los datos de la
+     *   planilla asociada (número y fecha de pago).
+     */
+    private function planillasACorregir(int $aliadoId, array $contratoIds): array
+    {
+        $planos = DB::table('planos AS p')
+            ->leftJoin('facturas AS f', 'f.id', '=', 'p.factura_id')
+            ->where('p.aliado_id', $aliadoId)
+            ->whereIn('p.contrato_id', $contratoIds)
+            ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
+            ->whereRaw('ISNULL(p.num_dias, 0) > 0')
+            ->whereNull('p.deleted_at')
+            ->whereNull('f.deleted_at')
+            ->orderByRaw('p.anio_plano * 12 + p.mes_plano DESC')
+            ->orderByDesc('p.id')
+            ->get(['p.*', 'f.mes AS factura_mes', 'f.anio AS factura_anio'])
+            ->groupBy('contrato_id');
+
+        $numeros = $planos->flatten(1)
+            ->map(fn ($p) => trim((string) $p->numero_planilla))
+            ->filter()->unique()->values()->all();
+
+        // La fecha de pago de la planilla vive en el gasto que la pagó.
+        $fechasPago = $numeros
+            ? DB::table('gastos')
+                ->where('aliado_id', $aliadoId)
+                ->where('tipo', 'pago_planilla')
+                ->whereIn('numero_planilla', $numeros)
+                ->selectRaw('numero_planilla, CONVERT(VARCHAR(10), MIN(fecha), 23) AS fecha')
+                ->groupBy('numero_planilla')
+                ->pluck('fecha', 'numero_planilla')
+            : collect();
+
+        $resultado = [];
+        foreach ($contratoIds as $contratoId) {
+            $ultimo = $planos->get($contratoId)?->first();
+
+            if (! $ultimo) {
+                $resultado[$contratoId] = [
+                    'estado'  => 'sin_planilla',
+                    'mensaje' => 'No tiene planillas con días cotizados: no hay qué corregir.',
+                    'plano'   => null,
+                ];
+                continue;
+            }
+
+            $periodo = sprintf('%02d/%d', $ultimo->mes_plano, $ultimo->anio_plano);
+            $numero  = trim((string) $ultimo->numero_planilla);
+
+            if ($ultimo->fecha_ret) {
+                $estado  = 'ya_retirado';
+                $mensaje = "Su última planilla ({$periodo}) ya lleva retiro con fecha "
+                    . Carbon::parse($ultimo->fecha_ret)->format('d/m/Y') . '.';
+            } elseif ($numero === '') {
+                $estado  = 'pendiente';
+                $mensaje = "Su último plano ({$periodo}, P{$ultimo->n_plano}) aún no se ha pagado: "
+                    . 'el retiro va en esa planilla, no en una corrección.';
+            } else {
+                $estado  = 'ok';
+                $mensaje = null;
+            }
+
+            $resultado[$contratoId] = [
+                'estado'     => $estado,
+                'mensaje'    => $mensaje,
+                'plano'      => $ultimo,
+                'periodo'    => $periodo,
+                // El retiro se reporta dentro del período que se corrige.
+                'fecha_ret'  => Carbon::create((int) $ultimo->anio_plano, (int) $ultimo->mes_plano, 1)
+                    ->endOfMonth()->toDateString(),
+                'planilla'   => $numero ?: null,
+                'fecha_pago' => $numero ? ($fechasPago[$numero] ?? null) : null,
+            ];
+        }
+
+        return $resultado;
+    }
+
+    public function previsualizarOpcionA(Request $request): JsonResponse
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+
+        $validated = $request->validate([
+            'contrato_ids'   => 'required|array|min:1',
+            'contrato_ids.*' => 'integer',
+        ]);
+
+        $contratos = Contrato::where('aliado_id', $aliadoId)
+            ->whereIn('id', $validated['contrato_ids'])
+            ->with('razonSocial:id,razon_social')
+            ->get(['id', 'cedula', 'estado', 'razon_social_id']);
+
+        $planillas = $this->planillasACorregir($aliadoId, $contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
+
+        $filas = $contratos->map(function ($c) use ($planillas) {
+            $info  = $planillas[(int) $c->id];
+            $plano = $info['plano'];
+
+            // Un contrato que ya no está vigente no se retira otra vez.
+            if ($c->estado !== 'vigente') {
+                $info['estado']  = 'no_vigente';
+                $info['mensaje'] = "El contrato está {$c->estado}.";
+            }
+
+            return [
+                'contrato_id'  => (int) $c->id,
+                'cedula'       => (string) $c->cedula,
+                'nombre'       => $plano ? trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}") : '',
+                'razon_social' => $plano->razon_social ?? $c->razonSocial?->razon_social,
+                'estado'       => $info['estado'],
+                'mensaje'      => $info['mensaje'],
+                'periodo'      => $info['periodo'] ?? null,
+                'n_plano'      => $plano ? (int) $plano->n_plano : null,
+                'num_dias'     => $plano ? (int) $plano->num_dias : null,
+                'planilla'     => $info['planilla'] ?? null,
+                'fecha_pago'   => $info['fecha_pago'] ?? null,
+                'fecha_ret'    => $info['fecha_ret'] ?? null,
+            ];
+        })->values();
+
+        return response()->json(['ok' => true, 'filas' => $filas]);
+    }
+
     public function retirarOpcionA(Request $request): JsonResponse
     {
-        $aliadoId  = session('aliado_id_activo');
+        $aliadoId  = (int) session('aliado_id_activo');
         $usuarioId = Auth::id();
 
         $validated = $request->validate([
-            'contrato_ids'    => 'required|array|min:1',
-            'contrato_ids.*'  => 'integer',
-            'fecha_retiro'    => 'required|date',
-            'mes_plano'       => 'required|integer|between:1,12',
-            'anio_plano'      => 'required|integer|min:2020|max:2099',
-            'n_plano'         => 'required|integer|min:1',
+            'contrato_ids'   => 'required|array|min:1',
+            'contrato_ids.*' => 'integer',
         ]);
 
-        $fechaRetiro = $validated['fecha_retiro'];
-        $mesPlan     = (int) $validated['mes_plano'];
-        $anioPlan    = (int) $validated['anio_plano'];
-        $nPlano      = (int) $validated['n_plano'];
-
         $procesados = [];
+        $omitidos   = [];
         $errores    = [];
 
-        DB::transaction(function () use (
-            $validated, $aliadoId, $usuarioId, $fechaRetiro, $mesPlan, $anioPlan, $nPlano,
-            &$procesados, &$errores
-        ) {
-            $contratos = Contrato::where('aliado_id', $aliadoId)
-                ->whereIn('id', $validated['contrato_ids'])
-                ->where('estado', 'vigente')
-                ->with(['eps', 'pension', 'arl', 'caja', 'razonSocial', 'cliente'])
-                ->get();
+        $contratos = Contrato::where('aliado_id', $aliadoId)
+            ->whereIn('id', $validated['contrato_ids'])
+            ->where('estado', 'vigente')
+            ->get();
 
-            foreach ($contratos as $contrato) {
-                try {
-                    // Buscar el último plano de planilla de este contrato
-                    $ultimoPlano = DB::table('planos')
-                        ->where('contrato_id', $contrato->id)
-                        ->where('aliado_id', $aliadoId)
-                        ->whereIn('tipo_reg', ['planilla', 'retiro'])
-                        ->whereNull('deleted_at')
-                        ->orderByDesc('id')
-                        ->first();
+        $planillas = $this->planillasACorregir($aliadoId, $contratos->pluck('id')->map(fn ($id) => (int) $id)->all());
 
-                    $cliente  = $contrato->cliente;
-                    $eps      = $contrato->eps;
-                    $afp      = $contrato->pension;
-                    $arl      = $contrato->arl;
-                    $caja     = $contrato->caja;
-                    $rs       = $contrato->razonSocial;
+        foreach ($contratos as $contrato) {
+            $info = $planillas[(int) $contrato->id];
 
-                    $arlSnapshot = \App\Models\Plano::resolverArlSnapshot($contrato, $rs);
-                    $codArl = $arlSnapshot['cod_arl'];
-                    $nombreArl = $arlSnapshot['nombre_arl'];
+            if ($info['estado'] !== 'ok') {
+                $omitidos[] = ['cedula' => (string) $contrato->cedula, 'mensaje' => $info['mensaje']];
+                continue;
+            }
 
-                    $apellidos = $cliente?->apellidos ?? trim(($cliente?->primer_apellido ?? '') . ' ' . ($cliente?->segundo_apellido ?? ''));
-                    $nombres   = $cliente?->nombres   ?? trim(($cliente?->primer_nombre   ?? '') . ' ' . ($cliente?->segundo_nombre   ?? ''));
-                    $partsApe  = preg_split('/\s+/', trim($apellidos), 2);
-                    $partsNom  = preg_split('/\s+/', trim($nombres),   2);
+            $base     = $info['plano'];
+            $fechaRet = $info['fecha_ret'];
 
-                    // Nueva factura de retiro con numero_factura=0, costo=0
+            // Una transacción por persona: si algo falla no queda la factura sin
+            // su plano ni el contrato retirado sin la corrección.
+            try {
+                $plano = DB::transaction(function () use ($contrato, $base, $fechaRet, $info, $aliadoId, $usuarioId) {
+                    $rsId = $base->razon_social_id ?: $contrato->razon_social_id;
+
+                    // Factura en $0 con el mismo mes de cobro de la que se corrige:
+                    // la factura es el mes en que se cobra y el plano el de servicio.
                     $facturaRet = Factura::create([
                         'aliado_id'        => $aliadoId,
                         'numero_factura'   => 0,
                         'tipo'             => 'planilla',
                         'cedula'           => $contrato->cedula,
                         'contrato_id'      => $contrato->id,
-                        'razon_social_id'  => $contrato->razon_social_id,
+                        'razon_social_id'  => $rsId,
                         'empresa_id'       => null,
-                        'mes'              => now()->month,
-                        'anio'             => now()->year,
+                        'mes'              => $base->factura_mes ?? $base->mes_plano,
+                        'anio'             => $base->factura_anio ?? $base->anio_plano,
                         'fecha_pago'       => now()->toDateString(),
                         'estado'           => 'pagada',
                         'forma_pago'       => 'efectivo',
                         'valor_efectivo'   => 0,
                         'valor_consignado' => 0,
                         'valor_prestamo'   => 0,
-                        'dias_cotizados'   => $ultimoPlano?->num_dias ?? 30,
+                        'dias_cotizados'   => $base->num_dias,
                         'v_eps'   => 0, 'v_arl'  => 0, 'v_afp'  => 0, 'v_caja' => 0,
                         'total_ss'=> 0, 'admon'  => 0, 'admin_asesor' => 0,
                         'otros_admon' => 0, 'seguro' => 0, 'afiliacion' => 0,
                         'mensajeria' => 0, 'otros' => 0, 'mora' => 0, 'iva' => 0,
                         'total'        => 0,
                         'saldo_proximo'=> 0,
-                        'n_plano'      => $nPlano,
+                        'n_plano'      => $base->n_plano,
                         'usuario_id'   => $usuarioId,
-                        'observacion'  => "Corrección planilla: retiro por traslado RS. Fecha retiro: {$fechaRetiro}.",
+                        'observacion'  => "Corrección de la planilla {$info['planilla']} ({$info['periodo']}): "
+                            . "retiro por traslado de razón social. Fecha retiro: {$fechaRet}.",
                     ]);
 
-                    // Plano de retiro: copia del último plano con fecha_ret
-                    Plano::create([
+                    // Copia de la línea pagada con la novedad de retiro. tipo_p 16
+                    // es lo que hace que el TXT salga como planilla N.
+                    $plano = Plano::create([
                         'factura_id'        => $facturaRet->id,
                         'contrato_id'       => $contrato->id,
                         'aliado_id'         => $aliadoId,
                         'numero_factura'    => 0,
                         'tipo_reg'          => 'retiro',
-                        'tipo_doc'          => $ultimoPlano?->tipo_doc ?? (strtoupper(trim($cliente?->tipo_doc ?? 'CC')) ?: 'CC'),
-                        'no_identifi'       => $contrato->cedula,
-                        'primer_ape'        => strtoupper($partsApe[0] ?? ''),
-                        'segundo_ape'       => strtoupper($partsApe[1] ?? ''),
-                        'primer_nombre'     => strtoupper($partsNom[0] ?? ''),
-                        'segundo_nombre'    => strtoupper($partsNom[1] ?? ''),
+                        'tipo_doc'          => $base->tipo_doc,
+                        'no_identifi'       => $base->no_identifi,
+                        'primer_ape'        => $base->primer_ape,
+                        'segundo_ape'       => $base->segundo_ape,
+                        'primer_nombre'     => $base->primer_nombre,
+                        'segundo_nombre'    => $base->segundo_nombre,
                         'fecha_ing'         => null,
-                        'fecha_ret'         => Carbon::parse($fechaRetiro)->toDateString(),
-                        'num_dias'          => $ultimoPlano?->num_dias ?? 30,
-                        'cod_eps'           => $ultimoPlano?->cod_eps  ?? ($eps?->nit  ?? $eps?->cod_eps  ?? null),
-                        'nombre_eps'        => $ultimoPlano?->nombre_eps ?? $eps?->nombre ?? null,
-                        'cod_afp'           => $ultimoPlano?->cod_afp  ?? ($afp?->nit  ?? $afp?->cod_afp  ?? null),
-                        'nombre_afp'        => $ultimoPlano?->nombre_afp ?? $afp?->razon_social ?? null,
-                        'cod_arl'           => $ultimoPlano?->cod_arl  ?? $codArl,
-                        'nombre_arl'        => $ultimoPlano?->nombre_arl ?? $nombreArl,
-                        'cod_caja'          => $ultimoPlano?->cod_caja ?? ($caja?->nit ?? $caja?->cod_caja ?? null),
-                        'nombre_caja'       => $ultimoPlano?->nombre_caja ?? $caja?->nombre ?? null,
-                        'nivel_riesgo'      => $ultimoPlano?->nivel_riesgo ?? $contrato->n_arl ?? 1,
-                        'salario_basico'    => $ultimoPlano?->salario_basico ?? (int)($contrato->salario ?? 0),
-                        'n_plano'           => $nPlano,
-                        'mes_plano'         => $mesPlan,
-                        'anio_plano'        => $anioPlan,
-                        'razon_social'      => $rs?->razon_social ?? null,
+                        'fecha_ret'         => $fechaRet,
+                        'num_dias'          => $base->num_dias,
+                        'cod_eps'           => $base->cod_eps,
+                        'nombre_eps'        => $base->nombre_eps,
+                        'cod_afp'           => $base->cod_afp,
+                        'nombre_afp'        => $base->nombre_afp,
+                        'cod_arl'           => $base->cod_arl,
+                        'nombre_arl'        => $base->nombre_arl,
+                        'cod_caja'          => $base->cod_caja,
+                        'nombre_caja'       => $base->nombre_caja,
+                        'nivel_riesgo'      => $base->nivel_riesgo,
+                        'salario_basico'    => $base->salario_basico,
+                        'n_plano'           => $base->n_plano,
+                        'mes_plano'         => $base->mes_plano,
+                        'anio_plano'        => $base->anio_plano,
+                        'razon_social'      => $base->razon_social,
+                        'razon_social_id'   => $rsId,
                         'tipo_p'            => 16,
-                        'tipo_modalidad_id' => $contrato->tipo_modalidad_id,
+                        'tipo_modalidad_id' => $base->tipo_modalidad_id ?? $contrato->tipo_modalidad_id,
+                        'paga_mes_actual'   => $base->paga_mes_actual,
+                        'dias_tp_afp'       => $base->dias_tp_afp,
+                        'dias_tp_caja'      => $base->dias_tp_caja,
+                        'grupo_fondo_solidaridad' => $base->grupo_fondo_solidaridad,
                         'usuario_id'        => $usuarioId,
                     ]);
 
-                    // Marcar contrato anterior como retirado
                     $contrato->update([
                         'estado'       => 'retirado',
-                        'fecha_retiro' => Carbon::parse($fechaRetiro)->toDateString(),
+                        'fecha_retiro' => $fechaRet,
                     ]);
 
-                    $procesados[] = [
-                        'cedula'      => $contrato->cedula,
-                        'contrato_id' => $contrato->id,
-                        'factura_id'  => $facturaRet->id,
-                    ];
+                    return $plano;
+                });
 
-                } catch (\Throwable $e) {
-                    $errores[] = ['cedula' => $contrato->cedula, 'mensaje' => $e->getMessage()];
-                }
+                $procesados[] = [
+                    'cedula'      => (string) $contrato->cedula,
+                    'contrato_id' => (int) $contrato->id,
+                    'plano_id'    => (int) $plano->id,
+                    'planilla'    => $info['planilla'],
+                    'fecha_pago'  => $info['fecha_pago'],
+                    'periodo'     => $info['periodo'],
+                    'fecha_ret'   => $fechaRet,
+                ];
+            } catch (\Throwable $e) {
+                $errores[] = ['cedula' => (string) $contrato->cedula, 'mensaje' => $e->getMessage()];
             }
-        });
+        }
+
+        // Una corrección N por planilla corregida.
+        $correcciones = collect($procesados)
+            ->groupBy('planilla')
+            ->map(fn ($g, $numero) => [
+                'planilla'   => (string) $numero,
+                'fecha_pago' => $g->first()['fecha_pago'],
+                'periodo'    => $g->first()['periodo'],
+                'plano_ids'  => $g->pluck('plano_id')->all(),
+                'cantidad'   => $g->count(),
+            ])->values();
 
         return response()->json([
-            'ok'         => count($procesados) > 0,
-            'procesados' => $procesados,
-            'errores'    => $errores,
-            'mensaje'    => count($procesados) . ' retiro(s) aplicado(s) en planilla anterior.',
+            'ok'           => count($procesados) > 0,
+            'procesados'   => $procesados,
+            'omitidos'     => $omitidos,
+            'errores'      => $errores,
+            'correcciones' => $correcciones,
+            'mensaje'      => count($procesados) . ' retiro(s) aplicado(s) como corrección de su última planilla.',
         ]);
     }
 
@@ -729,15 +866,20 @@ class TrasladoRazonSocialController extends Controller
         $tiposModalidad = array_map('intval', (array) $request->input('tipos_modalidad', []));
         $operadorId     = $request->input('operador_id');
 
-        if (!$razonSocialId) {
-            abort(400, 'Debe especificar la Razón Social.');
-        }
-
         $codigoOperador = '88';
         if ($operadorId) {
             $codigoOperador = DB::table('operadores_planilla')
                 ->where('id', $operadorId)
                 ->value('codigo_ni') ?: '88';
+        }
+
+        $planoIds = array_values(array_filter(array_map('intval', (array) $request->input('plano_ids', []))));
+        if ($planoIds) {
+            return $this->descargarCorreccion($aliadoId, $planoIds, $codigoOperador);
+        }
+
+        if (!$razonSocialId) {
+            abort(400, 'Debe especificar la Razón Social.');
         }
 
         try {
@@ -759,6 +901,99 @@ class TrasladoRazonSocialController extends Controller
             abort(422, $e->getMessage());
         } catch (\Exception $e) {
             abort(500, 'Error al generar el TXT: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * TXT de la corrección N de una planilla: solo los retiros del traslado,
+     * con el número y la fecha de pago de la planilla que corrigen (campos 9 y
+     * 10 del registro tipo 1). Todo sale de los planos: la pantalla solo dice
+     * cuáles.
+     */
+    private function descargarCorreccion(int $aliadoId, array $planoIds, string $codigoOperador)
+    {
+        $retiros = DB::table('planos')
+            ->where('aliado_id', $aliadoId)
+            ->whereIn('id', $planoIds)
+            ->where('tipo_reg', 'retiro')
+            ->where('tipo_p', 16)
+            ->whereNull('deleted_at')
+            ->get(['id', 'contrato_id', 'razon_social_id', 'n_plano', 'mes_plano', 'anio_plano', 'paga_mes_actual']);
+
+        if ($retiros->count() !== count($planoIds)) {
+            abort(422, 'Algunos de los retiros ya no existen o no son correcciones de este aliado.');
+        }
+
+        $llaves = $retiros->map(fn ($p) => "{$p->razon_social_id}|{$p->n_plano}|{$p->mes_plano}|{$p->anio_plano}|" . (int) (bool) $p->paga_mes_actual)->unique();
+        if ($llaves->count() > 1) {
+            abort(422, 'Los retiros son de planillas distintas: se descarga una corrección por planilla.');
+        }
+
+        $primero = $retiros->first();
+
+        // La planilla corregida es la que pagó esa línea: el plano del mismo
+        // contrato y período que tiene número de planilla.
+        $numeros = DB::table('planos')
+            ->where('aliado_id', $aliadoId)
+            ->whereIn('contrato_id', $retiros->pluck('contrato_id'))
+            ->where('mes_plano', $primero->mes_plano)
+            ->where('anio_plano', $primero->anio_plano)
+            ->where('n_plano', $primero->n_plano)
+            ->whereIn('tipo_reg', ['planilla', 'retiro'])
+            ->whereNull('deleted_at')
+            ->whereRaw('ISNULL(tipo_p, 0) <> 16')   // ni esta ni otras correcciones
+            ->whereNotNull('numero_planilla')
+            ->where('numero_planilla', '<>', '')
+            ->distinct()
+            ->pluck('numero_planilla')
+            ->map(fn ($n) => trim((string) $n))
+            ->unique();
+
+        if ($numeros->count() !== 1) {
+            abort(422, $numeros->isEmpty()
+                ? 'No se encontró la planilla pagada que corrigen estos retiros.'
+                : 'Estos retiros corrigen planillas distintas (' . $numeros->implode(', ') . '): se descarga una por planilla.');
+        }
+
+        $numero    = $numeros->first();
+        $fechaPago = DB::table('gastos')
+            ->where('aliado_id', $aliadoId)
+            ->where('tipo', 'pago_planilla')
+            ->where('numero_planilla', $numero)
+            ->min('fecha');
+
+        if (! $fechaPago) {
+            abort(422, "No se encontró la fecha de pago de la planilla {$numero} (el gasto que la pagó). La corrección N la exige.");
+        }
+
+        // El TXT pide el mes de PAGO y de ahí saca el período: quien cotiza el
+        // mes en curso paga el mismo mes del plano, el resto el siguiente.
+        $mesActual = (bool) $primero->paga_mes_actual;
+        $mesPago   = Carbon::create((int) $primero->anio_plano, (int) $primero->mes_plano, 1);
+        if (! $mesActual) {
+            $mesPago->addMonth();
+        }
+
+        try {
+            return (new PlanoPilaTxtService())->generar([
+                'aliado_id'          => $aliadoId,
+                'razon_social_id'    => (int) $primero->razon_social_id,
+                'mes'                => $mesPago->month,
+                'anio'               => $mesPago->year,
+                'n_plano'            => (int) $primero->n_plano,
+                'plano_ids'          => $planoIds,
+                'codigo_operador'    => $codigoOperador,
+                'tipo_planilla'      => 'N',
+                'periodo_mes_actual' => $mesActual,
+                'planilla_asociada'  => [
+                    'numero'     => $numero,
+                    'fecha_pago' => Carbon::parse($fechaPago)->toDateString(),
+                ],
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            abort(500, 'Error de base de datos al generar el TXT.');
+        } catch (\RuntimeException $e) {
+            abort(422, $e->getMessage());
         }
     }
 

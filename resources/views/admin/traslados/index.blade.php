@@ -53,6 +53,7 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
 .badge-blue{background:#dbeafe;color:#1d4ed8}
 .badge-green{background:#dcfce7;color:#15803d}
 .badge-red{background:#fee2e2;color:#dc2626}
+.badge-amber{background:#fef3c7;color:#b45309}
 .badge-gray{background:#f1f5f9;color:#64748b}
 
 /* ── Panel retiro (opciones A y B) ──────────────────── */
@@ -261,7 +262,7 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
                 <input type="radio" name="tipo_retiro" value="A" id="radio-a">
                 <div class="retiro-card-icon">📤</div>
                 <div class="retiro-card-title">Opción A · Retiro en Planilla Anterior</div>
-                <div class="retiro-card-sub">Ya se procesó la planilla con la fecha de retiro (ej: 30-abril). Se creará un plano de corrección y se descargará el TXT para MiPlanilla con la novedad de retiro.</div>
+                <div class="retiro-card-sub">La persona ya pagó su última planilla en la razón social de origen. Se le agrega el retiro como corrección de ESA planilla (queda en el historial de planos) y se descarga una planilla N por cada planilla corregida.</div>
             </label>
 
             {{-- OPCIÓN B --}}
@@ -276,32 +277,30 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
         {{-- Formulario Opción A --}}
         <div id="form-opcion-a" style="display:none;margin-top:1rem;padding:1rem;background:#f8fafc;border-radius:12px;border:1.5px solid #e2e8f0">
             <div style="font-size:.8rem;font-weight:700;color:#0f172a;margin-bottom:.75rem">📤 Configurar retiro en planilla anterior</div>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Fecha de Retiro *</label>
-                    <input type="date" class="form-control" id="a-fecha-retiro">
-                    <div style="font-size:.68rem;color:#94a3b8;margin-top:.2rem">Ej: 30-04-2026 (último día del mes anterior)</div>
-                </div>
-                <div class="form-group">
-                    <label>Mes del Plano *</label>
-                    <select class="form-control" id="a-mes-plano">
-                        @foreach(range(1,12) as $m)
-                        <option value="{{ $m }}" {{ now()->month === $m ? 'selected' : '' }}>
-                            {{ ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'][$m] }}
-                        </option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Año del Plano *</label>
-                    <input type="number" class="form-control" id="a-anio-plano" value="{{ now()->year }}" min="2020" max="2099">
-                </div>
-                <div class="form-group">
-                    <label>N° Plano RS Origen *</label>
-                    <select class="form-control" id="a-n-plano">
-                        <option value="">Cargando...</option>
-                    </select>
-                </div>
+            <div style="font-size:.74rem;color:#475569;margin-bottom:.6rem">
+                Cada persona se retira en <strong>su última planilla pagada</strong>, con fecha el último día de ese período.
+                Revisa la tabla: solo se aplica a las filas en verde.
+            </div>
+            <div class="tbl-wrap">
+                <table class="tbl">
+                    <thead>
+                        <tr>
+                            <th>Cédula</th>
+                            <th>Nombre</th>
+                            <th>Razón social</th>
+                            <th>Período</th>
+                            <th>Plano</th>
+                            <th>Días</th>
+                            <th>Planilla</th>
+                            <th>Pagada</th>
+                            <th>Fecha retiro</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-retiro-a">
+                        <tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:1rem">Cargando...</td></tr>
+                    </tbody>
+                </table>
             </div>
 
             {{-- Descarga TXT --}}
@@ -321,7 +320,7 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
             </div>
 
             <div style="display:flex;gap:.6rem;margin-top:.85rem;flex-wrap:wrap">
-                <button class="btn btn-primary" onclick="ejecutarRetiroA()">
+                <button class="btn btn-primary" id="btn-retiro-a" onclick="ejecutarRetiroA()" disabled>
                     📤 Aplicar Retiro en Planilla Anterior
                 </button>
             </div>
@@ -394,7 +393,10 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
                 </div>
             </div>
 
-            <div style="display:flex;gap:.75rem;flex-wrap:wrap">
+            {{-- Opción A: una corrección N por planilla corregida --}}
+            <div id="lista-correcciones" style="display:none;margin-bottom:1rem"></div>
+
+            <div id="botones-descarga-periodo" style="display:flex;gap:.75rem;flex-wrap:wrap">
                 <button class="btn btn-primary" onclick="descargarTxt()">
                     📄 Descargar TXT MiPlanilla
                 </button>
@@ -478,7 +480,6 @@ async function validarCedulas() {
         document.getElementById('paso2').style.display = 'block';
 
         // Cargar n_planos disponibles de la RS origen
-        cargarNPlanos(rsOrigenId, 'a-n-plano');
         cargarNPlanos(rsOrigenId, 'b-n-plano');
 
         setStep(2);
@@ -634,15 +635,7 @@ function seleccionarOpcion(op) {
     document.getElementById('form-opcion-b').style.display = op === 'B' ? 'block' : 'none';
 
     if (op === 'A') {
-        const hoy = new Date();
-        const ultimoDiaMesAnterior = new Date(hoy.getFullYear(), hoy.getMonth(), 0);
-        const yyyy = ultimoDiaMesAnterior.getFullYear();
-        const mm = String(ultimoDiaMesAnterior.getMonth() + 1).padStart(2, '0');
-        const dd = String(ultimoDiaMesAnterior.getDate()).padStart(2, '0');
-
-        document.getElementById('a-fecha-retiro').value = `${yyyy}-${mm}-${dd}`;
-        document.getElementById('a-mes-plano').value = ultimoDiaMesAnterior.getMonth() + 1;
-        document.getElementById('a-anio-plano').value = yyyy;
+        previsualizarRetiroA();
     }
 }
 
@@ -664,57 +657,126 @@ async function cargarNPlanos(rsId, selectId) {
     }
 }
 
-// ── EJECUTAR RETIRO A ──────────────────────────────────────────────────────
+// ── RETIRO A: previsualizar y aplicar ─────────────────────────────────────
+const ESTADOS_RETIRO_A = {
+    ok:           { txt: 'Se corrige',         badge: 'badge-green' },
+    pendiente:    { txt: 'Plano sin pagar',    badge: 'badge-amber' },
+    ya_retirado:  { txt: 'Ya tiene retiro',    badge: 'badge-amber' },
+    sin_planilla: { txt: 'Sin planilla',       badge: 'badge-red' },
+    no_vigente:   { txt: 'Contrato no vigente', badge: 'badge-red' },
+};
+
+function fechaCorta(iso) {
+    if (!iso) return '—';
+    const [y, m, d] = iso.substring(0, 10).split('-');
+    return `${d}/${m}/${y}`;
+}
+
+async function previsualizarRetiroA() {
+    const tbody = document.getElementById('tbody-retiro-a');
+    const btn   = document.getElementById('btn-retiro-a');
+    btn.disabled = true;
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:1rem">Buscando la última planilla de cada persona...</td></tr>';
+
+    const resp = await apiFetch('{{ route("admin.traslados.retiro_a.previsualizar") }}', 'POST', {
+        contrato_ids: window._trasladoData.contratoIdsOrigen,
+    });
+    if (!resp.ok) {
+        tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#dc2626;padding:1rem">${resp.mensaje}</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = resp.filas.map(f => {
+        const e = ESTADOS_RETIRO_A[f.estado] || { txt: f.estado, badge: 'badge-red' };
+        const fondo = f.estado === 'ok' ? '' : 'background:#fffbeb';
+        return `
+        <tr style="${fondo}">
+            <td style="font-family:monospace;font-size:.75rem">${f.cedula}</td>
+            <td style="font-weight:600;color:#1e293b">${nombreOracion(f.nombre) || '—'}</td>
+            <td style="font-size:.72rem">${f.razon_social || '—'}</td>
+            <td style="font-size:.75rem">${f.periodo || '—'}</td>
+            <td style="font-size:.75rem">${f.n_plano ? 'P' + f.n_plano : '—'}</td>
+            <td style="font-size:.75rem">${f.num_dias ?? '—'}</td>
+            <td style="font-family:monospace;font-size:.75rem">${f.planilla || '—'}</td>
+            <td style="font-size:.75rem">${fechaCorta(f.fecha_pago)}</td>
+            <td style="font-size:.75rem;font-weight:600">${f.estado === 'ok' ? fechaCorta(f.fecha_ret) : '—'}</td>
+            <td><span class="badge ${e.badge}" title="${f.mensaje || ''}">${e.txt}</span>
+                ${f.mensaje ? `<div style="font-size:.65rem;color:#92400e;margin-top:.2rem;max-width:260px">${f.mensaje}</div>` : ''}</td>
+        </tr>`;
+    }).join('');
+
+    const aplicables = resp.filas.filter(f => f.estado === 'ok').length;
+    btn.disabled = aplicables === 0;
+    btn.textContent = aplicables
+        ? `📤 Aplicar retiro a ${aplicables} persona(s)`
+        : 'Nadie tiene una planilla pagada que corregir';
+}
+
 async function ejecutarRetiroA() {
-    const fechaRet = document.getElementById('a-fecha-retiro').value;
-    const mesPlan  = document.getElementById('a-mes-plano').value;
-    const anioPlan = document.getElementById('a-anio-plano').value;
-    const nPlano   = document.getElementById('a-n-plano').value;
-
-    if (!fechaRet) { alert('Ingresa la fecha de retiro.'); return; }
-    if (!nPlano)   { alert('Selecciona el N° de plano.'); return; }
-
     const data = window._trasladoData;
-    mostrarSpinner('Aplicando retiro en planilla anterior...');
+    if (!confirm('Se agrega el retiro a la última planilla de cada persona marcada "Se corrige" y su contrato anterior queda retirado. ¿Continuar?')) return;
 
+    mostrarSpinner('Aplicando retiros como corrección...');
     try {
         const resp = await apiFetch('{{ route("admin.traslados.retiro_a") }}', 'POST', {
             contrato_ids: data.contratoIdsOrigen,
-            fecha_retiro: fechaRet,
-            mes_plano:    parseInt(mesPlan),
-            anio_plano:   parseInt(anioPlan),
-            n_plano:      parseInt(nPlano),
         });
 
-        if (!resp.ok && resp.procesados?.length === 0) {
-            alert('Error en el retiro: ' + resp.mensaje);
+        if (!resp.ok && !(resp.procesados?.length)) {
+            const detalle = [...(resp.omitidos || []), ...(resp.errores || [])].map(e => `• ${e.cedula}: ${e.mensaje}`).join('\n');
+            alert('No se aplicó ningún retiro. ' + (resp.mensaje || '') + (detalle ? '\n' + detalle : ''));
             return;
         }
 
-        // Guardar params para descargas
-        descargaTxtParams = {
-            razon_social_id: data.rsOrigenId,
-            mes:  mesPlan,
-            anio: anioPlan,
-            n_plano: nPlano,
-        };
-
-        // Sincronizar operador inicial si existe
-        const opIdA = document.getElementById('a-operador-id').value;
-        if (opIdA) {
-            document.getElementById('final-operador-id').value = opIdA;
+        const avisos = [...(resp.omitidos || []), ...(resp.errores || [])];
+        if (avisos.length) {
+            alert('Quedaron sin retiro:\n' + avisos.map(e => `• ${e.cedula}: ${e.mensaje}`).join('\n'));
         }
 
+        const opIdA = document.getElementById('a-operador-id').value;
+        if (opIdA) document.getElementById('final-operador-id').value = opIdA;
+
+        renderCorrecciones(resp.correcciones || []);
+
         document.getElementById('final-msg').textContent =
-            `🎉 ${resp.procesados.length} retiro(s) aplicado(s) en planilla anterior. ¡Traslado completo!`;
+            `🎉 ${resp.procesados.length} retiro(s) agregado(s) como corrección de su última planilla.`;
         document.getElementById('panel-descargas').style.display = 'block';
         document.getElementById('paso4').style.display = 'none';
         document.getElementById('paso-final').style.display = 'block';
         document.getElementById('paso-final').scrollIntoView({behavior:'smooth', block:'start'});
-
     } finally {
         ocultarSpinner();
     }
+}
+
+function renderCorrecciones(correcciones) {
+    const cont = document.getElementById('lista-correcciones');
+    document.getElementById('botones-descarga-periodo').style.display = 'none';
+    cont.style.display = 'block';
+    cont.innerHTML = `
+        <div style="font-size:.78rem;color:#475569;margin-bottom:.5rem">Una planilla de corrección (N) por cada planilla corregida:</div>
+        ${correcciones.map((c, i) => `
+            <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;padding:.55rem .7rem;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:.4rem">
+                <div style="font-size:.8rem;flex:1;min-width:220px">
+                    Planilla <strong style="font-family:monospace">${c.planilla}</strong>
+                    · período ${c.periodo}
+                    · pagada ${fechaCorta(c.fecha_pago)}
+                    · <strong>${c.cantidad}</strong> retiro(s)
+                    ${c.fecha_pago ? '' : '<div style="color:#dc2626;font-size:.7rem">Sin fecha de pago registrada: la N la exige. Registra el gasto de esa planilla.</div>'}
+                </div>
+                <button class="btn btn-primary" onclick="descargarCorreccion(${i})">📄 TXT corrección N</button>
+            </div>`).join('')}
+    `;
+    window._correcciones = correcciones;
+}
+
+function descargarCorreccion(i) {
+    const c = window._correcciones[i];
+    const opId = document.getElementById('final-operador-id').value;
+    const url = new URL('{{ route("admin.traslados.descargar_plano") }}', window.location.origin);
+    c.plano_ids.forEach(id => url.searchParams.append('plano_ids[]', id));
+    if (opId) url.searchParams.set('operador_id', opId);
+    window.open(url.toString(), '_blank');
 }
 
 // ── EJECUTAR RETIRO B ──────────────────────────────────────────────────────

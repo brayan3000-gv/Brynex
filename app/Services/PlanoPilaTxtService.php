@@ -133,6 +133,10 @@ class PlanoPilaTxtService
         // el aportante del registro tipo 1 pasa a ser la persona (CC), no la
         // razón social genérica "INDEPENDIENTE" que agrupa a todos.
         $planoIdFiltro = isset($params['plano_id']) ? (int) $params['plano_id'] : null;
+        // Solo estos registros, sin cambiar el aportante: la corrección N de un
+        // traslado lleva únicamente los retiros, no a todos los que ya pagaron
+        // esa planilla.
+        $planoIdsFiltro = array_values(array_filter(array_map('intval', (array) ($params['plano_ids'] ?? []))));
         // Modalidad E-1 (ver PilaCotizanteE1): 1 = planilla E de un día,
         // 2 = corrección. Sin el parámetro todo se comporta como siempre.
         $pasoE1 = ((int) ($params['paso'] ?? 1) === 2) ? 2 : 1;
@@ -251,7 +255,10 @@ class PlanoPilaTxtService
         if ($planoIdFiltro) {
             $query->where('p.id', $planoIdFiltro);
         }
-        $planos = $query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
+        if ($planoIdsFiltro) {
+            $query->whereIn('p.id', $planoIdsFiltro);
+        }
+        $planos =$query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
 
         Plano::validarPeriodoUnico($planos);
 
