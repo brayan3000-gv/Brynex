@@ -73,6 +73,10 @@
                 ['icono'=>'🧾', 'nombre'=>'Cuadre Caja',  'color'=>'#14b8a6', 'url'=>route('admin.cuadre-diario.index')],
                 ['icono'=>'💬', 'nombre'=>'Cotizaciones', 'color'=>'#ec4899', 'url'=>route('admin.cotizaciones.index')],
             ];
+            // Cobro en visita: cobrar puesto por puesto desde el celular.
+            if(auth()->user()?->can('facturacion.generar')){
+                array_splice($modulos, 10, 0, [['icono'=>'🛵', 'nombre'=>'Cobro en visita', 'color'=>'#16a34a', 'url'=>route('admin.visita.index')]]);
+            }
             // Informes solo para admin, superadmin y contador
             if(auth()->user()?->can('informes.ver')){
                 $modulos[] = ['icono'=>'📊', 'nombre'=>'Informes', 'color'=>'#6366f1', 'url'=>route('admin.informes.hub')];
