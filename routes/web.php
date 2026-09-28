@@ -266,6 +266,8 @@ Route::middleware('auth')->group(function () {
             Route::get('clientes/{cliente}/edit', [\App\Http\Controllers\Admin\ClienteController::class, 'edit'])->name('clientes.edit');
             Route::put('clientes/{cliente}', [\App\Http\Controllers\Admin\ClienteController::class, 'update'])->name('clientes.update');
             Route::patch('clientes/{cliente}', [\App\Http\Controllers\Admin\ClienteController::class, 'update']);
+            Route::get('clientes/{cliente}/cedula/impacto', [\App\Http\Controllers\Admin\ClienteController::class, 'impactoCedula'])->name('clientes.cedula.impacto');
+            Route::post('clientes/{cliente}/cedula/corregir', [\App\Http\Controllers\Admin\ClienteController::class, 'corregirCedula'])->name('clientes.cedula.corregir');
         });
 
         // Beneficiarios

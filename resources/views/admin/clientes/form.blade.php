@@ -119,14 +119,23 @@
                             </select>
                         </div>
                         <div>
-                            <label class="lbl-campo">Cédula *</label>
+                            <label class="lbl-campo" style="display:flex;justify-content:space-between;align-items:center;">
+                                <span>Cédula *</span>
+                                @if($cedulaBloqueada ?? false)
+                                <a href="#" onclick="CC_abrir(); return false;" style="font-size:0.66rem;font-weight:700;color:#2563eb;text-decoration:none;text-transform:none;letter-spacing:0;" title="Cambia la cédula en la ficha y en sus contratos, facturas y demás registros">✏️ Corregir</a>
+                                @endif
+                            </label>
+                            {{-- Con contratos u otros registros ligados, el número no se
+                                 cambia aquí: los dejaría huérfanos. Se corrige con el
+                                 botón de arriba, que los mueve todos. --}}
                             <input
                                 type="text"
                                 name="cedula"
-                                value="{{ old('cedula', $cliente->cedula ?: '') }}"
+                                value="{{ ($cedulaBloqueada ?? false) ? $cliente->cedula : old('cedula', $cliente->cedula ?: '') }}"
                                 required
                                 class="inp-campo"
-                                style="font-family:monospace;font-weight:700;"
+                                style="font-family:monospace;font-weight:700;{{ ($cedulaBloqueada ?? false) ? 'background:#f1f5f9;color:#475569;cursor:not-allowed;' : '' }}"
+                                @if($cedulaBloqueada ?? false) readonly @endif
                                 {{-- La verificación (duplicado + registro oficial) ya ocurrió
                                      en el modal de "Nuevo Cliente" del listado. Al llegar aquí
                                      los datos ya vienen confirmados. --}}
@@ -535,6 +544,9 @@
         @include('admin.clientes.partials.beneficiarios')
         @include('admin.clientes.partials.documentos')
         @include('admin.clientes.partials.clave_accesos')
+        @if($cedulaBloqueada ?? false)
+            @include('admin.clientes.partials.corregir_cedula')
+        @endif
 
         {{-- ═══ MODAL OTRO INGRESO / TRÁMITE ═══════════════════════ --}}
         @if(isset($bancos))

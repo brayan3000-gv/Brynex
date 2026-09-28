@@ -306,9 +306,15 @@ class ClienteController extends Controller
 
         $bancos = \App\Models\BancoCuenta::paraFacturacion(session('aliado_id_activo'));
 
+        // Con registros colgando de la cédula, el campo queda de solo lectura
+        // y se cambia con "Corregir cédula".
+        $cedulaBloqueada = $contratos->isNotEmpty()
+            || app(\App\Services\CorregirCedulaService::class)->tieneVinculados($cliente);
+
         return view('admin.clientes.form', compact(
             'cliente', 'lookups', 'contratos', 'razonesMap', 'resumen', 'bancos',
-            'tieneContratoIndependiente', 'operadoresPlanilla', 'isIframe', 'ultimosPagos'
+            'tieneContratoIndependiente', 'operadoresPlanilla', 'isIframe', 'ultimosPagos',
+            'cedulaBloqueada'
         ));
     }
 
@@ -320,6 +326,17 @@ class ClienteController extends Controller
         $data = $this->validarCliente($request, $id);
         $data = $this->limpiarDatos($data);
 
+        // Con contratos, facturas u otros registros colgando de la cédula, el
+        // formulario no la cambia: los dejaría con el número viejo y sin
+        // ficha. Eso lo hace "Corregir cédula", que los mueve todos juntos.
+        $corrector = app(\App\Services\CorregirCedulaService::class);
+        if ((string) $data['cedula'] !== (string) $cliente->cedula && $corrector->tieneVinculados($cliente)) {
+            return redirect()->back()->withInput()->withErrors([
+                'cedula' => 'Esta ficha ya tiene contratos o registros con la cédula '.$cliente->cedula
+                    .'. Para cambiarla usa el botón «Corregir» junto a la cédula, que los actualiza todos.',
+            ]);
+        }
+
         $cliente->update($data);
 
         $redirectUrl = route('admin.clientes.edit', $id);
@@ -329,6 +346,32 @@ class ClienteController extends Controller
 
         return redirect($redirectUrl)
             ->with('success', 'Cliente actualizado correctamente.');
+    }
+
+    // ─── Corregir cédula (AJAX) ───────────────────────────────────────
+    // Qué se movería y qué ya salió con el número viejo, antes de confirmar.
+    public function impactoCedula(int $id)
+    {
+        $cliente = Cliente::where('aliado_id', session('aliado_id_activo'))->findOrFail($id);
+
+        return response()->json(app(\App\Services\CorregirCedulaService::class)->impacto($cliente));
+    }
+
+    public function corregirCedula(Request $request, int $id)
+    {
+        $cliente = Cliente::where('aliado_id', session('aliado_id_activo'))->findOrFail($id);
+        $datos = $request->validate([
+            'cedula' => 'required|string|max:20',
+            'motivo' => 'required|string|min:5|max:500',
+        ], [
+            'motivo.required' => 'Escribe por qué se corrige la cédula.',
+            'motivo.min' => 'Escribe por qué se corrige la cédula.',
+        ]);
+
+        $resultado = app(\App\Services\CorregirCedulaService::class)
+            ->corregir($cliente, $datos['cedula'], $datos['motivo']);
+
+        return response()->json(['ok' => true] + $resultado);
     }
 
     // ─── Buscar cliente por cédula (AJAX) ─────────────────────────────
