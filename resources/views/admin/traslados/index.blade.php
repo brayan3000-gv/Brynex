@@ -393,6 +393,9 @@ textarea.form-control{resize:vertical;min-height:80px;font-family:monospace;font
                 </div>
             </div>
 
+            {{-- Opción A: quienes siguen vigentes en el origen (sin planilla que corregir) --}}
+            <div id="lista-omitidos" style="display:none;margin-bottom:1rem"></div>
+
             {{-- Opción A: una corrección N por planilla corregida --}}
             <div id="lista-correcciones" style="display:none;margin-bottom:1rem"></div>
 
@@ -738,9 +741,19 @@ async function ejecutarRetiroA() {
             return;
         }
 
+        // Quienes no tenían planilla que corregir siguen vigentes en el origen
+        // (ya tienen su contrato nuevo): el usuario los retira o los anula.
         const avisos = [...(resp.omitidos || []), ...(resp.errores || [])];
+        const contOmitidos = document.getElementById('lista-omitidos');
         if (avisos.length) {
-            alert('Quedaron sin retiro:\n' + avisos.map(e => `• ${e.cedula}: ${e.mensaje}`).join('\n'));
+            contOmitidos.style.display = 'block';
+            contOmitidos.innerHTML = `<div class="alert alert-warn" style="font-size:.78rem">
+                ⚠️ <strong>${avisos.length} persona(s) siguen vigentes en ${rsOrigenNome}</strong> (ya tienen su contrato nuevo).
+                No tenían una planilla pagada que corregir: retira o anula su contrato de origen desde Contratos.
+                <ul style="margin:.4rem 0 0 1rem;padding:0">${avisos.map(e => `<li><strong>${e.cedula}</strong> — ${e.mensaje}</li>`).join('')}</ul>
+            </div>`;
+        } else {
+            contOmitidos.style.display = 'none';
         }
 
         const opIdA = document.getElementById('a-operador-id').value;
