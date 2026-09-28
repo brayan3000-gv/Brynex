@@ -162,7 +162,7 @@ async function revisarSesionCaja() {
     const caja = ccfEl('ccfSesion');
     ccfEl('ccfBtnAbrir').style.display = 'none';
     ccfEl('ccfBtnIniciar').style.display = 'none';
-    if (e.sinExtension) { caja.innerHTML = '🧩 Instala o recarga la extensión <strong>BryNex Portales</strong> (versión 1.6.0) y recarga esta página.'; return; }
+    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
     if (!e.abierta || !e.sesion) {
         caja.innerHTML = `1️⃣ Abre la <strong>Sucursal Virtual Afiliación</strong> e inicia sesión con el usuario de <strong>${ccfEsc(ccfPrep.portal.empresa)}</strong>` +
             (ccfPrep.resumen?.usuario_portal ? ` (<strong>${ccfEsc(ccfPrep.resumen.usuario_portal)}</strong>)` : '') + '. BryNex deja escrito el usuario; solo confirma e ingresa.';

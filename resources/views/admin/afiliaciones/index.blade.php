@@ -3554,7 +3554,7 @@ async function revisarSesionSanitas() {
     const e = await brynexExt('sanitas', 'estado', {}, 30);
     const botonAbrir = `<button type="button" onclick="brynexExt('sanitas','abrir')" class="btn-export" style="background:#0e7490;cursor:pointer;margin-left:0.4rem;">🌐 Abrir Sanitas</button>`;
     if (e.sinExtension) {
-        caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong> (versión 1.1.0 o superior) en este navegador.';
+        caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.';
     } else if (!e.ok) {
         caja.innerHTML = '⚠️ ' + e.error;
     } else if (!e.sesion) {

@@ -139,7 +139,7 @@ async function revisarSesionBoxalud() {
     const caja = bxnEl('bxnSesion');
     bxnEl('bxnBtnAbrir').style.display = 'none';
     bxnEl('bxnBtnLlenar').style.display = 'none';
-    if (e.sinExtension) { caja.innerHTML = '🧩 Instala o recarga la extensión <strong>BryNex Portales</strong> (versión 1.3.0) y recarga esta página.'; return; }
+    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
     if (!e.abierta || !e.sesion) {
         caja.innerHTML = `1️⃣ Abre el portal e inicia sesión con el usuario de <strong>${bxnEsc(bxnPrep.portal.empresa)}</strong>` +
             (bxnPrep.resumen?.usuario_portal ? ` (<strong>${bxnEsc(bxnPrep.resumen.usuario_portal)}</strong>)` : '') + '. El captcha lo resuelves tú.';

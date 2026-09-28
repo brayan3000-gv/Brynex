@@ -1530,27 +1530,14 @@ async function cfdEntrar(tab, d) {
   const usuario = String(d.usuario || '').replace(/\D/g, '');
   if (!usuario || !d.contrasena) return { ok: false, abierta: true, error: 'Faltan el usuario o la clave de la empresa.' };
 
-  // Si la pestaña no tiene el formulario de acceso, se va a él. No basta con
-  // estar en iam.comfandi: después de enviar, Keycloak deja la pestaña en una
-  // pantalla de ese mismo dominio que ya no tiene los campos, y darla por buena
-  // hacía fallar el login sin salir nunca de ahí.
-  const enLogin = await ejecutar(tab, () =>
-    !!document.querySelector('input[name=password]') && !!document.querySelector('input[name=identification_type_up]')
-  ).catch(() => false);
-
-  if (!enLogin) {
-    await chrome.tabs.update(tab, { url: `${CFD_BASE}/guest` });
-    await esperarCarga(tab);
-    await esperarQue(tab, () => {
-      const b = [...document.querySelectorAll('button,a')].find(e => /iniciar sesi/i.test(e.innerText || ''));
-      if (!b) return false;
-      b.click();
-      return true;
-    }, [], 20000);
-    await esperarQue(tab, () =>
-      !!document.querySelector('input[name=password]') && !!document.querySelector('input[name=identification_type_up]'),
-    [], 25000);
-  }
+  // Siempre se pide un formulario recién hecho, aunque la pestaña ya muestre
+  // uno. El de Keycloak lleva dentro un código de un solo uso con caducidad: si
+  // la pestaña llevaba rato abierta en el login, al enviarlo el portal contesta
+  // «la autenticación ha caducado» y el trámite se quedaba ahí, girando en
+  // vacío hasta el minuto y medio. Reusar lo que hubiera ahorraba dos segundos
+  // y costaba el login entero.
+  const fresco = await cfdFormularioLogin(tab);
+  if (!fresco) return { ok: false, abierta: true, error: 'No se pudo abrir el formulario de acceso de Comfandi.' };
 
   // El tipo de documento: el usuario de la empresa es el NIT, y con "CC" el
   // portal contesta "Documento o contraseña incorrectos" con la clave buena.
@@ -1614,7 +1601,37 @@ async function cfdEntrar(tab, d) {
 
   if (!enviado) return { ok: false, abierta: true, error: 'No se encontró el formulario de acceso de Comfandi.' };
 
-  return cfdDespuesDeEntrar(tab, d);
+  const r = await cfdDespuesDeEntrar(tab, d);
+
+  // El portal puede caducar el formulario igual —una pestaña vieja, el botón
+  // pulsado dos veces—: en ese caso se pide uno nuevo y se reintenta una vez,
+  // que es lo que haría una persona.
+  if (r.caducado && !d._reintento) {
+    return cfdEntrar(tab, { ...d, _reintento: true });
+  }
+
+  return r;
+}
+
+/**
+ * Deja la pestaña en un formulario de acceso recién cargado y devuelve si lo
+ * consiguió. Se entra por `/guest` y su botón «Iniciar sesión», que es como
+ * Keycloak reparte un código nuevo.
+ */
+async function cfdFormularioLogin(tab) {
+  await chrome.tabs.update(tab, { url: `${CFD_BASE}/guest` });
+  await esperarCarga(tab);
+
+  await esperarQue(tab, () => {
+    const b = [...document.querySelectorAll('button,a')].find(e => /iniciar sesi/i.test(e.innerText || ''));
+    if (!b) return false;
+    b.click();
+    return true;
+  }, [], 20000);
+
+  return esperarQue(tab, () =>
+    !!document.querySelector('input[name=password]') && !!document.querySelector('input[name=identification_type_up]'),
+  [], 25000);
 }
 
 /**
@@ -1636,6 +1653,13 @@ async function cfdDespuesDeEntrar(tab, d) {
       const texto = document.body.innerText || '';
 
       if (/documento o contrase|credenciales inv[aá]lidas|usuario o contrase/i.test(texto)) return { fin: 'clave' };
+
+      // Keycloak cuando el formulario enviado ya no vale: «la autenticación ha
+      // caducado», «su sesión ha expirado». No es un error de clave y no se
+      // arregla esperando: hay que pedir el formulario otra vez.
+      if (/autenticaci[oó]n.{0,20}caducad|caducad.{0,20}autenticaci[oó]n|sesi[oó]n.{0,20}(caducad|expirad|venci)|authentication.{0,20}expired/i.test(texto)) {
+        return { fin: 'caducado' };
+      }
 
       // Ya dentro: el portal saluda con "actualmente estás en: EMPRESA".
       const dentro = texto.match(/actualmente est[aá]s en:\s*\n+\s*([^\n]+)/i);
@@ -1667,6 +1691,15 @@ async function cfdDespuesDeEntrar(tab, d) {
 
     if (paso?.fin === 'clave') {
       return { ok: false, abierta: true, error: 'Comfandi rechazó el usuario o la clave guardada en BryNex.' };
+    }
+
+    if (paso?.fin === 'caducado') {
+      return {
+        ok: false,
+        abierta: true,
+        caducado: true,
+        error: 'El portal dijo que la autenticación caducó: el formulario de acceso llevaba rato abierto. Se vuelve a intentar con uno nuevo.',
+      };
     }
 
     if (paso?.fin === 'dentro') {

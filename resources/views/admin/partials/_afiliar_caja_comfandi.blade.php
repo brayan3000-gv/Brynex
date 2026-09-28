@@ -179,7 +179,7 @@ async function revisarSesionComfandi() {
     const caja = cfdEl('cfdSesion');
     cfdEl('cfdBtnAbrir').style.display = 'none';
     cfdEl('cfdBtnIniciar').style.display = 'none';
-    if (e.sinExtension) { caja.innerHTML = '🧩 Instala o recarga la extensión <strong>BryNex Portales</strong> (versión 1.7.0) y recarga esta página.'; return; }
+    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
     if (!e.abierta || !e.sesion) {
         caja.innerHTML = `1️⃣ Abre la <strong>Sucursal Virtual Empresas</strong> e inicia sesión con el NIT de <strong>${cfdEsc(cfdPrep.portal.empresa)}</strong>` +
             (cfdPrep.resumen?.usuario_portal ? ` (<strong>${cfdEsc(cfdPrep.resumen.usuario_portal)}</strong>)` : '') +
@@ -192,14 +192,35 @@ async function revisarSesionComfandi() {
 }
 
 async function abrirPortalComfandi() {
+    const caja = cfdEl('cfdSesion');
+    const btn = cfdEl('cfdBtnAbrir');
+    const antes = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Entrando al portal…';
+
     let cred = {};
     try { cred = await cfdPedir('credencial', 'POST'); } catch (e) {}
-    const r = await cfdExt('cfdAbrir', { usuario: cred.usuario || '', contrasena: cred.contrasena || '' }, 60);
+
+    if (!cred.contrasena) {
+        caja.innerHTML += '<br>🔑 En BryNex no hay clave de Comfandi para esta empresa: se abre el portal y la escribes tú.';
+    }
+
+    const r = await cfdExt('cfdAbrir', { usuario: cred.usuario || '', contrasena: cred.contrasena || '' }, 90);
+
+    btn.disabled = false;
+    btn.textContent = antes;
+
     // El tipo de documento del login es un combo propio y a veces se queda en
     // CC: con el NIT en el campo, el portal responde "Documento o contraseña
     // incorrectos" aunque la clave esté bien. Mejor avisarlo que dejarlo
     // descubrir a punta de intentos.
-    if (r?.avisoTipo) cfdEl('cfdSesion').innerHTML += `<br>⚠️ ${cfdEsc(r.avisoTipo)}`;
+    if (r?.avisoTipo) caja.innerHTML += `<br>⚠️ ${cfdEsc(r.avisoTipo)}`;
+
+    // Sin esto el fallo era mudo: la pestaña se quedaba en la pantalla del
+    // portal y en BryNex no aparecía nada que explicara por qué.
+    if (r && r.ok === false && r.error) caja.innerHTML += `<br>❌ ${cfdEsc(r.error)}`;
+
+    if (r?.sesion) revisarSesionComfandi();
 }
 
 // Comfandi exige que el sueldo declarado sea proporcional a la jornada: 240
