@@ -208,7 +208,11 @@ class TrasladoRazonSocialController extends Controller
             // su usuario "Brynex" sugerido donde exista.
             'encargados_por_aliado' => $contratos->pluck('aliado_id')->unique()->values()
                 ->map(function ($aid) use ($contratos) {
-                    $usuarios = User::where('aliado_id', $aid)->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']);
+                    // El usuario "Brynex" de cada aliado suele estar inactivo:
+                    // no entra, solo marca que la afiliación la lleva BryNex.
+                    $usuarios = User::where('aliado_id', $aid)
+                        ->where(fn ($q) => $q->where('activo', true)->orWhereRaw('LOWER(LTRIM(RTRIM(nombre))) = ?', ['brynex']))
+                        ->orderBy('nombre')->get(['id', 'nombre']);
 
                     return [
                         'aliado_id' => (int) $aid,
