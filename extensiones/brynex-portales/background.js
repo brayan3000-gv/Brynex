@@ -44,7 +44,8 @@
  *
  * Pedidos caja Comfandi (portal: 'cfd', Sucursal Virtual Empresas):
  *  cfdEstado                           → {abierta, sesion, empresa, pagina}
- *  cfdAbrir {usuario, contrasena, empresa} → entra a la Sucursal Virtual: clave, 2FA omitido y empresa
+ *  cfdAbrir {usuario, contrasena, empresa, reiniciar} → entra a la Sucursal Virtual: clave, 2FA omitido y empresa
+ *                                      (con reiniciar, cierra la sesión antes: el portal se degrada)
  *  cfdConsultar {…datos}               → abre Afiliación individual y consulta al trabajador
  *  cfdLlenar {…datos}                  → llena el formulario; Finalizar lo pulsa la persona
  *  cfdFinalizar                        → pulsa Finalizar y confirma el sueldo (radica)
@@ -1481,6 +1482,7 @@ async function ccfTrabajadores(pestana) {
 
 const CFD_HOST = 'afiliaciones.sucursalcomfandi.com';
 const CFD_BASE = `https://${CFD_HOST}/sakaar`;
+const CFD_LOGOUT = 'https://iam.comfandi.com.co/auth/realms/empresas/protocol/openid-connect/logout';
 
 /**
  * La pestaña del portal en la que se trabaja.
@@ -1776,6 +1778,21 @@ async function cfdDespuesDeEntrar(tab, d) {
 
 async function atenderCfd(accion, d = {}) {
   if (accion === 'cfdAbrir') {
+    // Cerrar y volver a entrar cada pocas afiliaciones. El portal se va
+    // degradando —a las pocas empieza a pedir la empresa en cada pantalla y
+    // acaba diciendo «Sin permisos para esta empresa», que no es verdad— y solo
+    // se le pasa con una sesión nueva. Se cierra en Keycloak, que es donde vive
+    // de verdad: salir solo del sakaar deja el SSO en pie y vuelve a entrar con
+    // la sesión cansada.
+    if (d.reiniciar) {
+      const p0 = await pestanaCfd();
+      if (p0) {
+        await chrome.tabs.update(p0.id, { url: `${CFD_LOGOUT}?client_id=afiliaciones-empresas` });
+        await esperarCarga(p0.id);
+        await esperar(2500);
+      }
+    }
+
     let p = await pestanaCfd();
     if (p) {
       await chrome.tabs.update(p.id, { active: true });

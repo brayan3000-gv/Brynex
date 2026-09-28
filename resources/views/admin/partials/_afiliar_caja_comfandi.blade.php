@@ -93,6 +93,16 @@
 let cfdContratoId = null, cfdPrep = {}, cfdReloj = null, cfdFinal = null, cfdAvisoPortal = '';
 // Para no pulsar Finalizar dos veces en el mismo trámite.
 let cfdEnviado = false;
+
+// Cuántas van con la sesión del portal abierta. Comfandi se degrada a las pocas
+// afiliaciones —empieza a pedir la empresa en cada pantalla y acaba diciendo
+// «Sin permisos para esta empresa», que no es cierto— y la única cura es entrar
+// de nuevo. Se cuenta aquí y no en la extensión para no guardarle la clave a
+// nadie: BryNex la tiene a mano cuando toca reabrir.
+const CFD_POR_SESION = 3;
+const cfdVan = () => Number(sessionStorage.getItem('cfdVanEnSesion') || 0);
+const cfdSumarUna = () => sessionStorage.setItem('cfdVanEnSesion', String(cfdVan() + 1));
+const cfdReiniciarCuenta = () => sessionStorage.setItem('cfdVanEnSesion', '0');
 const CFD_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const cfdEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cfdEl = id => document.getElementById(id);
@@ -172,6 +182,14 @@ async function abrirCajaComfandi(contratoId) {
 
     if (problemas.length) { cfdEl('cfdDatos').style.display = 'none'; cfdEl('cfdSesion').style.display = 'none'; return; }
     cfdEl('cfdSesion').style.display = 'block';
+
+    // Antes de empezar otra, si la sesión ya hizo su cupo se renueva sola.
+    if (cfdVan() >= CFD_POR_SESION) {
+        cfdEl('cfdSesion').innerHTML = `🔄 Van ${cfdVan()} afiliaciones con esta sesión del portal: se cierra y se vuelve a entrar para que no se atasque…`;
+        await abrirPortalComfandi(true);
+        cfdReiniciarCuenta();
+    }
+
     await revisarSesionComfandi();
     cfdReloj = setInterval(() => { if (cfdEl('cfdPasos').style.display !== 'block') revisarSesionComfandi(); }, 3000);
 }
@@ -195,12 +213,12 @@ async function revisarSesionComfandi() {
     cfdEl('cfdBtnIniciar').style.display = 'block';
 }
 
-async function abrirPortalComfandi() {
+async function abrirPortalComfandi(reiniciar = false) {
     const caja = cfdEl('cfdSesion');
     const btn = cfdEl('cfdBtnAbrir');
     const antes = btn.textContent;
     btn.disabled = true;
-    btn.textContent = '⏳ Entrando al portal…';
+    btn.textContent = reiniciar ? '⏳ Renovando la sesión del portal…' : '⏳ Entrando al portal…';
 
     let cred = {};
     try { cred = await cfdPedir('credencial', 'POST'); } catch (e) {}
@@ -215,7 +233,8 @@ async function abrirPortalComfandi() {
         // El portal lista las empresas por nombre, sin el NIT: sin esto la
         // extensión no sabe cuál pulsar y se queda en «selecciona tu empresa».
         empresa: cfdPrep.portal?.empresa || '',
-    }, 120);
+        reiniciar,
+    }, 150);
 
     btn.disabled = false;
     btn.textContent = antes;
@@ -378,6 +397,7 @@ async function guardarCajaComfandi() {
         return;
     }
 
+    cfdSumarUna();
     cfdTerminar(`✅ ${cfdEsc(r.mensaje)}`);
 }
 
