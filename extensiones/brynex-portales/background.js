@@ -1942,6 +1942,31 @@ function pCfdLlenar(d) {
     return { paso: 'Sin formulario a la vista', hecho, falta: ['Abre Afiliación individual'], errores: [] };
   }
 
+  // La identidad la suele precargar la Registraduría al consultar el documento,
+  // pero no siempre responde (Erwing Torres, 28-sep-2026): sin nombre, apellido
+  // ni nacimiento el portal no deja radicar. Se rellena con lo de BryNex solo si
+  // quedó vacío, para no pisar lo que traiga la Registraduría, que manda.
+  const idFalta = [
+    ['Primer nombre', d.primerNombre, 'primer nombre'],
+    ['Segundo nombre (opcional)', d.segundoNombre, 'segundo nombre'],
+    ['Primer apellido', d.primerApellido, 'primer apellido'],
+    ['Segundo apellido (opcional)', d.segundoApellido, 'segundo apellido'],
+  ].filter(([ph]) => { const e = porPlaceholder(ph); return e && !e.value; });
+
+  idFalta.forEach(([ph, valor, nombre]) => { if (valor) texto(ph, valor, nombre + ' (de BryNex)'); });
+
+  const nac = porPlaceholder('Fecha de nacimiento');
+  if (nac && !nac.value && d.nacimiento) {
+    const comoLoQuiere = d.nacimiento.split('-').reverse().join(' | ');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    nac.focus();
+    setter.call(nac, comoLoQuiere);
+    nac.dispatchEvent(new Event('input', { bubbles: true }));
+    nac.dispatchEvent(new Event('change', { bubbles: true }));
+    nac.blur();
+    if (nac.value) hecho.push('fecha de nacimiento: ' + nac.value + ' (de BryNex)');
+  }
+
   elegir('Selecciona Género', d.genero, 'género');
   elegir('Selecciona Estado civil', d.estadoCivil, 'estado civil');
   elegir('Selecciona Orientación sexual', d.orientacion, 'orientación sexual');
@@ -2022,6 +2047,24 @@ function pCfdLlenar(d) {
   const errores = [...new Set([...document.querySelectorAll('*')]
     .filter(e => e.children.length === 0 && /obligatori|inv[aá]lid|no es v[aá]lid/i.test(e.innerText || ''))
     .map(e => e.innerText.trim()).filter(t => t.length < 120))];
+
+  // Los obligatorios que siguen vacíos, leídos de los campos y no de los
+  // carteles: el portal deja «La fecha de ingreso es obligatoria» puesto aunque
+  // la fecha esté, y fiarse de eso haría esperar para siempre —o, peor, enviar
+  // un formulario a medias, que fue lo que pasó con Erwing Torres—.
+  [
+    ['Primer nombre', 'primer nombre'],
+    ['Primer apellido', 'primer apellido'],
+    ['Fecha de nacimiento', 'fecha de nacimiento'],
+    ['Dirección del trabajador:', 'dirección'],
+    ['Celular', 'celular'],
+    ['Email', 'correo'],
+    ['Fecha de ingreso', 'fecha de ingreso'],
+    ['Sueldo declarado', 'sueldo'],
+  ].forEach(([ph, nombre]) => {
+    const e = porPlaceholder(ph);
+    if (e && !String(e.value || '').trim()) falta.push(nombre + ': el portal lo dejó vacío');
+  });
 
   return { paso: 'Afiliación individual', hecho, falta, errores: errores.slice(0, 6) };
 }

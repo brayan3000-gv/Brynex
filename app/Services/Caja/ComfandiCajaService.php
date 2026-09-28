@@ -180,6 +180,15 @@ class ComfandiCajaService
             'tipoDoc' => self::TIPOS[$tipo],
             'documento' => (string) $contrato->cedula,
             'apellido' => (string) $cliente->primer_apellido,
+            // La Registraduría no siempre devuelve la identidad al consultar el
+            // documento en el portal (Erwing Torres, 28-sep-2026): ahí el
+            // formulario se queda sin nombre ni nacimiento y no deja radicar.
+            // Se mandan los de BryNex para poder rellenarlos.
+            'primerNombre' => mb_strtoupper(trim((string) $cliente->primer_nombre)),
+            'segundoNombre' => mb_strtoupper(trim((string) $cliente->segundo_nombre)),
+            'primerApellido' => mb_strtoupper(trim((string) $cliente->primer_apellido)),
+            'segundoApellido' => mb_strtoupper(trim((string) $cliente->segundo_apellido)),
+            'nacimiento' => optional($cliente->fecha_nacimiento)->format('Y-m-d'),
             'genero' => $genero,
             'direccion' => $direccion,
             'ciudad' => $ciudad,
