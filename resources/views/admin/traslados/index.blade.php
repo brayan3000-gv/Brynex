@@ -718,6 +718,7 @@ async function cargarNPlanos(rsId, selectId) {
 const ESTADOS_RETIRO_A = {
     ok:           { txt: 'Se corrige',         badge: 'badge-green' },
     pendiente:    { txt: 'Plano sin pagar',    badge: 'badge-amber' },
+    atrasado:     { txt: 'Mes sin pagar',      badge: 'badge-amber' },
     ya_retirado:  { txt: 'Ya tiene retiro',    badge: 'badge-amber' },
     sin_planilla: { txt: 'Sin planilla',       badge: 'badge-red' },
     no_vigente:   { txt: 'Contrato no vigente', badge: 'badge-red' },

@@ -515,6 +515,14 @@ class TrasladoRazonSocialController extends Controller
                 $estado  = 'ya_retirado';
                 $mensaje = "Su última planilla ({$periodo}) ya lleva retiro con fecha "
                     . Carbon::parse($ultimo->fecha_ret)->format('d/m/Y') . '.';
+            } elseif ($numero !== '' && ((int) $ultimo->anio_plano * 12 + (int) $ultimo->mes_plano)
+                < ((int) now()->subMonthNoOverflow()->year * 12 + (int) now()->subMonthNoOverflow()->month)) {
+                // El contrato nuevo arranca el 1 de este mes: si lo último
+                // pagado es anterior al mes pasado, retirarlo ahí deja un mes
+                // sin cobertura. Primero se factura lo que falta.
+                $estado  = 'atrasado';
+                $mensaje = "Su última planilla pagada es {$periodo}: el mes pasado no se ha pagado, y el retiro "
+                    . 'en esa planilla dejaría ese mes sin cobertura. Facture lo que falta y retírela después.';
             } elseif ($numero === '') {
                 $estado  = 'pendiente';
                 $mensaje = "Su último plano ({$periodo}, P{$ultimo->n_plano}) aún no se ha pagado: "
