@@ -6,7 +6,7 @@
 .pe-card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:1.4rem;margin-bottom:1rem}
 .pe-title{display:flex;align-items:center;justify-content:space-between;gap:.5rem;font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:.04em}
 .pe-txt{font-size:.8rem;color:#475569;line-height:1.5;margin:0 0 .9rem}
-.pe-opciones{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:1rem}
+.pe-opciones{display:grid;grid-template-columns:1fr;gap:.5rem;margin-bottom:1rem}
 .pe-op{display:flex;gap:.55rem;align-items:flex-start;border:1.5px solid #e2e8f0;border-radius:10px;padding:.7rem .8rem;cursor:pointer;transition:border-color .15s,background .15s}
 .pe-op:hover{border-color:#93c5fd}
 .pe-op input{margin-top:.15rem}
@@ -21,11 +21,17 @@
 .pe-badge{display:inline-block;border-radius:999px;padding:.15rem .6rem;font-size:.68rem;font-weight:700;text-transform:none;letter-spacing:0}
 .pe-ok{background:#dcfce7;color:#15803d}
 .pe-off{background:#fee2e2;color:#b91c1c}
-.pe-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem;margin-bottom:1rem}
+.pe-datos{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:.5rem;margin-bottom:.8rem}
 .pe-dato{background:#f8fafc;border-radius:8px;padding:.55rem .7rem}
 .pe-dato small{display:block;font-size:.64rem;font-weight:700;color:#64748b;text-transform:uppercase}
-.pe-dato div{font-size:.86rem;font-weight:600;color:#0f172a;margin-top:.1rem}
-.pe-sw{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.6rem 0;border-top:1px solid #f1f5f9;font-size:.82rem;color:#334155}
+.pe-dato div{font-size:.82rem;font-weight:600;color:#0f172a;margin-top:.1rem;overflow-wrap:anywhere}
+.pe-sw{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.6rem 0;border-top:1px solid #f1f5f9;font-size:.82rem;color:#334155;cursor:pointer}
+/* Interruptor en vez de casilla */
+.pe-sw input{appearance:none;-webkit-appearance:none;width:38px;height:22px;border-radius:999px;background:#cbd5e1;position:relative;cursor:pointer;flex-shrink:0;transition:background .2s;margin:0}
+.pe-sw input::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .2s}
+.pe-sw input:checked{background:#2563eb}
+.pe-sw input:checked::after{transform:translateX(16px)}
+.pe-botones{display:flex;gap:.5rem;justify-content:space-between;align-items:center;margin-top:.8rem;padding-top:.8rem;border-top:1px solid #f1f5f9}
 .pe-sw small{display:block;color:#64748b;font-size:.72rem}
 .pe-clave{background:linear-gradient(135deg,#0f172a,#1e3a5f);color:#fff;border-radius:12px;padding:1.1rem 1.2rem;margin-bottom:1rem;animation:pe-entra .35s ease-out}
 .pe-clave .fila{display:flex;gap:1.5rem;flex-wrap:wrap;margin:.6rem 0}
@@ -94,7 +100,7 @@
                 <div class="pe-alerta">Esta empresa no tiene NIT en su ficha. Ponlo arriba y guarda: es el usuario con que entra.</div>
                 <button type="submit" class="pe-btn" disabled>🌐 Crear acceso al portal</button>
             @else
-                <button type="submit" class="pe-btn">🌐 Crear acceso al portal <span style="opacity:.75;font-weight:500">· usuario {{ $nitUsuario }}</span></button>
+                <button type="submit" class="pe-btn" style="width:100%;justify-content:center">🌐 Crear acceso al portal <span style="opacity:.75;font-weight:500">· usuario {{ $nitUsuario }}</span></button>
             @endif
         </form>
     @else
@@ -122,16 +128,16 @@
                 <div>Ver valores discriminados<small>Apagado: solo ve el total de seguridad social + administración.</small></div>
                 <input type="checkbox" x-model="disc">
             </label>
-            <div style="display:flex;gap:.6rem;flex-wrap:wrap;justify-content:flex-end;margin-top:.6rem">
+            <div class="pe-botones">
+                {{-- Es del formulario de abajo (form=…): los dos botones quedan en una fila. --}}
+                <button type="submit" form="pe-restablecer" class="pe-btn pe-btn-sec"
+                        onclick="return confirm('¿Generar una clave nueva? La actual deja de funcionar y se cierra la sesión que la empresa tenga abierta.')">🔑 Restablecer clave</button>
                 <button type="submit" class="pe-btn">💾 Guardar</button>
             </div>
         </form>
 
-        <form method="POST" action="{{ route('admin.facturacion.empresa.portal.restablecer', $empresa->id) }}"
-              onsubmit="return confirm('¿Generar una clave nueva? La actual deja de funcionar.')"
-              style="margin-top:.6rem;display:flex;justify-content:flex-end">
+        <form method="POST" action="{{ route('admin.facturacion.empresa.portal.restablecer', $empresa->id) }}" id="pe-restablecer" hidden>
             @csrf
-            <button type="submit" class="pe-btn pe-btn-sec">🔑 Restablecer clave</button>
         </form>
     @endif
 </div>

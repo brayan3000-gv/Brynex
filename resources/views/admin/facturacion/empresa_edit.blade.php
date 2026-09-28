@@ -3,7 +3,16 @@
 
 @section('contenido')
 <style>
-.edit-wrap{max-width:680px;margin:0 auto}
+.edit-wrap{max-width:1180px;margin:0 auto}
+/* Dos columnas en pantallas anchas: los datos de la empresa a la izquierda y,
+   al lado, lo que se consulta seguido (portal, asesor, observaciones). */
+.edit-grid{display:grid;grid-template-columns:1fr;gap:1rem;align-items:start}
+.edit-lado{display:flex;flex-direction:column}
+@media (min-width:1000px){
+    .edit-grid{grid-template-columns:minmax(0,1fr) 380px}
+    .edit-lado{position:sticky;top:1rem}
+}
+.edit-acciones{display:flex;gap:.6rem;align-items:center}
 .edit-header{background:linear-gradient(135deg,#0f172a,#1e3a5f);border-radius:14px;color:#fff;padding:1rem 1.4rem;margin-bottom:1.2rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem}
 .card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:1.4rem;margin-bottom:1rem}
 .card-title{font-size:.85rem;font-weight:800;color:#0f172a;margin-bottom:1rem;padding-bottom:.5rem;border-bottom:2px solid #e2e8f0;text-transform:uppercase;letter-spacing:.04em}
@@ -29,7 +38,8 @@
            style="color:#94a3b8;font-size:.78rem;text-decoration:none">← Volver a facturación</a>
         <div style="font-size:1.15rem;font-weight:800;margin-top:.2rem">✏️ Editar Empresa</div>
     </div>
-    <div style="display:flex;align-items:center;gap:.7rem;">
+    <div style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
+        <div style="font-size:.78rem;color:#94a3b8">ID: {{ $empresa->id }}</div>
         <button type="button" onclick="abrirClavesEmpresa()"
             style="display:inline-flex;align-items:center;gap:.4rem;
                    background:#fef9c3;color:#92400e;border:1px solid #fde68a;
@@ -38,7 +48,11 @@
             onmouseover="this.style.background='#fde68a'" onmouseout="this.style.background='#fef9c3'">
             🔑 Claves
         </button>
-        <div style="font-size:.78rem;color:#94a3b8">ID: {{ $empresa->id }}</div>
+        {{-- Guardar arriba también: la ficha es larga y así no hay que bajar. --}}
+        <div class="edit-acciones">
+            <a href="{{ route('admin.facturacion.empresa', $empresa->id) }}" class="btn-cancel" style="padding:.4rem .9rem;font-size:.8rem">Cancelar</a>
+            <button type="submit" form="form-empresa" class="btn-save" style="padding:.42rem 1.1rem;font-size:.82rem">💾 Guardar cambios</button>
+        </div>
     </div>
 </div>
 
@@ -48,17 +62,32 @@
 </div>
 @endif
 
-<form method="POST" action="{{ route('admin.facturacion.empresa.update', $empresa->id) }}">
+<div class="edit-grid">
+<form method="POST" action="{{ route('admin.facturacion.empresa.update', $empresa->id) }}" id="form-empresa">
     @csrf
     @method('PUT')
 
     @include('admin.facturacion._empresa_campos')
 
+    {{-- Botones --}}
+    <div style="display:flex;gap:.7rem;justify-content:flex-end;margin-bottom:2rem">
+        <a href="{{ route('admin.facturacion.empresa', $empresa->id) }}" class="btn-cancel">Cancelar</a>
+        <button type="submit" class="btn-save">💾 Guardar cambios</button>
+    </div>
+</form>
+
+{{-- Columna lateral. Asesor y observaciones son del mismo formulario aunque
+     vivan aquí (atributo form="form-empresa"); el portal tiene los suyos. --}}
+<aside class="edit-lado">
+    @can('facturacion.portal_empresas')
+        @include('admin.facturacion.partials.portal_empresa')
+    @endcan
+
     {{-- Asesor --}}
     <div class="card">
         <div class="card-title">👤 Asesor Asignado</div>
         <label class="flb">Asesor (para comisiones en Otros Ingresos)</label>
-        <select class="finp" name="asesor_id">
+        <select class="finp" name="asesor_id" form="form-empresa">
             <option value="">— Sin asesor —</option>
             @foreach($asesores as $asesor)
             <option value="{{ $asesor->id }}" {{ (int)old('asesor_id', $empresa->asesor_id) === (int)$asesor->id ? 'selected' : '' }}>
@@ -74,20 +103,11 @@
     {{-- Observación --}}
     <div class="card">
         <div class="card-title">📝 Observaciones</div>
-        <textarea class="finp" name="observacion" rows="3"
+        <textarea class="finp" name="observacion" rows="4" form="form-empresa"
             style="resize:vertical">{{ old('observacion', $empresa->observacion) }}</textarea>
     </div>
-
-    {{-- Botones --}}
-    <div style="display:flex;gap:.7rem;justify-content:flex-end;margin-bottom:2rem">
-        <a href="{{ route('admin.facturacion.empresa', $empresa->id) }}" class="btn-cancel">Cancelar</a>
-        <button type="submit" class="btn-save">💾 Guardar cambios</button>
-    </div>
-</form>
-
-@can('facturacion.portal_empresas')
-    @include('admin.facturacion.partials.portal_empresa')
-@endcan
+</aside>
+</div>
 
 </div>
 
