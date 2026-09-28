@@ -110,7 +110,7 @@ class PortalTramitesController extends Controller
             'tipo' => $tipo,
             'trabajadores' => in_array($tipo, ['retiro', 'incapacidad', 'otra'], true) ? $this->trabajadores($acceso) : collect(),
             'contratoElegido' => (int) $request->query('contrato'),
-            'planes' => $tipo === 'ingreso' ? PlanContrato::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'descripcion']) : collect(),
+            'planes' => $tipo === 'ingreso' ? $this->planesParaIngreso($acceso) : collect(),
             'departamentos' => $tipo === 'ingreso' ? DB::table('departamentos')->orderBy('nombre')->pluck('nombre', 'id') : collect(),
             'ciudades' => $tipo === 'ingreso' ? DB::table('ciudades')->orderBy('nombre')->get(['id', 'departamento_id', 'nombre']) : collect(),
             'tiposDoc' => Cliente::TIPOS_DOC,
@@ -307,6 +307,34 @@ class PortalTramitesController extends Controller
         }
 
         return $contrato;
+    }
+
+    /**
+     * Los planes, con los que sirven para un empleado primero: los que la
+     * empresa ya usa y los de dependiente. Los de independientes, solo ARL,
+     * seguro… quedan detrás de «Ver otros planes»: a una empresa que afilia
+     * un empleado casi nunca le sirven y confunden.
+     */
+    private function planesParaIngreso(EmpresaAcceso $acceso)
+    {
+        $usados = Contrato::where('aliado_id', $acceso->aliado_id)
+            ->whereIn('cedula', $this->subconsultaCedulas($acceso))
+            ->whereNotNull('plan_id')
+            ->distinct()
+            ->pluck('plan_id')
+            ->map(fn ($id) => (int) $id)
+            ->flip();
+
+        return PlanContrato::where('activo', true)->orderBy('nombre')->get(['id', 'nombre', 'descripcion'])
+            ->each(function ($p) use ($usados) {
+                $desc = (string) $p->descripcion;
+                // «Independiente sin ARL… no tiene trabajo dependiente» no es
+                // de dependiente: manda cómo empieza la descripción.
+                $p->principal = $usados->has((int) $p->id)
+                    || (preg_match('/\bdependiente\b/i', $desc) && ! preg_match('/^\s*independiente/i', $desc));
+            })
+            ->sortByDesc('principal')
+            ->values();
     }
 
     /** Los trabajadores con contrato vigente, para escoger en los formularios. */

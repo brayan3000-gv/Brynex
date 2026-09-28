@@ -92,14 +92,24 @@
 
         <section class="tarjeta bloque aparece" style="--i:2">
             <h2><span class="num-paso">2</span> El trabajo</h2>
-            <div class="planes" x-data="{ plan: '{{ old('plan_id') }}' }">
-                @foreach($planes as $p)
-                    <label class="plan" :class="plan == '{{ $p->id }}' && 'activo'">
-                        <input type="radio" name="plan_id" value="{{ $p->id }}" x-model="plan" required>
-                        <b>{{ $p->nombre }}</b>
-                        @if($p->descripcion)<small>{{ \Illuminate\Support\Str::limit($p->descripcion, 110) }}</small>@endif
-                    </label>
-                @endforeach
+            @php
+                $planesOtros = $planes->where('principal', false);
+                $planElegidoEsOtro = $planesOtros->contains('id', (int) old('plan_id'));
+            @endphp
+            <div x-data="{ plan: '{{ old('plan_id') }}', otros: {{ $planElegidoEsOtro ? 'true' : 'false' }} }">
+                <div class="planes">
+                    @foreach($planes->where('principal', true) as $p)
+                        @include('portal._plan', ['p' => $p])
+                    @endforeach
+                </div>
+                @if($planesOtros->isNotEmpty())
+                    <button type="button" class="ver-otros" @click="otros = !otros" x-text="otros ? 'Ocultar otros planes' : 'Ver otros planes ({{ $planesOtros->count() }})'"></button>
+                    <div class="planes" x-show="otros" x-cloak x-transition:enter="t-fade-enter" x-transition:enter-start="t-fade-from">
+                        @foreach($planesOtros as $p)
+                            @include('portal._plan', ['p' => $p])
+                        @endforeach
+                    </div>
+                @endif
             </div>
             <div class="rejilla">
                 <label class="campo"><span>Fecha de ingreso</span><input type="date" name="fecha_ingreso" value="{{ old('fecha_ingreso', now()->format('Y-m-d')) }}" required></label>
@@ -207,8 +217,10 @@
     .campo input:focus, .campo select:focus, .campo textarea:focus { outline: 0; border-color: var(--acento); box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
     .campo textarea { resize: vertical; }
     .segmentos { display: flex; gap: .4rem; }
-    .segmentos label { flex: 1; }
-    .segmentos input { position: absolute; opacity: 0; pointer-events: none; }
+    .segmentos label { flex: 1; position: relative; }
+    /* El radio queda oculto: sin el tamaño fijo heredaba el width:100% de
+       .campo input y empujaba la página hacia los lados. */
+    .segmentos input { position: absolute; opacity: 0; pointer-events: none; width: 1px !important; height: 1px; padding: 0; border: 0; }
     .segmentos i { display: block; text-align: center; font-style: normal; font-size: .85rem; font-weight: 600; padding: .6rem;
         border: 1.5px solid var(--borde); border-radius: 10px; cursor: pointer; transition: all .15s; }
     .segmentos input:checked + i { background: var(--azul-btn); border-color: var(--azul-btn); color: #fff; box-shadow: 0 4px 12px rgba(37,99,235,.25); }
@@ -220,6 +232,7 @@
     .plan small { display: block; font-size: .74rem; color: var(--tenue); margin-top: .15rem; }
     .plan.activo { border-color: var(--azul-btn); background: #eff6ff; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
     .nota { font-size: .78rem; color: var(--tenue); margin: 0; }
+    .ver-otros { border: 0; background: none; font: inherit; font-size: .8rem; font-weight: 700; color: var(--acento); cursor: pointer; padding: 0 0 .7rem; }
     .acciones { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .4rem; }
     .acciones .btn { padding: .75rem 1.3rem; }
     .btn:disabled { opacity: .65; cursor: wait; transform: none; box-shadow: none; }
