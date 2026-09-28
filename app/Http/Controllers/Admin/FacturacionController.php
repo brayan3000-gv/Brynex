@@ -851,6 +851,34 @@ class FacturacionController extends Controller
             ->whereIn('id', $validated['contratos'])
             ->get()
             ->keyBy('id');
+
+        // ─── Contrato sin plan ──────────────────────────────────────────────
+        // El plan es lo que dice a qué entidades cotiza la persona. Sin él, la
+        // factura y el plano salen sin pensión (o sin lo que falte) y el
+        // operador rechaza la planilla después, cuando ya se cobró (FECOP,
+        // ELITES CREACIONES, contrato 55352, sep-2026). Solo se exige en las
+        // modalidades que tienen planes configurados en `modalidad_planes`:
+        // las que no tienen ninguno nunca han pedido plan.
+        $modalidadesConPlan = DB::table('modalidad_planes')
+            ->whereIn('tipo_modalidad_id', $contratosChk->pluck('tipo_modalidad_id')->filter()->unique()->all())
+            ->distinct()
+            ->pluck('tipo_modalidad_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+        $sinPlan = $contratosChk->filter(fn ($c) => empty($c->plan_id)
+            && in_array((int) $c->tipo_modalidad_id, $modalidadesConPlan, true));
+        if ($sinPlan->isNotEmpty()) {
+            $lista = $sinPlan->map(fn ($c) => 'contrato '.$c->id.($c->cedula ? ' (CC '.$c->cedula.')' : ''))
+                ->values()->implode(', ');
+
+            return response()->json([
+                'error' => true,
+                'mensaje' => '🚫 No se puede facturar un contrato sin plan: la planilla saldría sin '
+                    .'las entidades que le corresponden (por ejemplo, sin pensión). '
+                    .'Escoja el plan en el contrato y vuelva a facturar. Sin plan: '.$lista.'.',
+            ], 422);
+        }
+
         foreach ($validated['contratos'] as $cId) {
             $cChk = $contratosChk->get($cId);
             if ($cChk) {
