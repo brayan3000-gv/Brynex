@@ -1627,6 +1627,16 @@ async function cfdFormularioLogin(tab) {
   await esperarCarga(tab);
 
   await esperarQue(tab, () => {
+    // El portal saluda con un modal («¡Bienvenido a la Sucursal Virtual
+    // Empresas!») que tapa el botón de entrar. Se cierra primero, o el clic de
+    // abajo se lo come el velo y el trámite se queda esperando el formulario.
+    const velo = [...document.querySelectorAll('button')]
+      .find(e => e.offsetParent && /^\s*aceptar\s*$/i.test((e.innerText || '').trim()));
+    if (velo && /bienvenido a la sucursal/i.test(document.body.innerText || '')) {
+      velo.click();
+      return false;
+    }
+
     const b = [...document.querySelectorAll('button,a')].find(e => /iniciar sesi/i.test(e.innerText || ''));
     if (!b) return false;
     b.click();
