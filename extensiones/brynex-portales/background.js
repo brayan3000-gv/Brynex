@@ -1663,8 +1663,11 @@ async function cfdDespuesDeEntrar(tab, d) {
     await esperar(1500);
 
     const paso = await ejecutar(tab, (nitBuscado, nombre) => {
-      const golpe = (e) => ['pointerdown', 'mousedown', 'mouseup', 'click']
-        .forEach(t => e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+      const golpe = (e) => {
+        ['pointerdown', 'mousedown', 'mouseup', 'click']
+          .forEach(t => e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+        if (typeof e.click === 'function') e.click();
+      };
       const texto = document.body.innerText || '';
 
       if (/documento o contrase|credenciales inv[aá]lidas|usuario o contrase/i.test(texto)) return { fin: 'clave' };
@@ -2332,8 +2335,14 @@ async function cfdEmpresaSiLaPide(tab, nit, nombre) {
 
   while (Date.now() < limite) {
     const listo = await ejecutar(tab, (nitBuscado, nombreBuscado) => {
-      const golpe = (e) => ['pointerdown', 'mousedown', 'mouseup', 'click']
-        .forEach(t => e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+      // El .click() nativo además de los eventos fabricados: la tarjeta de la
+      // empresa no reaccionaba solo con MouseEvent —con el ratón de verdad sí—
+      // y el trámite se quedaba en «selecciona tu empresa» sin poder salir.
+      const golpe = (e) => {
+        ['pointerdown', 'mousedown', 'mouseup', 'click']
+          .forEach(t => e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
+        if (typeof e.click === 'function') e.click();
+      };
 
       if (/actualmente est[aá]s en/i.test(document.body.innerText || '')) return true;
 
