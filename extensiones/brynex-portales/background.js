@@ -1800,7 +1800,16 @@ async function atenderCfd(accion, d = {}) {
   }
   if (accion === 'cfdConsultar') return cfdConsultar(pestana, d);
   if (accion === 'cfdLlenar') return { ok: true, ...(await ejecutar(pestana.id, pCfdLlenar, [d])) };
-  if (accion === 'cfdResultado') return { ok: true, ...(await ejecutar(pestana.id, pCfdResultado)) };
+  if (accion === 'cfdResultado') {
+    const r = await ejecutar(pestana.id, pCfdResultado);
+    if (!r.buscarEnRadicados) return { ok: true, ...r };
+
+    const hallado = await cfdRadicadoDe(pestana.id, String(d.documento || ''));
+
+    return hallado
+      ? { ok: true, radicado: true, numero: hallado.numero, estadoPortal: hallado.estado, recuperado: r.motivo, texto: r.texto }
+      : { ok: true, ...r };
+  }
   if (accion === 'cfdTrabajadores') return cfdTrabajadores(pestana);
   if (accion === 'cfdListado') return cfdListado(pestana);
   if (accion === 'cfdEmpresa') return { ok: true, ...(await cfdNitEmpresa(pestana.id) || {}) };
@@ -1958,7 +1967,11 @@ function pCfdLlenar(d) {
   // que primero se escribe, y el calendario queda de respaldo por si alguna
   // pantalla sí lo abre.
   const fecha = porPlaceholder('Fecha de ingreso');
-  const comoTexto = d.fechaIngreso ? d.fechaIngreso.split('-').reverse().join('/') : '';
+  // El componente guarda «23 | 09 | 2026», con esos separadores: es lo que
+  // queda en el campo al escoger el día en el calendario, y es el formato que
+  // su máscara reconoce. Con barras el texto se veía bien pero el formulario
+  // seguía dándolo por vacío.
+  const comoTexto = d.fechaIngreso ? d.fechaIngreso.split('-').reverse().join(' | ') : '';
 
   if (fecha && !fecha.value && d.fechaIngreso) {
     const [anio, mes, dia] = d.fechaIngreso.split('-').map(Number);
@@ -2014,7 +2027,22 @@ function pCfdResultado() {
   const t = (document.body.innerText || '').replace(/\s+/g, ' ');
   const m = t.match(/\b(\d{3}-\d{3}-\d{6,})\b/);
   const exito = /exitos|radicad[oa]|registrad[oa]|recibimos tu solicitud/i.test(t);
+
+  // Comfandi a veces contesta «Tu solicitud de afiliación no pudo ser radicada
+  // / No se pudo generar el radicado» y sin embargo la radica: al reintentar
+  // avisa de que esa cédula «ya se encuentra con un radicado en proceso»
+  // (28-sep-2026, Nidia Belalcázar, 002-002-00450631). Falla al MOSTRAR el
+  // número, no al crearlo. Se avisa para ir a buscarlo a Radicados en vez de
+  // dar el trámite por perdido.
+  const sinNumero = /no se pudo generar el radicado|no pudo ser radicada/i.test(t);
+  const yaExiste = /ya se encuentra con un radicado en proceso/i.test(t);
+
+  if (!m && (sinNumero || yaExiste)) {
+    return { radicado: false, buscarEnRadicados: true, motivo: yaExiste ? 'ya-existe' : 'sin-numero', texto: t.slice(0, 600) };
+  }
+
   if (!m && !exito) return { radicado: false };
+
   return { radicado: !!m, numero: m ? m[1] : null, texto: t.slice(0, 1200) };
 }
 
@@ -2126,6 +2154,32 @@ async function cfdIr(tab, ruta) {
   await esperar(2500);
 
   return !!llego;
+}
+
+/**
+ * Busca en Radicados el radicado de esa cédula, para cuando el portal lo crea
+ * pero no enseña el número.
+ */
+async function cfdRadicadoDe(tab, documento) {
+  const doc = String(documento).replace(/\D/g, '');
+  if (!doc) return null;
+
+  if (!await cfdIr(tab, 'filed')) return null;
+  await cfdBuscar(tab);
+
+  return ejecutar(tab, (buscado) => {
+    const fila = [...document.querySelectorAll('tbody tr')]
+      .map(t => (t.innerText || '').replace(/\s+/g, ' ').trim())
+      .filter(t => t.replace(/\D/g, '').includes(buscado))
+      .find(t => /afiliaci[oó]n individual/i.test(t));
+    if (!fila) return null;
+
+    const num = fila.match(/\b(\d{3}-\d{3}-\d{6,})\b/);
+    if (!num) return null;
+
+    const est = fila.match(/(En proceso|Procesado con [ÉE]xito|Rechazad[oa]|En validaci[oó]n)/i);
+    return { numero: num[1], estado: est ? est[1] : null };
+  }, [doc]).catch(() => null);
 }
 
 /**

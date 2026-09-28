@@ -292,7 +292,9 @@ async function iniciarCajaComfandi() {
     const desde = Date.now();
     cfdReloj = setInterval(async () => {
         if (Date.now() - desde > 45 * 60 * 1000) { clearInterval(cfdReloj); return; }
-        const fin = await cfdExt('cfdResultado', {}, 20);
+        // El documento va porque, si el portal no enseña el número, hay que ir a
+        // buscarlo a Radicados por la cédula.
+        const fin = await cfdExt('cfdResultado', { documento: cfdPrep.portal?.documento || '' }, 40);
         if (fin.ok && fin.radicado) { clearInterval(cfdReloj); mostrarRadicadoComfandi(fin); return; }
         const p = await cfdExt('cfdLlenar', cfdDatosPortal(), 40);
         if (!p.ok) return;
@@ -307,6 +309,21 @@ function mostrarRadicadoComfandi(fin) {
     cfdFinal = fin;
     cfdEl('cfdRadicado').style.display = 'block';
     cfdEl('cfdNumero').value = fin.numero || '';
+
+    // Cuando el portal dijo que no pudo radicar y sí lo hizo, conviene decirlo:
+    // el número no salió de la pantalla de éxito sino de la pestaña Radicados.
+    if (fin.recuperado) {
+        const caja = cfdEl('cfdPasos');
+        if (caja) {
+            caja.style.display = 'block';
+            caja.innerHTML += '<div class="cfd-aviso">🔎 El portal ' +
+                (fin.recuperado === 'ya-existe'
+                    ? 'avisó de que esta cédula ya tenía un radicado en proceso'
+                    : 'dijo que no pudo generar el radicado') +
+                ', pero la afiliación sí quedó: el número se tomó de la pestaña <strong>Radicados</strong>' +
+                (fin.estadoPortal ? ' (estado: <strong>' + cfdEsc(fin.estadoPortal) + '</strong>)' : '') + '.</div>';
+        }
+    }
     cfdEl('cfdRadicadoInfo').innerHTML = fin.numero
         ? `📨 El portal radicó la afiliación con el N° <strong>${cfdEsc(fin.numero)}</strong>.`
         : '📨 El portal respondió, pero no se encontró el número: cópialo de la pantalla o de la pestaña Radicados.';
