@@ -1127,6 +1127,7 @@ Route::middleware('auth')->group(function () {
     // ── Solicitudes del portal de empresas (se trabajan desde la tarea) ─────
     Route::prefix('admin/portal-solicitudes')->name('admin.portal_solicitudes.')->middleware(['permiso:tareas.ver', 'permiso.escritura:tareas.gestionar'])->group(function () {
         $es = \App\Http\Controllers\Admin\EmpresaSolicitudController::class;
+        Route::get('/', [$es, 'index'])->name('index');
         Route::get('/nuevas', [$es, 'nuevas'])->name('nuevas');
         Route::get('/{id}/archivo/{i}', [$es, 'archivo'])->whereNumber(['id', 'i'])->name('archivo');
         Route::get('/{id}/ruaf', [$es, 'ruaf'])->whereNumber('id')->name('ruaf');

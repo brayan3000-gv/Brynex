@@ -27,6 +27,50 @@ class EmpresaSolicitudController extends Controller
 {
     public function __construct(private EmpresaSolicitudService $servicio) {}
 
+    /**
+     * El tablero del portal: qué empresas tienen acceso, cuándo entraron por
+     * última vez y los trámites que tienen abiertos. Se llega con el botón
+     * «Portal empresas» del listado de Empresas; atender cada trámite sigue
+     * siendo en Tareas.
+     */
+    public function index()
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+
+        $abiertasPorEmpresa = DB::table('tareas')
+            ->where('aliado_id', $aliadoId)
+            ->whereNotNull('empresa_id')
+            ->where('estado', '!=', \App\Models\Tarea::ESTADO_CERRADA)
+            ->whereNull('deleted_at')
+            ->groupBy('empresa_id')
+            ->selectRaw('empresa_id, COUNT(*) as n')
+            ->pluck('n', 'empresa_id');
+
+        $accesos = \App\Models\EmpresaAcceso::where('aliado_id', $aliadoId)
+            ->with('empresa:id,empresa,nit')
+            ->get()
+            ->sortBy(fn ($a) => mb_strtolower($a->empresa?->empresa ?? ''))
+            ->values();
+
+        $abiertas = \App\Models\Tarea::where('aliado_id', $aliadoId)
+            ->whereNotNull('empresa_id')
+            ->where('estado', '!=', \App\Models\Tarea::ESTADO_CERRADA)
+            ->with(['solicitudEmpresa', 'encargado:id,nombre'])
+            ->orderByDesc('id')
+            ->limit(100)
+            ->get();
+
+        $empresas = \App\Models\Empresa::whereIn('id', $abiertas->pluck('empresa_id')->unique())->pluck('empresa', 'id');
+
+        return view('admin.portal_empresas.index', [
+            'accesos' => $accesos,
+            'abiertasPorEmpresa' => $abiertasPorEmpresa,
+            'abiertas' => $abiertas,
+            'empresas' => $empresas,
+            'nuevas' => $this->servicio->nuevasPara(Auth::user(), $aliadoId)['total'],
+        ]);
+    }
+
     /** Para el globo y el aviso emergente del panel. */
     public function nuevas()
     {

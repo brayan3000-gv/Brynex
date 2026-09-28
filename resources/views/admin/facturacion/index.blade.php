@@ -82,6 +82,21 @@
             <input type="text" id="buscadorEmpresa" placeholder="Buscar empresa o NIT..." autocomplete="off"
                    style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:#fff;padding:0.45rem 1rem 0.45rem 2.4rem;font-size:0.85rem;">
         </div>
+        @can('tareas.ver')
+        @php
+            // Solicitudes del portal que nadie ha mirado y le tocan a quien ve la pantalla.
+            $portalNuevas = app(\App\Services\EmpresaSolicitudService::class)
+                ->nuevasPara(auth()->user(), (int) session('aliado_id_activo'))['total'];
+        @endphp
+        <a href="{{ route('admin.portal_solicitudes.index') }}" title="Empresas con acceso al portal y sus trámites"
+           style="position:relative;background:rgba(59,130,246,0.18);border:1px solid rgba(147,197,253,0.45);color:#fff;padding:0.5rem 1.1rem;border-radius:8px;font-size:0.85rem;font-weight:700;text-decoration:none;transition:background .15s;display:inline-flex;align-items:center;gap:0.4rem;white-space:nowrap;"
+           onmouseover="this.style.background='rgba(59,130,246,0.32)'" onmouseout="this.style.background='rgba(59,130,246,0.18)'">
+            🌐 Portal empresas
+            @if($portalNuevas)
+                <span style="position:absolute;top:-7px;right:-7px;background:#ef4444;color:#fff;font-size:.62rem;font-weight:800;padding:.1rem .4rem;border-radius:999px;min-width:18px;text-align:center;box-shadow:0 0 0 2px #0f172a;">{{ $portalNuevas > 99 ? '99+' : $portalNuevas }}</span>
+            @endif
+        </a>
+        @endcan
         <a href="{{ route('admin.facturacion.empresa.create') }}" style="background:#10b981;color:#fff;padding:0.5rem 1.2rem;border-radius:8px;font-size:0.85rem;font-weight:700;text-decoration:none;transition:background .15s;display:inline-flex;align-items:center;gap:0.4rem;white-space:nowrap;">
             ➕ Nueva Empresa
         </a>
