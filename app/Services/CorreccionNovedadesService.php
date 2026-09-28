@@ -166,4 +166,43 @@ class CorreccionNovedadesService
 
         return $n;
     }
+
+    /**
+     * La línea A de una N la arma el operador con lo que QUEDÓ PAGADO, y al
+     * pagar el operador ajusta la EPS contra la BDUA: si BryNex tenía otra, la
+     * C (que sale del plano) no coincide y rechaza con eo.val.2.085 ("La
+     * Administradora de Salud EPS010 de la línea A, es diferente a la ... de la
+     * linea C"). El error dice cuál se pagó: se lleva al plano de corrección.
+     *
+     * @param  \Illuminate\Support\Collection  $correcciones  filas con id (planos de la tanda)
+     * @return int planos ajustados
+     */
+    public static function alinearEpsConLoPagado(Collection $correcciones, array $erroresCotizante): int
+    {
+        $ajustados = 0;
+
+        foreach ($erroresCotizante as $error) {
+            if (($error['idRegla'] ?? '') !== 'eo.val.2.085') {
+                continue;
+            }
+            if (! preg_match('/Salud\s+(\S+)\s+de la l[ií]nea A/iu', (string) ($error['descripcion'] ?? ''), $m)) {
+                continue;
+            }
+
+            $numero = preg_replace('/^\D+/', '', (string) ($error['identificacion'] ?? ''));
+            $eps    = DB::table('eps')->where('codigo', $m[1])->orderBy('id')->first(['nit', 'nombre']);
+            if ($numero === '' || ! $eps) {
+                continue;
+            }
+
+            $ajustados += DB::table('planos')
+                ->whereIn('id', $correcciones->pluck('id'))
+                ->where(DB::raw('CAST(no_identifi AS VARCHAR(20))'), $numero)
+                ->where('tipo_p', self::TIPO_P)
+                ->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''))
+                ->update(['cod_eps' => (string) $eps->nit, 'nombre_eps' => $eps->nombre, 'updated_at' => now()]);
+        }
+
+        return $ajustados;
+    }
 }

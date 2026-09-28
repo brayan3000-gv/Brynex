@@ -689,6 +689,32 @@ class PlanillaApiController extends Controller
             }
         }
 
+        // ── 5c. La EPS que quedó pagada ──────────────────────────────────
+        // En una corrección N la línea A es lo pagado, con la EPS que el
+        // operador ajustó por BDUA al pagar. Si BryNex tenía otra, el rechazo
+        // (eo.val.2.085) la dice: se lleva al plano y se reintenta una vez.
+        if ($correccionNovedades && ($resultado['success'] ?? false) && ! ($resultado['liquidada'] ?? false)
+            && CorreccionNovedadesService::alinearEpsConLoPagado($pendientesN, $resultado['errores_cotizante'] ?? []) > 0) {
+            try {
+                $plano = (new PlanoPilaTxtService())->construir(array_merge([
+                    'aliado_id'       => $aliadoId,
+                    'razon_social_id' => $rs->id,
+                    'mes'             => $validated['mes'],
+                    'anio'            => $validated['anio'],
+                    'n_plano'         => $validated['n_plano'],
+                    'tipos_modalidad' => $validated['tipos_modalidad'] ?? [],
+                    'codigo_operador' => (string) $operador->codigo_ni,
+                ], $opcionesPlano));
+
+                $resultado = $api->liquidarPlanilla($rs->nit, $plano['contenido'], $plano['filename'], $opcionesApi);
+            } catch (\Exception $e) {
+                Log::error('Enlace API: error al rearmar la corrección con la EPS pagada', [
+                    'razon_social_id' => $rs->id,
+                    'message'         => $e->getMessage(),
+                ]);
+            }
+        }
+
         // Deja constancia de qué planilla corrige esta, para no tener que
         // reconstruir el número después leyendo el archivo.
         $datosAsociada = isset($opcionesPlano['planilla_asociada'])
