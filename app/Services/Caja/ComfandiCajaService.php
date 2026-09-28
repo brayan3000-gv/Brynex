@@ -252,6 +252,15 @@ class ComfandiCajaService
         'VENDEDORA' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
         'VENDEDOR EXTERNO' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
         'ASESOR COMERCIAL' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
+        // «VENTAS» a secas caía en «Directores de ventas y comercialización»:
+        // quien atiende un almacén no es directora comercial.
+        'VENTAS' => 'VENDEDORES Y AUXILIARES DE VENTA EN TIENDAS',
+
+        // «ADMINISTRADOR» caía en «Diseñadores y administradores de bases de
+        // datos». En una empresa de confección es trabajo administrativo; si
+        // alguna vez es de verdad un gerente, se corrige aquí.
+        'ADMINISTRADOR' => 'ADMINISTRATIVO',
+        'ADMINISTRADORA' => 'ADMINISTRATIVO',
 
         'COCINA' => 'COCINEROS',
         'COCINERA' => 'COCINEROS',
