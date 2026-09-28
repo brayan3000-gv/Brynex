@@ -1933,18 +1933,37 @@ function pCfdLlenar(d) {
   elegirTexto('Selecciona Ocupación', d.ocupacionTexto, 'ocupación');
   elegir('Selecciona Ciudad donde labora el trabajador', d.ciudadLabor, 'ciudad donde labora');
 
-  // La fecha de ingreso es un react-multi-date-picker: no acepta texto, hay que
-  // abrir el calendario y escoger el día.
+  // La fecha de ingreso es un react-multi-date-picker. Su calendario NO se abre
+  // con un clic sintético —solo con uno de verdad—, y por eso el trámite se
+  // quedaba pidiendo que la pusiera la persona.
+  //
+  // Pero el campo sí acepta que se le escriba: con el setter nativo y un
+  // 'input', el componente parsea DD/MM/AAAA y lo guarda en su estado (probado
+  // en el portal: memoizedState y las props del input quedan con la fecha). Así
+  // que primero se escribe, y el calendario queda de respaldo por si alguna
+  // pantalla sí lo abre.
   const fecha = porPlaceholder('Fecha de ingreso');
+  const comoTexto = d.fechaIngreso ? d.fechaIngreso.split('-').reverse().join('/') : '';
+
   if (fecha && !fecha.value && d.fechaIngreso) {
     const [anio, mes, dia] = d.fechaIngreso.split('-').map(Number);
+    const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+
+    fecha.focus();
+    set.call(fecha, comoTexto);
+    fecha.dispatchEvent(new Event('input', { bubbles: true }));
+    fecha.dispatchEvent(new Event('change', { bubbles: true }));
+    fecha.blur();
+
     if (!document.querySelector('.rmdp-wrapper, .rmdp-calendar')) {
       fecha.focus();
       ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(t => fecha.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
     }
     const w = document.querySelector('.rmdp-wrapper, .rmdp-calendar');
-    if (!w) {
-      falta.push('fecha de ingreso: abre el calendario con un clic y escoge el ' + d.fechaIngreso.split('-').reverse().join('/'));
+    if (fecha.value) {
+      hecho.push('fecha de ingreso: ' + fecha.value);
+    } else if (!w) {
+      falta.push('fecha de ingreso: no se pudo escribir ni abrir el calendario; escoge el ' + comoTexto + ' a mano');
     } else {
       const cab = (w.querySelector('.rmdp-header')?.innerText || '').replace(/\s+/g, ' ').trim();
       const m = cab.match(/([A-Za-zÁÉÍÓÚáéíóú]+)[, ]+(\d{4})/);
@@ -1954,13 +1973,13 @@ function pCfdLlenar(d) {
         if (saltos !== 0) {
           const flecha = w.querySelector(saltos > 0 ? '.rmdp-left' : '.rmdp-right');
           (flecha?.querySelector('span') || flecha)?.click();
-          falta.push('fecha de ingreso: buscando ' + d.fechaIngreso.split('-').reverse().join('/') + ' en el calendario');
+          falta.push('fecha de ingreso: buscando ' + comoTexto + ' en el calendario');
         } else {
           const celda = [...w.querySelectorAll('.rmdp-day')]
             .filter(x => !/rmdp-deactive|rmdp-disabled/.test(x.className))
             .find(x => x.innerText.trim() === String(dia));
           if (!celda) falta.push('fecha de ingreso: el calendario no deja escoger ese día, escógelo tú');
-          else { (celda.querySelector('span') || celda).click(); hecho.push('fecha de ingreso: ' + d.fechaIngreso.split('-').reverse().join('/')); }
+          else { (celda.querySelector('span') || celda).click(); hecho.push('fecha de ingreso: ' + comoTexto); }
         }
       }
     }
