@@ -1931,9 +1931,20 @@ function pCfdLlenar(d) {
   const elegirTexto = (etiqueta, t, nombre) => {
     const s = combo(etiqueta); if (!s || s.value || !t) return;
     const q = norm(t);
+
+    // El cargo de BryNex está en singular y en el género de la persona
+    // («SECRETARIA»), y la lista CIUO del portal en masculino plural
+    // («4120 - Secretarios generales»): sin recortar la terminación no se
+    // encontraban ni los cargos más comunes. Se prueba de lo más exacto a lo
+    // más laxo, y la raíz solo si queda algo con lo que buscar.
+    const raiz = (p) => p.replace(/(ES|AS|OS|A|O|E)$/, '');
+    const primera = q.split(' ')[0];
+
     const op = [...s.options].find(o => norm(o.text) === q)
       || [...s.options].find(o => o.value && norm(o.text).includes(q))
-      || [...s.options].find(o => o.value && q.split(' ')[0].length > 3 && norm(o.text).includes(q.split(' ')[0]));
+      || [...s.options].find(o => o.value && primera.length > 3 && norm(o.text).includes(primera))
+      || [...s.options].find(o => o.value && raiz(primera).length > 4 && norm(o.text).includes(raiz(primera)));
+
     if (!op) { falta.push(`${nombre}: no se encontró "${t}" en la lista, escógelo tú`); return; }
     set(s, op.value) && hecho.push(`${nombre}: ${op.text.trim()}`);
   };
