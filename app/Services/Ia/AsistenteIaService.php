@@ -181,9 +181,12 @@ class AsistenteIaService
         // fácil de perder —las piezas #90 y #91 se recrearon con él vacío, y la #91 dejó de
         // reconocerse pese a estar pautada— mientras que el copy es el texto del anuncio y
         // siempre está. Sin esto, un asesor recibe el guion de cliente y nadie se entera.
-        $texto = mb_strtolower(
-            ($pieza->tema ?? '').' '.($pieza->titulo ?? '').' '.($pieza->copy ?? ''),
-            'UTF-8'
+        // Sin tildes, porque las señales se comparan como texto plano: "comision" NO casaba con
+        // "comisión" en singular, así que una pieza que dijera «mejor comisión» se clasificaba
+        // como de clientes y el asesor recibía el guion equivocado.
+        $texto = strtr(
+            mb_strtolower(($pieza->tema ?? '').' '.($pieza->titulo ?? '').' '.($pieza->copy ?? ''), 'UTF-8'),
+            ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']
         );
 
         // No solo el asesor de seguridad social: el público es quien YA tiene la relación con el
@@ -204,7 +207,12 @@ class AsistenteIaService
 
         // Las señales de que se le habla a alguien con CARTERA, no a alguien que quiere afiliarse.
         // "trabaj" salió de la lista: casaba con "trabajadores", que está en medio copy de clientes.
-        foreach (['comision', 'cartera', 'propia empresa', 'empresa propia'] as $senal) {
+        //
+        // "afilia clientes" entró por la pieza #97 («¿tu empresa u oficina ya afilia clientes?»),
+        // que hablaba de tarifas por afiliación y administración mensual sin nombrar comisión ni
+        // cartera, y por eso iba a caer en el conjunto de clientes. Se probó contra las 87 piezas
+        // del histórico antes de agregarla: mueve esa sola y ninguna más.
+        foreach (['comision', 'cartera', 'propia empresa', 'empresa propia', 'afilia clientes', 'afilian clientes'] as $senal) {
             if (str_contains($texto, $senal)) {
                 return true;
             }
