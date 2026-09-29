@@ -1297,6 +1297,19 @@ class FacturacionController extends Controller
             ], 422);
         }
 
+        // ── Contratos retirados antes del período que se factura ──────────
+        // El retiro cierra el contrato: facturar un mes cuyo período empieza
+        // después de la fecha de retiro cobra seguridad social de alguien que
+        // ya no cotiza (caso Daniel Arroyave, sep-2026: retirado el 31-ago por
+        // corrección N y el modal le armaba octubre por $554.300).
+        if ($validated['tipo'] === 'planilla') {
+            foreach ($contratosCargados as $c) {
+                if ($motivo = $this->_facturaDespuesDelRetiro($c, $mes, $anio)) {
+                    return response()->json(['ok' => false, 'mensaje' => 'No se generó ninguna factura. '.$motivo], 422);
+                }
+            }
+        }
+
         // ── Saldo a favor que el lote trae de meses anteriores ─────────────
         // Es lo único que justifica que una factura PAGADA quede con saldo
         // negativo: el cliente pagó de más antes y ahora abona menos. Se usa
@@ -3431,6 +3444,13 @@ class FacturacionController extends Controller
             'gap_mensaje' => $gap['mensaje'] ?? null,
             // Primer mes sin facturar, para que el modal abra ahí y no en el mes en curso
             'pendiente' => $this->primerMesPendiente($aliadoId, $contrato),
+            // El mes escogido ya está pagado y es el del pago en curso: en vez de
+            // saltar al siguiente, el modal ofrece corregir su planilla.
+            'correccion' => $existe
+                ? \App\Services\CorreccionPlanillaService::oferta($aliadoId, $contrato->id, $mes, $anio)
+                : null,
+            // El contrato ya se retiró antes del período que cubre esta factura.
+            'retiro_bloquea' => $this->_facturaDespuesDelRetiro($contrato, $targetMes, $targetAnio),
             // Préstamos pendientes del cliente
             'tiene_prestamo_pendiente' => $prestamosPendientes->isNotEmpty(),
             'prestamos_pendientes' => $prestamosPendientes,
@@ -3477,6 +3497,32 @@ class FacturacionController extends Controller
      * Sin esta distinción el flujo de retiro facturable se comía la selección
      * y la afiliación quedaba sin cobrar.
      */
+    /**
+     * Por qué no se puede facturar este mes a un contrato retirado, o null si
+     * se puede. Se puede mientras el período que cubre la factura empiece en o
+     * antes de la fecha de retiro: ese es el mes del retiro, que se cobra por
+     * sus días (retiro facturable).
+     */
+    private function _facturaDespuesDelRetiro(Contrato $contrato, int $mes, int $anio): ?string
+    {
+        if ($contrato->estado !== 'retirado' || ! $contrato->fecha_retiro) {
+            return null;
+        }
+
+        [$mesPlan, $anioPlan] = Plano::periodoPlano($mes, $anio, (bool) $contrato->paga_mes_actual, false);
+        $inicio = \Carbon\Carbon::create($anioPlan, $mesPlan, 1);
+        $retiro = \Carbon\Carbon::parse($contrato->fecha_retiro)->startOfDay();
+
+        if ($retiro->gte($inicio)) {
+            return null;
+        }
+
+        $meses = [1 => 'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        return "El contrato {$contrato->id} (CC {$contrato->cedula}) se retiró el {$retiro->format('d-m-Y')}: "
+            ."la factura de {$meses[$mes]} {$anio} cubre {$meses[$mesPlan]} {$anioPlan}, cuando ya no cotiza.";
+    }
+
     /**
      * Retiro facturable: contrato ya retirado que dejo una factura en $0 al
      * marcarse el retiro, y que ahora se cobra de verdad dentro del lote.

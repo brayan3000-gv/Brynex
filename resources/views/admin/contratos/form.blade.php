@@ -4312,6 +4312,8 @@ if (typeof MF !== 'undefined' && FC_CONTRATO_ID) {
         modo:              'individual',
         urlFacturar:       FC_URL_FAC,
         urlMesPagado:      FC_URL_MES_PAG,
+        // Corrección N de un mes ya pagado (ver CorreccionPlanillaController)
+        urlCorreccion:     '{{ url('admin/facturacion/correccion') }}',
         // URL para subir imagen de soporte de consignación (mismo endpoint que en empresa.blade.php)
         urlConsignacionImagen: '{{ route('admin.facturacion.consignacion.imagen.subir', ['id' => '__ID__']) }}',
         csrf:              FC_CSRF,

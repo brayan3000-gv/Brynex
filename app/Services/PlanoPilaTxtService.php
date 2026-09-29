@@ -217,6 +217,8 @@ class PlanoPilaTxtService
                 'p.tipo_doc', 'p.no_identifi', 'p.tipo_modalidad_id', 'p.tipo_p', 'p.paga_mes_actual',
                 // Para ubicar la planilla que corrige una línea de tipo_p 16.
                 'p.contrato_id', 'p.mes_plano', 'p.anio_plano', 'p.n_plano',
+                // Corrección con valores: de ese plano sale la línea A.
+                'p.plano_corregido_id',
                 'p.primer_nombre', 'p.segundo_nombre', 'p.primer_ape', 'p.segundo_ape',
                 'p.cod_eps', 'p.cod_afp', 'p.cod_arl', 'p.cod_caja',
                 'p.salario_basico', 'p.num_dias', 'p.nivel_riesgo',
@@ -263,6 +265,9 @@ class PlanoPilaTxtService
         $planos = $query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
 
         Plano::validarPeriodoUnico($planos);
+
+        // Correcciones con valores: lo que se pagó, para armar la línea A.
+        $pagados = CorreccionPlanillaService::lineasPagadas((int) $aliadoId, $planos);
 
         if ($planoIdFiltro && $planos->isEmpty()) {
             throw new \RuntimeException("El registro {$planoIdFiltro} no existe, no coincide con el período o ya fue eliminado.");
@@ -361,6 +366,11 @@ class PlanoPilaTxtService
             if ((int) $_p->tipo_modalidad_id === -1) {
                 continue;
             }
+            // En una corrección el campo 20 repite el de la planilla que
+            // corrige (ver abajo), así que cuenta lo pagado y no lo nuevo.
+            if (isset($_p->plano_corregido_id, $pagados[(int) $_p->plano_corregido_id])) {
+                $_p = CorreccionPlanillaService::comoLineaA($_p, $pagados[(int) $_p->plano_corregido_id]);
+            }
             $ibcF = (int) ($_p->salario_basico ?? 0);
             $dias_ = (int) ($_p->num_dias ?? $_p->dias_cotizados ?? 30);
             $ibcP = $dias_ < 30 ? (int) (ceil($ibcF * $dias_ / 30 / 100) * 100) : $ibcF;
@@ -413,11 +423,16 @@ class PlanoPilaTxtService
                 // punto del archivo (la A va sin salud, la C con salud, ARL y
                 // caja completas), y quien decide qué sale en cada una es
                 // `paso_e1`. Para el resto de modalidades las dos líneas
-                // siguen saliendo iguales, como hasta ahora.
+                // salen iguales, salvo en la corrección con valores: ahí la
+                // A es la línea pagada (salario, días y fechas de entonces) y
+                // la C el plano de corrección. Ver CorreccionPlanillaService.
                 $p->codigo_operador = $codigoOperador;
                 $p->paso2_pension = $paso2Pension;
                 $p->paso_e1 = 1;
-                $lineas[] = $this->tipo2($p, $seqLineas++, $actEco, $codigoArlRs, $periodoLiq, 'A');
+                $lineaA = isset($p->plano_corregido_id, $pagados[(int) $p->plano_corregido_id])
+                    ? CorreccionPlanillaService::comoLineaA($p, $pagados[(int) $p->plano_corregido_id])
+                    : $p;
+                $lineas[] = $this->tipo2($lineaA, $seqLineas++, $actEco, $codigoArlRs, $periodoLiq, 'A');
                 $p->paso_e1 = 2;
                 $lineas[] = $this->tipo2($p, $seqLineas++, $actEco, $codigoArlRs, $periodoLiq, 'C');
             } else {

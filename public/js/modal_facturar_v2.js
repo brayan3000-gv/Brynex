@@ -810,13 +810,20 @@ const MF = (function () {
     // ── Verificar mes pagado (individual) ─────────────────────────
     // alAbrir: solo al abrir el modal se salta al primer mes pendiente; si luego
     // escogen otro mes a mano, se respeta. avisoPendiente es el texto que lo explica.
-    async function _verificarMesPagado(originalMes = null, originalAnio = null, alAbrir = false, avisoPendiente = null) {
+    // Cada verificación nueva deja sin efecto la que venía en camino: con la
+    // red lenta, la de la apertura llegaba después de que el usuario escogía
+    // otro mes y le devolvía el modal al anterior.
+    let _verifSeq = 0;
+
+    async function _verificarMesPagado(originalMes = null, originalAnio = null, alAbrir = false, avisoPendiente = null, seq = null) {
         if (_modo !== 'individual' || !_cfg.contratoId) return;
+        if (seq === null) seq = ++_verifSeq;
         const mes = parseInt(el('mf-mes')?.value);
         const anio = parseInt(el('mf-anio')?.value);
         try {
             const url = _cfg.urlMesPagado + '/' + _cfg.contratoId + '?mes=' + mes + '&anio=' + anio;
             const data = await fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': _cfg.csrf } }).then(r => r.json());
+            if (seq !== _verifSeq) return;
             const avisoMes = el('mf-aviso-mes');
             const saldoPanel = el('mf-saldos-panel');
             const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -827,14 +834,22 @@ const MF = (function () {
                 setVal('mf-mes', p.mes);
                 setVal('mf-anio', p.anio);
                 return _verificarMesPagado(null, null, false,
-                    'Primer mes sin facturar: ' + meses[p.mes - 1] + ' ' + p.anio + '. Se propone ese en vez de ' + meses[mes - 1] + ' ' + anio + '.');
+                    'Primer mes sin facturar: ' + meses[p.mes - 1] + ' ' + p.anio + '. Se propone ese en vez de ' + meses[mes - 1] + ' ' + anio + '.', seq);
             }
+
+            // Escogieron a mano un mes ya pagado y es el del pago en curso: en vez
+            // de saltar al siguiente se ofrece corregir su planilla.
+            if (data.pagado && !originalMes && !alAbrir && data.correccion) {
+                _ofrecerCorreccion(data, mes, anio);
+                return;
+            }
+            _corr = null;
 
             if (data.pagado) {
                 setVal('mf-mes', data.mes);
                 setVal('mf-anio', data.anio);
                 // Si el mes consultado ya está pagado, volvemos a verificar el período sugerido recursivamente
-                return _verificarMesPagado(originalMes || mes, originalAnio || anio);
+                return _verificarMesPagado(originalMes || mes, originalAnio || anio, false, null, seq);
             } else {
                 if (originalMes) {
                     if (avisoMes) {
@@ -874,12 +889,23 @@ const MF = (function () {
                 gapPanel.style.background = bloquea ? '#fef2f2' : '#fffbeb';
                 gapPanel.style.color = bloquea ? '#991b1b' : '#92400e';
                 gapPanel.innerHTML = (bloquea ? '🚫 ' : '⚠️ ') + data.gap_mensaje;
-                const btn = el('mf-btn-submit');
+                const btn = el('mf-btn-guardar');
                 if (btn) { btn.disabled = bloquea; btn.style.opacity = bloquea ? '0.5' : '1'; }
             } else {
                 gapPanel.style.display = 'none';
-                const btn = el('mf-btn-submit');
+                const btn = el('mf-btn-guardar');
                 if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+            }
+
+            // Contrato retirado antes del período de esta factura: no se factura.
+            if (data.retiro_bloquea) {
+                gapPanel.style.display = 'block';
+                gapPanel.style.borderColor = '#ef4444';
+                gapPanel.style.background = '#fef2f2';
+                gapPanel.style.color = '#991b1b';
+                gapPanel.textContent = '🚫 ' + data.retiro_bloquea;
+                const btn = el('mf-btn-guardar');
+                if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
             }
 
             _saldoFavor = parseInt(data.saldo_a_favor || 0);
@@ -1334,12 +1360,174 @@ const MF = (function () {
         _pintarAvisoDup();
     }
 
+    // ── Corrección N de un mes ya pagado ──────────────────────────
+    // Ver CorreccionPlanillaService. Hoy: solo novedad (el retiro que faltó).
+    let _corr = null;
+    const _mesesLargos = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const _esc = t => String(t ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+    const _fechaCo = f => f ? f.split('-').reverse().join('/') : '';
+
+    function _ofrecerCorreccion(data, mes, anio) {
+        _corr = { oferta: data.correccion, mes, anio, sigMes: data.mes, sigAnio: data.anio };
+        const c = data.correccion;
+        const aviso = el('mf-aviso-mes');
+        const btn = el('mf-btn-guardar');
+        if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+        _ocultarAvisosDelMes();
+        if (!aviso) return;
+
+        const nombreMes = _mesesLargos[mes - 1] + ' ' + anio;
+        const siguiente = _mesesLargos[data.mes - 1] + ' ' + data.anio;
+        let html = '<div style="font-weight:700;margin-bottom:.3rem">' + _esc(nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)) + ' ya está facturado y pagado.</div>';
+        if (c.disponible) {
+            html += '<div style="font-weight:500">Planilla ' + _esc(c.planilla) + ' · período ' + _esc(c.periodo)
+                + (c.operador ? ' · ' + _esc(c.operador) : '') + ' · pagada el ' + _esc(_fechaCo(c.fecha_pago)) + '</div>'
+                + '<div style="margin-top:.5rem;display:flex;gap:.5rem;flex-wrap:wrap">'
+                + '<button type="button" onclick="MF.abrirCorreccion()" style="padding:.35rem .8rem;border-radius:8px;border:none;background:#1e3a8a;color:#fff;font-weight:700;cursor:pointer">Hacer corrección de la planilla</button>'
+                + '<button type="button" onclick="MF.facturarSiguiente()" style="padding:.35rem .8rem;border-radius:8px;border:1px solid #92400e;background:#fff;color:#92400e;font-weight:600;cursor:pointer">Facturar ' + _esc(siguiente) + '</button></div>';
+        } else {
+            html += '<div style="font-weight:500">No se puede corregir: ' + _esc(c.motivo) + '</div>'
+                + '<div style="margin-top:.5rem"><button type="button" onclick="MF.facturarSiguiente()" style="padding:.35rem .8rem;border-radius:8px;border:1px solid #92400e;background:#fff;color:#92400e;font-weight:600;cursor:pointer">Facturar ' + _esc(siguiente) + '</button></div>';
+        }
+        aviso.style.display = 'block';
+        aviso.style.background = '#fef3c7';
+        aviso.style.borderColor = '#f59e0b';
+        aviso.style.color = '#78350f';
+        aviso.innerHTML = html;
+    }
+
+    // Los avisos de hueco, retiro y tipo eran del mes que estaba antes: con la
+    // oferta en pantalla no se factura, así que no aplican.
+    function _ocultarAvisosDelMes() {
+        ['mf-aviso-gap', 'mf-aviso-tipo-plan'].forEach(id => { const n = el(id); if (n) n.style.display = 'none'; });
+    }
+
+    function facturarSiguiente() {
+        if (!_corr) return;
+        const { mes, anio, sigMes, sigAnio } = _corr;
+        _corr = null;
+        setVal('mf-mes', sigMes);
+        setVal('mf-anio', sigAnio);
+        _verificarMesPagado(mes, anio).then(() => { detectarTipo(); recalc(); });
+    }
+
+    function abrirCorreccion() {
+        if (!_corr || !_corr.oferta?.disponible) return;
+        const c = _corr.oferta;
+        cerrarCorreccion();
+
+        const hoy = new Date().toISOString().slice(0, 10);
+        const vencido = c.limite_novedad && hoy > c.limite_novedad;
+        const motivos = (c.motivos_retiro || []).map(m =>
+            '<option value="' + m.id + '"' + (/solicitud/i.test(m.nombre) ? ' selected' : '') + '>' + _esc(m.nombre) + '</option>').join('');
+        const fila = (k, v) => '<div style="display:flex;justify-content:space-between;gap:1rem;padding:.3rem 0;border-bottom:1px solid #e2e8f0"><span style="color:#64748b">' + k + '</span><span style="font-weight:600;text-align:right">' + v + '</span></div>';
+        const campo = 'width:100%;padding:.45rem .6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.9rem;box-sizing:border-box';
+        const etiqueta = 'display:block;font-size:.75rem;font-weight:700;color:#475569;text-transform:uppercase;margin:.7rem 0 .25rem';
+
+        const ov = document.createElement('div');
+        ov.id = 'mf-corr-overlay';
+        ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:1rem';
+        ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 50px rgba(0,0,0,.3)">'
+            + '<div style="background:#1e293b;color:#fff;padding:1rem 1.25rem;border-radius:16px 16px 0 0;display:flex;justify-content:space-between;align-items:center">'
+            + '<div><div style="font-size:1.1rem;font-weight:700">Corrección de la planilla ' + _esc(c.planilla) + '</div><div style="font-size:.8rem;opacity:.8">Planilla N · período ' + _esc(c.periodo) + '</div></div>'
+            + '<button type="button" onclick="MF.cerrarCorreccion()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer" aria-label="Cerrar">×</button></div>'
+            + '<div id="mf-corr-cuerpo" style="padding:1rem 1.25rem">'
+            + fila('Factura que se corrige', '#' + _esc(c.factura))
+            + fila('Operador', _esc(c.operador || '—') + (c.operador_con_api ? '' : ' <span style="color:#b45309">(sin API: se hace en su portal)</span>'))
+            + fila('Pagada el', _esc(_fechaCo(c.fecha_pago)))
+            + fila('Días', _esc(c.dias) + ' → ' + _esc(c.dias))
+            + fila('Valor de la corrección', '$0')
+            + '<label style="' + etiqueta + '">Qué se corrige</label>'
+            + '<div style="padding:.55rem .7rem;border:2px solid #1e3a8a;border-radius:8px;font-size:.88rem"><b>Solo novedad: retiro</b><br><span style="color:#64748b">Los días y el salario quedan como se pagaron. La corrección de salario o días viene en la siguiente fase.</span></div>'
+            + '<label style="' + etiqueta + '" for="mf-corr-fecha">Fecha de retiro (dentro de ' + _esc(c.periodo) + ')</label>'
+            + '<input id="mf-corr-fecha" type="date" min="' + c.periodo_desde + '" max="' + c.periodo_hasta + '" value="' + c.periodo_hasta + '" style="' + campo + '">'
+            + '<label style="' + etiqueta + '" for="mf-corr-tipo">Tipo de retiro</label>'
+            + '<select id="mf-corr-tipo" style="' + campo + '"><option value="general">General a todos los sistemas</option><option value="servicios">Por terminación del contrato de prestación de servicios</option><option value="pension">Solo pensión</option><option value="arl">Solo riesgos laborales</option><option value="caja">Solo caja de compensación</option></select>'
+            + '<label style="' + etiqueta + '" for="mf-corr-motivo">Motivo del retiro</label>'
+            + '<select id="mf-corr-motivo" style="' + campo + '">' + motivos + '</select>'
+            + '<label style="' + etiqueta + '" for="mf-corr-obs">Observación</label>'
+            + '<textarea id="mf-corr-obs" maxlength="300" rows="2" placeholder="Opcional" style="' + campo + '"></textarea>'
+            + (c.limite_novedad ? '<div style="margin-top:.8rem;padding:.55rem .7rem;border-radius:8px;font-size:.82rem;' + (vencido ? 'background:#fef2f2;color:#991b1b' : 'background:#eff6ff;color:#1e3a8a') + '">'
+                + (vencido ? 'Venció el plazo: el retiro olvidado se podía marcar hasta el ' : 'El retiro olvidado se puede marcar hasta el ')
+                + _esc(_fechaCo(c.limite_novedad)) + ' (5.º día hábil del mes siguiente al pago).' + (vencido ? ' El operador puede rechazarla.' : '') + '</div>' : '')
+            + '<div style="margin-top:.6rem;font-size:.82rem;color:#475569">Al guardar, el contrato queda <b>retirado</b> con esta fecha.</div>'
+            + '<div id="mf-corr-error" style="display:none;margin-top:.6rem;padding:.5rem .7rem;border-radius:8px;background:#fef2f2;color:#991b1b;font-size:.85rem"></div>'
+            + '<div style="display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem">'
+            + '<button type="button" onclick="MF.cerrarCorreccion()" style="padding:.5rem 1rem;border-radius:8px;border:1px solid #cbd5e1;background:#fff;cursor:pointer">Cancelar</button>'
+            + '<button type="button" id="mf-corr-guardar" onclick="MF.guardarCorreccion()" style="padding:.5rem 1rem;border-radius:8px;border:none;background:#15803d;color:#fff;font-weight:700;cursor:pointer">Guardar corrección</button></div>'
+            + '</div></div>';
+        document.body.appendChild(ov);
+    }
+
+    function cerrarCorreccion() {
+        document.getElementById('mf-corr-overlay')?.remove();
+    }
+
+    async function guardarCorreccion() {
+        const c = _corr?.oferta;
+        if (!c) return;
+        const err = el('mf-corr-error');
+        const fecha = el('mf-corr-fecha')?.value;
+        const mostrar = msg => { err.textContent = msg; err.style.display = 'block'; };
+        err.style.display = 'none';
+        if (!fecha || fecha < c.periodo_desde || fecha > c.periodo_hasta) {
+            return mostrar('La fecha de retiro tiene que ser de ' + c.periodo + ', el período que se corrige.');
+        }
+        if (!el('mf-corr-motivo')?.value) return mostrar('Escoge el motivo del retiro.');
+
+        const btn = el('mf-corr-guardar');
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        try {
+            const r = await fetch(_cfg.urlCorreccion + '/' + _cfg.contratoId, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': _cfg.csrf },
+                body: JSON.stringify({
+                    tipo: 'novedad',
+                    plano_id: c.plano_id,
+                    fecha_ret: fecha,
+                    tipo_retiro: el('mf-corr-tipo').value,
+                    motivo_retiro_id: el('mf-corr-motivo').value,
+                    observacion: el('mf-corr-obs').value.trim() || null,
+                }),
+            });
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok || !data.ok) {
+                btn.disabled = false; btn.textContent = 'Guardar corrección';
+                const val = data.errors ? Object.values(data.errors).flat().join(' ') : '';
+                return mostrar(data.mensaje || val || 'No se pudo guardar la corrección.');
+            }
+            _mostrarCorreccionCreada(c, data, fecha);
+        } catch (e) {
+            btn.disabled = false; btn.textContent = 'Guardar corrección';
+            mostrar('Sin conexión con BryNex. Intenta de nuevo.');
+        }
+    }
+
+    function _mostrarCorreccionCreada(c, data, fecha) {
+        const cuerpo = el('mf-corr-cuerpo');
+        if (!cuerpo) return;
+        const tipo = el('mf-corr-tipo')?.selectedOptions[0]?.text || 'general';
+        const pasoPlanos = 'En Planos SS queda en su propio plano (P' + _esc(data.n_plano) + ') del mes de pago, como planilla N de la ' + _esc(c.planilla) + '.';
+        const pasos = c.operador_con_api
+            ? '<p style="margin:.4rem 0">' + pasoPlanos + ' Liquídala desde ahí por API.</p>'
+            : '<p style="margin:.4rem 0">' + _esc(c.operador || 'Este operador') + ' no tiene API: hazla en su portal.</p>'
+                + '<ol style="margin:.3rem 0 .5rem 1.1rem;padding:0;line-height:1.6">'
+                + '<li>Correcciones · pagada por mí · buscar la planilla ' + _esc(c.planilla) + '</li>'
+                + '<li>Corrección de novedades sin aportes · seleccionar a la persona</li>'
+                + '<li>Agregar novedad RET · ' + _esc(tipo.toLowerCase()) + ' · ' + _esc(_fechaCo(fecha)) + '</li>'
+                + '<li>Validar planilla · aplicar el pago en $0</li></ol>'
+                + '<p style="margin:.4rem 0">' + pasoPlanos + ' Cuando la apliques, confirma el pago ahí con el número de la N y valor $0.</p>';
+        cuerpo.innerHTML = '<div style="padding:.6rem .8rem;border-radius:8px;background:#f0fdf4;color:#166534;font-weight:700">✓ ' + _esc(data.mensaje) + '</div>'
+            + '<div style="font-size:.88rem;color:#334155;margin-top:.6rem">' + pasos + '</div>'
+            + '<div style="display:flex;justify-content:flex-end;margin-top:1rem"><button type="button" onclick="location.reload()" style="padding:.5rem 1rem;border-radius:8px;border:none;background:#1e3a8a;color:#fff;font-weight:700;cursor:pointer">Cerrar</button></div>';
+    }
+
     // ── Cambio de período (llama a re-detectar tipo en individual) ─
     function cambiarPeriodo() {
         // Otro mes es otra mora: se descarta lo que el usuario haya escrito para el anterior.
         _moraTocada = false;
         if (_modo === 'individual') {
-            _verificarMesPagado().then(() => detectarTipo());
+            _verificarMesPagado().then(() => { detectarTipo(); if (_corr) _ocultarAvisosDelMes(); });
         } else {
             _verificarPeriodoLote();
         }
@@ -2297,7 +2485,7 @@ const MF = (function () {
         ANT.abrir(contratoId, empresaId, onRegistrado);
     }
 
-    return { init, abrir, cerrar, detectarTipo, actualizarTipo, cambiarPeriodo, onEstado, recalc, distRecalc, addConsig, guardar, toggleRetiro, onRetiroFecha, setMora, onMoraInput, seleccionarSegundoContrato, _abrirAnticipo, actualizarValoresDesdeAlpine, toggleFavor };
+    return { init, abrir, cerrar, detectarTipo, actualizarTipo, cambiarPeriodo, onEstado, recalc, distRecalc, addConsig, guardar, toggleRetiro, onRetiroFecha, setMora, onMoraInput, seleccionarSegundoContrato, _abrirAnticipo, actualizarValoresDesdeAlpine, toggleFavor, abrirCorreccion, cerrarCorreccion, guardarCorreccion, facturarSiguiente };
 
 })();
 

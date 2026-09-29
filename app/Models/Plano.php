@@ -47,6 +47,7 @@ class Plano extends BaseModel
         'dias_tp_afp',            // snapshot: días de pensión del mes en tiempo parcial
         'dias_tp_caja',           // snapshot: días de caja del mes en tiempo parcial
         'grupo_fondo_solidaridad', // snapshot: grupo del PSAP, decide la tarifa de pensión del cotizante 33
+        'plano_corregido_id',     // corrección N con valores: el plano pagado que corrige (de ahí sale la línea A)
         'usuario_id',
     ];
 

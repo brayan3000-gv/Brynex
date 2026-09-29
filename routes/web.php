@@ -537,6 +537,7 @@ Route::middleware('auth')->group(function () {
             Route::get('recibo-abono/{id}', [$fc, 'reciboAbono'])->name('recibo-abono');
             Route::get('api/saldo/{cedula}', [$fc, 'saldoCliente'])->name('api.saldo');
             Route::get('api/mes-pagado/{contratoId}', [$fc, 'mesPagado'])->name('api.mes_pagado');
+            Route::post('correccion/{contratoId}', [\App\Http\Controllers\Admin\CorreccionPlanillaController::class, 'store'])->whereNumber('contratoId')->name('correccion.store')->middleware('permiso:facturacion.generar');
             Route::get('api/plano/{razon_social_id}', [$fc, 'planoActual'])->name('api.plano');
             Route::get('api/saldos-contratos', [$fc, 'saldosContratos'])->name('api.saldos_contratos');
             Route::post('api/verificar-periodo', [$fc, 'verificarPeriodoLote'])->name('api.verificar_periodo');
