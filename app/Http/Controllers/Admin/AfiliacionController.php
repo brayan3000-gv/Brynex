@@ -72,7 +72,7 @@ class AfiliacionController extends Controller
             ->whereYear('fecha_ingreso', $anio)
             ->pluck('id');
         $baseContratos = Contrato::whereIn('id', $baseIds)
-            ->get(['id','razon_social_id','tipo_modalidad_id','eps_id','arl_id','caja_id','pension_id']);
+            ->get(['id','razon_social_id','tipo_modalidad_id','eps_id','arl_id','caja_id','pension_id','estado','encargado_id']);
 
         // ── Contratos base (con eager loading) ──
         $query = Contrato::with([
@@ -193,29 +193,61 @@ class AfiliacionController extends Controller
             ->orderBy('nombre')
             ->get(['id', 'nombre']);
 
-        // Solo razones sociales que aparecen en el período
+        // Cada desplegable muestra solo lo que hay en la tabla con los demás
+        // filtros puestos: con LALA Confecciones escogida, el de EPS lista las
+        // EPS de LALA y no el catálogo entero. Se excluye su propio filtro para
+        // no dejar el desplegable con una sola opción —la escogida— y sin
+        // manera de cambiarla.
+        $presentes = function (string $columna) use ($baseContratos, $rsId, $tipoModId, $epsF, $arlF, $cajaF, $pensionF, $estadoCont, $encId) {
+            $todos = [
+                'razon_social_id' => $rsId,
+                'tipo_modalidad_id' => $tipoModId,
+                'eps_id' => $epsF,
+                'arl_id' => $arlF,
+                'caja_id' => $cajaF,
+                'pension_id' => $pensionF,
+                'estado' => $estadoCont,
+                'encargado_id' => $encId,
+            ];
+            $filtros = array_diff_key($todos, [$columna => null]);
+
+            return $baseContratos
+                ->filter(function ($c) use ($filtros) {
+                    foreach ($filtros as $col => $valor) {
+                        if (($valor ?? '') !== '' && (string) $c->$col !== (string) $valor) {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                })
+                ->pluck($columna)
+                // Lo ya escogido se mantiene en su lista aunque el resto de
+                // filtros lo dejen fuera: si no, el desplegable se vería en otra
+                // opción distinta a la que está filtrando.
+                ->push($todos[$columna] ?? null)
+                ->filter()->unique();
+        };
+
         $razonesDisponibles = DB::table('razones_sociales')
-            ->whereIn('id', $baseContratos->pluck('razon_social_id')->filter()->unique())
+            ->whereIn('id', $presentes('razon_social_id'))
             ->orderBy('razon_social')
             ->get(['id', 'razon_social']);
 
-        // Solo tipos de modalidad que aparecen en el período
-        $tipoIdsUsados = $baseContratos->pluck('tipo_modalidad_id')->filter()->unique();
-        $tiposModalidad = \App\Models\TipoModalidad::whereIn('id', $tipoIdsUsados)
+        $tiposModalidad = \App\Models\TipoModalidad::whereIn('id', $presentes('tipo_modalidad_id'))
             ->orderBy('orden')->get(['id', 'tipo_modalidad', 'modalidad']);
 
-        // EPS, ARL, Caja, Pensión disponibles en el período
         $epsDisponibles = DB::table('eps')
-            ->whereIn('id', $baseContratos->pluck('eps_id')->filter()->unique())
+            ->whereIn('id', $presentes('eps_id'))
             ->orderBy('nombre')->get(['id', 'nombre']);
         $arlDisponibles = DB::table('arls')
-            ->whereIn('id', $baseContratos->pluck('arl_id')->filter()->unique())
+            ->whereIn('id', $presentes('arl_id'))
             ->orderBy('nombre_arl')->get(['id', 'nombre_arl']);
         $cajaDisponibles = DB::table('cajas')
-            ->whereIn('id', $baseContratos->pluck('caja_id')->filter()->unique())
+            ->whereIn('id', $presentes('caja_id'))
             ->orderBy('nombre')->get(['id', 'nombre']);
         $pensionDisponibles = DB::table('pensiones')
-            ->whereIn('id', $baseContratos->pluck('pension_id')->filter()->unique())
+            ->whereIn('id', $presentes('pension_id'))
             ->orderBy('razon_social')->get(['id', 'razon_social']);
 
         // Empresas cliente presentes en el período (vía cliente, que se une por
