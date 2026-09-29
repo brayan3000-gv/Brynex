@@ -301,6 +301,9 @@ body {
 
 {{-- ══ HEADER + FILTROS UNIFICADOS ══ --}}
 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" id="formFiltros" style="flex-shrink:0;">
+{{-- El modo «todos los aliados que gestiona BryNex» no es un filtro visible:
+     se conserva al cambiar cualquier otro. --}}
+@if($gestionados)<input type="hidden" name="gestionados" value="1">@endif
 <div class="afil-header" style="flex-wrap:wrap;gap:0.5rem;padding:0.6rem 1.2rem;">
     <div style="display:flex;align-items:center;gap:0.5rem;">
         <div class="afil-title" style="white-space:nowrap;margin:0;">📋 Afiliaciones</div>
@@ -332,8 +335,12 @@ body {
         </select>
         <span style="color:#4b6a8b;font-size:0.9rem;">|</span>
 
-        {{-- Aliado (SOLO BryNex) --}}
-        @if($user->es_brynex && count($alidosDisponibles) > 1)
+        {{-- Aliado (SOLO BryNex). Viendo los gestionados no se escoge uno: la
+             lista los trae todos y el selector solo confundiría. --}}
+        @if($gestionados)
+        <span style="background:#7c3aed;color:#fff;font-size:0.72rem;font-weight:800;padding:0.25rem 0.55rem;border-radius:6px;white-space:nowrap;">🏢 Gestionadas por BryNex</span>
+        <span style="color:#4b6a8b;font-size:0.9rem;">|</span>
+        @elseif($user->es_brynex && count($alidosDisponibles) > 1)
         <select name="aliado_id" onchange="this.form.submit()" style="font-size:0.78rem;padding:0.3rem 0.5rem;border:1px solid #334155;background:#1e3a5f;color:#e2e8f0;border-radius:6px;font-weight:700;">
             @foreach($alidosDisponibles as $al)
             <option value="{{ $al->id }}" {{ $alidoId == $al->id ? 'selected' : '' }}>{{ $al->nombre }}</option>
@@ -379,6 +386,14 @@ body {
             <option value="retirado" {{ $estadoCont === 'retirado' ? 'selected' : '' }}>🔴 Retirados</option>
         </select>
 
+        @if($user->es_brynex)
+        {{-- Todas las afiliaciones que gestiona BryNex, de todos los aliados que
+             tienen contratado el módulo «Gestión de Afiliaciones». --}}
+        <a href="{{ route('admin.afiliaciones.index', $gestionados ? request()->except(['gestionados','page']) : request()->except('page') + ['gestionados' => 1]) }}"
+           class="btn-export"
+           style="background:{{ $gestionados ? '#7c3aed' : '#1e3a5f' }};border:1px solid {{ $gestionados ? '#a78bfa' : '#334155' }};text-decoration:none;"
+           title="{{ $gestionados ? 'Volviendo al aliado activo' : 'Ver las afiliaciones de todos los aliados que gestiona BryNex' }}">🏢</a>
+        @endif
         <button type="button" onclick="abrirModalClavesGlobal()" class="btn-export" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1c1917;border:none;font-weight:800;cursor:pointer;">🔑 Claves</button>
         <a href="{{ route('admin.gestion-arl.index') }}" class="btn-export" style="background:#f97316;">🛡️ ARL</a>
         @can('automatizar-portales')
@@ -590,6 +605,9 @@ function sortClass($col, $currSort, $currDir) {
             @else
             <span class="razon-badge">—</span>
             @endif
+            @if($gestionados)
+            <div style="font-size:.62rem;font-weight:800;color:#7c3aed;letter-spacing:.02em;margin-top:.12rem;">{{ $c->aliado?->nombre }}</div>
+            @endif
         </td>
 
         {{-- Día ingreso --}}
@@ -617,6 +635,7 @@ function sortClass($col, $currSort, $currDir) {
                 data-contrato-id="{{ $c->id }}"
                 data-nombre="{{ $ctxNombre }}"
                 data-row-id="{{ $c->id }}"
+                @if($gestionados) data-aliado-id="{{ $c->aliado_id }}" @endif
                 title="{{ trim($ctxTipoDoc.' '.$ctxCedula) }} · clic para abrir contrato"
                 style="background:none;border:none;padding:0;font-family:monospace;font-size:.77rem;font-weight:700;color:#3b82f6;cursor:pointer;text-decoration:underline dotted;">
                 @if($ctxTipoDoc)<span style="color:#94a3b8;font-weight:600;">{{ $ctxTipoDoc }}</span> @endif{{ $c->cedula }}
@@ -631,6 +650,7 @@ function sortClass($col, $currSort, $currDir) {
                 data-cliente-id="{{ $c->cliente->id }}"
                 data-nombre="{{ $ctxNombre }}"
                 data-row-id="{{ $c->id }}"
+                @if($gestionados) data-aliado-id="{{ $c->aliado_id }}" @endif
                 title="Clic para editar cliente"
                 style="background:none;border:none;padding:0;font:inherit;font-weight:600;color:#1e3a5f;cursor:pointer;text-decoration:underline dotted;text-align:left;max-width:128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;">
                 {{ nombre_oracion($c->cliente?->primer_nombre) }} {{ nombre_oracion($c->cliente?->primer_apellido) }}
@@ -651,6 +671,7 @@ function sortClass($col, $currSort, $currDir) {
                 data-contrato-id="{{ $c->id }}"
                 data-nombre="{{ $ctxNombre }}"
                 data-row-id="{{ $c->id }}"
+                @if($gestionados) data-aliado-id="{{ $c->aliado_id }}" @endif
                 title="Clic para editar contrato"
                 style="background:#f1f5f9;color:#334155;padding:0.12rem 0.4rem;border-radius:5px;font-weight:700;font-size:0.67rem;border:none;cursor:pointer;transition:background .15s;"
                 onmouseover="this.style.background='#dbeafe';this.style.color='#1e40af'"
@@ -1651,8 +1672,9 @@ document.addEventListener('click', function(e) {
 
     _clienteActivo = { clienteId, rowId };
 
+    const deOtroAliado = btn.dataset.aliadoId ? `&aliado=${btn.dataset.aliadoId}` : '';
     const fullUrl = `${BASE_CLIENTE}/${clienteId}/edit`;
-    const url     = `${fullUrl}?iframe=1`;
+    const url     = `${fullUrl}?iframe=1${deOtroAliado}`;
 
     document.getElementById('iframeClienteTitulo').textContent = nombre;
     document.getElementById('iframeClienteLink').href          = fullUrl;
@@ -1672,8 +1694,12 @@ document.addEventListener('click', function(e) {
 
     _contratoActivo = { contratoId, rowId };
 
+    // Viendo varios aliados a la vez, la ficha es de otro aliado y el
+    // controlador la busca en el activo: `?aliado=` lo cambia al abrirla
+    // (SetAlidoContext solo lo permite a usuarios BryNex con acceso).
+    const deOtroAliado = btn.dataset.aliadoId ? `&aliado=${btn.dataset.aliadoId}` : '';
     const fullUrl = `${BASE_CONTRATO}/${contratoId}/edit`;
-    const url     = `${fullUrl}?iframe=1`;
+    const url     = `${fullUrl}?iframe=1${deOtroAliado}`;
 
     document.getElementById('iframeContratoTitulo').textContent = nombre;
     document.getElementById('iframeContratoLink').href          = fullUrl;

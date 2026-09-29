@@ -66,8 +66,14 @@ class AfiliacionController extends Controller
         // ── Aliado activo ──
         $alidoId = $this->resolverAliado($request, $user);
 
+        // Normalmente se lista un aliado, el activo. Un usuario BryNex puede
+        // pedir con el botón 🏢 los de todos los aliados cuyas afiliaciones
+        // gestiona BryNex, para trabajarlos en una sola lista.
+        $aliados = $this->aliadosDeLaVista($request, $user, $alidoId);
+        $gestionados = count($aliados) > 1;
+
         // Capturar IDs del período sin filtros opcionales (para poblar selects dinámicos)
-        $baseIds = Contrato::where('aliado_id', $alidoId)
+        $baseIds = Contrato::whereIn('aliado_id', $aliados)
             ->whereMonth('fecha_ingreso', $mes)
             ->whereYear('fecha_ingreso', $anio)
             ->pluck('id');
@@ -95,7 +101,7 @@ class AfiliacionController extends Controller
                 'ultimoMovimiento',
             ]),
         ])
-        ->where('aliado_id', $alidoId)
+        ->whereIn('aliado_id', $aliados)
         ->whereMonth('fecha_ingreso', $mes)
         ->whereYear('fecha_ingreso', $anio);
 
@@ -139,7 +145,7 @@ class AfiliacionController extends Controller
         if ($pensionF)  $query->where('pension_id', $pensionF);
         if ($tipoModId) $query->where('tipo_modalidad_id', $tipoModId);
         if ($empresaF) {
-            $query->whereHas('cliente', fn($q) => $q->where('clientes.aliado_id', $alidoId)
+            $query->whereHas('cliente', fn($q) => $q->whereIn('clientes.aliado_id', $aliados)
                                                     ->where('cod_empresa', $empresaF));
         }
         // Filtro por estado del radicado (al menos uno con ese estado)
@@ -188,7 +194,7 @@ class AfiliacionController extends Controller
         });
 
         // ── Datos para filtros dinámicos (basados en los contratos del período) ──
-        $encargados = User::where('aliado_id', $alidoId)
+        $encargados = User::whereIn('aliado_id', $aliados)
             ->where('activo', true)
             ->orderBy('nombre')
             ->get(['id', 'nombre']);
@@ -275,7 +281,7 @@ class AfiliacionController extends Controller
                 $j->on('ct.cedula', '=', 'cl.cedula')
                   ->on('ct.aliado_id', '=', 'cl.aliado_id');
             })
-            ->where('ct.aliado_id', $alidoId)
+            ->whereIn('ct.aliado_id', $aliados)
             ->whereMonth('ct.fecha_ingreso', $mes)
             ->whereYear('ct.fecha_ingreso', $anio)
             ->distinct()
@@ -293,7 +299,7 @@ class AfiliacionController extends Controller
         // las que no tienen un NIT real —la comodín con nit "2"—, porque contra
         // esas no hay portal al que entrar ni empresa que cruzar.
         $razonesConciliar = DB::table('razones_sociales')
-            ->where('aliado_id', $alidoId)
+            ->whereIn('aliado_id', $aliados)
             ->where('es_independiente', false)
             ->whereNotNull('nit')
             ->whereRaw('LEN(nit) >= 8')
@@ -303,7 +309,7 @@ class AfiliacionController extends Controller
         return view('admin.afiliaciones.index', compact(
             'razonesConciliar',
             'contratos', 'mes', 'anio', 'encId', 'encargados',
-            'alidoId', 'alidosDisponibles', 'user',
+            'alidoId', 'alidosDisponibles', 'user', 'gestionados',
             'rsId', 'tipoModId', 'epsF', 'arlF', 'cajaF', 'pensionF', 'empresaF', 'estadoRad', 'estadoCont',
             'sort', 'dir', 'razonesDisponibles', 'tiposModalidad',
             'epsDisponibles', 'arlDisponibles', 'cajaDisponibles', 'pensionDisponibles',
@@ -323,6 +329,8 @@ class AfiliacionController extends Controller
         $anio    = (int) $request->get('anio', now()->year);
         $encId   = $request->get('encargado_id');
         $alidoId = $this->resolverAliado($request, $user);
+        // El Excel sale de lo mismo que está en pantalla, aliados incluidos.
+        $aliados = $this->aliadosDeLaVista($request, $user, $alidoId);
 
         // Filtros adicionales
         $rsId       = $request->get('razon_social_id');
@@ -346,7 +354,7 @@ class AfiliacionController extends Controller
             'encargado:id,nombre',
             'radicados',
         ])
-        ->where('aliado_id', $alidoId)
+        ->whereIn('aliado_id', $aliados)
         ->whereMonth('fecha_ingreso', $mes)
         ->whereYear('fecha_ingreso', $anio);
 
@@ -389,7 +397,7 @@ class AfiliacionController extends Controller
         if ($pensionF)  $query->where('pension_id', $pensionF);
         if ($tipoModId) $query->where('tipo_modalidad_id', $tipoModId);
         if ($empresaF) {
-            $query->whereHas('cliente', fn($q) => $q->where('clientes.aliado_id', $alidoId)
+            $query->whereHas('cliente', fn($q) => $q->whereIn('clientes.aliado_id', $aliados)
                                                     ->where('cod_empresa', $empresaF));
         }
 
@@ -625,6 +633,34 @@ class AfiliacionController extends Controller
         }
 
         return $buscar;
+    }
+
+    /**
+     * Aliados cuyas afiliaciones se listan: el activo, o —con `?gestionados=1`
+     * y siendo usuario de BryNex— todos aquellos a los que BryNex les gestiona
+     * las afiliaciones, que son los que tienen contratado el módulo BryNex
+     * «Gestión de Afiliaciones». El aliado 1 queda fuera: es el de pruebas.
+     *
+     * @return int[]
+     */
+    private function aliadosDeLaVista(Request $request, User $user, int $alidoId): array
+    {
+        if (! $user->es_brynex || ! $request->boolean('gestionados')) {
+            return [$alidoId];
+        }
+
+        $ids = DB::table('brynex_modulos_aliado as ma')
+            ->join('brynex_modulos as m', 'm.id', '=', 'ma.modulo_id')
+            ->where('ma.activo', true)
+            ->where('m.codigo', 'afiliaciones')
+            ->where('ma.aliado_id', '<>', 1)
+            ->distinct()
+            ->pluck('ma.aliado_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $user->puedeAccederAliado($id))
+            ->values()->all();
+
+        return $ids ?: [$alidoId];
     }
 
     private function resolverAliado(Request $request, User $user): int
