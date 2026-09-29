@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\{Gasto, BancoCuenta, User, Consignacion};
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\{Auth, DB, Storage};
 
 class GastoAdminController extends Controller
@@ -207,12 +208,19 @@ class GastoAdminController extends Controller
         $aid   = $this->aliadoId();
         $gasto = Gasto::where('aliado_id', $aid)->findOrFail($id);
 
+        // Planos SS guarda los pagos de planilla con forma_pago='transferencia',
+        // que no está entre las opciones del modal: se acepta la que el gasto ya
+        // tiene para que corregirle la fecha no obligue a cambiarla.
+        $formasPago = array_values(array_unique(array_filter([
+            'efectivo', 'transferencia_bancaria', 'banco_banco', $gasto->forma_pago,
+        ])));
+
         $data = $request->validate([
             'fecha'             => 'required|date',
             'tipo'              => 'required|string',
             'descripcion'       => 'required|string|max:500',
             'pagado_a'          => 'nullable|string|max:255',
-            'forma_pago'        => 'required|in:efectivo,transferencia_bancaria,banco_banco',
+            'forma_pago'        => ['required', Rule::in($formasPago)],
             'banco_origen_id'   => 'nullable|integer',
             'banco_destino_id'  => 'nullable|integer',
             'valor'             => 'required|integer|min:1',

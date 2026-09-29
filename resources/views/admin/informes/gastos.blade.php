@@ -330,12 +330,32 @@ function abrirModalNuevo(){
         if(htipo) htipo.remove();
         const badge = form.querySelector('#badge-tipo-planilla');
         if(badge) badge.remove();
+        quitarFormaPagoPropia(form);
     }
     const hdr = document.querySelector('#modal-gasto [style*="background:#0f172a"] span');
     if(hdr) hdr.textContent = '💼 Registrar Gasto';
     const btn = document.querySelector('#modal-gasto-form button[type="submit"]');
     if(btn) btn.textContent = '✅ Registrar Gasto';
     document.getElementById('modal-gasto').style.display = 'flex';
+}
+
+// Planos SS guarda los pagos de planilla con forma_pago='transferencia', que el
+// select del modal no ofrece: sin opción propia abría vacío y obligaba a cambiarla.
+const FORMAS_PAGO_PROPIAS = { transferencia: '🏦 Transferencia (Planos SS)' };
+
+function quitarFormaPagoPropia(form){
+    form.querySelectorAll('select[name="forma_pago"] option[data-propia]').forEach(o => o.remove());
+}
+
+function asegurarFormaPago(form, valor){
+    quitarFormaPagoPropia(form);
+    const sel = form.querySelector('select[name="forma_pago"]');
+    if(!sel || !valor || sel.querySelector(`option[value="${CSS.escape(valor)}"]`)) return;
+    const opt = document.createElement('option');
+    opt.value = valor;
+    opt.textContent = FORMAS_PAGO_PROPIAS[valor] ?? valor;
+    opt.dataset.propia = '1';
+    sel.appendChild(opt);
 }
 
 function abrirModalEditar(g){
@@ -394,6 +414,7 @@ function abrirModalEditar(g){
     set('descripcion',      g.descripcion ?? '');
     set('pagado_a',         g.pagado_a    ?? '');
     set('valor',            g.valor       ?? '');
+    asegurarFormaPago(form, g.forma_pago);
     set('forma_pago',       g.forma_pago  ?? 'efectivo');
     set('banco_origen_id',  g.banco_origen_id  ?? '');
     set('banco_destino_id', g.banco_destino_id ?? '');

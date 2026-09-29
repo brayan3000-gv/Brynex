@@ -243,8 +243,9 @@ function gasto_actualizarBancos(id) {
         if (bloqDestino) bloqDestino.style.display = 'block';
         if (lblOrigen)   lblOrigen.textContent  = 'Banco Origen (sale el dinero)';
         if (lblDestino)  lblDestino.textContent = 'Banco Destino (entra el dinero)';
-    } else if (fp === 'transferencia_bancaria') {
+    } else if (fp === 'transferencia_bancaria' || fp === 'transferencia') {
         // Pago de gasto por transferencia: solo banco origen
+        // ('transferencia' es la que guarda Planos SS en los pagos de planilla)
         if (bloqOrigen)  bloqOrigen.style.display  = 'block';
         if (bloqDestino) bloqDestino.style.display = 'none';
         if (lblOrigen)   lblOrigen.textContent = 'Banco Origen';
