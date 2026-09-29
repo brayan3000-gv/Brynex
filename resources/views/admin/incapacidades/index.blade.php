@@ -205,23 +205,28 @@ tbody td{padding:.6rem .85rem;vertical-align:middle;}
         <div class="kpi">
             <span class="num" style="color:#059669">{{ $totalPagadas }}</span>
             <span class="lbl">Pagadas</span>
-            <span class="kpi-sep"></span>
-            <span class="num" style="color:#dc2626">{{ $totalNoPagadas }}</span>
-            <span class="lbl">No pagadas</span>
         </div>
-        {{-- Anuladas: ocultas de la tabla por defecto (son estado final), pero
-             alcanzables de un clic. Sin este chip el usuario no tiene forma de
-             saber que existen ni de revisar si anuló algo por error. --}}
-        @if($totalAnuladas > 0)
-        <a class="kpi kpi-link {{ request('estado') === 'anulada' ? 'activo' : '' }}"
-           href="{{ request('estado') === 'anulada'
-                    ? request()->fullUrlWithQuery(['estado' => null, 'page' => null])
-                    : request()->fullUrlWithQuery(['estado' => 'anulada', 'page' => null]) }}"
-           title="{{ request('estado') === 'anulada' ? 'Quitar el filtro' : 'Ver las incapacidades anuladas' }}">
-            <span class="num" style="color:#64748b">{{ $totalAnuladas }}</span>
-            <span class="lbl">Anuladas</span>
-        </a>
-        @endif
+        {{-- Estados finales que la tabla esconde por defecto, alcanzables de un
+             clic y con la más reciente arriba (ver el orden en index()). Sin
+             estos chips el usuario no tiene forma de revisarlas: "No pagadas"
+             son las rechazadas (cierre definitivo) y "Negadas" las que la
+             entidad negó pero todavía se pueden pelear. --}}
+        @foreach([
+            ['rechazado', $totalNoPagadas, 'No pagadas', '#dc2626', 'Ver las no pagadas (rechazadas), la más reciente primero'],
+            ['negada',    $totalNegadas,   'Negadas',    '#b91c1c', 'Ver las negadas, la más reciente primero'],
+            ['anulada',   $totalAnuladas,  'Anuladas',   '#64748b', 'Ver las anuladas, la más reciente primero'],
+        ] as [$chipEstado, $chipTotal, $chipLbl, $chipColor, $chipTitle])
+            @if($chipTotal > 0)
+            <a class="kpi kpi-link {{ request('estado') === $chipEstado ? 'activo' : '' }}"
+               href="{{ request('estado') === $chipEstado
+                        ? request()->fullUrlWithQuery(['estado' => null, 'page' => null])
+                        : request()->fullUrlWithQuery(['estado' => $chipEstado, 'page' => null, 'orden' => null, 'dir' => null]) }}"
+               title="{{ request('estado') === $chipEstado ? 'Quitar el filtro' : $chipTitle }}">
+                <span class="num" style="color:{{ $chipColor }}">{{ $chipTotal }}</span>
+                <span class="lbl">{{ $chipLbl }}</span>
+            </a>
+            @endif
+        @endforeach
     </div>
 
     <form id="filtro-form" method="GET" class="barra-top-form">

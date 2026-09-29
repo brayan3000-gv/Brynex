@@ -307,6 +307,19 @@ class IncapacidadController extends Controller
             } else {
                 $query->orderBy('valor_esperado', $dir)->orderBy('incapacidades.id', 'desc');
             }
+        } elseif ($pidioEstadoFinal) {
+            // Viendo solo negadas, rechazadas, anuladas...: lo útil es la
+            // última que llegó a ese estado, no la última recibida. La fecha
+            // es la de la gestión que la pasó a ese estado; las migradas del
+            // legacy no la tienen y caen a la fecha de recibido.
+            $query->orderByRaw("
+                COALESCE((
+                    SELECT MAX(g.created_at) FROM gestiones_incapacidad g
+                    WHERE g.incapacidad_id = incapacidades.id
+                      AND g.estado_nuevo = incapacidades.estado
+                      AND g.revertida_at IS NULL
+                ), CAST(incapacidades.fecha_recibido AS datetime)) DESC
+            ")->orderByDesc('incapacidades.id');
         } else {
             // La lista se arma de la constante y no a mano: cuando se agregó
             // 'anulada' esta copia se quedó atrás y las anuladas volvían a
@@ -390,6 +403,7 @@ class IncapacidadController extends Controller
 
         $totalPagadas = $resumen->filter(fn ($v, $k) => in_array($k, self::ESTADOS_PAGADA_COMPLETA))->sum();
         $totalNoPagadas = $resumen->get('rechazado', 0);
+        $totalNegadas = $resumen->get('negada', 0);
         // Chip aparte: no son "no pagadas" (nunca se radicaron) y no deben
         // ensuciar ese contador, pero tienen que ser alcanzables de un clic.
         $totalAnuladas = $resumen->get('anulada', 0);
@@ -447,7 +461,7 @@ class IncapacidadController extends Controller
             ->get(['e.id', 'e.empresa']);
 
         return view('admin.incapacidades.index', compact(
-            'incapacidades', 'resumen', 'totalActivas', 'totalPagadas', 'totalNoPagadas', 'totalAnuladas',
+            'incapacidades', 'resumen', 'totalActivas', 'totalPagadas', 'totalNoPagadas', 'totalNegadas', 'totalAnuladas',
             'sinGestion10dias', 'sinGestion7dias',
             'trabajadores', 'epsList', 'arlList', 'pensionList', 'razonesSociales',
             'smmlv', 'vista', 'busqueda', 'opcionesColumna', 'empresasDisponibles'
