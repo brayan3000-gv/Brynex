@@ -102,19 +102,16 @@ class PautaSemanal extends Command
                         continue;
                     }
 
-                    $sinNada = $f['conversaciones'] === 0;
-                    $muyCara = $referencia !== null && is_finite($f['costo'])
-                        && $f['costo'] > $referencia * $regla['veces'];
-
-                    if (! $sinNada && ! $muyCara) {
+                    $motivo = $this->motivoParaApagar($f, $referencia, $regla);
+                    if (! $motivo) {
                         continue;
                     }
 
-                    $motivo = $sinNada ? 'nadie escribió' : 'cuesta '.round($f['costo'] / max($referencia, 1)).'× la mejor';
                     $this->warn("   apagar #{$f['pieza']->id} — {$motivo}");
+                    $apagadas[] = "#{$f['pieza']->id} ({$motivo})";
 
-                    if (! $this->option('no-pausar') && MetaAdsService::pausarAnuncio($f['pieza'])) {
-                        $apagadas[] = "#{$f['pieza']->id} ({$motivo})";
+                    if (! $this->option('no-pausar')) {
+                        MetaAdsService::pausarAnuncio($f['pieza']);
                     }
                 }
 
@@ -144,6 +141,38 @@ class PautaSemanal extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Por qué apagar esta creatividad, o null si se sostiene.
+     *
+     * Distinguir «no la entregaron» de «nadie escribió» no es cosmético: con el diagnóstico
+     * equivocado uno sale a cambiar el video cuando el problema era que había seis creatividades
+     * peleando por $10.000 diarios y Meta eligió dos.
+     */
+    private function motivoParaApagar(array $f, ?float $referencia, array $regla): ?string
+    {
+        $dias = $f['pieza']->pauta_activada_at
+            ? (int) $f['pieza']->pauta_activada_at->diffInDays(now())
+            : null;
+
+        if ($f['gasto'] < $regla['cop']) {
+            if ($dias === null || $dias < $regla['dias_sin_entrega']) {
+                return null; // todavía puede arrancar
+            }
+
+            return 'Meta no la entregó ('.number_format($f['impresiones']).' impr. en '.$dias.' días)';
+        }
+
+        if ($f['conversaciones'] === 0) {
+            return 'nadie escribió';
+        }
+
+        if ($referencia !== null && is_finite($f['costo']) && $f['costo'] > $referencia * $regla['veces']) {
+            return 'cuesta '.round($f['costo'] / max($referencia, 1)).'× la mejor';
+        }
+
+        return null;
+    }
+
     /** @return string[] */
     private function destinatarios(): array
     {
@@ -155,9 +184,14 @@ class PautaSemanal extends Command
     private function aviso(array $resumen, array $apagadas, int $dias): string
     {
         $texto = "Pauta de los últimos {$dias} días. ".implode('. ', $resumen).'. ';
-        $texto .= $apagadas
-            ? 'Apagadas: '.implode(', ', $apagadas).'.'
-            : 'No se apagó nada: todas sostienen su costo.';
+
+        if (! $apagadas) {
+            $texto .= 'No se apagó nada: todas sostienen su costo.';
+        } else {
+            // En seco hay que decirlo, o el aviso de prueba se lee como si ya hubiera actuado.
+            $verbo = $this->option('no-pausar') ? 'Se apagarían' : 'Apagadas';
+            $texto .= "{$verbo}: ".implode(', ', $apagadas).'.';
+        }
 
         return mb_substr($texto, 0, self::MAX_CARACTERES);
     }

@@ -44,6 +44,18 @@ class MetaAdsService
     private const DIAS_PRUEBA = 3;
 
     /**
+     * Días que se le aguantan a una creatividad que Meta no está entregando.
+     *
+     * Con varias creatividades sobre un presupuesto chico Meta no reparte: elige. #101, #103 y
+     * #105 llevaban veinte días activas con 29 impresiones entre las tres — eso no es una pieza
+     * que falló, es una pieza que nunca salió, y decir «nadie escribió» sería mentir. Pero
+     * tampoco puede quedarse ocupando un cupo para siempre, así que a la semana se apaga
+     * diciendo lo que de verdad pasó. Una semana, no tres días: la fase de aprendizaje de Meta
+     * dura eso y a veces arranca tarde.
+     */
+    private const DIAS_SIN_ENTREGA = 7;
+
+    /**
      * Cuántas veces más caro que la mejor del conjunto puede ser una pieza antes de apagarla.
      *
      * No basta con «tiene pocas conversaciones»: una pieza puede traer menos y costar igual. Lo
@@ -1052,7 +1064,12 @@ class MetaAdsService
     /** Lo que se le exige a una creatividad antes de poder apagarla. */
     public static function reglaDePrueba(): array
     {
-        return ['cop' => self::MIN_PRUEBA_COP, 'dias' => self::DIAS_PRUEBA, 'veces' => self::VECES_PEOR_TOLERADO];
+        return [
+            'cop' => self::MIN_PRUEBA_COP,
+            'dias' => self::DIAS_PRUEBA,
+            'veces' => self::VECES_PEOR_TOLERADO,
+            'dias_sin_entrega' => self::DIAS_SIN_ENTREGA,
+        ];
     }
 
     /**
