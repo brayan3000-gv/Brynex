@@ -144,15 +144,42 @@ class IncapacidadController extends Controller
     }
 
     /**
-     * ¿El usuario pidió expresamente un estado final desde el filtro de columna?
+     * Grupo pedido con clic en una tarjeta de arriba que no es un estado suelto
+     * (los de un solo estado, como Negadas, viajan en `estado`).
+     */
+    private function kpiIncapacidades(Request $request): ?string
+    {
+        $kpi = $request->get('kpi');
+
+        return in_array($kpi, ['sin_gestion', 'pagadas'], true) ? $kpi : null;
+    }
+
+    /**
+     * ¿El usuario pidió expresamente incapacidades cerradas, con un estado final
+     * del filtro de columna o con la tarjeta de Pagadas?
      *
      * Si lo pidió, la regla de ocultar las cerradas no aplica: dejaría la tabla
      * vacía sin explicación.
      */
-    private function pidioEstadoFinal(Request $request): bool
+    private function pidioCerradas(Request $request): bool
     {
-        return $request->filled('estado')
-            && in_array($request->get('estado'), self::ESTADOS_FINALES, true);
+        return ($request->filled('estado') && in_array($request->get('estado'), self::ESTADOS_FINALES, true))
+            || $this->kpiIncapacidades($request) === 'pagadas';
+    }
+
+    /**
+     * Abiertas sin ninguna gestión en los últimos 7 días. Una sola definición
+     * para la tarjeta "Sin gestión +7d" y para la tabla que abre, o el número
+     * y las filas dejarían de coincidir.
+     */
+    private function sinGestionReciente($query, string $tabla)
+    {
+        return $query->whereNotIn("$tabla.estado", self::ESTADOS_FINALES)
+            ->whereNotExists(function ($sub) use ($tabla) {
+                $sub->from('gestiones_incapacidad as g')
+                    ->whereColumn('g.incapacidad_id', "$tabla.id")
+                    ->whereRaw('g.created_at >= DATEADD(day, -7, GETDATE())');
+            });
     }
 
     /**
@@ -210,9 +237,16 @@ class IncapacidadController extends Controller
             });
         }
 
+        $kpi = $this->kpiIncapacidades($request);
+        if ($kpi === 'pagadas') {
+            $query->whereIn('incapacidades.estado', self::ESTADOS_PAGADA_COMPLETA);
+        } elseif ($kpi === 'sin_gestion') {
+            $this->sinGestionReciente($query, 'incapacidades');
+        }
+
         // Si hay búsqueda: mostrar TODAS (pagadas, rechazadas, activas)
         // Sin búsqueda: ocultar estados finales/cerrados por defecto.
-        if (strlen($busqueda) === 0 && ! $request->boolean('con_cerradas') && ! $this->pidioEstadoFinal($request)) {
+        if (strlen($busqueda) === 0 && ! $request->boolean('con_cerradas') && ! $this->pidioCerradas($request)) {
             $query->whereNotIn('estado', self::ESTADOS_FINALES);
         }
 
@@ -267,7 +301,7 @@ class IncapacidadController extends Controller
         $busqueda = $this->busquedaIncapacidades($request);
         $hayBusqueda = strlen($busqueda) > 0;
         $estadosInactivosDefault = self::ESTADOS_FINALES;
-        $pidioEstadoFinal = $this->pidioEstadoFinal($request);
+        $pidioCerradas = $this->pidioCerradas($request);
 
         $this->aplicarFiltrosIncapacidades($request, $query, $alidoId);
 
@@ -307,18 +341,19 @@ class IncapacidadController extends Controller
             } else {
                 $query->orderBy('valor_esperado', $dir)->orderBy('incapacidades.id', 'desc');
             }
-        } elseif ($pidioEstadoFinal) {
-            // Viendo solo negadas, rechazadas, anuladas...: lo útil es la
+        } elseif ($pidioCerradas) {
+            // Viendo solo pagadas, negadas, rechazadas...: lo útil es la
             // última que llegó a ese estado, no la última recibida. La fecha
             // es la de la gestión que la pasó a ese estado; las migradas del
-            // legacy no la tienen y caen a la fecha de recibido.
+            // legacy no la tienen y caen a la de pago, y si no a la de recibido.
             $query->orderByRaw("
                 COALESCE((
                     SELECT MAX(g.created_at) FROM gestiones_incapacidad g
                     WHERE g.incapacidad_id = incapacidades.id
                       AND g.estado_nuevo = incapacidades.estado
                       AND g.revertida_at IS NULL
-                ), CAST(incapacidades.fecha_recibido AS datetime)) DESC
+                ), CAST(incapacidades.fecha_pago AS datetime),
+                   CAST(incapacidades.fecha_recibido AS datetime)) DESC
             ")->orderByDesc('incapacidades.id');
         } else {
             // La lista se arma de la constante y no a mano: cuando se agregó
@@ -408,17 +443,13 @@ class IncapacidadController extends Controller
         // ensuciar ese contador, pero tienen que ser alcanzables de un clic.
         $totalAnuladas = $resumen->get('anulada', 0);
 
-        $sinGestion7dias = DB::table('incapacidades as i')
-            ->where('i.aliado_id', $alidoId)
-            ->whereNull('i.deleted_at')
-            ->whereNull('i.incapacidad_padre_id')
-            ->whereNotIn('i.estado', self::ESTADOS_FINALES)
-            ->whereNotExists(function ($sub) {
-                $sub->from('gestiones_incapacidad as g')
-                    ->whereColumn('g.incapacidad_id', 'i.id')
-                    ->whereRaw('g.created_at >= DATEADD(day, -7, GETDATE())');
-            })
-            ->count();
+        $sinGestion7dias = $this->sinGestionReciente(
+            DB::table('incapacidades as i')
+                ->where('i.aliado_id', $alidoId)
+                ->whereNull('i.deleted_at')
+                ->whereNull('i.incapacidad_padre_id'),
+            'i'
+        )->count();
         $sinGestion10dias = $sinGestion7dias; // backward compat alias
 
         // ── Listas estáticas cacheadas (cambian rara vez) ──────────────────
@@ -453,7 +484,7 @@ class IncapacidadController extends Controller
             ->whereNull('i.deleted_at')
             ->where('e.aliado_id', $alidoId)
             ->when(
-                ! $hayBusqueda && ! $request->boolean('con_cerradas') && ! $pidioEstadoFinal,
+                ! $hayBusqueda && ! $request->boolean('con_cerradas') && ! $pidioCerradas,
                 fn ($q) => $q->whereNotIn('i.estado', $estadosInactivosDefault)
             )
             ->distinct()

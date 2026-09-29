@@ -200,30 +200,43 @@ tbody td{padding:.6rem .85rem;vertical-align:middle;}
     <div class="barra-sep"></div>
 
     <div class="kpi-bar">
-        <div class="kpi ok"><span class="num">{{ $totalActivas }}</span><span class="lbl">Activas</span></div>
-        <div class="kpi danger"><span class="num">{{ $sinGestion7dias }}</span><span class="lbl">Sin gestión +7d</span></div>
-        <div class="kpi">
-            <span class="num" style="color:#059669">{{ $totalPagadas }}</span>
-            <span class="lbl">Pagadas</span>
-        </div>
-        {{-- Estados finales que la tabla esconde por defecto, alcanzables de un
-             clic y con la más reciente arriba (ver el orden en index()). Sin
-             estos chips el usuario no tiene forma de revisarlas: "No pagadas"
-             son las rechazadas (cierre definitivo) y "Negadas" las que la
-             entidad negó pero todavía se pueden pelear. --}}
-        @foreach([
-            ['rechazado', $totalNoPagadas, 'No pagadas', '#dc2626', 'Ver las no pagadas (rechazadas), la más reciente primero'],
-            ['negada',    $totalNegadas,   'Negadas',    '#b91c1c', 'Ver las negadas, la más reciente primero'],
-            ['anulada',   $totalAnuladas,  'Anuladas',   '#64748b', 'Ver las anuladas, la más reciente primero'],
-        ] as [$chipEstado, $chipTotal, $chipLbl, $chipColor, $chipTitle])
-            @if($chipTotal > 0)
-            <a class="kpi kpi-link {{ request('estado') === $chipEstado ? 'activo' : '' }}"
-               href="{{ request('estado') === $chipEstado
-                        ? request()->fullUrlWithQuery(['estado' => null, 'page' => null])
-                        : request()->fullUrlWithQuery(['estado' => $chipEstado, 'page' => null, 'orden' => null, 'dir' => null]) }}"
-               title="{{ request('estado') === $chipEstado ? 'Quitar el filtro' : $chipTitle }}">
-                <span class="num" style="color:{{ $chipColor }}">{{ $chipTotal }}</span>
-                <span class="lbl">{{ $chipLbl }}</span>
+        {{-- Cada tarjeta filtra la tabla de un clic, y un segundo clic quita el
+             filtro. "Activas" es la vista por defecto, así que la marca estar
+             sin filtro. Las que muestran cerradas salen con la más reciente
+             arriba (ver el orden en index()). "No pagadas" son las rechazadas
+             (cierre definitivo) y "Negadas" las que la entidad negó pero
+             todavía se pueden pelear. --}}
+        @php
+            $sinTarjeta = ['estado' => null, 'kpi' => null, 'con_cerradas' => null,
+                           'orden' => null, 'dir' => null, 'page' => null];
+            $tarjetas = [
+                ['activa' => ! request()->filled('estado') && ! request()->filled('kpi') && ! request()->boolean('con_cerradas'),
+                 'query' => [], 'total' => $totalActivas, 'lbl' => 'Activas', 'color' => '#059669',
+                 'title' => 'Ver las que aún requieren gestión', 'siempre' => true],
+                ['activa' => request('kpi') === 'sin_gestion',
+                 'query' => ['kpi' => 'sin_gestion'], 'total' => $sinGestion7dias, 'lbl' => 'Sin gestión +7d', 'color' => '#dc2626',
+                 'title' => 'Ver las activas sin ninguna gestión en los últimos 7 días', 'siempre' => true],
+                ['activa' => request('kpi') === 'pagadas',
+                 'query' => ['kpi' => 'pagadas'], 'total' => $totalPagadas, 'lbl' => 'Pagadas', 'color' => '#059669',
+                 'title' => 'Ver las pagadas, la más reciente primero', 'siempre' => true],
+                ['activa' => request('estado') === 'rechazado',
+                 'query' => ['estado' => 'rechazado'], 'total' => $totalNoPagadas, 'lbl' => 'No pagadas', 'color' => '#dc2626',
+                 'title' => 'Ver las no pagadas (rechazadas), la más reciente primero'],
+                ['activa' => request('estado') === 'negada',
+                 'query' => ['estado' => 'negada'], 'total' => $totalNegadas, 'lbl' => 'Negadas', 'color' => '#b91c1c',
+                 'title' => 'Ver las negadas, la más reciente primero'],
+                ['activa' => request('estado') === 'anulada',
+                 'query' => ['estado' => 'anulada'], 'total' => $totalAnuladas, 'lbl' => 'Anuladas', 'color' => '#64748b',
+                 'title' => 'Ver las anuladas, la más reciente primero'],
+            ];
+        @endphp
+        @foreach($tarjetas as $t)
+            @if($t['total'] > 0 || ! empty($t['siempre']))
+            <a class="kpi kpi-link {{ $t['activa'] ? 'activo' : '' }}"
+               href="{{ request()->fullUrlWithQuery($t['activa'] ? $sinTarjeta : array_merge($sinTarjeta, $t['query'])) }}"
+               title="{{ $t['activa'] && $t['query'] ? 'Quitar el filtro' : $t['title'] }}">
+                <span class="num" style="color:{{ $t['color'] }}">{{ $t['total'] }}</span>
+                <span class="lbl">{{ $t['lbl'] }}</span>
             </a>
             @endif
         @endforeach
@@ -231,7 +244,7 @@ tbody td{padding:.6rem .85rem;vertical-align:middle;}
 
     <form id="filtro-form" method="GET" class="barra-top-form">
         {{-- Los filtros de columna viajan como hidden para no perderse al buscar --}}
-        @foreach(['tipo_entidad', 'estado', 'tipo_incapacidad', 'con_cerradas', 'orden', 'dir'] as $h)
+        @foreach(['tipo_entidad', 'estado', 'kpi', 'tipo_incapacidad', 'con_cerradas', 'orden', 'dir'] as $h)
             @if(request()->filled($h))<input type="hidden" name="{{ $h }}" value="{{ request($h) }}">@endif
         @endforeach
         <input id="inp-busqueda" name="busqueda" value="{{ $busqueda }}"
@@ -274,15 +287,18 @@ tbody td{padding:.6rem .85rem;vertical-align:middle;}
     // valores que el aliado tiene cargados (los arma el controlador).
     $thFiltro = function (string $param, string $label, array $opciones, array $extra = []) {
         $actual = request($param);
+        // Elegir un estado a mano reemplaza la tarjeta de arriba (Pagadas,
+        // Sin gestión): juntos casi siempre dejarían la tabla vacía.
+        $limpia = $param === 'estado' ? ['kpi' => null] : [];
         $items  = [];
         $items[] = [
-            'url'    => request()->fullUrlWithQuery([$param => null, 'page' => null]),
+            'url'    => request()->fullUrlWithQuery([$param => null, 'page' => null] + $limpia),
             'label'  => 'Todos',
             'activo' => ! filled($actual),
         ];
         foreach ($opciones as $valor => $texto) {
             $items[] = [
-                'url'    => request()->fullUrlWithQuery([$param => $valor, 'page' => null]),
+                'url'    => request()->fullUrlWithQuery([$param => $valor, 'page' => null] + $limpia),
                 'label'  => $texto,
                 'activo' => (string) $actual === (string) $valor,
             ];
