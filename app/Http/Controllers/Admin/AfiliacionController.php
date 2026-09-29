@@ -94,7 +94,7 @@ class AfiliacionController extends Controller
             'pension:id,razon_social,formulario_pdf',
             'plan:id,nombre,incluye_eps,incluye_arl,incluye_pension,incluye_caja',
             'tipoModalidad:id,tipo_modalidad,modalidad',
-            'aliado:id,nombre',
+            'aliado:id,nombre,logo',
             'radicados' => fn($q) => $q->with([
                 'movimientos' => fn($m) => $m->reorder()->orderByDesc('id')->limit(3),
                 // Para los días en estado de cada radicado, en una sola consulta.

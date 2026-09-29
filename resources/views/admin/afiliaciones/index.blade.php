@@ -595,6 +595,17 @@ function sortClass($col, $currSort, $currDir) {
     <tr data-ctx='{{ $contexto }}' @if($esRetirado) style="background:#fef2f2;" title="Contrato retirado — la afiliación sí ocurrió en este período" @endif>
         {{-- Empresa --}}
         <td>
+            @if($gestionados)
+            {{-- De qué aliado es la fila. El logo va delante de la razón social
+                 para no robarle alto a la fila con otro renglón. --}}
+            @if($c->aliado?->logo)
+            <img src="{{ asset('storage/'.$c->aliado->logo) }}" alt="{{ $c->aliado->nombre }}" title="{{ $c->aliado->nombre }}"
+                 style="height:17px;width:17px;object-fit:contain;border-radius:4px;background:#fff;vertical-align:middle;margin-right:.2rem;">
+            @else
+            <span title="{{ $c->aliado?->nombre }}"
+                  style="display:inline-block;width:17px;height:17px;line-height:17px;text-align:center;border-radius:4px;background:#ede9fe;color:#7c3aed;font-size:.62rem;font-weight:800;vertical-align:middle;margin-right:.2rem;">{{ mb_strtoupper(mb_substr($c->aliado?->nombre ?? '?', 0, 1)) }}</span>
+            @endif
+            @endif
             @if($c->razonSocial)
             <span class="razon-badge razon-badge-link"
                   title="Ver claves de {{ $c->razonSocial->razon_social }}"
@@ -604,9 +615,6 @@ function sortClass($col, $currSort, $currDir) {
             </span>
             @else
             <span class="razon-badge">—</span>
-            @endif
-            @if($gestionados)
-            <div style="font-size:.62rem;font-weight:800;color:#7c3aed;letter-spacing:.02em;margin-top:.12rem;">{{ $c->aliado?->nombre }}</div>
             @endif
         </td>
 
