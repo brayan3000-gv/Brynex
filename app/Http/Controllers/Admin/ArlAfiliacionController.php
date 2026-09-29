@@ -659,11 +659,13 @@ class ArlAfiliacionController extends Controller
         ]);
     }
 
-    /** Contrato del aliado activo. El filtro por aliado va en el primer query. */
+    /**
+     * Contrato del aliado activo —y, para un usuario de BryNex, de cualquier
+     * aliado suyo, que es como ve las afiliaciones que gestiona (ver
+     * {@see Contrato::paraTramite()}).
+     */
     private function contrato(Request $request, int $id): Contrato
     {
-        $aliadoId = (int) session('aliado_id_activo', Auth::user()->aliado_id);
-
         // OJO: `cliente` se carga aparte, NO con `with()`.
         //
         // La relación filtra por `$this->aliado_id`, que en un eager load todavía
@@ -673,9 +675,8 @@ class ArlAfiliacionController extends Controller
         // Con carga perezosa la relación sí filtra bien.
         // `cliente` se deja en carga perezosa a propósito: `with()` y `load()`
         // rompen el filtro por aliado y traen la ficha de otra empresa.
-        return Contrato::with(['razonSocial', 'eps', 'pension', 'tipoModalidad', 'aliado'])
-            ->where('aliado_id', $aliadoId)
-            ->findOrFail($id);
+        return Contrato::paraTramite($id)
+            ->loadMissing(['razonSocial', 'eps', 'pension', 'tipoModalidad', 'aliado']);
     }
 
     /**

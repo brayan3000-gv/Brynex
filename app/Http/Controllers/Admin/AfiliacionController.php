@@ -80,6 +80,23 @@ class AfiliacionController extends Controller
         $baseContratos = Contrato::whereIn('id', $baseIds)
             ->get(['id','razon_social_id','tipo_modalidad_id','eps_id','arl_id','caja_id','pension_id','estado','encargado_id']);
 
+        // La misma empresa puede estar registrada varias veces —una por aliado,
+        // o repetida dentro del mismo— y en el filtro salía otras tantas. Se
+        // agrupan por NIT (por nombre las que no lo tengan): en el desplegable
+        // es una sola y al escogerla trae las de todos sus registros.
+        $razonesPeriodo = DB::table('razones_sociales')
+            ->whereIn('id', $baseContratos->pluck('razon_social_id')->filter()->unique())
+            ->get(['id', 'razon_social', 'nit']);
+
+        $grupoRazon = [];
+        foreach ($razonesPeriodo->groupBy(fn ($r) => $this->claveRazon($r)) as $hermanas) {
+            $ids = $hermanas->pluck('id')->map(fn ($i) => (int) $i)->all();
+            foreach ($ids as $id) {
+                $grupoRazon[$id] = $ids;
+            }
+        }
+        $razonesDelFiltro = $this->razonesHermanas($rsId);
+
         // ── Contratos base (con eager loading) ──
         $query = Contrato::with([
             'cliente:id,tipo_doc,cedula,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,iva,cod_empresa,celular,correo,direccion_vivienda,barrio,municipio_id,pension_id',
@@ -138,7 +155,7 @@ class AfiliacionController extends Controller
 
         // Filtros opcionales
         if ($encId)     $query->where('encargado_id', $encId);
-        if ($rsId)      $query->where('razon_social_id', $rsId);
+        if ($rsId)      $query->whereIn('razon_social_id', $razonesDelFiltro);
         if ($epsF)      $query->where('eps_id', $epsF);
         if ($arlF)      $query->where('arl_id', $arlF);
         if ($cajaF)     $query->where('caja_id', $cajaF);
@@ -204,7 +221,7 @@ class AfiliacionController extends Controller
         // EPS de LALA y no el catálogo entero. Se excluye su propio filtro para
         // no dejar el desplegable con una sola opción —la escogida— y sin
         // manera de cambiarla.
-        $presentes = function (string $columna) use ($baseContratos, $rsId, $tipoModId, $epsF, $arlF, $cajaF, $pensionF, $estadoCont, $encId) {
+        $presentes = function (string $columna) use ($baseContratos, $rsId, $razonesDelFiltro, $tipoModId, $epsF, $arlF, $cajaF, $pensionF, $estadoCont, $encId) {
             $todos = [
                 'razon_social_id' => $rsId,
                 'tipo_modalidad_id' => $tipoModId,
@@ -218,9 +235,18 @@ class AfiliacionController extends Controller
             $filtros = array_diff_key($todos, [$columna => null]);
 
             $conteo = $baseContratos
-                ->filter(function ($c) use ($filtros) {
+                ->filter(function ($c) use ($filtros, $razonesDelFiltro) {
                     foreach ($filtros as $col => $valor) {
-                        if (($valor ?? '') !== '' && (string) $c->$col !== (string) $valor) {
+                        if (($valor ?? '') === '') {
+                            continue;
+                        }
+                        // La razón social escogida vale por todos los registros
+                        // de esa misma empresa.
+                        $cabe = $col === 'razon_social_id'
+                            ? in_array((int) $c->razon_social_id, $razonesDelFiltro, true)
+                            : (string) $c->$col === (string) $valor;
+
+                        if (! $cabe) {
                             return false;
                         }
                     }
@@ -251,10 +277,23 @@ class AfiliacionController extends Controller
         $conteoCaja = $presentes('caja_id');
         $conteoPension = $presentes('pension_id');
 
-        $razonesDisponibles = DB::table('razones_sociales')
-            ->whereIn('id', $conteoRazon->keys())
-            ->orderBy('razon_social')
-            ->get(['id', 'razon_social']);
+        $razonesDisponibles = $razonesPeriodo
+            ->whereIn('id', $conteoRazon->keys()->all())
+            ->groupBy(fn ($r) => implode(',', $grupoRazon[(int) $r->id] ?? [(int) $r->id]))
+            ->map(function ($hermanas) use ($conteoRazon) {
+                // Se muestra el registro con más afiliaciones: es el que la
+                // gente reconoce, y los demás suelen ser copias a medio llenar.
+                $principal = $hermanas->sortByDesc(fn ($r) => (int) ($conteoRazon[(string) $r->id] ?? 0))->first();
+
+                return (object) [
+                    'id' => $principal->id,
+                    'ids' => $hermanas->pluck('id')->map(fn ($i) => (int) $i)->all(),
+                    'razon_social' => $principal->razon_social,
+                    'n' => $hermanas->sum(fn ($r) => (int) ($conteoRazon[(string) $r->id] ?? 0)),
+                ];
+            })
+            ->sortBy('razon_social')
+            ->values();
 
         $tiposModalidad = \App\Models\TipoModalidad::whereIn('id', $conteoModalidad->keys())
             ->orderBy('orden')->get(['id', 'tipo_modalidad', 'modalidad']);
@@ -331,6 +370,7 @@ class AfiliacionController extends Controller
         $alidoId = $this->resolverAliado($request, $user);
         // El Excel sale de lo mismo que está en pantalla, aliados incluidos.
         $aliados = $this->aliadosDeLaVista($request, $user, $alidoId);
+        $razonesDelFiltro = $this->razonesHermanas($rsId);
 
         // Filtros adicionales
         $rsId       = $request->get('razon_social_id');
@@ -390,7 +430,7 @@ class AfiliacionController extends Controller
         }
 
         if ($encId)     $query->where('encargado_id', $encId);
-        if ($rsId)      $query->where('razon_social_id', $rsId);
+        if ($rsId)      $query->whereIn('razon_social_id', $razonesDelFiltro);
         if ($epsF)      $query->where('eps_id', $epsF);
         if ($arlF)      $query->where('arl_id', $arlF);
         if ($cajaF)     $query->where('caja_id', $cajaF);
@@ -660,6 +700,41 @@ class AfiliacionController extends Controller
             ->values()->all();
 
         return $ids ?: [$alidoId];
+    }
+
+    /** Con qué se reconoce a una empresa: su NIT y, si no lo tiene, su nombre. */
+    private function claveRazon(object $razonSocial): string
+    {
+        $digitos = preg_replace('/\D/', '', (string) $razonSocial->nit);
+
+        return strlen($digitos) >= 8 ? $digitos : mb_strtoupper(trim((string) $razonSocial->razon_social));
+    }
+
+    /**
+     * Los registros de razón social que son la misma empresa que la escogida:
+     * los del mismo NIT. Escoger una en el filtro las trae todas, porque la
+     * empresa está repetida —una vez por aliado— y quien filtra busca la
+     * empresa, no el registro.
+     *
+     * @return int[]
+     */
+    private function razonesHermanas($rsId): array
+    {
+        $rsId = (int) $rsId;
+        if (! $rsId) {
+            return [];
+        }
+
+        $nit = preg_replace('/\D/', '', (string) DB::table('razones_sociales')->where('id', $rsId)->value('nit'));
+        if (strlen($nit) < 8) {
+            return [$rsId];
+        }
+
+        $ids = DB::table('razones_sociales')
+            ->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(nit,''),'-',''),'.',''),' ','') = ?", [$nit])
+            ->pluck('id')->map(fn ($i) => (int) $i)->all();
+
+        return $ids ?: [$rsId];
     }
 
     private function resolverAliado(Request $request, User $user): int

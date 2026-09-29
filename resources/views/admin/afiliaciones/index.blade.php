@@ -441,7 +441,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['razon_social_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="razon_social_id" onchange="this.form.submit()" class="th-select {{ $rsId ? 'activo' : '' }}" style="max-width:105px;">
                         <option value="">↓ Razón Social</option>
-                        @foreach($razonesDisponibles as $rs)<option value="{{ $rs->id }}" {{ $rsId == $rs->id ? 'selected' : '' }}>{{ $rs->razon_social }} ({{ $conteoRazon[(string) $rs->id] ?? 0 }})</option>@endforeach
+                        @foreach($razonesDisponibles as $rs)<option value="{{ $rs->id }}" {{ in_array((int) $rsId, $rs->ids, true) ? 'selected' : '' }}>{{ $rs->razon_social }} ({{ $rs->n }})</option>@endforeach
                     </select>
                 </form>
             </th>
@@ -1791,7 +1791,7 @@ document.addEventListener('click', function(e) {
     const docBtn = e.target.closest('.btn-docs-open');
     if(docBtn) {
         docContextCedula  = docBtn.dataset.cedula;
-        docContextAlidoId = docBtn.dataset.alidoId;
+        docContextAlidoId = docBtn.dataset.aliadoId;   // el documento se guarda en el aliado del contrato
         abrirDocs(docBtn.dataset.radId, docBtn.dataset.nombre);
     }
 });
@@ -2541,6 +2541,7 @@ async function subirDocumento() {
     if(para) fd.append('doc_beneficiario', para);  // vacío = cotizante
 
     try {
+        if (docContextAlidoId) fd.append('aliado_id', docContextAlidoId);
         const r = await fetch(`/admin/clientes/${docContextCedula}/documentos`, { method: 'POST', body: fd });
         const data = await r.json();
         if(r.ok || data.ok) {

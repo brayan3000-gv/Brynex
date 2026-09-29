@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\DocumentoCliente;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -27,7 +28,7 @@ class DocumentoClienteController extends Controller
     /** Lista documentos de un cliente (JSON para AJAX) */
     public function index(Request $request, $cedula)
     {
-        $alidoId = session('aliado_id_activo');
+        $alidoId = $this->aliado($request);
 
         $docs = DocumentoCliente::with('subidor:id,nombre')
             ->where('aliado_id', $alidoId)
@@ -58,7 +59,7 @@ class DocumentoClienteController extends Controller
             'doc_beneficiario' => 'nullable|string|max:20',
         ]);
 
-        $alidoId = session('aliado_id_activo');
+        $alidoId = $this->aliado($request);
         $archivo = $request->file('archivo');
 
         // Nombre único: tipo_timestamp_random.ext
@@ -94,8 +95,7 @@ class DocumentoClienteController extends Controller
     /** Descargar / ver un documento (ruta protegida) */
     public function download($id)
     {
-        $alidoId = session('aliado_id_activo');
-        $doc = DocumentoCliente::where('aliado_id', $alidoId)->findOrFail($id);
+        $doc = $this->documento($id);
 
         if (!Storage::disk('local')->exists($doc->ruta)) {
             abort(404, 'Archivo no encontrado.');
@@ -107,8 +107,7 @@ class DocumentoClienteController extends Controller
     /** Eliminar un documento */
     public function destroy($id)
     {
-        $alidoId = session('aliado_id_activo');
-        $doc = DocumentoCliente::where('aliado_id', $alidoId)->findOrFail($id);
+        $doc = $this->documento($id);
 
         // Eliminar archivo físico
         Storage::disk('local')->delete($doc->ruta);
@@ -116,5 +115,38 @@ class DocumentoClienteController extends Controller
         $doc->delete(); // El Observer registra en bitácora
 
         return back()->with('success', 'Documento eliminado.');
+    }
+
+    /**
+     * Aliado dueño de los documentos: el activo y, para un usuario de BryNex
+     * que está viendo las afiliaciones de otro aliado, el que venga con la
+     * petición. Sin esto, subir un documento desde la lista de afiliaciones
+     * gestionadas lo guardaba en el aliado equivocado.
+     */
+    private function aliado(Request $request): int
+    {
+        $pedido = (int) $request->input('aliado_id');
+        $user = Auth::user();
+
+        if ($pedido && $user?->es_brynex && $user->puedeAccederAliado($pedido)) {
+            return $pedido;
+        }
+
+        return (int) session('aliado_id_activo');
+    }
+
+    /** El documento, si es del aliado activo o de otro aliado del usuario BryNex. */
+    private function documento(int $id): DocumentoCliente
+    {
+        $doc = DocumentoCliente::findOrFail($id);
+        $user = Auth::user();
+
+        abort_unless(
+            (int) $doc->aliado_id === (int) session('aliado_id_activo')
+                || ($user?->es_brynex && $user->puedeAccederAliado((int) $doc->aliado_id)),
+            404
+        );
+
+        return $doc;
     }
 }
