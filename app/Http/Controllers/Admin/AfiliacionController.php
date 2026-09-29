@@ -76,7 +76,7 @@ class AfiliacionController extends Controller
 
         // ── Contratos base (con eager loading) ──
         $query = Contrato::with([
-            'cliente:id,cedula,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,iva,cod_empresa,celular,correo,direccion_vivienda,barrio,municipio_id,pension_id',
+            'cliente:id,tipo_doc,cedula,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido,iva,cod_empresa,celular,correo,direccion_vivienda,barrio,municipio_id,pension_id',
             'cliente.empresa:id,empresa',
             'cliente.municipio:id,nombre,departamento_id',
             'cliente.municipio.departamento:id,nombre',
@@ -102,7 +102,7 @@ class AfiliacionController extends Controller
         if ($estadoCont) $query->where('estado', $estadoCont);
 
         // Búsqueda inteligente por nombre tokenizado y cédula
-        $buscar = $request->get('buscar');
+        $buscar = $this->buscarSinTipoDoc($request->get('buscar'));
         if ($buscar) {
             $query->where(function ($q) use ($buscar) {
                 // Coincidencia directa en cédula (contrato)
@@ -304,7 +304,7 @@ class AfiliacionController extends Controller
         if ($estadoCont) $query->where('estado', $estadoCont);
 
         // Búsqueda inteligente por nombre tokenizado y cédula
-        $buscar = $request->get('buscar');
+        $buscar = $this->buscarSinTipoDoc($request->get('buscar'));
         if ($buscar) {
             $query->where(function ($q) use ($buscar) {
                 // Coincidencia directa en cédula (contrato)
@@ -564,6 +564,19 @@ class AfiliacionController extends Controller
     }
 
     // ── Helpers privados ──────────────────────────────────────────────────
+
+    /**
+     * La lista muestra la cédula con su tipo ("CC 1143944458"). Si pegan eso tal cual
+     * en el buscador, el tipo no es parte del número: sin quitarlo no encontraría nada.
+     */
+    private function buscarSinTipoDoc(?string $buscar): ?string
+    {
+        if ($buscar && preg_match('/^\s*(CC|CE|TI|PA|PE|PT|PP|NI|SC|RC|AS|MS)\s+([\d.\-]+)\s*$/i', $buscar, $m)) {
+            return str_replace(['.', '-'], '', $m[2]);
+        }
+
+        return $buscar;
+    }
 
     private function resolverAliado(Request $request, User $user): int
     {

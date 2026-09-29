@@ -531,6 +531,7 @@ function sortClass($col, $currSort, $currDir) {
         $ctxTipoModalidad  = $c->tipo_modalidad_label ?? ($c->es_dependiente ? 'Dependiente' : 'Independiente');
         $ctxEmpresaCliente = $c->aliado?->nombre ?? '—';
         $ctxCedula         = $c->cedula ?? '—';
+        $ctxTipoDoc        = strtoupper(trim($c->cliente?->tipo_doc ?? ''));
         $ctxArl            = $c->arl_efectiva_nombre ?? ($c->cliente?->arl?->nombre_arl ?? '—');
         $ctxPension        = $c->pension?->razon_social ?? ($c->cliente?->pension?->razon_social ?? '—');
         $ctxEps            = $c->eps?->nombre ?? ($c->cliente?->eps?->nombre ?? '—');
@@ -556,6 +557,7 @@ function sortClass($col, $currSort, $currDir) {
             'tipo_modalidad'  => $ctxTipoModalidad,
             'empresa_cliente' => $ctxEmpresaCliente,
             'cedula'          => $ctxCedula,
+            'tipo_doc'        => $ctxTipoDoc,
             'arl'             => $ctxArl,
             'pension'         => $ctxPension,
             'eps'             => $ctxEps,
@@ -615,9 +617,9 @@ function sortClass($col, $currSort, $currDir) {
                 data-contrato-id="{{ $c->id }}"
                 data-nombre="{{ $ctxNombre }}"
                 data-row-id="{{ $c->id }}"
-                title="Clic para abrir contrato"
+                title="{{ trim($ctxTipoDoc.' '.$ctxCedula) }} · clic para abrir contrato"
                 style="background:none;border:none;padding:0;font-family:monospace;font-size:.77rem;font-weight:700;color:#3b82f6;cursor:pointer;text-decoration:underline dotted;">
-                {{ $c->cedula }}
+                @if($ctxTipoDoc)<span style="color:#94a3b8;font-weight:600;">{{ $ctxTipoDoc }}</span> @endif{{ $c->cedula }}
             </button>
         </td>
 
@@ -2106,7 +2108,7 @@ function abrirVerDatos(ctx, tipoEntidad) {
         { lbl: 'RAZÓN SOCIAL', val: ctx.razon_social },
         { lbl: 'NIT',          val: ctx.nit },
         { lbl: 'NOMBRE',       val: ctx.nombre_completo || ctx.nombre },
-        { lbl: 'CÉDULA',       val: ctx.cedula },
+        { lbl: 'CÉDULA',       val: (ctx.tipo_doc ? ctx.tipo_doc + ' ' : '') + (ctx.cedula || '—') },
         { lbl: 'ARL',          val: ctx.arl },
         { lbl: 'PENSIÓN',      val: ctx.pension },
         { lbl: 'SALARIO',      val: salarioFmt },
