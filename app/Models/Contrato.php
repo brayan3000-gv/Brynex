@@ -412,6 +412,44 @@ class Contrato extends BaseModel
         ];
     }
 
+    /**
+     * Lo que se le declara a la caja de compensación: sueldo y jornada.
+     *
+     * En Tiempo Parcial el salario del contrato es el de pensión —un TP(7-14)
+     * son 7 días de AFP y 14 de caja—, así que declararlo tal cual deja al
+     * trabajador con la mitad del subsidio que le corresponde. La caja cotiza
+     * por sus propias semanas (Decreto 2616 de 2013): el sueldo es el mínimo
+     * por semana cotizada, y la jornada tiene que ir en la misma proporción
+     * porque los portales validan que una cosa cuadre con la otra
+     * (Comfandi: "El salario no es proporcional a las horas diarias trabajadas").
+     *
+     * 'salario_mes' es el sueldo de la jornada completa, con el que el portal
+     * hace esa proporción; 'salario' es ya el declarado para esa jornada.
+     *
+     * @return array{salario: int, salario_mes: int, horas: int, dias: int}
+     */
+    public function baseCaja(): array
+    {
+        $salario = (int) round((float) ($this->salario ?: $this->ibc));
+
+        if (! $this->tipoModalidad?->esTiempoParcial()) {
+            return ['salario' => $salario, 'salario_mes' => $salario, 'horas' => 8, 'dias' => 30];
+        }
+
+        $dias = (int) $this->diasTiempoParcial()['caja'];
+        $semanas = max(1, min(4, (int) ceil($dias / 7)));
+        $sm = (int) ConfiguracionBrynex::salarioMinimo();
+
+        return [
+            // El IBC semanal queda fraccionado (SM/4): se redondea hacia arriba,
+            // igual que en la planilla, para que no se separen por un peso.
+            'salario' => (int) ceil($sm / 4 * $semanas),
+            'salario_mes' => $sm,
+            'horas' => 2 * $semanas,   // 8 horas es el mes completo (4 semanas)
+            'dias' => $dias,
+        ];
+    }
+
     // ── COTIZADOR ──
 
     /**

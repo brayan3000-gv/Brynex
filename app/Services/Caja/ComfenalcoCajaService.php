@@ -24,6 +24,8 @@ use RuntimeException;
  */
 class ComfenalcoCajaService
 {
+    use ContactoDeCaja;
+
     public const ENTIDAD = 'comfenalco_caja';
 
     public const HOST = 'virtual.comfenalcovalle.com.co';
@@ -93,7 +95,7 @@ class ComfenalcoCajaService
         if (! $contrato->fecha_ingreso) {
             $problemas[] = 'El contrato no tiene fecha de ingreso.';
         }
-        if (! (int) round((float) ($contrato->salario ?: $contrato->ibc))) {
+        if (! $contrato->baseCaja()['salario']) {
             $problemas[] = 'El contrato no tiene salario.';
         }
         if ($radicado?->estado === Radicado::ESTADO_OK) {
@@ -114,15 +116,28 @@ class ComfenalcoCajaService
         if (! $cliente?->direccion_vivienda) {
             $avisos[] = 'El cliente no tiene dirección: habrá que escribirla en el portal (sin # ni -).';
         }
-        if (! $cliente?->correo) {
-            $avisos[] = 'El cliente no tiene correo: se usa el del buzón del aliado.';
-        }
         $beneficiarios = $cliente ? $cliente->beneficiarios()->where('aliado_id', $contrato->aliado_id)->get() : collect();
         if ($beneficiarios->isNotEmpty()) {
             $avisos[] = 'El cliente tiene '.$beneficiarios->count().' beneficiario(s) en BryNex: agrégalos en el paso Beneficiarios del portal o después con una adición.';
         }
         if ($radicado?->numero_radicado && $radicado->estado === Radicado::ESTADO_TRAMITE) {
             $avisos[] = "Este radicado ya está en trámite (formulario {$radicado->numero_radicado}).";
+        }
+
+        // El salario que se le declara a la caja no es el del contrato cuando es
+        // Tiempo Parcial: ese es el de pensión (ver Contrato::baseCaja()).
+        $base = $contrato->baseCaja();
+
+        // Si el trabajador no tiene correo se usa el de su empleador, que es
+        // quien hace el trámite y a quien la caja le responde.
+        $correo = $this->correo($cliente->correo)
+            ?: $this->correoRazonSocial($rs)
+            ?: $this->correo($contrato->aliado?->correo, config("afiliaciones_correo.buzones.{$contrato->aliado_id}"));
+
+        if ($correo && ! $cliente->correo) {
+            $avisos[] = "El cliente no tiene correo: se usa {$correo}.";
+        } elseif (! $correo) {
+            $avisos[] = 'Nadie tiene correo (ni el cliente, ni la empresa, ni el aliado): habrá que escribirlo en el portal.';
         }
 
         $nombre = trim(implode(' ', array_filter([$cliente?->primer_nombre, $cliente?->segundo_nombre, $cliente?->primer_apellido, $cliente?->segundo_apellido])));
@@ -133,7 +148,7 @@ class ComfenalcoCajaService
             'nit'          => $rs?->nit,
             'caja'         => $caja,
             'fecha_ingreso' => $contrato->fecha_ingreso?->toDateString(),
-            'salario'      => (int) round((float) ($contrato->salario ?: $contrato->ibc)),
+            'salario'      => $base['salario'],
             'residencia'   => trim(($cliente?->municipio?->nombre ?? '').' · '.($cliente?->departamento?->nombre ?? ''), ' ·'),
             'direccion'    => $cliente?->direccion_vivienda,
             'barrio'       => $cliente?->barrio,
@@ -156,9 +171,9 @@ class ComfenalcoCajaService
             'barrio'       => (string) $cliente->barrio,
             'direccion'    => (string) $cliente->direccion_vivienda,
             'celular'      => $celular,
-            'correo'       => $cliente->correo ?: config("afiliaciones_correo.buzones.{$contrato->aliado_id}"),
+            'correo'       => $correo,
             'fechaIngreso' => $contrato->fecha_ingreso->format('Y-m-d'),
-            'salario'      => (int) round((float) ($contrato->salario ?: $contrato->ibc)),
+            'salario'      => $base['salario'],
             'cargoTexto'   => mb_strtoupper(trim((string) $contrato->cargo)) ?: 'APOYO ADMINISTRATIVO',
         ]];
     }

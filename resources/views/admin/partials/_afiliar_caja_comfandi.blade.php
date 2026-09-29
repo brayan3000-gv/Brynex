@@ -179,6 +179,7 @@ async function abrirCajaComfandi(contratoId) {
         li('Empresa', r.razon_social ? `${r.razon_social} (NIT ${r.nit})` : null) +
         li('Caja', r.caja) + li('Ingreso', cfdFmt(r.fecha_ingreso)) +
         li('Salario', r.salario ? '$' + Number(r.salario).toLocaleString('es-CO') : null) +
+        li('Jornada', r.jornada) +
         li('Residencia', r.residencia) + li('Celular', r.celular) + li('Correo', r.correo) +
         li('Usuario del portal', r.usuario_portal) +
         li('Radicado de caja', r.estado_radicado ? `${r.estado_radicado}${r.numero_radicado ? ' · ' + r.numero_radicado : ''}` : null);
@@ -194,7 +195,9 @@ async function abrirCajaComfandi(contratoId) {
     cfdOpciones(cfdEl('cfdEstadoCivil'), cfdPrep.listas?.estados_civil, '1');
     cfdOpciones(cfdEl('cfdContrato'), cfdPrep.listas?.contratos, '02');
     cfdOpciones(cfdEl('cfdSalario'), cfdPrep.listas?.salarios, '02');
-    cfdOpciones(cfdEl('cfdHoras'), cfdPrep.listas?.horas, '8');
+    // La jornada la propone el contrato: un Tiempo Parcial de 14 días es media
+    // jornada, y el sueldo declarado tiene que ir en esa misma proporción.
+    cfdOpciones(cfdEl('cfdHoras'), cfdPrep.listas?.horas, String(cfdPrep.portal?.horas || '8'));
     cfdOpciones(cfdEl('cfdNivel'), cfdPrep.listas?.niveles, '10');
     cfdEl('cfdOcupacion').value = cfdPrep.portal?.ocupacionTexto || '';
     cfdEl('cfdDireccion').value = cfdPrep.portal?.direccion || cfdPrep.resumen?.direccion || '';
@@ -267,10 +270,15 @@ async function abrirPortalComfandi() {
 
 // Comfandi exige que el sueldo declarado sea proporcional a la jornada: 240
 // horas al mes es la completa. Con 4 horas (120 al mes) sobre el mínimo da
-// 875.453, el mismo salario que BryNex usa en un Tiempo Parcial (14).
-function cfdSueldoPorHoras(salario, horas) {
+// 875.453, que es lo que le corresponde a un Tiempo Parcial de 14 días.
+//
+// La proporción se hace siempre sobre el sueldo de jornada completa
+// (salarioMes), nunca sobre el ya proporcional: si no, cambiar la jornada en
+// el modal lo volvía a partir y el trabajador quedaba con la mitad.
+function cfdSueldoPorHoras(horas) {
     const h = Math.max(1, Math.min(8, parseInt(horas, 10) || 8));
-    return Math.round(Number(salario || 0) * (h * 30) / 240);
+    const mes = Number(cfdPrep.portal?.salarioMes || cfdPrep.portal?.salario || 0);
+    return Math.round(mes * (h * 30) / 240);
 }
 
 function cfdDatosPortal() {
@@ -284,12 +292,12 @@ function cfdDatosPortal() {
         nivel: cfdEl('cfdNivel').value,
         ocupacionTexto: cfdEl('cfdOcupacion').value.trim(),
         direccion: cfdEl('cfdDireccion').value.trim(),
-        salario: cfdSueldoPorHoras(cfdPrep.portal?.salario, horas),
+        salario: cfdSueldoPorHoras(horas),
     });
 }
 
 function cfdAvisarSueldo() {
-    const s = cfdSueldoPorHoras(cfdPrep.portal?.salario, cfdEl('cfdHoras').value);
+    const s = cfdSueldoPorHoras(cfdEl('cfdHoras').value);
     cfdEl('cfdSueldoAviso').textContent = 'Sueldo declarado al portal: $' + s.toLocaleString('es-CO')
         + ' (Comfandi exige que sea proporcional a la jornada; el IBC de la planilla va aparte).';
 }

@@ -24,6 +24,8 @@ use RuntimeException;
  */
 class ComfandiCajaService
 {
+    use ContactoDeCaja;
+
     public const ENTIDAD = 'comfandi_caja';
 
     public const HOST = 'afiliaciones.sucursalcomfandi.com';
@@ -106,7 +108,7 @@ class ComfandiCajaService
         } elseif ($contrato->fecha_ingreso->year < 2022) {
             $problemas[] = 'El calendario de Comfandi no baja de 2022.';
         }
-        if (! (int) round((float) ($contrato->salario ?: $contrato->ibc))) {
+        if (! $contrato->baseCaja()['salario']) {
             $problemas[] = 'El contrato no tiene salario.';
         }
         if ($radicado?->estado === Radicado::ESTADO_OK) {
@@ -127,35 +129,44 @@ class ComfandiCajaService
             $avisos[] = 'El cliente no tiene género en BryNex: escógelo abajo, el portal lo exige.';
         }
 
-        // El portal exige celular y dirección, y sin ellos no se puede radicar.
-        // Cuando el cliente no los tiene se usan los del aliado, que es quien
-        // hace el trámite y quien recibe lo que la caja mande: preferible eso a
-        // dejar a la persona sin afiliar. Va como aviso, no en silencio, para
-        // que se complete el dato de verdad cuando se sepa.
+        // El portal exige celular, dirección y correo, y sin ellos no se puede
+        // radicar. Cuando el cliente no los tiene se usan los de la razón
+        // social —el empleador que hace el trámite y a quien la caja le
+        // responde— y solo si ella tampoco los tiene, los del aliado.
+        // Preferible eso a dejar a la persona sin afiliar, pero va como aviso,
+        // no en silencio, para que se complete el dato de verdad cuando se sepa.
         $aliado = $contrato->aliado;
 
-        $celular = collect([$cliente?->celular, $cliente?->telefono])
-            ->flatMap(fn ($t) => preg_split('/[,;\/|]| - /', (string) $t))
-            ->map(fn ($t) => preg_replace('/\D/', '', $t))->first(fn ($t) => strlen($t) === 10) ?: null;
+        $celular = $this->celular($cliente?->celular, $cliente?->telefono);
 
         if (! $celular) {
-            $celular = collect([$aliado?->celular, $aliado?->telefono])
-                ->flatMap(fn ($t) => preg_split('/[,;\/|]| - /', (string) $t))
-                ->map(fn ($t) => preg_replace('/\D/', '', $t))->first(fn ($t) => strlen($t) === 10) ?: null;
+            $celular = $this->celular($rs?->tel_formulario, $rs?->telefonos);
+            $de = $rs?->razon_social ?: 'la empresa';
+
+            if (! $celular) {
+                $celular = $this->celular($aliado?->celular, $aliado?->telefono);
+                $de = $aliado?->nombre ?: 'el aliado';
+            }
 
             $celular
-                ? $avisos[] = "El cliente no tiene celular: se usa el de {$aliado->nombre} ({$celular})."
-                : $problemas[] = 'El cliente no tiene celular de 10 dígitos y el aliado tampoco: el portal lo exige.';
+                ? $avisos[] = "El cliente no tiene celular: se usa el de {$de} ({$celular})."
+                : $problemas[] = 'No hay celular de 10 dígitos ni del cliente, ni de la razón social, ni del aliado: el portal lo exige.';
         }
 
         $direccion = $this->direccion((string) $cliente?->direccion_vivienda);
 
         if (! $direccion) {
-            $direccion = $this->direccion((string) $aliado?->direccion);
+            $direccion = $this->direccion((string) ($rs?->dir_formulario ?: $rs?->direccion));
+            $de = $rs?->razon_social ?: 'la empresa';
+
+            if (! $direccion) {
+                $direccion = $this->direccion((string) $aliado?->direccion);
+                $de = $aliado?->nombre ?: 'el aliado';
+            }
 
             $direccion
-                ? $avisos[] = "El cliente no tiene dirección: se usa la de {$aliado->nombre} ({$direccion})."
-                : $problemas[] = 'El cliente no tiene dirección y el aliado tampoco: el portal la exige (mira la "Última dirección registrada" que muestra Comfandi).';
+                ? $avisos[] = "El cliente no tiene dirección: se usa la de {$de} ({$direccion})."
+                : $problemas[] = 'No hay dirección del cliente, ni de la razón social, ni del aliado: el portal la exige (mira la "Última dirección registrada" que muestra Comfandi).';
         }
 
         $ciudad = (string) ($cliente?->municipio_id ?: '');
@@ -166,13 +177,29 @@ class ComfandiCajaService
             $ciudad = '76001';
         }
 
-        $correo = $cliente?->correo ?: config("afiliaciones_correo.buzones.{$contrato->aliado_id}");
-        if (! $cliente?->correo) {
-            $avisos[] = 'El cliente no tiene correo: se usa el del buzón del aliado.';
+        $correo = $this->correo($cliente?->correo);
+
+        if (! $correo) {
+            $correo = $this->correoRazonSocial($rs);
+            $de = $rs?->razon_social ?: 'la empresa';
+
+            if (! $correo) {
+                $correo = $this->correo($aliado?->correo, config("afiliaciones_correo.buzones.{$contrato->aliado_id}"));
+                $de = $aliado?->nombre ?: 'el aliado';
+            }
+
+            $correo
+                ? $avisos[] = "El cliente no tiene correo: se usa el de {$de} ({$correo})."
+                : $problemas[] = 'No hay correo del cliente, ni de la razón social, ni del aliado: el portal lo exige.';
         }
         if ($radicado?->numero_radicado && $radicado->estado === Radicado::ESTADO_TRAMITE) {
             $avisos[] = "Este radicado ya está en trámite (N° {$radicado->numero_radicado}).";
         }
+
+        // En Tiempo Parcial el salario del contrato es el de pensión (un
+        // TP(7-14) son 7 días de AFP y 14 de caja): a la caja se le declara lo
+        // suyo, con la jornada en la misma proporción.
+        $base = $contrato->baseCaja();
 
         $nombre = trim(implode(' ', array_filter([$cliente?->primer_nombre, $cliente?->segundo_nombre, $cliente?->primer_apellido, $cliente?->segundo_apellido])));
         $resumen = [
@@ -182,7 +209,8 @@ class ComfandiCajaService
             'nit' => $rs?->nit,
             'caja' => $caja,
             'fecha_ingreso' => $contrato->fecha_ingreso?->toDateString(),
-            'salario' => (int) round((float) ($contrato->salario ?: $contrato->ibc)),
+            'salario' => $base['salario'],
+            'jornada' => $base['horas'].' horas diarias'.($base['dias'] < 30 ? " · caja por {$base['dias']} días" : ''),
             'residencia' => $cliente?->municipio?->nombre,
             'direccion' => $direccion,
             'celular' => $celular,
@@ -216,9 +244,12 @@ class ComfandiCajaService
             'celular' => $celular,
             'correo' => $correo,
             'fechaIngreso' => $contrato->fecha_ingreso->format('Y-m-d'),
-            'salario' => (int) round((float) ($contrato->salario ?: $contrato->ibc)),
+            'salario' => $base['salario'],
+            // El modal deja cambiar la jornada y rehace la proporción con esto.
+            'salarioMes' => $base['salario_mes'],
+            'horas' => (string) $base['horas'],
             'ocupacionTexto' => $this->ocupacion((string) $contrato->cargo),
-        ] + array_diff_key(self::PREDETERMINADOS, ['ocupacion' => null])];
+        ] + array_diff_key(self::PREDETERMINADOS, ['ocupacion' => null, 'horas' => null])];
     }
 
     /**
@@ -411,23 +442,6 @@ class ComfandiCajaService
 
         // Si ya trae el sector (urbano o rural) se respeta; si no, urbano.
         return preg_match('/\bSECTOR\s+(URBANO|RURAL)\b/', $limpia) ? $limpia : $limpia.' SECTOR URBANO';
-    }
-
-    /**
-     * Sueldo que espera el portal para esa jornada.
-     *
-     * Comfandi valida que el salario sea proporcional a las horas ("El salario
-     * no es proporcional a las horas diarias trabajadas"): la jornada completa
-     * son 240 horas al mes (8 × 30), así que el sueldo declarado es el del
-     * contrato por la fracción de jornada. Con 4 horas —120 al mes— sobre el
-     * mínimo da 875.453, que es además lo que BryNex ya usa como salario de un
-     * Tiempo Parcial (14). Ojo: no es el IBC de la planilla, que va por 14/30.
-     */
-    public static function sueldoPorHoras(int $salario, int $horasDiarias): int
-    {
-        $horasDiarias = max(1, min(8, $horasDiarias));
-
-        return (int) round($salario * ($horasDiarias * 30) / 240);
     }
 
     private function marcar(Radicado $radicado, ?string $numero, string $estado, string $observacion, ?int $usuarioId): void
