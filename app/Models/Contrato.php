@@ -441,9 +441,11 @@ class Contrato extends BaseModel
         $sm = (int) ConfiguracionBrynex::salarioMinimo();
 
         return [
-            // El IBC semanal queda fraccionado (SM/4): se redondea hacia arriba,
-            // igual que en la planilla, para que no se separen por un peso.
-            'salario' => (int) ceil($sm / 4 * $semanas),
+            // El sueldo semanal queda fraccionado (SM/4): se redondea al más
+            // cercano, que es la cuenta que hace el portal al validar la
+            // proporción. El IBC de la planilla va por su lado y redondea
+            // hacia arriba, así que pueden separarse por un peso.
+            'salario' => (int) round($sm / 4 * $semanas),
             'salario_mes' => $sm,
             'horas' => 2 * $semanas,   // 8 horas es el mes completo (4 semanas)
             'dias' => $dias,
