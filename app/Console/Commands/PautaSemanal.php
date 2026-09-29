@@ -108,7 +108,7 @@ class PautaSemanal extends Command
                     }
 
                     $this->warn("   apagar #{$f['pieza']->id} — {$motivo}");
-                    $apagadas[] = "#{$f['pieza']->id} ({$motivo})";
+                    $apagadas[] = "#{$f['pieza']->id} {$motivo}";
 
                     if (! $this->option('no-pausar')) {
                         MetaAdsService::pausarAnuncio($f['pieza']);
