@@ -116,7 +116,7 @@ class BrynexRazonSocialService
         $ids = $this->razonSocialIds($ficha);
 
         if (! $ids) {
-            return ['total' => 0, 'por_aliado' => []];
+            return ['total' => 0, 'por_aliado' => collect()];
         }
 
         $filas = DB::table('contratos as c')
