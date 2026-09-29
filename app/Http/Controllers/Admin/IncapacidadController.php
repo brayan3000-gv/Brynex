@@ -262,7 +262,15 @@ class IncapacidadController extends Controller
             $query->where('tipo_entidad', $request->tipo_entidad);
         }
         if ($request->filled('estado')) {
-            $query->where('estado', $request->estado);
+            // Familias donde la original O cualquier prórroga está en ese
+            // estado: la fila muestra la familia, y una original pagada no
+            // debe esconder una prórroga radicada.
+            $estado = $request->estado;
+            $query->where(fn ($q) => $q->where('incapacidades.estado', $estado)
+                ->orWhereExists(fn ($s) => $s->from('incapacidades as pe')
+                    ->whereColumn('pe.incapacidad_padre_id', 'incapacidades.id')
+                    ->whereNull('pe.deleted_at')
+                    ->where('pe.estado', $estado)));
         }
         if ($request->filled('tipo_incapacidad')) {
             $query->where('tipo_incapacidad', $request->tipo_incapacidad);
@@ -393,17 +401,21 @@ class IncapacidadController extends Controller
         } elseif ($pidioCerradas) {
             // Viendo solo pagadas, negadas, rechazadas...: lo útil es la
             // última que llegó a ese estado, no la última recibida. La fecha
-            // es la de la gestión que la pasó a ese estado; las migradas del
-            // legacy no la tienen y caen a la de pago, y si no a la de recibido.
-            $query->orderByRaw("
+            // es la de la gestión que pasó a ese estado a cualquier miembro de
+            // la familia (el pedido en el filtro, o el de la original si vino
+            // de la tarjeta de Pagadas); las migradas del legacy no la tienen
+            // y caen a la de pago, y si no a la de recibido.
+            $estadoPedido = $request->filled('estado') ? (string) $request->get('estado') : null;
+            $query->orderByRaw('
                 COALESCE((
                     SELECT MAX(g.created_at) FROM gestiones_incapacidad g
-                    WHERE g.incapacidad_id = incapacidades.id
-                      AND g.estado_nuevo = incapacidades.estado
+                    JOIN incapacidades gm ON gm.id = g.incapacidad_id
+                    WHERE (gm.id = incapacidades.id OR gm.incapacidad_padre_id = incapacidades.id)
+                      AND g.estado_nuevo = '.($estadoPedido !== null ? '?' : 'incapacidades.estado').'
                       AND g.revertida_at IS NULL
                 ), CAST(incapacidades.fecha_pago AS datetime),
                    CAST(incapacidades.fecha_recibido AS datetime)) DESC
-            ")->orderByDesc('incapacidades.id');
+            ', $estadoPedido !== null ? [$estadoPedido] : [])->orderByDesc('incapacidades.id');
         } else {
             // Primero las familias con algo pendiente, con la misma regla que
             // decide qué se esconde: cuando esta copia se armaba a mano se quedó
@@ -496,12 +508,16 @@ class IncapacidadController extends Controller
         $incapacidades->setCollection($items);
 
         // ── KPIs: una sola consulta GROUP BY en vez de tres queries ───────
-        $resumen = DB::table('incapacidades')
-            ->where('aliado_id', $alidoId)
-            ->whereNull('deleted_at')
-            ->whereNull('incapacidad_padre_id')
-            ->select('estado', DB::raw('COUNT(*) as total'))
-            ->groupBy('estado')
+        // Familias por estado de CUALQUIER miembro, la misma regla del filtro
+        // de Estado: cada tarjeta de un estado abre ese filtro y tienen que
+        // coincidir. Una familia puede contar en dos estados.
+        $resumen = DB::table('incapacidades as i')
+            ->leftJoin('incapacidades as ip', 'ip.id', '=', 'i.incapacidad_padre_id')
+            ->where('i.aliado_id', $alidoId)
+            ->whereNull('i.deleted_at')
+            ->where(fn ($q) => $q->whereNull('i.incapacidad_padre_id')->orWhereNull('ip.deleted_at'))
+            ->select('i.estado', DB::raw('COUNT(DISTINCT ISNULL(i.incapacidad_padre_id, i.id)) as total'))
+            ->groupBy('i.estado')
             ->pluck('total', 'estado');
 
         // Activas y Pagadas se cuentan por familia, con las mismas condiciones
@@ -582,11 +598,13 @@ class IncapacidadController extends Controller
      */
     private function opcionesFiltroColumna(int $alidoId): array
     {
-        $distinct = function (string $columna) use ($alidoId) {
+        // $soloRaiz = false para el estado: el filtro busca en las prórrogas
+        // también, así que debe ofrecer los estados que solo tiene una prórroga.
+        $distinct = function (string $columna, bool $soloRaiz = true) use ($alidoId) {
             return DB::table('incapacidades')
                 ->where('aliado_id', $alidoId)
                 ->whereNull('deleted_at')
-                ->whereNull('incapacidad_padre_id')
+                ->when($soloRaiz, fn ($q) => $q->whereNull('incapacidad_padre_id'))
                 ->whereNotNull($columna)
                 ->where($columna, '!=', '')
                 ->distinct()
@@ -610,7 +628,7 @@ class IncapacidadController extends Controller
 
         return [
             'entidad' => $etiquetar($distinct('tipo_entidad'), Incapacidad::TIPOS_ENTIDAD, fn ($v) => strtoupper($v)),
-            'estado' => $etiquetar($distinct('estado'), Incapacidad::ESTADOS),
+            'estado' => $etiquetar($distinct('estado', false), Incapacidad::ESTADOS),
             'tipo' => $etiquetar($distinct('tipo_incapacidad'), Incapacidad::TIPOS_INCAPACIDAD),
         ];
     }
