@@ -41,6 +41,25 @@ class IncapacidadController extends Controller
     ];
 
     /**
+     * Estados en los que ya no queda NADA pendiente: ni trámite con la entidad
+     * ni plata por entregar. Es la regla de la lista (tarjeta de Activas,
+     * "Sin gestión +7d", qué se esconde por defecto) y del semáforo.
+     *
+     * Se diferencia de ESTADOS_FINALES en los pagos a medias: con
+     * 'pagada_razon_social' la empresa tiene la plata y falta entregársela al
+     * afiliado, y con 'pagada_afiliado' falta el reembolso. Contarlas como
+     * cerradas las escondía de Activas: en sep-2026 Brygar tenía $8,9M así y
+     * el aliado 6 $15,9M, sin que nadie las viera.
+     */
+    public const ESTADOS_CERRADOS = [
+        'pagada',                 // legacy
+        'cierre_exitoso',
+        'rechazado',
+        'negada',
+        'anulada',
+    ];
+
+    /**
      * Estados que cuentan como "pago completo" para el KPI de Pagadas.
      *
      * 'pagada' (legacy) y 'cierre_exitoso' significan lo mismo — el ciclo de pago
@@ -168,16 +187,47 @@ class IncapacidadController extends Controller
     }
 
     /**
-     * Abiertas sin ninguna gestión en los últimos 7 días. Una sola definición
-     * para la tarjeta "Sin gestión +7d" y para la tabla que abre, o el número
-     * y las filas dejarían de coincidir.
+     * SQL: a la familia de la incapacidad raíz `$tabla` (original + prórrogas)
+     * le queda algo pendiente.
+     *
+     * La lista muestra una fila por familia, así que se juzga la familia y no
+     * la original sola. Mirando solo la original, una cerrada con prórrogas
+     * todavía radicadas desaparecía de Activas (28 familias en sep-2026) y
+     * salía en Pagadas aunque la plata de las prórrogas no se hubiera entregado.
+     */
+    private function sqlFamiliaAbierta(string $tabla): string
+    {
+        $cerrados = "'".implode("','", self::ESTADOS_CERRADOS)."'";
+
+        return "($tabla.estado NOT IN ($cerrados) OR EXISTS (
+            SELECT 1 FROM incapacidades pr
+            WHERE pr.incapacidad_padre_id = $tabla.id AND pr.deleted_at IS NULL
+              AND pr.estado NOT IN ($cerrados)
+        ))";
+    }
+
+    /** Familias pagadas del todo: la original pagada y nada pendiente en ninguna. */
+    private function soloPagadas($query, string $tabla)
+    {
+        return $query->whereIn("$tabla.estado", self::ESTADOS_PAGADA_COMPLETA)
+            ->whereRaw('NOT '.$this->sqlFamiliaAbierta($tabla));
+    }
+
+    /**
+     * Familias abiertas sin ninguna gestión en los últimos 7 días, en ninguno
+     * de sus miembros: las gestiones de una prórroga se registran en la
+     * prórroga, no en la original. Una sola definición para la tarjeta "Sin
+     * gestión +7d" y para la tabla que abre, o el número y las filas dejarían
+     * de coincidir.
      */
     private function sinGestionReciente($query, string $tabla)
     {
-        return $query->whereNotIn("$tabla.estado", self::ESTADOS_FINALES)
+        return $query->whereRaw($this->sqlFamiliaAbierta($tabla))
             ->whereNotExists(function ($sub) use ($tabla) {
                 $sub->from('gestiones_incapacidad as g')
-                    ->whereColumn('g.incapacidad_id', "$tabla.id")
+                    ->join('incapacidades as gm', 'gm.id', '=', 'g.incapacidad_id')
+                    ->where(fn ($w) => $w->whereColumn('gm.id', "$tabla.id")
+                        ->orWhereColumn('gm.incapacidad_padre_id', "$tabla.id"))
                     ->whereRaw('g.created_at >= DATEADD(day, -7, GETDATE())');
             });
     }
@@ -239,15 +289,15 @@ class IncapacidadController extends Controller
 
         $kpi = $this->kpiIncapacidades($request);
         if ($kpi === 'pagadas') {
-            $query->whereIn('incapacidades.estado', self::ESTADOS_PAGADA_COMPLETA);
+            $this->soloPagadas($query, 'incapacidades');
         } elseif ($kpi === 'sin_gestion') {
             $this->sinGestionReciente($query, 'incapacidades');
         }
 
         // Si hay búsqueda: mostrar TODAS (pagadas, rechazadas, activas)
-        // Sin búsqueda: ocultar estados finales/cerrados por defecto.
+        // Sin búsqueda: ocultar las familias cerradas por defecto.
         if (strlen($busqueda) === 0 && ! $request->boolean('con_cerradas') && ! $this->pidioCerradas($request)) {
-            $query->whereNotIn('estado', self::ESTADOS_FINALES);
+            $query->whereRaw($this->sqlFamiliaAbierta('incapacidades'));
         }
 
         return $query;
@@ -300,7 +350,6 @@ class IncapacidadController extends Controller
         // ── Filtros ─────────────────────────────────────────────────────────
         $busqueda = $this->busquedaIncapacidades($request);
         $hayBusqueda = strlen($busqueda) > 0;
-        $estadosInactivosDefault = self::ESTADOS_FINALES;
         $pidioCerradas = $this->pidioCerradas($request);
 
         $this->aplicarFiltrosIncapacidades($request, $query, $alidoId);
@@ -356,16 +405,15 @@ class IncapacidadController extends Controller
                    CAST(incapacidades.fecha_recibido AS datetime)) DESC
             ")->orderByDesc('incapacidades.id');
         } else {
-            // La lista se arma de la constante y no a mano: cuando se agregó
-            // 'anulada' esta copia se quedó atrás y las anuladas volvían a
-            // encabezar la tabla como si necesitaran gestión.
-            $finales = "'".implode("','", self::ESTADOS_FINALES)."'";
+            // Primero las familias con algo pendiente, con la misma regla que
+            // decide qué se esconde: cuando esta copia se armaba a mano se quedó
+            // atrás y las anuladas volvían a encabezar la tabla.
             // fecha_recibido no trae hora y hay 15-25 empatadas por página: sin
             // desempate SQL Server las devolvía en cualquier orden, y una que
             // cayera en el borde podía salir en dos páginas o en ninguna.
-            $query->orderByRaw("
-                CASE WHEN estado IN ($finales) THEN 99 ELSE 0 END ASC
-            ")->orderByDesc('fecha_recibido')->orderByDesc('incapacidades.id');
+            $query->orderByRaw('
+                CASE WHEN '.$this->sqlFamiliaAbierta('incapacidades').' THEN 0 ELSE 99 END ASC
+            ')->orderByDesc('fecha_recibido')->orderByDesc('incapacidades.id');
         }
 
         $incapacidades = $query->paginate(40)->withQueryString();
@@ -387,7 +435,24 @@ class IncapacidadController extends Controller
         // Subquery compatible con SQL Server: agrupa por el padre calculado
         $padreIds = $items->pluck('id')->filter()->values()->toArray();
         $diasFamiliaMap = collect();
+        $ultimaGestionFamiliaMap = collect();
         if (! empty($padreIds)) {
+            // Última gestión de cualquier miembro, para el semáforo de la fila:
+            // la de una prórroga en trámite se registra en la prórroga.
+            $ultimaGestionFamiliaMap = DB::table('gestiones_incapacidad as g')
+                ->join('incapacidades as i', 'i.id', '=', 'g.incapacidad_id')
+                ->whereNull('i.deleted_at')
+                ->where(function ($q) use ($padreIds) {
+                    $q->whereIn('i.id', $padreIds)
+                        ->orWhereIn('i.incapacidad_padre_id', $padreIds);
+                })
+                ->select(
+                    DB::raw('ISNULL(i.incapacidad_padre_id, i.id) AS padre_id'),
+                    DB::raw('MAX(g.created_at) AS ultima')
+                )
+                ->groupBy(DB::raw('ISNULL(i.incapacidad_padre_id, i.id)'))
+                ->pluck('ultima', 'padre_id');
+
             $diasFamiliaMap = DB::table('incapacidades as i')
                 ->whereNull('i.deleted_at')
                 ->where(function ($q) use ($padreIds) {
@@ -403,7 +468,7 @@ class IncapacidadController extends Controller
         }
 
         // ── Inyectar datos pre-calculados en la colección del paginador ───────
-        $items->transform(function ($inc) use ($clientesMap, $diasFamiliaMap) {
+        $items->transform(function ($inc) use ($clientesMap, $diasFamiliaMap, $ultimaGestionFamiliaMap) {
             $cl = $clientesMap->get($inc->cedula_usuario);
             $inc->_nombre_cliente_cache = $cl
                 ? trim(($cl->primer_nombre ?? '').' '.($cl->segundo_nombre ?? '').' '.
@@ -412,9 +477,17 @@ class IncapacidadController extends Controller
             $inc->_tipo_doc_cache = $cl->tipo_doc ?? null;
             $inc->_total_dias_familia_cache = (int) ($diasFamiliaMap->get($inc->id) ?? $inc->dias_incapacidad);
             $inc->_num_prorrogas_cache = $inc->prorrogas_count ?? 0;
-            // Pre-calcular semáforo (PHP-only, sin DB gracias al eager-load)
-            $inc->_dias_gestion_cache = $inc->diasDesdeUltimaGestion();
-            $inc->_color_semaforo_cache = $inc->colorSemaforo();
+            // Semáforo de la FAMILIA, con la misma regla que la tarjeta "Sin
+            // gestión +7d": gris solo si no le queda nada pendiente a ningún
+            // miembro, y los días desde la última gestión de cualquiera.
+            $dias = $inc->diasDesdeUltimaGestion();
+            if ($ultima = $ultimaGestionFamiliaMap->get($inc->id)) {
+                $dias = min($dias, max(0, (int) now()->diffInDays(\Carbon\Carbon::parse($ultima))));
+            }
+            $abierta = ! in_array($inc->estado, self::ESTADOS_CERRADOS, true)
+                || $inc->prorrogas->contains(fn ($p) => ! in_array($p->estado, self::ESTADOS_CERRADOS, true));
+            $inc->_dias_gestion_cache = $dias;
+            $inc->_color_semaforo_cache = $abierta ? Incapacidad::colorPorDias($dias) : 'gris';
 
             return $inc;
         });
@@ -431,12 +504,14 @@ class IncapacidadController extends Controller
             ->groupBy('estado')
             ->pluck('total', 'estado');
 
-        // Estados finales: ya no requieren gestión. Incluye las variantes de pagada
-        // ('cierre_exitoso' y las parciales) y 'negada', que la entidad ya resolvió.
-        $estadosInactivos = self::ESTADOS_FINALES;
-        $totalActivas = $resumen->filter(fn ($v, $k) => ! in_array($k, $estadosInactivos))->sum();
-
-        $totalPagadas = $resumen->filter(fn ($v, $k) => in_array($k, self::ESTADOS_PAGADA_COMPLETA))->sum();
+        // Activas y Pagadas se cuentan por familia, con las mismas condiciones
+        // que filtran la tabla: agrupar por el estado de la original no alcanza.
+        $raices = fn () => DB::table('incapacidades')
+            ->where('aliado_id', $alidoId)
+            ->whereNull('deleted_at')
+            ->whereNull('incapacidad_padre_id');
+        $totalActivas = $raices()->whereRaw($this->sqlFamiliaAbierta('incapacidades'))->count();
+        $totalPagadas = $this->soloPagadas($raices(), 'incapacidades')->count();
         $totalNoPagadas = $resumen->get('rechazado', 0);
         $totalNegadas = $resumen->get('negada', 0);
         // Chip aparte: no son "no pagadas" (nunca se radicaron) y no deben
@@ -485,7 +560,7 @@ class IncapacidadController extends Controller
             ->where('e.aliado_id', $alidoId)
             ->when(
                 ! $hayBusqueda && ! $request->boolean('con_cerradas') && ! $pidioCerradas,
-                fn ($q) => $q->whereNotIn('i.estado', $estadosInactivosDefault)
+                fn ($q) => $q->whereNotIn('i.estado', self::ESTADOS_CERRADOS)
             )
             ->distinct()
             ->orderBy('e.empresa')

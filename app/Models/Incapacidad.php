@@ -702,14 +702,18 @@ class Incapacidad extends BaseModel
      */
     public function colorSemaforo(): string
     {
-        // Estados finales — ya no requieren gestión.
-        // 'negada' incluida: la entidad ya resolvió, no hay más trámite que hacer.
-        if (in_array($this->estado, \App\Http\Controllers\Admin\IncapacidadController::ESTADOS_FINALES)) {
+        // Cerradas — no les queda nada pendiente. 'negada' incluida: la entidad
+        // ya resolvió. Los pagos a medias NO: falta entregar o recibir la plata.
+        if (in_array($this->estado, \App\Http\Controllers\Admin\IncapacidadController::ESTADOS_CERRADOS)) {
             return 'gris';
         }
 
-        $dias = $this->diasDesdeUltimaGestion();
+        return self::colorPorDias($this->diasDesdeUltimaGestion());
+    }
 
+    /** Color del semáforo según los días sin gestión (ver colorSemaforo()). */
+    public static function colorPorDias(int $dias): string
+    {
         if ($dias < 7)   return 'verde';
         if ($dias <= 14) return 'amarillo';
         return 'rojo';

@@ -691,7 +691,7 @@ class InformeController extends Controller
             // no existe en el catálogo y le faltaban cierre_exitoso, negada y
             // las pagadas parciales, así que contaba como activas cosas ya
             // cerradas. Ahora también deja fuera las anuladas.
-            'activas'  => (clone $base)->whereNotIn('estado', \App\Http\Controllers\Admin\IncapacidadController::ESTADOS_FINALES)->count(),
+            'activas'  => (clone $base)->whereNotIn('estado', \App\Http\Controllers\Admin\IncapacidadController::ESTADOS_CERRADOS)->count(),
             'dias'     => (clone $base)->sum('dias_incapacidad'),
             'v_esperado'=> (clone $base)->sum('valor_esperado'),
         ];

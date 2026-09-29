@@ -434,8 +434,7 @@ tbody td{padding:.6rem .85rem;vertical-align:middle;}
                     @if($numPrr > 0)
                     <span class="badge badge-primary">+{{ $numPrr }} prórr.</span>
                     @php
-                        $estadosFinales = ['pagada','pagado_afiliado','pagada_afiliado','pagada_razon_social','cierre_exitoso','rechazado','anulada'];
-                        $hayPendiente = $inc->prorrogas->whereNotIn('estado', $estadosFinales)->count() > 0;
+                        $hayPendiente = $inc->prorrogas->whereNotIn('estado', \App\Http\Controllers\Admin\IncapacidadController::ESTADOS_CERRADOS)->count() > 0;
                     @endphp
                     @if($hayPendiente)
                     <span style="display:block;font-size:.68rem;color:#d97706;font-weight:700;margin-top:.15rem">⚠️ Prórr. activa</span>
