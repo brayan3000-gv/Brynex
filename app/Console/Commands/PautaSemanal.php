@@ -59,6 +59,29 @@ class PautaSemanal extends Command
             $desde = now()->subDays($dias);
             $entrega = MetaAdsService::entregaPorAnuncio($config, $desde->toDateString(), now()->toDateString());
 
+            // Si la cuenta entera no entregó nada, el problema no es de ninguna creatividad y no
+            // hay nada que juzgar. Sin esta puerta el corte leería ceros como fracasos y apagaría
+            // las que funcionan: el 27-sep-2026 Meta cortó la entrega por falta de pago
+            // (account_status 9) con todo en ACTIVE, y una semana así habría dejado la pauta
+            // vacía culpando a los videos. Se avisa igual, porque una cuenta detenida es
+            // justamente lo que hay que saber.
+            $gastoDeLaVentana = array_sum(array_column($entrega, 'gasto'));
+            if ($gastoDeLaVentana <= 0) {
+                $this->warn("   La cuenta no entregó nada en {$dias} días: no se juzga ninguna creatividad.");
+                $texto = "Pauta detenida: en {$dias} días Meta no entregó nada, con los anuncios en ACTIVE. "
+                    .'Casi siempre es el pago (la cuenta queda en período de gracia y deja de entregar). '
+                    .'No se apagó ninguna creatividad: el problema no es de ellas.';
+                $this->line('   Aviso: '.$texto);
+
+                if (! $this->option('no-enviar')) {
+                    foreach ($this->destinatarios() as $numero) {
+                        $alertas->enviarA($numero, 'Corte de pauta', $texto);
+                    }
+                }
+
+                continue;
+            }
+
             $apagadas = [];
             $resumen = [];
 
