@@ -423,6 +423,21 @@ class Kernel extends ConsoleKernel
             ->runInBackground()
             ->appendOutputTo(storage_path('logs/marketing-pauta-creatividades.log'));
 
+        // ── Corte semanal de la pauta ────────────────────────────────────────
+        // Lunes 8:30: mide cada creatividad de la semana por conversaciones que
+        // pasaron del saludo, apaga las que no jalan gente o cuestan el triple
+        // que la mejor, y avisa por WhatsApp. Solo apaga gasto; subirlo o
+        // prenderlo sigue pidiendo el clic del usuario, y la mejor de cada
+        // conjunto nunca se apaga. Antes de esto nadie miraba: #86 gastó $17.781
+        // para una conversación y #73 $2.439 para ninguna, semanas enteras.
+        // Ejecución manual: php artisan marketing:pauta-semanal --no-enviar --no-pausar
+        $schedule->command('marketing:pauta-semanal')
+            ->weeklyOn(1, '08:30')
+            ->timezone('America/Bogota')
+            ->withoutOverlapping(30)
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/marketing-pauta-semanal.log'));
+
         // ── Piloto automático de marketing (community manager IA) ────────────
         // Cada 30 min en horario diurno: genera la pieza publicitaria del día de
         // cada aliado con piloto activo (una por día, desde la hora configurada).

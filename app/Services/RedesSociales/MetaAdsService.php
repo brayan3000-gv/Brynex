@@ -32,8 +32,24 @@ class MetaAdsService
 {
     private const BASE_URL = 'https://graph.facebook.com/v23.0';
 
-    /** Días que una creatividad nueva queda a salvo de la rotación, para que junte datos. */
-    private const DIAS_GRACIA = 4;
+    /**
+     * Prueba mínima antes de juzgar una creatividad: lo que llegue primero.
+     *
+     * Con $15.000 se compran unas 800 impresiones en Colombia, y ahí ya se ve si la gente
+     * escribe o no: #90 llevaba 5 conversaciones con ese gasto, #73 y #82 ninguna. Juzgar antes
+     * es tirar una moneda; esperar más es pagar por saber lo que ya se sabía.
+     */
+    private const MIN_PRUEBA_COP = 15000;
+
+    private const DIAS_PRUEBA = 3;
+
+    /**
+     * Cuántas veces más caro que la mejor del conjunto puede ser una pieza antes de apagarla.
+     *
+     * No basta con «tiene pocas conversaciones»: una pieza puede traer menos y costar igual. Lo
+     * que no se sostiene es pagar el triple por el mismo lead.
+     */
+    private const VECES_PEOR_TOLERADO = 3;
 
     /**
      * Token con el que se habla con la API de anuncios.
@@ -848,59 +864,195 @@ class MetaAdsService
     }
 
     /**
-     * Deja activas solo las mejores creatividades del conjunto y pausa el resto.
+     * Conversaciones de WhatsApp que pasaron del saludo, por pieza.
      *
-     * Se ordena por conversaciones de WhatsApp atribuidas de verdad, no por likes: un like no
-     * paga una afiliación. Las piezas con menos de $DIAS_GRACIA días quedan protegidas —
-     * juzgar un anuncio sin datos es tirar una moneda, no medir.
+     * El anuncio lleva el mensaje escrito de antemano («Hola, quiero información»), así que la
+     * primera entrada llega sola: contar conversaciones a secas premia a quien trae curiosos.
+     * #61 gastó $56.412 para 7 conversaciones y casi ninguna respondió nada más. Dos mensajes
+     * del cliente ya significan que leyó y contestó.
+     *
+     * @param  iterable<int>  $piezaIds
+     * @return \Illuminate\Support\Collection<int, int> pieza_id => conversaciones reales
+     */
+    public static function conversacionesReales(iterable $piezaIds, ?\Carbon\Carbon $desde = null): \Illuminate\Support\Collection
+    {
+        $ids = collect($piezaIds)->filter()->values();
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        $conversaciones = \App\Models\WhatsappConversacion::whereIn('origen_publicacion_id', $ids)
+            ->when($desde, fn ($q) => $q->where('created_at', '>=', $desde))
+            ->get(['id', 'origen_publicacion_id']);
+
+        if ($conversaciones->isEmpty()) {
+            return collect();
+        }
+
+        $entrantesPorConversacion = \App\Models\WhatsappMensaje::whereIn('conversacion_id', $conversaciones->pluck('id'))
+            ->where('direccion', 'entrante')
+            ->selectRaw('conversacion_id, COUNT(*) as total')
+            ->groupBy('conversacion_id')
+            ->pluck('total', 'conversacion_id');
+
+        return $conversaciones
+            ->filter(fn ($c) => (int) ($entrantesPorConversacion[$c->id] ?? 0) >= 2)
+            ->groupBy('origen_publicacion_id')
+            ->map(fn ($grupo) => $grupo->count());
+    }
+
+    /**
+     * Gasto y entrega de cada anuncio en una ventana de fechas, leído de Meta.
+     *
+     * `pauta_gasto_total_cop` guarda el acumulado de toda la vida del anuncio, que no sirve para
+     * un corte semanal: una pieza de agosto arrastra su historia y parece peor de lo que fue
+     * esta semana.
+     *
+     * @return array<string, array{gasto: float, impresiones: int, clics: int}>
+     */
+    public static function entregaPorAnuncio(PautaConfig $config, string $desde, string $hasta): array
+    {
+        if (! $config->ad_account_id || ! $config->access_token_ads) {
+            return [];
+        }
+
+        $cuenta = 'act_'.ltrim($config->ad_account_id, 'act_');
+        $resp = Http::timeout(60)->get(self::BASE_URL."/{$cuenta}/insights", [
+            'access_token' => $config->access_token_ads,
+            'level' => 'ad',
+            'limit' => 200,
+            'time_range' => json_encode(['since' => $desde, 'until' => $hasta]),
+            'fields' => 'ad_id,spend,impressions,clicks',
+        ]);
+
+        $porAnuncio = [];
+        foreach (($resp->json('data') ?? []) as $fila) {
+            $porAnuncio[$fila['ad_id']] = [
+                'gasto' => (float) ($fila['spend'] ?? 0),
+                'impresiones' => (int) ($fila['impressions'] ?? 0),
+                'clics' => (int) ($fila['clicks'] ?? 0),
+            ];
+        }
+
+        return $porAnuncio;
+    }
+
+    /** Conjuntos de anuncios del aliado, con nombre legible. @return array<string, string> */
+    public static function conjuntos(PautaConfig $config): array
+    {
+        return array_filter([
+            'clientes' => $config->meta_adset_permanente_id,
+            'asesores' => $config->meta_adset_asesores_id,
+            'exterior' => $config->meta_adset_exterior_id,
+        ]);
+    }
+
+    /** Apaga un anuncio suelto, sin tocar el conjunto. */
+    public static function pausarAnuncio(Publicacion $publicacion): bool
+    {
+        if (! $publicacion->meta_ad_id) {
+            return false;
+        }
+
+        $config = PautaConfig::paraAliado($publicacion->aliado_id);
+        $fb = RedSocialConfig::paraAliado($publicacion->aliado_id, 'facebook');
+        $resp = Http::asForm()->post(self::BASE_URL."/{$publicacion->meta_ad_id}", [
+            'status' => 'PAUSED',
+            'access_token' => self::tokenAds($config, $fb),
+        ]);
+
+        if (! $resp->successful() || $resp->json('error')) {
+            return false;
+        }
+
+        $publicacion->update(['pauta_estado' => 'pausada']);
+
+        return true;
+    }
+
+    /**
+     * Deja activas solo las mejores creatividades de cada conjunto y pausa el resto.
+     *
+     * Se ordena por conversaciones que pasaron del saludo, no por likes ni por conversaciones a
+     * secas: un like no paga una afiliación y un «Hola, quiero información» tampoco. Las piezas
+     * que todavía no tuvieron su prueba mínima quedan protegidas — juzgar un anuncio sin datos
+     * es tirar una moneda, no medir.
+     *
+     * Recorre TODOS los conjuntos, no solo el permanente. Mientras miró únicamente el de
+     * clientes, el de asesores quedó sin tope: #90, #91, #101, #103, #104 y #105 activos a la
+     * vez sobre $10.000/día, y Meta le dio el 99% del dinero a las dos con historia. Las tres
+     * nuevas recibieron $694 entre las tres en veinte días: nunca se supo si servían.
      *
      * @return array{ok: bool, mensaje: string, pausadas: int}
      */
     public static function rotarCreatividades(PautaConfig $config, int $aliadoId): array
     {
-        if (! $config->meta_adset_permanente_id) {
-            return ['ok' => false, 'mensaje' => 'Todavía no hay conjunto permanente.', 'pausadas' => 0];
+        $conjuntos = self::conjuntos($config);
+        if (empty($conjuntos)) {
+            return ['ok' => false, 'mensaje' => 'Todavía no hay conjuntos de anuncios.', 'pausadas' => 0];
         }
 
         $maximo = max(1, (int) ($config->creatividades_max ?: 3));
-        $activas = Publicacion::where('aliado_id', $aliadoId)
-            ->where('meta_adset_id', $config->meta_adset_permanente_id)
-            ->where('pauta_estado', 'activa')
-            ->whereNotNull('meta_ad_id')
-            ->get();
-
-        if ($activas->count() <= $maximo) {
-            return ['ok' => true, 'mensaje' => "Nada que rotar ({$activas->count()} de {$maximo}).", 'pausadas' => 0];
-        }
-
-        $conversaciones = \App\Models\WhatsappConversacion::whereIn('origen_publicacion_id', $activas->pluck('id'))
-            ->selectRaw('origen_publicacion_id, COUNT(*) as total')
-            ->groupBy('origen_publicacion_id')
-            ->pluck('total', 'origen_publicacion_id');
-
-        $ordenadas = $activas->sortByDesc(function ($p) use ($conversaciones) {
-            $protegida = $p->pauta_activada_at && $p->pauta_activada_at->gt(now()->subDays(self::DIAS_GRACIA));
-
-            // Las protegidas van primero para que nunca caigan en la zona de pausa; entre
-            // iguales manda la fecha, así el retador más nuevo desplaza al más viejo.
-            return [$protegida ? 1 : 0, (int) ($conversaciones[$p->id] ?? 0), $p->pauta_activada_at?->timestamp ?? 0];
-        })->values();
-
-        $fb = RedSocialConfig::paraAliado($aliadoId, 'facebook');
-        $token = self::tokenAds($config, $fb);
         $pausadas = 0;
-        foreach ($ordenadas->slice($maximo) as $pieza) {
-            $r = Http::asForm()->post(self::BASE_URL."/{$pieza->meta_ad_id}", [
-                'status' => 'PAUSED',
-                'access_token' => $token,
-            ]);
-            if ($r->successful()) {
-                $pieza->update(['pauta_estado' => 'pausada']);
-                $pausadas++;
+        $notas = [];
+
+        foreach ($conjuntos as $etiqueta => $adsetId) {
+            $activas = Publicacion::where('aliado_id', $aliadoId)
+                ->where('meta_adset_id', $adsetId)
+                ->where('pauta_estado', 'activa')
+                ->whereNotNull('meta_ad_id')
+                ->get();
+
+            if ($activas->count() <= $maximo) {
+                $notas[] = "{$etiqueta}: {$activas->count()} de {$maximo}";
+
+                continue;
             }
+
+            $reales = self::conversacionesReales($activas->pluck('id'));
+
+            $ordenadas = $activas->sortByDesc(function ($p) use ($reales) {
+                // Las protegidas van primero para que nunca caigan en la zona de pausa; entre
+                // iguales manda la fecha, así el retador más nuevo desplaza al más viejo.
+                return [
+                    self::enPrueba($p) ? 1 : 0,
+                    (int) ($reales[$p->id] ?? 0),
+                    $p->pauta_activada_at?->timestamp ?? 0,
+                ];
+            })->values();
+
+            $apagadas = 0;
+            foreach ($ordenadas->slice($maximo) as $pieza) {
+                if (self::pausarAnuncio($pieza)) {
+                    $apagadas++;
+                    $pausadas++;
+                }
+            }
+            $notas[] = "{$etiqueta}: {$apagadas} pausada(s), se dejan {$maximo}";
         }
 
-        return ['ok' => true, 'mensaje' => "Rotación: {$pausadas} creatividad(es) pausada(s), se dejan {$maximo}.", 'pausadas' => $pausadas];
+        return ['ok' => true, 'mensaje' => 'Rotación — '.implode(' | ', $notas), 'pausadas' => $pausadas];
+    }
+
+    /**
+     * ¿La pieza todavía está en su prueba mínima?
+     *
+     * Protegida mientras no haya gastado lo suficiente NI llevado los días suficientes: basta
+     * con que se cumpla una de las dos para poder juzgarla.
+     */
+    public static function enPrueba(Publicacion $publicacion): bool
+    {
+        $gastoSuficiente = (float) $publicacion->pauta_gasto_total_cop >= self::MIN_PRUEBA_COP;
+        $diasSuficientes = $publicacion->pauta_activada_at
+            && $publicacion->pauta_activada_at->lte(now()->subDays(self::DIAS_PRUEBA));
+
+        return ! $gastoSuficiente && ! $diasSuficientes;
+    }
+
+    /** Lo que se le exige a una creatividad antes de poder apagarla. */
+    public static function reglaDePrueba(): array
+    {
+        return ['cop' => self::MIN_PRUEBA_COP, 'dias' => self::DIAS_PRUEBA, 'veces' => self::VECES_PEOR_TOLERADO];
     }
 
     /**
