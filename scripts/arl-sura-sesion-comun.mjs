@@ -66,9 +66,12 @@ export async function loginSso(pagina, { tipoDocumento = 'C', usuario, contrasen
   // revienta con "Execution context was destroyed". Se deja asentar primero.
   await esperar(2500);
 
+  // Visible, no solo presente: una página que ya entró puede traer el
+  // formulario escondido en el DOM, y contarlo como "sigue pidiendo la clave"
+  // da un falso "el login no pasó".
   let siguePidiendoClave = false;
   try {
-    siguePidiendoClave = !!(await pagina.$(SEL_CLAVE));
+    siguePidiendoClave = await pagina.$eval(SEL_CLAVE, e => e.offsetParent !== null).catch(() => false);
   } catch {
     siguePidiendoClave = false; // navegando: señal de que sí entró
   }
@@ -81,7 +84,7 @@ export async function loginSso(pagina, { tipoDocumento = 'C', usuario, contrasen
     try {
       motivo = await pagina.evaluate(() => {
         const t = document.body?.innerText || '';
-        const m = t.match(/[^.\n]*(no v\u00e1lid|incorrect|bloque|inactiv|expirad)[^.\n]*\.?/i);
+        const m = t.match(/[^.\n]*(no v\u00e1lid|inv\u00e1lid|incorrect|no son correct|no coincide|bloque|inactiv|expir|vencid|caducad|cambiar (su |la )?contrase|intentos)[^.\n]*\.?/i);
         return m ? m[0].trim().slice(0, 120) : '';
       });
     } catch {}

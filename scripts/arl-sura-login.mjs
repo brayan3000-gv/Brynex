@@ -15,6 +15,7 @@
  * stdin y nunca se escriben en el log.
  */
 import puppeteer from 'puppeteer-core';
+import { loginSso } from './arl-sura-sesion-comun.mjs';
 
 const CHROME_CANDIDATOS = [
   process.env.CHROME_PATH,
@@ -80,69 +81,9 @@ let pagina;
 try {
   pagina = await navegador.newPage();
   await pagina.setViewport({ width: 1400, height: 900 });
-  // Sin un UA de navegador real, Incapsula devuelve el reto en vez del login.
-  await pagina.setUserAgent(
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-  );
-
-  await pagina.goto(URL_LOGIN, { waitUntil: 'networkidle2', timeout: 60000 });
-
-  // Los campos del login, por id. El formulario es ASP.NET y está lleno de
-  // inputs ocultos (ViewState), así que buscar "el primer input de texto"
-  // acaba escribiendo en uno invisible.
-  const SEL_TIPO  = '#ctl00_ContentMain_suraType';
-  const SEL_USER  = '#suraName';
-  const SEL_CLAVE = '#suraPassword';
-  const SEL_ENTRAR = '#session-internet';
-
-  await pagina.waitForSelector(SEL_CLAVE, { visible: true, timeout: 30000 });
-
-  await pagina.select(SEL_TIPO, tipoDocumento).catch(() => {});
-
-  await pagina.click(SEL_USER, { clickCount: 3 });
-  await pagina.type(SEL_USER, usuario, { delay: 45 });
-
-  // La contraseña NO se escribe con el teclado: al enfocar el campo, Sura abre
-  // un teclado virtual (plugin jQuery Keyboard) con los dígitos en posiciones
-  // aleatorias, y el input real queda bloqueado. Es una defensa anti-keylogger,
-  // así que hay que pulsar tecla por tecla.
-  await pagina.click(SEL_CLAVE);
-  await pagina.waitForSelector('.ui-keyboard', { visible: true, timeout: 15000 });
-
-  for (const caracter of contrasena.split('')) {
-    // El teclado se rebaraja tras cada pulsación: hay que volver a localizar
-    // la tecla cada vez en lugar de guardar posiciones.
-    const tecla = `.ui-keyboard button.ui-keyboard-button[data-value="${caracter}"]`;
-    const existe = await pagina.$(tecla);
-
-    if (!existe) {
-      throw new Error(`El teclado virtual no ofrece la tecla "${caracter}". ¿La contraseña tiene caracteres que ese teclado no muestra?`);
-    }
-
-    await pagina.click(tecla);
-    await new Promise(r => setTimeout(r, 120));
-  }
-
-  // El botón verde del teclado confirma y lo cierra.
-  const aceptar = await pagina.$('.ui-keyboard button.ui-keyboard-accept');
-  if (aceptar) {
-    await aceptar.click();
-    await new Promise(r => setTimeout(r, 400));
-  }
-
-  // "Iniciar sesión" es un input[type=button] movido por JavaScript, no un
-  // submit: pulsar Enter no envía nada y la página se queda igual.
-  await Promise.all([
-    pagina.waitForNavigation({ waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {}),
-    pagina.click(SEL_ENTRAR),
-  ]);
-
-  if (await pagina.$(SEL_CLAVE)) {
-    const mensaje = await pagina.evaluate(() =>
-      (document.body.innerText.match(/.*(incorrect|inválid|bloque|error).*/i) || [''])[0].trim().slice(0, 160)
-    );
-    throw new Error('El login no pasó' + (mensaje ? `: ${mensaje}` : '. Revisa usuario y contraseña.'));
-  }
+  // El SSO es el mismo de los demás trámites de Sura: un solo login para que
+  // un arreglo en uno no se quede sin llegar a los otros.
+  await loginSso(pagina, { tipoDocumento, usuario, contrasena }, URL_LOGIN);
 
   // La Sucursal Virtual pide el NIT de la empresa sobre la que se va a trabajar.
   //
