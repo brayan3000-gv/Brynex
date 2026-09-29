@@ -1036,12 +1036,20 @@ class PlanoPagoController extends Controller
         $esCorreccionN = false;
         if ((int) $validated['valor'] === 0) {
             $tiposIds = array_map('intval', (array) ($validated['tipos_modalidad'] ?? []));
+            // Independiente (se confirma fila por fila): basta con que ese
+            // plano sea una corrección pendiente —ver CorreccionPlanillaService—.
             $correcciones = empty($validated['plano_id'])
                 ? \App\Services\CorreccionNovedadesService::pendientes(
                     (int) $aliadoId, (int) $rs->id, (int) $validated['mes_plano'],
                     (int) $validated['anio_plano'], (int) $validated['n_plano'], $tiposIds)
-                : collect();
-            $otrosPendientes = $correcciones->isEmpty() ? 0 : DB::table('planos AS p')
+                : DB::table('planos')
+                    ->where('id', $validated['plano_id'])
+                    ->where('aliado_id', $aliadoId)
+                    ->whereNull('deleted_at')
+                    ->where('tipo_p', \App\Services\CorreccionNovedadesService::TIPO_P)
+                    ->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''))
+                    ->get(['id']);
+            $otrosPendientes = ($correcciones->isEmpty() || ! empty($validated['plano_id'])) ? 0 : DB::table('planos AS p')
                 ->where('p.aliado_id', $aliadoId)
                 ->where('p.razon_social_id', $rs->id)
                 ->where('p.n_plano', $validated['n_plano'])
