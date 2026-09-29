@@ -393,6 +393,7 @@ class AfiliacionController extends Controller
             'pension:id,razon_social,formulario_pdf',
             'encargado:id,nombre',
             'radicados',
+            'aliado:id,nombre',
         ])
         ->whereIn('aliado_id', $aliados)
         ->whereMonth('fecha_ingreso', $mes)
@@ -469,7 +470,7 @@ class AfiliacionController extends Controller
 
         // Encabezado
         $headers = [
-            'Razón Social', 'Día', 'Factura', 'Cédula', 'Nombres',
+            'Aliado', 'Razón Social', 'Día', 'Factura', 'Cédula', 'Nombres',
             'EPS', 'Estado EPS', 'ARL', 'Estado ARL',
             'Caja', 'Estado Caja', 'Pensión', 'Estado Pensión',
             'Encargado', 'Observación', 'Estado',
@@ -477,7 +478,7 @@ class AfiliacionController extends Controller
         $sheet->fromArray($headers, null, 'A1');
 
         // Estilo encabezado
-        $sheet->getStyle('A1:P1')->applyFromArray([
+        $sheet->getStyle('A1:Q1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1e40af']],
         ]);
@@ -487,6 +488,7 @@ class AfiliacionController extends Controller
             $radicados = $c->radicados->keyBy('tipo');
 
             $sheet->fromArray([
+                $c->aliado?->nombre ?? '—',
                 $c->razonSocial?->razon_social ?? '—',
                 $c->fecha_ingreso?->format('d') ?? '',
                 $facturas->get($c->id) ?? '',
@@ -508,7 +510,7 @@ class AfiliacionController extends Controller
         }
 
         // Auto-ancho columnas
-        foreach (range('A', 'P') as $col) {
+        foreach (range('A', 'Q') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
