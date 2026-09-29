@@ -62,9 +62,12 @@
 
         <button class="sosn-btn sec" id="sosnBtnConsultar" style="display:none" onclick="consultarSos()">🔎 Consultar en S.O.S.</button>
         <div id="sosnRegistro" style="display:none">
+          {{-- La fecha no se pregunta: es la real del contrato, o la más cercana
+               que S.O.S. acepte si quedó fuera de su ventana de ±10 días. --}}
           <div class="sosn-fecha" id="sosnFechaFila">
-            <label for="sosnFecha"><strong>Fecha de ingreso a reportar:</strong></label>
-            <input type="date" id="sosnFecha">
+            <strong>Se reporta con fecha de ingreso:</strong>
+            <span id="sosnFechaTexto" style="font-weight:800;color:#1e3a5f"></span>
+            <input type="hidden" id="sosnFecha">
           </div>
           <div id="sosnFechaNota" style="font-size:.72rem;color:#64748b"></div>
           <button class="sosn-btn" id="sosnBtnRegistrar" onclick="registrarSos()">🏥 Registrar y adjuntar lado B</button>
@@ -281,12 +284,12 @@ async function consultarSos() {
             : '🔗 Actualizar el radicado con este estado';
     } else {
         sosnEl('sosnFechaFila').style.display = 'flex';
-        fecha.min = r.fecha_minima; fecha.max = r.fecha_maxima;
-        fecha.value = r.en_plazo ? r.fecha_ingreso : '';
+        fecha.value = r.fecha_reportar || r.fecha_ingreso;
+        sosnEl('sosnFechaTexto').textContent = sosnFmt(fecha.value);
         sosnEl('sosnFechaNota').textContent = `S.O.S. acepta del ${sosnFmt(r.fecha_minima)} al ${sosnFmt(r.fecha_maxima)}.` +
-            (r.en_plazo ? '' : ' El ingreso real está fuera de ese rango: elige la fecha a reportar.');
+            (r.en_plazo ? '' : ' Es la más cercana al ingreso real que el portal acepta.');
         if (!r.en_plazo) {
-            aviso.innerHTML = `⚠️ El ingreso real (${sosnFmt(r.fecha_ingreso)}) está fuera del plazo de S.O.S. La fecha que elijas queda anotada en el radicado junto con la real.`;
+            aviso.innerHTML = `⚠️ El ingreso real (${sosnFmt(r.fecha_ingreso)}) está fuera del plazo de S.O.S.: se reporta el ${sosnFmt(fecha.value)} y queda anotado en el radicado. El lado B que se adjunta lleva la fecha real.`;
             aviso.style.display = 'block';
         }
         reg.textContent = '🏥 Registrar y adjuntar lado B';
@@ -298,7 +301,7 @@ async function consultarSos() {
 async function registrarSos() {
     const nueva = !sosnNovedad;
     const fecha = sosnEl('sosnFecha').value;
-    if (nueva && !fecha) { alert('Elige la fecha de ingreso a reportar.'); return; }
+    if (nueva && !fecha) { alert('No se pudo resolver la fecha de ingreso a reportar; vuelve a consultar.'); return; }
     if (nueva && !confirm(`¿Radicar la novedad en S.O.S. con fecha de ingreso ${sosnFmt(fecha)} y adjuntar el lado B firmado?\n\nQueda radicada en el portal y no se puede anular desde aquí.`)) return;
 
     const btn = sosnEl('sosnBtnRegistrar');

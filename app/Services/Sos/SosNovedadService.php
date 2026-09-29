@@ -82,6 +82,7 @@ class SosNovedadService
 
         [$minimo, $maximo] = $this->ventana();
         $enPlazo = $contrato->fecha_ingreso && $contrato->fecha_ingreso->between($minimo, $maximo);
+        $aReportar = $contrato->fecha_ingreso ? $this->fechaAReportar($contrato->fecha_ingreso) : null;
 
         $resumen = [
             'trabajador'    => trim(implode(' ', array_filter([$cliente?->primer_nombre, $cliente?->segundo_nombre, $cliente?->primer_apellido, $cliente?->segundo_apellido]))),
@@ -97,6 +98,7 @@ class SosNovedadService
             'fecha_minima'  => $minimo->toDateString(),
             'fecha_maxima'  => $maximo->toDateString(),
             'en_plazo'      => $enPlazo,
+            'fecha_reportar' => $aReportar?->toDateString(),
             'usuario_portal' => $rs ? $this->usuarioPortal((string) $rs->nit) : null,
             'independiente' => (bool) $rs?->es_independiente,
         ];
@@ -108,7 +110,8 @@ class SosNovedadService
                 'desde'     => $contrato->fecha_ingreso->copy()->subDays(45)->format('d/m/Y'),
                 'hasta'     => today()->format('d/m/Y'),
             ],
-            // La fecha la elige la persona dentro del plazo; se agrega al registrar.
+            // La fecha ya viene resuelta: la real si S.O.S. la acepta y, si no,
+            // la más cercana que sí (ver fechaAReportar).
             'envio' => [
                 'tipoId' => self::TIPOS[$tipo][0], 'documento' => (string) $contrato->cedula, 'ibc' => $ibc,
                 'arl' => $this->arl($contrato), 'afp' => $this->afp($contrato), 'guardar' => true,
@@ -197,6 +200,22 @@ class SosNovedadService
         $this->marcar($radicado, $numero, Radicado::ESTADO_TRAMITE, null, "{$prefijo} Radicado S.O.S. {$numero}: {$novedad['estado']}.", $usuarioId);
 
         return ['ok' => true, 'siguiente' => null, 'radicado' => $numero, 'estado_eps' => $novedad['estado'], 'mensaje' => 'En trámite: S.O.S. responde en unas 24 horas.'];
+    }
+
+    /**
+     * La fecha de ingreso que se le reporta a S.O.S.: la real del contrato si
+     * el portal la acepta y, si no, el extremo más cercano de su ventana de
+     * ±10 días. No hay nada que preguntar —dejarla fuera de plazo hace que el
+     * portal la rechace— y la real queda anotada en el radicado y va, esa sí,
+     * en el lado B del formulario que se adjunta.
+     */
+    public function fechaAReportar(\Carbon\CarbonInterface $ingreso): \Carbon\CarbonInterface
+    {
+        [$minimo, $maximo] = $this->ventana();
+
+        $f = $ingreso->copy()->startOfDay();
+
+        return $f->lt($minimo) ? $minimo->copy() : ($f->gt($maximo) ? $maximo->copy() : $f);
     }
 
     /** Valida la fecha elegida para una novedad nueva. */
