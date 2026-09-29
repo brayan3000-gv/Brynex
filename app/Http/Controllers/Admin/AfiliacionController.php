@@ -211,7 +211,7 @@ class AfiliacionController extends Controller
             ];
             $filtros = array_diff_key($todos, [$columna => null]);
 
-            return $baseContratos
+            $conteo = $baseContratos
                 ->filter(function ($c) use ($filtros) {
                     foreach ($filtros as $col => $valor) {
                         if (($valor ?? '') !== '' && (string) $c->$col !== (string) $valor) {
@@ -221,33 +221,49 @@ class AfiliacionController extends Controller
 
                     return true;
                 })
-                ->pluck($columna)
-                // Lo ya escogido se mantiene en su lista aunque el resto de
-                // filtros lo dejen fuera: si no, el desplegable se vería en otra
-                // opción distinta a la que está filtrando.
-                ->push($todos[$columna] ?? null)
-                ->filter()->unique();
+                ->groupBy(fn ($c) => (string) $c->$columna)
+                ->map->count()
+                ->reject(fn ($n, $id) => $id === '');
+
+            // Lo ya escogido se mantiene en su lista aunque el resto de filtros
+            // lo dejen fuera (en cero): si no, el desplegable se vería en otra
+            // opción distinta a la que está filtrando.
+            $actual = (string) ($todos[$columna] ?? '');
+            if ($actual !== '' && ! $conteo->has($actual)) {
+                $conteo[$actual] = 0;
+            }
+
+            return $conteo;
         };
 
+        // Cada lista lleva su cuenta —"S.O.S. (3)"— para saber cuánto hay
+        // detrás de cada opción antes de escogerla.
+        $conteoRazon = $presentes('razon_social_id');
+        $conteoModalidad = $presentes('tipo_modalidad_id');
+        $conteoEps = $presentes('eps_id');
+        $conteoArl = $presentes('arl_id');
+        $conteoCaja = $presentes('caja_id');
+        $conteoPension = $presentes('pension_id');
+
         $razonesDisponibles = DB::table('razones_sociales')
-            ->whereIn('id', $presentes('razon_social_id'))
+            ->whereIn('id', $conteoRazon->keys())
             ->orderBy('razon_social')
             ->get(['id', 'razon_social']);
 
-        $tiposModalidad = \App\Models\TipoModalidad::whereIn('id', $presentes('tipo_modalidad_id'))
+        $tiposModalidad = \App\Models\TipoModalidad::whereIn('id', $conteoModalidad->keys())
             ->orderBy('orden')->get(['id', 'tipo_modalidad', 'modalidad']);
 
         $epsDisponibles = DB::table('eps')
-            ->whereIn('id', $presentes('eps_id'))
+            ->whereIn('id', $conteoEps->keys())
             ->orderBy('nombre')->get(['id', 'nombre']);
         $arlDisponibles = DB::table('arls')
-            ->whereIn('id', $presentes('arl_id'))
+            ->whereIn('id', $conteoArl->keys())
             ->orderBy('nombre_arl')->get(['id', 'nombre_arl']);
         $cajaDisponibles = DB::table('cajas')
-            ->whereIn('id', $presentes('caja_id'))
+            ->whereIn('id', $conteoCaja->keys())
             ->orderBy('nombre')->get(['id', 'nombre']);
         $pensionDisponibles = DB::table('pensiones')
-            ->whereIn('id', $presentes('pension_id'))
+            ->whereIn('id', $conteoPension->keys())
             ->orderBy('razon_social')->get(['id', 'razon_social']);
 
         // Empresas cliente presentes en el período (vía cliente, que se une por
@@ -291,7 +307,8 @@ class AfiliacionController extends Controller
             'rsId', 'tipoModId', 'epsF', 'arlF', 'cajaF', 'pensionF', 'empresaF', 'estadoRad', 'estadoCont',
             'sort', 'dir', 'razonesDisponibles', 'tiposModalidad',
             'epsDisponibles', 'arlDisponibles', 'cajaDisponibles', 'pensionDisponibles',
-            'empresasDisponibles'
+            'empresasDisponibles',
+            'conteoRazon', 'conteoModalidad', 'conteoEps', 'conteoArl', 'conteoCaja', 'conteoPension'
         ));
     }
 

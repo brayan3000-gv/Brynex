@@ -426,7 +426,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['razon_social_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="razon_social_id" onchange="this.form.submit()" class="th-select {{ $rsId ? 'activo' : '' }}" style="max-width:105px;">
                         <option value="">↓ Razón Social</option>
-                        @foreach($razonesDisponibles as $rs)<option value="{{ $rs->id }}" {{ $rsId == $rs->id ? 'selected' : '' }}>{{ $rs->razon_social }}</option>@endforeach
+                        @foreach($razonesDisponibles as $rs)<option value="{{ $rs->id }}" {{ $rsId == $rs->id ? 'selected' : '' }}>{{ $rs->razon_social }} ({{ $conteoRazon[(string) $rs->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
             </th>
@@ -449,7 +449,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['tipo_modalidad_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="tipo_modalidad_id" onchange="this.form.submit()" class="th-select {{ $tipoModId ? 'activo' : '' }}" style="max-width:115px;">
                         <option value="">↓ Modalidad</option>
-                        @foreach($tiposModalidad as $tm)<option value="{{ $tm->id }}" {{ $tipoModId == $tm->id ? 'selected' : '' }}>{{ $tm->tipo_modalidad }}</option>@endforeach
+                        @foreach($tiposModalidad as $tm)<option value="{{ $tm->id }}" {{ $tipoModId == $tm->id ? 'selected' : '' }}>{{ $tm->tipo_modalidad }} ({{ $conteoModalidad[(string) $tm->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
             </th>
@@ -461,7 +461,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['eps_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="eps_id" onchange="this.form.submit()" class="th-select {{ $epsF ? 'activo' : '' }}">
                         <option value="">↓ EPS</option>
-                        @foreach($epsDisponibles as $e)<option value="{{ $e->id }}" {{ $epsF == $e->id ? 'selected' : '' }}>{{ $e->nombre }}</option>@endforeach
+                        @foreach($epsDisponibles as $e)<option value="{{ $e->id }}" {{ $epsF == $e->id ? 'selected' : '' }}>{{ $e->nombre }} ({{ $conteoEps[(string) $e->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
             </th>
@@ -472,7 +472,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['arl_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="arl_id" onchange="this.form.submit()" class="th-select {{ $arlF ? 'activo' : '' }}">
                         <option value="">↓ ARL</option>
-                        @foreach($arlDisponibles as $a)<option value="{{ $a->id }}" {{ $arlF == $a->id ? 'selected' : '' }}>{{ $a->nombre_arl }}</option>@endforeach
+                        @foreach($arlDisponibles as $a)<option value="{{ $a->id }}" {{ $arlF == $a->id ? 'selected' : '' }}>{{ $a->nombre_arl }} ({{ $conteoArl[(string) $a->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
             </th>
@@ -483,7 +483,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['caja_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="caja_id" onchange="this.form.submit()" class="th-select {{ $cajaF ? 'activo' : '' }}">
                         <option value="">↓ Caja</option>
-                        @foreach($cajaDisponibles as $ca)<option value="{{ $ca->id }}" {{ $cajaF == $ca->id ? 'selected' : '' }}>{{ $ca->nombre }}</option>@endforeach
+                        @foreach($cajaDisponibles as $ca)<option value="{{ $ca->id }}" {{ $cajaF == $ca->id ? 'selected' : '' }}>{{ $ca->nombre }} ({{ $conteoCaja[(string) $ca->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
             </th>
@@ -494,7 +494,7 @@ function sortClass($col, $currSort, $currDir) {
                     @foreach(request()->except(['pension_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="pension_id" onchange="this.form.submit()" class="th-select {{ $pensionF ? 'activo' : '' }}">
                         <option value="">↓ Pensión</option>
-                        @foreach($pensionDisponibles as $p)<option value="{{ $p->id }}" {{ $pensionF == $p->id ? 'selected' : '' }}>{{ $p->razon_social }}</option>@endforeach
+                        @foreach($pensionDisponibles as $p)<option value="{{ $p->id }}" {{ $pensionF == $p->id ? 'selected' : '' }}>{{ $p->razon_social }} ({{ $conteoPension[(string) $p->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
             </th>
