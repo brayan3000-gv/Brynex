@@ -85,6 +85,16 @@
           </div>
           <div class="sosn-aviso" id="sosnCorreoAvisos" style="display:none"></div>
 
+          {{-- Sin la firma dibujada el formulario sale en blanco y S.O.S. lo
+               devuelve: aquí están las dos salidas, firmar o revisar si ya firmó. --}}
+          <div id="sosnCorreoFirma" style="display:none;border:1px solid #fbbf24;background:#fffbeb;border-radius:9px;padding:.55rem .7rem;margin-bottom:.5rem">
+            <div style="font-size:.76rem;color:#92400e;font-weight:700;margin-bottom:.4rem">✍️ Falta la firma del contratista</div>
+            <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+              <button class="sosn-btn" style="flex:1;min-width:190px" onclick="firmarParaCorreoSos()">✍️ Abrir formulario y firmar</button>
+              <button class="sosn-btn sec" style="flex:1;min-width:150px" onclick="abrirCorreoSos(sosnCorreoMotivoActual, true)">✅ Ya firmó, revisar</button>
+            </div>
+          </div>
+
           <label class="sosn-campo" for="sosnCorreoPara">Para</label>
           <input id="sosnCorreoPara" class="sosn-input">
           <span class="sosn-chip" id="sosnCorreoReemplazo" style="display:none" onclick="usarReemplazoSos()"></span>
@@ -364,6 +374,12 @@ async function registrarSos() {
 // ── Plan B: correo al asesor ────────────────────────────────────────────
 let sosnCorreoMotivoActual = 'manual', sosnCorreoPrep = null, sosnCorreoDetalle = '';
 
+// Abre el formulario del contrato en otra pestaña: ahí sale el lienzo para que
+// el contratista firme. Al volver, «Ya firmó, revisar» rehace la vista previa.
+function firmarParaCorreoSos() {
+    window.open(`/admin/afiliaciones/${sosnContratoId}/formulario/eps`, '_blank');
+}
+
 async function abrirCorreoSos(motivo, conservarTexto = false, detalle = '') {
     if (typeof conservarTexto === 'string') { detalle = conservarTexto; conservarTexto = false; }
     sosnCorreoMotivoActual = motivo;
@@ -392,6 +408,12 @@ async function abrirCorreoSos(motivo, conservarTexto = false, detalle = '') {
     sosnEl('sosnCorreoSubir').style.display = av.some(a => /documento de identidad/i.test(a)) ? 'block' : 'none';
     sosnEl('sosnCorreoAvisos').innerHTML = av.map(a => '⚠️ ' + sosnEsc(a)).join('<br>');
     sosnEl('sosnCorreoAvisos').style.display = av.length ? 'block' : 'none';
+
+    // Mientras falte la firma no hay correo que enviar: el asesor lo devolvería.
+    sosnEl('sosnCorreoFirma').style.display = d.falta_firma ? 'block' : 'none';
+    const btnEnviar = sosnEl('sosnBtnEnviarCorreo');
+    btnEnviar.disabled = !!d.falta_firma;
+    btnEnviar.textContent = d.falta_firma ? '📧 Enviar correo (falta la firma)' : '📧 Enviar correo';
 
     sosnEl('sosnCorreoPara').value = previo ? previo.para : d.para.correo;
     sosnEl('sosnCorreoCc').value = previo ? previo.cc : '';

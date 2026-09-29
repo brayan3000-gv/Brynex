@@ -40,6 +40,16 @@
         </div>
         <div class="ceps2-aviso" id="ceps2Avisos" style="display:none"></div>
 
+        {{-- Sin la firma dibujada el formulario sale en blanco y la EPS lo
+             devuelve: aquí están las dos salidas, firmar o revisar si ya firmó. --}}
+        <div id="ceps2Firma" style="display:none;border:1px solid #fbbf24;background:#fffbeb;border-radius:9px;padding:.55rem .7rem;margin-bottom:.5rem">
+          <div style="font-size:.76rem;color:#92400e;font-weight:700;margin-bottom:.4rem">✍️ Falta la firma del contratista</div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+            <button class="ceps2-btn" style="flex:1;min-width:190px" onclick="firmarParaCorreoEps()">✍️ Abrir formulario y firmar</button>
+            <button class="ceps2-btn sec" style="flex:1;min-width:150px" onclick="abrirCorreoEps(ceps2ContratoId, ceps2Entidad, true)">✅ Ya firmó, revisar</button>
+          </div>
+        </div>
+
         <label class="ceps2-campo" for="ceps2Para">Para</label>
         <input id="ceps2Para" class="ceps2-input">
         <span class="ceps2-chip" id="ceps2Reemplazo" style="display:none" onclick="usarReemplazoCorreoEps()"></span>
@@ -109,9 +119,17 @@ async function abrirCorreoEps(contratoId, entidad, conservar = false) {
     ceps2El('ceps2Info').innerHTML = `Sale desde <strong>${ceps2Esc(d.buzon)}</strong> para <strong>${ceps2Esc(d.para.nombre)}</strong>. Si no hay respuesta, se avisa el ${ceps2Esc(d.vence)}.` +
         (previos ? `<br>Correos anteriores:<br>${previos}` : '');
 
+    ceps2El('ceps2Firma').style.display = d.falta_firma ? 'block' : 'none';
+
     const btn = ceps2El('ceps2BtnEnviar');
-    btn.disabled = prob.length > 0;
-    btn.textContent = prob.length ? '🚫 Resuelve lo que falta para enviar' : '📧 Enviar correo';
+    btn.disabled = prob.length > 0 || !!d.falta_firma;
+    btn.textContent = prob.length ? '🚫 Resuelve lo que falta para enviar'
+        : (d.falta_firma ? '📧 Enviar correo (falta la firma)' : '📧 Enviar correo');
+}
+
+// El formulario del contrato se abre aparte: ahí está el lienzo de la firma.
+function firmarParaCorreoEps() {
+    window.open(`/admin/afiliaciones/${ceps2ContratoId}/formulario/eps`, '_blank');
 }
 
 function usarReemplazoCorreoEps() {

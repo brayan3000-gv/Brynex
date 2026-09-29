@@ -81,7 +81,8 @@ class CorreoAsesorEpsService
         }
         // Sin firma dibujada el formulario sale con ese espacio en blanco y la
         // EPS lo devuelve, así que aquí no es un aviso más: el envío se frena.
-        if ($cliente && ! FormularioEpsService::tieneFirma($cliente)) {
+        $faltaFirma = $cliente && ! FormularioEpsService::tieneFirma($cliente);
+        if ($faltaFirma) {
             $avisos[] = 'Falta la firma del contratista: ábrele el formulario y pídele que la dibuje (✍️ Firmar). Sin ella no se puede enviar.';
         }
         if ($cliente && (! $cliente->direccion_vivienda || ! $cliente->celular)) {
@@ -160,6 +161,7 @@ class CorreoAsesorEpsService
             'nombre_entidad' => $conf['nombre_entidad'],
             'problemas'     => $problemas,
             'avisos'        => $avisos,
+            'falta_firma'   => $faltaFirma,
             'independiente' => $independiente,
             'buzon'         => config("afiliaciones_correo.buzones.{$contrato->aliado_id}"),
             'para'          => $principal,

@@ -65,6 +65,14 @@ class SosCorreoService
             $avisos[] = 'No hay copia del documento de identidad del cliente. Puedes subirla aquí o enviar sin ella.';
         }
 
+        // La firma del contratista va dibujada: en letra del PDF las EPS
+        // devuelven el formulario (le pasó a Comfenalco el 16-sep-2026). Sin
+        // ella el envío se frena, no es un aviso más.
+        $faltaFirma = $cliente && ! FormularioEpsService::tieneFirma($cliente);
+        if ($faltaFirma) {
+            $avisos[] = 'Falta la firma del contratista: ábrele el formulario y pídele que la dibuje. Sin ella no se puede enviar.';
+        }
+
         $beneficiarios = $cliente ? $cliente->beneficiarios()->where('aliado_id', $contrato->aliado_id)->get() : collect();
         $docsBenef = $conBeneficiarios && $beneficiarios->isNotEmpty()
             ? DocumentoCliente::where('aliado_id', $contrato->aliado_id)->where('cc_cliente', $contrato->cedula)
@@ -140,6 +148,7 @@ class SosCorreoService
         return [
             'problemas'     => $problemas,
             'avisos'        => $avisos,
+            'falta_firma'   => $faltaFirma,
             'independiente' => $independiente,
             'buzon'         => config("afiliaciones_correo.buzones.{$contrato->aliado_id}"),
             'para'          => $principal,
@@ -263,6 +272,12 @@ class SosCorreoService
     {
         $disco = Storage::disk('local');
         $contrato->loadMissing(['cliente.municipio', 'cliente.departamento', 'cliente.beneficiarios', 'razonSocial', 'eps', 'arl', 'pension']);
+
+        // Igual que en el correo a los demás asesores: sin firma dibujada el
+        // formulario sale con ese espacio en blanco y lo devuelven.
+        if (! FormularioEpsService::tieneFirma($contrato->cliente)) {
+            throw new RuntimeException('El formulario no tiene la firma del contratista. Ábrelo y dibújala en «✍️ Firmar» antes de enviarlo: las EPS devuelven los formularios sin firma a mano alzada.');
+        }
 
         $rutaFormulario = EpsRadicado::guardarPdf($contrato, $this->formularios->generar($contrato, $conBeneficiarios, []), 'eps_formulario_sos_correo');
         if (! $rutaFormulario) {
