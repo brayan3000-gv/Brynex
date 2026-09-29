@@ -1778,12 +1778,13 @@ async function cfdDespuesDeEntrar(tab, d) {
 
 async function atenderCfd(accion, d = {}) {
   if (accion === 'cfdAbrir') {
-    // Cerrar y volver a entrar cada pocas afiliaciones. El portal se va
-    // degradando —a las pocas empieza a pedir la empresa en cada pantalla y
-    // acaba diciendo «Sin permisos para esta empresa», que no es verdad— y solo
-    // se le pasa con una sesión nueva. Se cierra en Keycloak, que es donde vive
-    // de verdad: salir solo del sakaar deja el SSO en pie y vuelve a entrar con
-    // la sesión cansada.
+    // Cerrar la sesión antes de entrar. No se hace solo: se pide desde BryNex
+    // cuando hace falta. El portal se degrada tras varias afiliaciones seguidas
+    // —empieza a pedir la empresa en cada pantalla y acaba diciendo «Sin
+    // permisos para esta empresa», que no es verdad— y solo se le pasa con una
+    // sesión nueva. Se cierra en Keycloak, que es donde vive de verdad: salir
+    // solo del sakaar deja el SSO en pie y se vuelve a entrar con la sesión
+    // cansada.
     if (d.reiniciar) {
       const p0 = await pestanaCfd();
       if (p0) {

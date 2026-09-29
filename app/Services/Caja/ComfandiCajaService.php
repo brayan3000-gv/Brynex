@@ -335,7 +335,12 @@ class ComfandiCajaService
             $this->marcar($radicado, null, Radicado::ESTADO_ERROR, $mensaje, $usuarioId);
             $this->bitacora($contrato, $radicado, 'fallida', null, $texto, (string) $entrada['error'], $usuarioId);
 
-            return ['ok' => false, 'estado' => Radicado::ESTADO_ERROR, 'mensaje' => $mensaje];
+            return [
+                'ok' => false,
+                'estado' => Radicado::ESTADO_ERROR,
+                'mensaje' => $mensaje,
+                'radicado' => $this->paraLaLista($radicado->fresh()),
+            ];
         }
         if (! $numero) {
             throw new RuntimeException('Falta el número de radicado que dio el portal.');
@@ -346,7 +351,41 @@ class ComfandiCajaService
         $this->marcar($radicado, $numero, Radicado::ESTADO_TRAMITE, $mensaje, $usuarioId);
         $this->bitacora($contrato, $radicado, 'exitosa', $numero, $texto, null, $usuarioId);
 
-        return ['ok' => true, 'estado' => Radicado::ESTADO_TRAMITE, 'numero' => $numero, 'mensaje' => $mensaje];
+        return [
+            'ok' => true,
+            'estado' => Radicado::ESTADO_TRAMITE,
+            'numero' => $numero,
+            'mensaje' => $mensaje,
+            // Con esto el listado repinta la pastilla de la caja sin recargar.
+            'radicado' => $this->paraLaLista($radicado->fresh()),
+        ];
+    }
+
+    /**
+     * Cómo queda la pastilla del radicado en el listado de afiliaciones.
+     *
+     * Se arma aquí, con los mismos métodos del modelo que usa la vista, para
+     * que el estado pintado sin recargar sea el mismo que saldría al recargar.
+     */
+    private function paraLaLista(Radicado $r): array
+    {
+        return [
+            'id' => $r->id,
+            'clase' => $r->estadoClaseEfectiva(),
+            'texto' => $r->estadoTextoEfectivo(),
+            'titulo' => $r->esConfirmadoPorEntidad() ? $r->textoConfirmacion() : null,
+            'datos' => [
+                'id' => $r->id,
+                'tipo' => $r->tipo,
+                'estado' => $r->estado,
+                'numero_radicado' => $r->numero_radicado,
+                'canal_envio' => $r->canal_envio,
+                'canal_envio_cliente' => $r->canal_envio_cliente,
+                'enviado_al_cliente' => $r->enviado_al_cliente,
+                'ruta_pdf' => $r->ruta_pdf,
+                'observacion' => $r->observacion,
+            ],
+        ];
     }
 
     /**

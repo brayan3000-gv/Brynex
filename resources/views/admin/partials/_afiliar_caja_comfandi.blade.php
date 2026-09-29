@@ -94,21 +94,42 @@ let cfdContratoId = null, cfdPrep = {}, cfdReloj = null, cfdFinal = null, cfdAvi
 // Para no pulsar Finalizar dos veces en el mismo trámite.
 let cfdEnviado = false;
 
-// Cuántas van con la sesión del portal abierta. Comfandi se degrada a las pocas
-// afiliaciones —empieza a pedir la empresa en cada pantalla y acaba diciendo
-// «Sin permisos para esta empresa», que no es cierto— y la única cura es entrar
-// de nuevo. Se cuenta aquí y no en la extensión para no guardarle la clave a
-// nadie: BryNex la tiene a mano cuando toca reabrir.
-const CFD_POR_SESION = 3;
-const cfdVan = () => Number(sessionStorage.getItem('cfdVanEnSesion') || 0);
-const cfdSumarUna = () => sessionStorage.setItem('cfdVanEnSesion', String(cfdVan() + 1));
-const cfdReiniciarCuenta = () => sessionStorage.setItem('cfdVanEnSesion', '0');
 const CFD_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const cfdEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cfdEl = id => document.getElementById(id);
 const cfdFmt = iso => iso ? iso.split('-').reverse().join('/') : '—';
 
-function cerrarCajaComfandi() { cfdEl('cfdModal').classList.remove('open'); clearInterval(cfdReloj); }
+function cerrarCajaComfandi() {
+    cfdEl('cfdModal').classList.remove('open');
+    clearInterval(cfdReloj);
+    pintarRadicadoEnLista();
+}
+
+// Lo que dejó el trámite, para repintar la fila al cerrar.
+let cfdRadicadoNuevo = null;
+
+/**
+ * Pone al día la pastilla de la caja en el listado, sin recargar la página.
+ *
+ * El estado y el texto los arma BryNex con los mismos métodos del modelo que
+ * usa la vista, así que lo que se ve aquí es lo mismo que saldría al recargar.
+ */
+function pintarRadicadoEnLista() {
+    const r = cfdRadicadoNuevo;
+    cfdRadicadoNuevo = null;
+    if (!r?.id) return;
+
+    const btn = document.querySelector(`.btn-rad[data-rad-id="${r.id}"]`);
+    if (!btn) return;
+
+    btn.className = `badge-estado badge-${r.clase} btn-rad`;
+    btn.textContent = r.texto;
+    if (r.titulo) btn.title = r.titulo; else btn.removeAttribute('title');
+
+    // El modal de gestión del radicado lee de aquí: sin esto seguiría
+    // enseñando el radicado sin número hasta recargar.
+    if (r.datos) btn.dataset.rad = JSON.stringify(r.datos);
+}
 
 async function cfdPedir(ruta, metodo = 'GET', cuerpo = null) {
     const r = await fetch(`/admin/afiliaciones/${cfdContratoId}/caja-comfandi/${ruta}`, {
@@ -182,14 +203,6 @@ async function abrirCajaComfandi(contratoId) {
 
     if (problemas.length) { cfdEl('cfdDatos').style.display = 'none'; cfdEl('cfdSesion').style.display = 'none'; return; }
     cfdEl('cfdSesion').style.display = 'block';
-
-    // Antes de empezar otra, si la sesión ya hizo su cupo se renueva sola.
-    if (cfdVan() >= CFD_POR_SESION) {
-        cfdEl('cfdSesion').innerHTML = `🔄 Van ${cfdVan()} afiliaciones con esta sesión del portal: se cierra y se vuelve a entrar para que no se atasque…`;
-        await abrirPortalComfandi(true);
-        cfdReiniciarCuenta();
-    }
-
     await revisarSesionComfandi();
     cfdReloj = setInterval(() => { if (cfdEl('cfdPasos').style.display !== 'block') revisarSesionComfandi(); }, 3000);
 }
@@ -213,12 +226,12 @@ async function revisarSesionComfandi() {
     cfdEl('cfdBtnIniciar').style.display = 'block';
 }
 
-async function abrirPortalComfandi(reiniciar = false) {
+async function abrirPortalComfandi() {
     const caja = cfdEl('cfdSesion');
     const btn = cfdEl('cfdBtnAbrir');
     const antes = btn.textContent;
     btn.disabled = true;
-    btn.textContent = reiniciar ? '⏳ Renovando la sesión del portal…' : '⏳ Entrando al portal…';
+    btn.textContent = '⏳ Entrando al portal…';
 
     let cred = {};
     try { cred = await cfdPedir('credencial', 'POST'); } catch (e) {}
@@ -233,7 +246,6 @@ async function abrirPortalComfandi(reiniciar = false) {
         // El portal lista las empresas por nombre, sin el NIT: sin esto la
         // extensión no sabe cuál pulsar y se queda en «selecciona tu empresa».
         empresa: cfdPrep.portal?.empresa || '',
-        reiniciar,
     }, 150);
 
     btn.disabled = false;
@@ -397,7 +409,7 @@ async function guardarCajaComfandi() {
         return;
     }
 
-    cfdSumarUna();
+    cfdRadicadoNuevo = r.radicado || null;
     cfdTerminar(`✅ ${cfdEsc(r.mensaje)}`);
 }
 
@@ -413,6 +425,6 @@ function cfdTerminar(html) {
     cfdEl('cfdContenido').style.display = 'none';
     cfdEl('cfdResultado').style.display = 'block';
     cfdEl('cfdResultado').innerHTML = html + '<br><span style="color:#475569">El radicado queda visible en la pestaña Radicados del portal hasta que Comfandi lo procese.</span>';
-    if (typeof mostrarToast === 'function') mostrarToast('Radicado de caja actualizado. Recarga para verlo.', 'success');
+    if (typeof mostrarToast === 'function') mostrarToast('Radicado de caja actualizado.', 'success');
 }
 </script>
