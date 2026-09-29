@@ -370,10 +370,10 @@ class AfiliacionController extends Controller
         $alidoId = $this->resolverAliado($request, $user);
         // El Excel sale de lo mismo que está en pantalla, aliados incluidos.
         $aliados = $this->aliadosDeLaVista($request, $user, $alidoId);
-        $razonesDelFiltro = $this->razonesHermanas($rsId);
 
         // Filtros adicionales
         $rsId       = $request->get('razon_social_id');
+        $razonesDelFiltro = $this->razonesHermanas($rsId);
         $tipoModId  = $request->get('tipo_modalidad_id');
         $epsF       = $request->get('eps_id');
         $arlF       = $request->get('arl_id');
