@@ -25,8 +25,8 @@ class RadicadoController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $radicado = Radicado::where('aliado_id', $alidoId)->findOrFail($id);
+        $radicado = Radicado::paraTramite($id);
+        $alidoId  = (int) $radicado->aliado_id;
 
         $data = $request->validate([
             'estado'             => 'required|in:pendiente,tramite,traslado,error,ok',
@@ -96,16 +96,13 @@ class RadicadoController extends Controller
      */
     public function crearPendiente(Request $request)
     {
-        $alidoId = session('aliado_id_activo');
-
         $data = $request->validate([
             'contrato_id' => 'required|integer',
             'tipo'        => 'required|in:eps,arl,pension,caja',
         ]);
 
-        $contrato = Contrato::with('plan')
-            ->where('aliado_id', $alidoId)
-            ->findOrFail($data['contrato_id']);
+        $contrato = Contrato::paraTramite((int) $data['contrato_id'])->loadMissing('plan');
+        $alidoId = (int) $contrato->aliado_id;
 
         // El tipo debe corresponder a un servicio que el plan realmente incluye.
         if (!$contrato->plan || !in_array($data['tipo'], $contrato->plan->tiposRadicado(), true)) {
@@ -143,8 +140,8 @@ class RadicadoController extends Controller
      */
     public function subirPdf(Request $request, $id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $radicado = Radicado::with('contrato')->where('aliado_id', $alidoId)->findOrFail($id);
+        $radicado = Radicado::paraTramite($id, ['contrato']);
+        $alidoId  = (int) $radicado->aliado_id;
         $contrato = $radicado->contrato;
 
         $request->validate([
@@ -186,8 +183,8 @@ class RadicadoController extends Controller
      */
     public function descargarPdf($id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $radicado = Radicado::where('aliado_id', $alidoId)->findOrFail($id);
+        $radicado = Radicado::paraTramite($id);
+        $alidoId  = (int) $radicado->aliado_id;
 
         if (!$radicado->ruta_pdf || !Storage::disk('local')->exists($radicado->ruta_pdf)) {
             abort(404, 'PDF no encontrado.');
@@ -202,8 +199,8 @@ class RadicadoController extends Controller
      */
     public function marcarEnviado(Request $request, $id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $radicado = Radicado::where('aliado_id', $alidoId)->findOrFail($id);
+        $radicado = Radicado::paraTramite($id);
+        $alidoId  = (int) $radicado->aliado_id;
 
         $data = $request->validate([
             'enviado_al_cliente'   => 'required|boolean',
@@ -244,10 +241,7 @@ class RadicadoController extends Controller
      */
     public function bitacora($id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $radicado = Radicado::with([
-            'movimientos.user:id,nombre',
-        ])->where('aliado_id', $alidoId)->findOrFail($id);
+        $radicado = Radicado::paraTramite($id, ['movimientos.user:id,nombre']);
 
         $movimientos = $radicado->movimientos->map(function ($m, $i) use ($radicado) {
             // Calcular días entre este movimiento y el anterior
@@ -285,8 +279,8 @@ class RadicadoController extends Controller
      */
     public function documentosCotizante($id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $radicado = Radicado::with('contrato')->where('aliado_id', $alidoId)->findOrFail($id);
+        $radicado = Radicado::paraTramite($id, ['contrato']);
+        $alidoId  = (int) $radicado->aliado_id;
         $contrato = $radicado->contrato;
         $alidoId  = $contrato->aliado_id;
         $cedula   = $contrato->cedula;

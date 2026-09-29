@@ -257,6 +257,6 @@ class ComfandiCajaController extends Controller
     /** Siempre del aliado activo: el id llega por la URL. */
     private function contrato(int $id): Contrato
     {
-        return Contrato::where('aliado_id', (int) session('aliado_id_activo'))->findOrFail($id);
+        return Contrato::paraTramite($id);
     }
 }

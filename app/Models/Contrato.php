@@ -7,6 +7,7 @@ use App\Services\PilaCotizanteDosPasos;
 use App\Services\UpcAdicionalService;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class Contrato extends BaseModel
@@ -450,6 +451,30 @@ class Contrato extends BaseModel
             'horas' => 2 * $semanas,   // 8 horas es el mes completo (4 semanas)
             'dias' => $dias,
         ];
+    }
+
+    /**
+     * El contrato para un trámite del panel: el del aliado activo y, para un
+     * usuario de BryNex, también el de cualquier aliado al que tenga acceso.
+     *
+     * BryNex gestiona las afiliaciones de varios aliados y las ve juntas en una
+     * sola lista (botón 🏢 de Afiliaciones): exigir que el contrato sea del
+     * aliado activo dejaba los botones de afiliar sin poder abrir la ficha.
+     * Para cualquier otro usuario sigue siendo un 404, igual que antes.
+     */
+    public static function paraTramite(int $id): self
+    {
+        $contrato = self::findOrFail($id);
+        $user = Auth::user();
+
+        $delActivo = (int) $contrato->aliado_id === (int) session('aliado_id_activo');
+
+        abort_unless(
+            $delActivo || ($user?->es_brynex && $user->puedeAccederAliado((int) $contrato->aliado_id)),
+            404
+        );
+
+        return $contrato;
     }
 
     // ── COTIZADOR ──

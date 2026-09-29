@@ -487,11 +487,10 @@ class AfiliacionController extends Controller
      */
     public function historial($id)
     {
-        $alidoId  = session('aliado_id_activo');
-        $contrato = Contrato::with([
+        $contrato = Contrato::paraTramite($id)->loadMissing([
             'cliente:cedula,primer_nombre,segundo_nombre,primer_apellido,segundo_apellido',
             'encargado:id,nombre',
-        ])->where('aliado_id', $alidoId)->findOrFail($id);
+        ]);
 
         $historial = collect();
 

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
 
 class Radicado extends BaseModel
 {
@@ -86,6 +87,27 @@ class Radicado extends BaseModel
         return 'Confirmado en '.(self::CONFIRMADORES[$this->confirmado_por] ?? $this->confirmado_por)
             .($this->confirmado_en ? ' el '.$this->confirmado_en->format('d/m/Y') : '')
             .($this->numero_radicado ? ' · radicado '.$this->numero_radicado : '');
+    }
+
+    /**
+     * El radicado para gestionarlo desde el panel: el del aliado activo y, para
+     * un usuario de BryNex, el de cualquier aliado al que tenga acceso, porque
+     * ve las afiliaciones de varios aliados en una sola lista (botón 🏢).
+     * Ver {@see Contrato::paraTramite()}.
+     */
+    public static function paraTramite(int $id, array $with = []): self
+    {
+        $radicado = self::with($with)->findOrFail($id);
+        $user = Auth::user();
+
+        $delActivo = (int) $radicado->aliado_id === (int) session('aliado_id_activo');
+
+        abort_unless(
+            $delActivo || ($user?->es_brynex && $user->puedeAccederAliado((int) $radicado->aliado_id)),
+            404
+        );
+
+        return $radicado;
     }
 
     // ── Constantes de estado ──
