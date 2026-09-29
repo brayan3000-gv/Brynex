@@ -543,8 +543,8 @@ class Incapacidad extends BaseModel
      * El `$campo` del miembro más reciente de la familia (la original y sus
      * prórrogas), resuelto con las prórrogas que ya vienen cargadas.
      *
-     * El listado agrupado pide `estado_grupo` y `entidad_grupo` por cada fila,
-     * y cada uno era una consulta: 80 por página. Como el listado ya carga las
+     * El listado agrupado pide `entidad_grupo` por cada fila, y cada una era
+     * una consulta. Como el listado ya carga las
      * prórrogas, se resuelve en memoria con la misma regla de la consulta —
      * el `numero_proroga` más alto, con NULL al final como en SQL Server — y
      * la relación ya excluye las borradas (SoftDeletes). Contrastado contra la
@@ -574,27 +574,67 @@ class Incapacidad extends BaseModel
     }
 
     /**
-     * Estado del grupo: siempre refleja el estado de la incapacidad más reciente
-     * (la última prórroga, o la original si no hay prórrogas).
-     * Útil para el encabezado de la familia en la vista agrupada.
+     * Qué tan avanzado va cada estado, para mostrar el más atrasado de una
+     * familia. Primero todo lo que sigue en trámite, en el orden del ciclo;
+     * después lo cerrado, con los malos resultados antes del pago, que es lo
+     * que hay que ver primero. Un estado que no esté aquí sale como el más
+     * atrasado: mejor verlo que esconderlo.
+     */
+    public const AVANCE_ESTADO = [
+        'recibido' => 1,
+        'transcripcion_ips' => 2,
+        'transcripcion' => 2,           // legacy
+        'radicada' => 3,
+        'derecho_peticion' => 4,
+        'derecho_peticion_radicado' => 5,
+        'tutela' => 6,
+        'tutela_radicada' => 7,
+        'en_liquidacion' => 8,
+        'liquidacion' => 8,             // legacy
+        'pagada_razon_social' => 9,
+        'pagada_afiliado' => 10,
+        'pagado_afiliado' => 10,        // legacy
+        // Cerradas
+        'negada' => 20,
+        'rechazado' => 21,
+        'anulada' => 22,
+        'cierre_exitoso' => 23,
+        'pagada' => 23,                 // legacy
+    ];
+
+    /** El estado menos avanzado de la lista (ver AVANCE_ESTADO). */
+    public static function estadoMasAtrasado(iterable $estados): ?string
+    {
+        return collect($estados)->filter()
+            ->sortBy(fn ($e) => self::AVANCE_ESTADO[$e] ?? 0)
+            ->first();
+    }
+
+    /**
+     * Estado del grupo: el más atrasado de la familia (la original y sus
+     * prórrogas). Si la original ya se pagó y una prórroga sigue radicada,
+     * el grupo está "Radicada": lo que importa en la lista es lo que falta.
+     *
+     * Antes era el de la prórroga más reciente, y una prórroga vieja todavía
+     * en trámite quedaba tapada por una nueva ya pagada.
      */
     public function getEstadoGrupoAttribute(): string
     {
-        $ultimo = $this->ultimoMiembroCargado('estado');
-        if ($ultimo !== false) {
-            return $ultimo ?? $this->estado;
+        if ($this->incapacidad_padre_id === null && $this->relationLoaded('prorrogas')
+            && $this->prorrogas->every(fn ($p) => array_key_exists('estado', $p->getAttributes()))) {
+            $estados = collect([$this->estado])->concat($this->prorrogas->pluck('estado'));
+        } else {
+            $padreId = $this->incapacidad_padre_id ?? $this->id;
+            $estados = DB::table('incapacidades')
+                ->where(function ($q) use ($padreId) {
+                    $q->where('id', $padreId)
+                      ->orWhere('incapacidad_padre_id', $padreId);
+                })
+                ->whereNull('deleted_at')
+                ->pluck('estado');
         }
 
-        $padreId = $this->incapacidad_padre_id ?? $this->id;
-        $ultimaEstado = DB::table('incapacidades')
-            ->where(function ($q) use ($padreId) {
-                $q->where('id', $padreId)
-                  ->orWhere('incapacidad_padre_id', $padreId);
-            })
-            ->whereNull('deleted_at')
-            ->orderByDesc('numero_proroga')
-            ->value('estado');
-        return $ultimaEstado ?? $this->estado;
+        return self::estadoMasAtrasado($estados) ?? $this->estado;
     }
 
     /**
