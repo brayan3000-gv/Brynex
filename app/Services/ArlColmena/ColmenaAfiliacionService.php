@@ -58,6 +58,23 @@ class ColmenaAfiliacionService
         return $this->api;
     }
 
+    /** @var (callable(string): void)|null Avisa cada paso a quien esté mirando (la pantalla). */
+    private $avance = null;
+
+    public function conAvance(?callable $avance): static
+    {
+        $this->avance = $avance;
+
+        return $this;
+    }
+
+    private function avisar(string $paso): void
+    {
+        if ($this->avance) {
+            ($this->avance)($paso);
+        }
+    }
+
     public function builder(): ColmenaPayloadBuilder
     {
         return $this->builder;
@@ -104,6 +121,7 @@ class ColmenaAfiliacionService
             );
         }
 
+        $this->avisar('Armando los datos del ingreso');
         $payload = $this->builder->paraAfiliacion($contrato, $inicio, $arlAnteriorId);
 
         $registro = new ArlAfiliacion([
@@ -126,6 +144,7 @@ class ColmenaAfiliacionService
         ]);
 
         try {
+            $this->avisar('Radicando el ingreso en Colmena');
             $respuesta = $this->api->afiliarDependiente($payload);
         } catch (Throwable $e) {
             $registro->fill([
@@ -150,6 +169,7 @@ class ColmenaAfiliacionService
         // Sin certificado no se deshace nada: la afiliación ya quedó radicada y
         // el PDF se puede bajar después con `arl:colmena certificado`.
         $certificado = null;
+        $this->avisar('Descargando el certificado de afiliación');
         try {
             $certificado = $this->archivarCertificado($contrato, $usuarioId);
         } catch (Throwable $e) {
@@ -157,6 +177,7 @@ class ColmenaAfiliacionService
             $registro->update(['mensaje_error' => 'Afiliado, pero sin certificado: '.Str::limit($e->getMessage(), 400)]);
         }
 
+        $this->avisar('Cerrando el radicado en BryNex');
         $this->cerrarRadicado($contrato, $registro, $usuarioId, $certificado);
 
         return $registro;

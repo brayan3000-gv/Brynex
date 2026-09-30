@@ -112,7 +112,12 @@ class ColmenaApiService
         // Solo las lecturas se reintentan. Un timeout en `workers/dependent` no
         // significa que Colmena no lo haya radicado: reintentar dejaría dos
         // ingresos al mismo trabajador.
-        return $reintentable ? $peticion->retry(2, 500) : $peticion;
+        // Un 4xx (p. ej. el 404 de «no está en Colmena») es una respuesta, no
+        // un fallo de red: no se reintenta y pasa por `interpretar`.
+        return $reintentable
+            ? $peticion->retry(2, 500, fn ($e) => $e instanceof \Illuminate\Http\Client\ConnectionException
+                || ($e instanceof \Illuminate\Http\Client\RequestException && $e->response->status() >= 500), throw: false)
+            : $peticion;
     }
 
     public function get(string $ruta, array $query = []): array|string|null

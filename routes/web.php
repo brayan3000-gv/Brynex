@@ -1017,6 +1017,7 @@ Route::middleware('auth')->group(function () {
         // un día después del inicio de la vigencia; luego es retiro.
         Route::middleware('can:automatizar-arl')->group(function () {
             $colm = \App\Http\Controllers\Admin\ArlColmenaController::class;
+            Route::get('/colmena/progreso/{id}', [$colm, 'progreso'])->name('colmena.progreso');
             Route::get('/{contrato}/colmena/precheck', [$colm, 'precheck'])->name('colmena.precheck');
             Route::post('/{contrato}/colmena/afiliar', [$colm, 'afiliar'])->name('colmena.afiliar');
             Route::post('/{contrato}/colmena/anular', [$colm, 'anular'])->name('colmena.anular');

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Bitacora;
 use App\Models\Contrato;
 use App\Services\ArlColmena\ColmenaAfiliacionService;
+use App\Services\ArlColmena\ColmenaProgreso;
 use App\Services\ArlColmena\ColmenaSesionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -54,12 +55,21 @@ class ArlColmenaController extends Controller
             ]);
         }
 
+        $progreso = $request->query('progreso');
+
         try {
             $servicio = ColmenaAfiliacionService::paraContrato($contrato);
+            ColmenaProgreso::paso($progreso, 'Iniciando sesión en el portal de Colmena');
+            $servicio->api()->contrato();
+            ColmenaProgreso::paso($progreso, 'Revisando los datos del trabajador');
             $problemas = $servicio->builder()->problemas($contrato);
+            ColmenaProgreso::paso($progreso, 'Consultando el centro de trabajo');
             $centro = $problemas ? null : $servicio->builder()->centro($contrato);
+            ColmenaProgreso::paso($progreso, 'Consultando si ya está afiliado en Colmena');
             $cobertura = $servicio->coberturaEnColmena($contrato);
+            ColmenaProgreso::terminar($progreso);
         } catch (Throwable $e) {
+            ColmenaProgreso::terminar($progreso);
             Log::warning('ARL Colmena: precheck falló', ['contrato' => $contrato->id, 'error' => $e->getMessage()]);
 
             return response()->json([
@@ -88,6 +98,12 @@ class ArlColmenaController extends Controller
         ]);
     }
 
+    /** Lo que lleva hecho el robot, para el contador de la pantalla. */
+    public function progreso(string $id)
+    {
+        return response()->json(ColmenaProgreso::leer($id));
+    }
+
     /** Radica el ingreso. */
     public function afiliar(Request $request, int $contratoId)
     {
@@ -96,16 +112,25 @@ class ArlColmenaController extends Controller
         $contrato = $this->contrato($request, $contratoId);
         $datos = $request->validate(['fecha_inicio_cobertura' => 'required|date']);
 
+        $progreso = $request->input('progreso');
+
         try {
-            $afiliacion = ColmenaAfiliacionService::paraContrato($contrato)->afiliar(
+            ColmenaProgreso::paso($progreso, 'Iniciando sesión en el portal de Colmena');
+            $servicio = ColmenaAfiliacionService::paraContrato($contrato);
+            $servicio->api()->contrato();
+            $afiliacion = $servicio->conAvance(fn (string $p) => ColmenaProgreso::paso($progreso, $p))->afiliar(
                 $contrato,
                 Carbon::parse($datos['fecha_inicio_cobertura']),
                 Auth::id(),
                 $request->input('arl_anterior'),
             );
         } catch (Throwable $e) {
+            ColmenaProgreso::terminar($progreso);
+
             return response()->json(['ok' => false, 'mensaje' => $e->getMessage()], 422);
         }
+
+        ColmenaProgreso::terminar($progreso);
 
         Bitacora::registrar(
             'created',

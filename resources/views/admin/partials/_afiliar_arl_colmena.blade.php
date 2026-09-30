@@ -27,6 +27,14 @@
 .acm-input { width:100%;padding:.5rem .65rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;font-family:inherit }
 .acm-btn { width:100%;margin-top:.9rem;background:linear-gradient(135deg,#b45309,#f59e0b);color:#fff;border:none;border-radius:10px;padding:.6rem 1.2rem;font-size:.86rem;font-weight:700;cursor:pointer }
 .acm-btn:disabled { opacity:.5;cursor:not-allowed }
+.acm-prog { padding:.6rem .4rem;font-size:.8rem;color:#475569 }
+.acm-prog-titulo { font-weight:800;color:#92400e;margin-bottom:.6rem;display:flex;justify-content:space-between;align-items:center }
+.acm-seg { background:#fef3c7;color:#92400e;border-radius:999px;padding:.1rem .6rem;font-variant-numeric:tabular-nums;font-size:.75rem }
+.acm-paso { display:flex;gap:.5rem;align-items:flex-start;padding:.2rem 0;line-height:1.35 }
+.acm-paso.hecho { color:#166534 }
+.acm-paso.actual { color:#0f172a;font-weight:700 }
+@keyframes acm-giro { to { transform:rotate(360deg) } }
+.acm-giro { display:inline-block;animation:acm-giro 1.1s linear infinite }
 </style>
 
 <div class="acm-bg" id="acmModal">
@@ -36,9 +44,7 @@
       <button class="acm-x" onclick="cerrarAfiliarColmena()">✕</button>
     </div>
     <div class="acm-body">
-      <div id="acmCargando" style="text-align:center;color:#64748b;font-size:.82rem;padding:1.2rem">
-        ⏳ Entrando al portal de Colmena y revisando el contrato...
-      </div>
+      <div id="acmCargando" class="acm-prog"></div>
 
       <div id="acmContenido" style="display:none">
         <div class="acm-resumen" id="acmResumen"></div>
@@ -74,32 +80,57 @@ const ACM_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '
 
 function cerrarAfiliarColmena() { document.getElementById('acmModal').classList.remove('open'); }
 
-// El precheck abre sesión en el portal (un navegador dentro del servidor) y
-// puede tardar más de un minuto: sin contador el botón parece congelado.
-function acmEsperar(btn, texto) {
+// Abrir sesión en el portal (un navegador dentro del servidor) y radicar pueden
+// tardar más de un minuto. El servidor anota cada paso bajo un id y aquí se lee
+// cada segundo, junto con el segundero: así se ve que el robot sigue trabajando.
+function acmProgreso(titulo) {
+    const id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+        : Date.now() + '-' + Math.random().toString(16).slice(2);
+    const caja = document.getElementById('acmCargando');
     const desde = Date.now();
-    const pintar = () => { btn.textContent = `⏳ ${texto} ${Math.round((Date.now() - desde) / 1000)}s`; };
-    btn.disabled = true; pintar();
-    const reloj = setInterval(pintar, 1000);
-    return () => clearInterval(reloj);
+    let pasos = [];
+
+    const pintar = () => {
+        const seg = Math.round((Date.now() - desde) / 1000);
+        const filas = pasos.map((p, i) => i < pasos.length - 1
+            ? `<div class="acm-paso hecho"><span>✅</span><span>${p}</span></div>`
+            : `<div class="acm-paso actual"><span class="acm-giro">⏳</span><span>${p}…</span></div>`).join('');
+        caja.innerHTML = `<div class="acm-prog-titulo"><span>${titulo}</span><span class="acm-seg">⏱ ${seg}s</span></div>` +
+            (filas || `<div class="acm-paso actual"><span class="acm-giro">⏳</span><span>Conectando con el servidor…</span></div>`);
+    };
+
+    const consultar = async () => {
+        try {
+            const r = await fetch(`/admin/afiliaciones/colmena/progreso/${id}`, { headers: { 'Accept': 'application/json' } });
+            const d = await r.json();
+            if (Array.isArray(d.pasos)) pasos = d.pasos;
+        } catch (e) { /* un tic perdido no importa: el siguiente lo recupera */ }
+        pintar();
+    };
+
+    pintar();
+    const reloj = setInterval(consultar, 1000);
+    return { id, parar: () => clearInterval(reloj) };
 }
 
 async function abrirAfiliarColmena(contratoId) {
     acmContratoId = contratoId;
     document.getElementById('acmCargando').style.display  = 'block';
-    document.getElementById('acmCargando').textContent    = '⏳ Entrando al portal de Colmena y revisando el contrato...';
     document.getElementById('acmContenido').style.display = 'none';
     document.getElementById('acmResultado').style.display = 'none';
     document.getElementById('acmModal').classList.add('open');
 
+    const prog = acmProgreso('Revisando el contrato en Colmena');
     let data;
     try {
-        const r = await fetch(`/admin/afiliaciones/${contratoId}/colmena/precheck`, { headers: { 'Accept': 'application/json' } });
+        const r = await fetch(`/admin/afiliaciones/${contratoId}/colmena/precheck?progreso=${prog.id}`, { headers: { 'Accept': 'application/json' } });
         data = await r.json();
     } catch (e) {
+        prog.parar();
         document.getElementById('acmCargando').textContent = '⚠️ No se pudo revisar el contrato.';
         return;
     }
+    prog.parar();
 
     document.getElementById('acmCargando').style.display  = 'none';
     document.getElementById('acmContenido').style.display = 'block';
@@ -166,14 +197,18 @@ async function confirmarAfiliarColmena() {
     if (!fecha) { alert('Selecciona la fecha de inicio de vigencia.'); return; }
 
     const btn = document.getElementById('acmBtn');
-    const parar = acmEsperar(btn, 'Afiliando en Colmena...');
+    // El formulario se esconde mientras trabaja el robot: así no se puede
+    // pulsar dos veces y se ve el avance en su lugar.
+    document.getElementById('acmContenido').style.display = 'none';
+    document.getElementById('acmCargando').style.display  = 'block';
+    const prog = acmProgreso('Afiliando en Colmena');
 
     let data;
     try {
         const res = await fetch(`/admin/afiliaciones/${acmContratoId}/colmena/afiliar`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': ACM_CSRF, 'Accept': 'application/json' },
-            body: JSON.stringify({ fecha_inicio_cobertura: fecha }),
+            body: JSON.stringify({ fecha_inicio_cobertura: fecha, progreso: prog.id }),
         });
         data = await res.json();
     } catch (e) {
@@ -182,10 +217,10 @@ async function confirmarAfiliarColmena() {
         data = { ok: false, mensaje: 'Se perdió la conexión con el servidor. Antes de reintentar, revisa en el portal de Colmena si el ingreso quedó radicado.' };
     }
 
-    parar();
+    prog.parar();
+    document.getElementById('acmCargando').style.display = 'none';
 
     if (data.ok) {
-        document.getElementById('acmContenido').style.display = 'none';
         const caja = document.getElementById('acmResultado');
         caja.innerHTML = `✅ <strong>${data.mensaje}</strong><br>` +
             `Radicación <strong>${data.codigo_transaccion ?? '—'}</strong> · vigencia desde <strong>${data.fecha_display}</strong>` +
@@ -193,6 +228,7 @@ async function confirmarAfiliarColmena() {
         caja.style.display = 'block';
         setTimeout(() => location.reload(), 3500);
     } else {
+        document.getElementById('acmContenido').style.display = 'block';
         btn.disabled = false; btn.textContent = '🐝 Reintentar';
         alert(data.mensaje || 'No se pudo afiliar.');
     }
