@@ -273,6 +273,37 @@ class ColmenaApiService
      * vigencia; pasado eso hay que retirar. Si no hay ingreso que anular,
      * responde 404 con ese mismo mensaje del plazo, que despista.
      */
+    /**
+     * Certificado de afiliación de un dependiente ("Certificados → Dependientes
+     * → Certificado de afiliación"). Devuelve el PDF crudo.
+     *
+     * Es el mismo POST que dispara la pantalla: el trabajador va en el cuerpo y
+     * el PDF vuelve en base64 dentro de `bytes`.
+     */
+    public function certificadoAfiliacionDependiente(string $tipoDoc, string $documento, bool $conSalario = true): string
+    {
+        $r = $this->post('/membership/special-certification/dependent-worker', [
+            ['numberIdentification' => $documento, 'typeIdentification' => $tipoDoc],
+        ], [
+            'quoteType' => '0',
+            'headquarterId' => '0',
+            'sampleSalary' => $conSalario ? '1' : '0',
+            'startDateCoverage' => '',
+            'endDateCoverage' => '',
+            'contractId' => $this->contrato(),
+            'reportSizeLimit' => '5000',
+            'reportType' => 'PDF',
+        ]);
+
+        $pdf = is_array($r) ? base64_decode((string) ($r['bytes'] ?? ''), true) : false;
+
+        if (! $pdf || ! str_starts_with($pdf, '%PDF')) {
+            throw new RuntimeException('Colmena no devolvió el PDF del certificado de afiliación.');
+        }
+
+        return $pdf;
+    }
+
     public function anularIngresoDependiente(string $tipoDoc, string $documento): array
     {
         $r = $this->post('/news/dependent/cancellation-entry', [

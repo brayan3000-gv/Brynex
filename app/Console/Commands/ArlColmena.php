@@ -19,7 +19,7 @@ use Throwable;
 class ArlColmena extends Command
 {
     protected $signature = 'arl:colmena
-        {accion : sesion|centros|consultar|afiliar|anular|retirar}
+        {accion : sesion|centros|consultar|certificado|afiliar|anular|retirar}
         {--contrato= : Id del contrato en BryNex}
         {--nit= : NIT de la empresa ante Colmena, si no es la de la razón social del contrato}
         {--fecha= : Inicio de vigencia (afiliar) o fecha de retiro, AAAA-MM-DD}
@@ -35,6 +35,7 @@ class ArlColmena extends Command
                 'sesion' => $this->sesion(),
                 'centros' => $this->centros(),
                 'consultar' => $this->consultar(),
+                'certificado' => $this->certificado(),
                 'afiliar' => $this->afiliar(),
                 'anular' => $this->anular(),
                 'retirar' => $this->retirar(),
@@ -53,6 +54,15 @@ class ArlColmena extends Command
 
         $this->info('Contrato en Colmena: '.$api->contrato());
         $this->line('SMLV que maneja Colmena: '.number_format($api->smlv(), 0, ',', '.'));
+
+        return self::SUCCESS;
+    }
+
+    private function certificado(): int
+    {
+        $documento = $this->servicio()->archivarCertificado($this->contrato());
+
+        $this->info('Certificado guardado: '.$documento->ruta);
 
         return self::SUCCESS;
     }

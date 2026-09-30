@@ -178,6 +178,43 @@ try {
     }
   }
 
+  // Con un solo contrato el portal salta la selección y cae en «Selecciona un
+  // módulo»: el contrato queda en la cookie al entrar a Oficina Digital.
+  if (!contrato) {
+    const modulo = await visibleConTexto(pagina, txt => /oficina digital/i.test(txt));
+    if (modulo) {
+      await Promise.all([
+        pagina.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }).catch(() => {}),
+        modulo.click().catch(() => {}),
+      ]);
+      for (let i = 0; i < 6 && !contrato; i++) {
+        await esperar(1500);
+        contrato = await cookie(pagina, 'userContract');
+      }
+      // Las pantallas de Dependientes sí llaman con contractId=…
+      if (!contrato) {
+        for (const paso of [/^dependientes$/i, /^novedades$/i, /ingresos?$/i, /^reportes$/i, /afiliados|vigentes/i]) {
+          const el = await visibleConTexto(pagina, txt => paso.test(txt) && txt.length < 60);
+          if (el) { await el.evaluate(e => e.scrollIntoView({block:'center'})).catch(() => {}); await el.click().catch(() => {}); await esperar(4000); }
+        }
+      }
+      // Sin selección no hay cookie: el id del contrato viaja en las llamadas
+      // del propio portal (contractId=…) y en el almacenamiento de la página.
+      if (!contrato) {
+        contrato = await pagina.evaluate(() => {
+          for (const almacen of [localStorage, sessionStorage]) {
+            for (const k of Object.keys(almacen)) {
+              if (/contract/i.test(k) && /^\d{4,}$/.test(String(almacen.getItem(k)).replace(/"/g, ''))) return String(almacen.getItem(k)).replace(/"/g, '');
+            }
+          }
+          const vistos = performance.getEntriesByType('resource').map(r => r.name).join(' ');
+          const m = vistos.match(/contractId=(\d+)/i);
+          return m ? m[1] : null;
+        }).catch(() => null);
+      }
+    }
+  }
+
   contrato ??= await cookie(pagina, 'userContract');
   if (!contrato) {
     throw new Error(

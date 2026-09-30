@@ -4,8 +4,12 @@ namespace App\Services\ArlColmena;
 
 use App\Models\ArlAfiliacion;
 use App\Models\Contrato;
+use App\Models\DocumentoCliente;
 use App\Models\Radicado;
+use App\Services\ArlSura\ArlAfiliacionService;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
@@ -143,7 +147,17 @@ class ColmenaAfiliacionService
 
         $contrato->update(['fecha_arl' => $registro->fecha_inicio_cobertura]);
 
-        $this->cerrarRadicado($contrato, $registro, $usuarioId);
+        // Sin certificado no se deshace nada: la afiliación ya quedó radicada y
+        // el PDF se puede bajar después con `arl:colmena certificado`.
+        $certificado = null;
+        try {
+            $certificado = $this->archivarCertificado($contrato, $usuarioId);
+        } catch (Throwable $e) {
+            Log::warning('ARL Colmena: afiliado, pero sin certificado', ['contrato' => $contrato->id, 'error' => $e->getMessage()]);
+            $registro->update(['mensaje_error' => 'Afiliado, pero sin certificado: '.Str::limit($e->getMessage(), 400)]);
+        }
+
+        $this->cerrarRadicado($contrato, $registro, $usuarioId, $certificado);
 
         return $registro;
     }
@@ -151,11 +165,10 @@ class ColmenaAfiliacionService
     /**
      * Deja el radicado de ARL en OK con el número de radicación de Colmena.
      *
-     * Colmena no entrega certificado en el mismo trámite (el carné y el soporte
-     * salen de otra pantalla), así que aquí no se adjunta PDF: el número de
-     * radicación es lo que sirve para reclamar.
+     * El certificado no viene en la respuesta del ingreso: se pide aparte
+     * (`archivarCertificado`) y, si se tiene, se adjunta al radicado.
      */
-    private function cerrarRadicado(Contrato $contrato, ArlAfiliacion $afiliacion, ?int $usuarioId): void
+    private function cerrarRadicado(Contrato $contrato, ArlAfiliacion $afiliacion, ?int $usuarioId, ?DocumentoCliente $certificado = null): void
     {
         Radicado::updateOrCreate(
             ['contrato_id' => $contrato->id, 'tipo' => Radicado::TIPO_ARL],
@@ -164,6 +177,7 @@ class ColmenaAfiliacionService
                 'estado' => Radicado::ESTADO_OK,
                 'numero_radicado' => $afiliacion->codigo_transaccion,
                 'canal_envio' => Radicado::CANAL_WEB,
+                'ruta_pdf' => $certificado?->ruta,
                 'fecha_confirmacion' => now(),
                 'confirmado_por' => 'arl_colmena',
                 'confirmado_en' => now(),
@@ -172,6 +186,40 @@ class ColmenaAfiliacionService
                     $afiliacion->fecha_inicio_cobertura->format('d/m/Y').'.',
             ]
         );
+    }
+
+    // ─── Certificado ─────────────────────────────────────────────────
+
+    /**
+     * Baja el certificado de afiliación del portal y lo archiva contra la
+     * cédula del cliente, igual que el soporte de ARL Sura. Va al disco
+     * `local`: lleva salario y documento.
+     */
+    public function archivarCertificado(Contrato $contrato, ?int $usuarioId = null): DocumentoCliente
+    {
+        $tipo = $this->builder->tipoDocumento($contrato->cliente?->tipo_doc)['id'];
+        $pdf = $this->api->certificadoAfiliacionDependiente($tipo, (string) $contrato->cedula);
+
+        $nombre = ArlAfiliacionService::DOC_SOPORTE.'_'.$contrato->cedula.'_'.now()->format('Ymd_His').'.pdf';
+        $ruta = "documentos/{$contrato->aliado_id}/{$contrato->cedula}/{$nombre}";
+
+        Storage::disk('local')->put($ruta, $pdf);
+
+        $documento = DocumentoCliente::create([
+            'aliado_id' => $contrato->aliado_id,
+            'cc_cliente' => $contrato->cedula,
+            'tipo_documento' => ArlAfiliacionService::DOC_SOPORTE,
+            'nombre_archivo' => $nombre,
+            'ruta' => $ruta,
+            // Por comando no hay sesión y la columna no admite nulo: el 2 es el dueño.
+            'subido_por' => $usuarioId ?? 2,
+        ]);
+
+        Radicado::where('contrato_id', $contrato->id)
+            ->where('tipo', Radicado::TIPO_ARL)
+            ->update(['ruta_pdf' => $ruta]);
+
+        return $documento;
     }
 
     // ─── Anulación ───────────────────────────────────────────────────
