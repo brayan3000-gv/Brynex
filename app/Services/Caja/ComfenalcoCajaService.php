@@ -59,7 +59,7 @@ class ComfenalcoCajaService
 
     public const CONTRATOS = [1 => 'Término indefinido', 2 => 'Término fijo', 3 => 'Labor contratada'];
 
-    public const FORMAS_PAGO = [10 => 'Daviplata', 13 => 'Kupi'];
+    public const FORMAS_PAGO = [13 => 'Kupi', 10 => 'Daviplata'];
 
     /**
      * @return array{problemas: string[], avisos: string[], resumen: array, portal: array|null}
@@ -182,6 +182,70 @@ class ComfenalcoCajaService
                 'parentesco' => $b->parentesco,
             ])->values()->all(),
         ]];
+    }
+
+    /**
+     * Guarda los anexos que la caja ya tiene. Solo PDF o imagen, al disco privado
+     * (llevan datos personales), y se omiten los que ya están: mismo nombre de
+     * archivo para la misma persona.
+     *
+     * @param  array<int, array{requerido?:?string, nombre:string, doc_beneficiario?:?string, base64:string}>  $docs
+     * @return array{guardados:int, repetidos:int, rechazados:int, detalle:string[]}
+     */
+    public function guardarDocumentos(Contrato $contrato, array $docs, ?int $usuarioId): array
+    {
+        $cedula = (string) $contrato->cedula;
+        $guardados = $repetidos = $rechazados = 0;
+        $detalle = [];
+
+        foreach ($docs as $d) {
+            $bin = base64_decode((string) $d['base64'], true);
+            $esPdf = $bin !== false && str_starts_with($bin, '%PDF');
+            $esImagen = $bin !== false && (str_starts_with($bin, "\xFF\xD8\xFF") || str_starts_with($bin, "\x89PNG"));
+            if (! $esPdf && ! $esImagen) {
+                $rechazados++;
+                $detalle[] = "{$d['nombre']}: no es PDF ni imagen";
+
+                continue;
+            }
+
+            $docBen = ! empty($d['doc_beneficiario']) ? ltrim(preg_replace('/\D/', '', (string) $d['doc_beneficiario']), '0') : null;
+            $yaEsta = DB::table('documentos_cliente')->where('aliado_id', $contrato->aliado_id)->where('cc_cliente', $cedula)
+                ->where('nombre_archivo', $d['nombre'])
+                ->when($docBen, fn ($q) => $q->where('doc_beneficiario', $docBen), fn ($q) => $q->whereNull('doc_beneficiario'))
+                ->exists();
+            if ($yaEsta) {
+                $repetidos++;
+
+                continue;
+            }
+
+            $tipo = $this->tipoDocumento((string) ($d['requerido'] ?? ''), (string) $d['nombre']);
+            $ruta = "documentos/{$contrato->aliado_id}/{$cedula}/{$tipo}_".time().'_'.\Illuminate\Support\Str::random(6).($esPdf ? '.pdf' : (str_starts_with($bin, "\x89PNG") ? '.png' : '.jpg'));
+            \Illuminate\Support\Facades\Storage::disk('local')->put($ruta, $bin);
+            \App\Models\DocumentoCliente::create([
+                'aliado_id' => $contrato->aliado_id, 'cc_cliente' => $cedula, 'doc_beneficiario' => $docBen,
+                'tipo_documento' => $tipo, 'nombre_archivo' => $d['nombre'], 'ruta' => $ruta, 'subido_por' => $usuarioId,
+            ]);
+            $guardados++;
+            $detalle[] = ($docBen ? "beneficiario {$docBen}: " : 'trabajador: ').$d['nombre'];
+        }
+
+        return compact('guardados', 'repetidos', 'rechazados', 'detalle');
+    }
+
+    /** Tipo de documento de BryNex según el nombre que le da la caja al anexo. */
+    private function tipoDocumento(string $requerido, string $archivo): string
+    {
+        $t = mb_strtolower($requerido.' '.$archivo);
+
+        return match (true) {
+            str_contains($t, 'juramentada') => 'decl_juramentada',
+            str_contains($t, 'registro civil') || str_starts_with(mb_strtolower($archivo), 'rc') => 'registro_civil',
+            str_contains($t, 'identidad') && str_contains(mb_strtolower($archivo), 'ti') => 'tarjeta_identidad',
+            str_contains($t, 'identidad') || str_contains($t, 'cedula') || str_contains($t, 'cédula') => 'cedula',
+            default => 'otro',
+        };
     }
 
     /** Usuario (y clave, según permiso) del portal de la razón social. */

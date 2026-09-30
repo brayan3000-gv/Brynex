@@ -77,7 +77,7 @@
 </div>
 
 <script>
-let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null;
+let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null, ccfDocsGuardados = false;
 const CCF_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const ccfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ccfEl = id => document.getElementById(id);
@@ -117,7 +117,7 @@ function ccfOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfenalco(contratoId) {
-    ccfContratoId = contratoId; ccfFinal = null; clearInterval(ccfReloj);
+    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; clearInterval(ccfReloj);
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
@@ -147,7 +147,7 @@ async function abrirCajaComfenalco(contratoId) {
 
     ccfOpciones(ccfEl('ccfEstadoCivil'), ccfPrep.listas?.estados_civil, 1);
     ccfOpciones(ccfEl('ccfContrato'), ccfPrep.listas?.contratos, 1);
-    ccfOpciones(ccfEl('ccfFormaPago'), ccfPrep.listas?.formas_pago, 10);   // Daviplata por defecto
+    ccfOpciones(ccfEl('ccfFormaPago'), ccfPrep.listas?.formas_pago, 13);
     ccfEl('ccfCargo').value = ccfPrep.portal?.cargoTexto || 'APOYO ADMINISTRATIVO';
     ccfEl('ccfEstadoCivil').onchange = () => { ccfEl('ccfAvisoCony').style.display = ['2', '4'].includes(ccfEl('ccfEstadoCivil').value) ? 'block' : 'none'; };
 
@@ -219,7 +219,22 @@ async function iniciarCajaComfenalco() {
             (p.hecho?.length ? '<br>✅ ' + p.hecho.map(ccfEsc).join('<br>✅ ') : '') +
             (p.falta?.length ? '<br>⚠️ ' + p.falta.map(ccfEsc).join('<br>⚠️ ') : '') +
             (p.errores?.length ? '<br>❗ ' + p.errores.map(ccfEsc).join('<br>❗ ') : '');
+        if (/Anexos/i.test(p.paso || '') && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos(); }
     }, 4000);
+}
+
+// En el paso Anexos la caja ya tiene guardados algunos documentos (cédula, registros
+// civiles, ADRES…): se bajan y se guardan en BryNex una sola vez por afiliación.
+async function ccfGuardarDocumentos() {
+    const caja = ccfEl('ccfPasoActual');
+    const aviso = t => { if (caja) caja.insertAdjacentHTML('beforeend', `<br>${t}`); };
+    aviso('📎 Bajando los documentos que la caja ya tiene…');
+    const r = await ccfExt('ccfDocumentos', {}, 180);
+    const docs = (r.docs || []).filter(d => d.base64);
+    if (!r.ok || !docs.length) { aviso('📎 ' + ccfEsc(r.error || 'La caja no tiene documentos guardados para esta persona.')); return; }
+    const g = await ccfPedir('documentos', 'POST', { docs });
+    if (!g.ok) { aviso('❗ No se pudieron guardar los documentos: ' + ccfEsc(g.message || g.error || '')); return; }
+    aviso(`✅ Documentos en BryNex: ${g.guardados} nuevos, ${g.repetidos} ya estaban.` + (g.rechazados ? ` ${g.rechazados} rechazados.` : ''));
 }
 
 function mostrarRadicadoCaja(fin) {

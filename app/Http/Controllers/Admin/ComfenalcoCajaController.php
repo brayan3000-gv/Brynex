@@ -64,6 +64,26 @@ class ComfenalcoCajaController extends Controller
     }
 
     /**
+     * Guarda en BryNex los anexos que Comfenalco ya tiene del trabajador y de sus
+     * beneficiarios (los baja la extensión del paso Anexos). Van al disco privado,
+     * como el resto de documentos del cliente, y no se duplican.
+     */
+    public function documentos(Request $request, int $contratoId)
+    {
+        $datos = $request->validate([
+            'docs' => 'required|array|max:60',
+            'docs.*.requerido' => 'nullable|string|max:150',
+            'docs.*.nombre' => 'required|string|max:200',
+            'docs.*.doc_beneficiario' => 'nullable|string|max:20',
+            'docs.*.base64' => 'required|string|max:20000000',
+        ]);
+
+        $contrato = $this->contrato($contratoId);
+
+        return response()->json(['ok' => true] + $this->servicio->guardarDocumentos($contrato, $datos['docs'], Auth::id()));
+    }
+
+    /**
      * Conciliación de los radicados de caja con "Trabajadores por Empresa" que
      * baja la extensión. BryNex concilia la empresa en todos los aliados del NIT.
      */

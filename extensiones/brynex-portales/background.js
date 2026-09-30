@@ -39,6 +39,7 @@
  *  ccfConsultar {tipoDoc, documento}   → busca al trabajador y devuelve las opciones del portal
  *  ccfPaso {…datos, opciones}          → llena el paso que esté a la vista (Personal, Laboral, Beneficiarios…)
  *  ccfResultado                        → {radicado, numero, texto} tras Finalizar Afiliación
+ *  ccfDocumentos                       → {docs:[{requerido, nombre, doc_beneficiario, mime, base64}]} anexos que la caja ya tiene (paso Anexos)
  *  ccfTrabajadores                     → {nit, empresa, filas} de "Trabajadores por Empresa" (conciliación)
  *  ccfGrupoFamiliar {documentos}       → {familias} beneficiarios de cada trabajador, uno por consulta
  *
@@ -78,7 +79,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -1104,6 +1105,56 @@ async function pestanaCcfcv() {
   return ps.find(p => /ServiciosWebRyA/.test(p.url || '')) || ps[0] || null;
 }
 
+/**
+ * Baja los anexos que Comfenalco ya tiene guardados (paso Anexos): la cédula del
+ * trabajador y, de cada beneficiario, registro civil, consulta ADRES, etc.
+ *
+ * El botón "Ver" del portal pide `CmndConsultarAnexoSesion {idAnexo, usuario}` y
+ * recibe el PDF como arreglo de bytes; aquí se hace la misma llamada, sin abrir
+ * el visor, y se devuelve en base64 para que BryNex lo guarde.
+ */
+async function pCcfDocumentos() {
+  const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
+  let usuario = null;
+  try { usuario = JSON.parse(localStorage.getItem('usuario')); } catch { /* sin usuario */ }
+  if (!usuario) return { docs: [], error: 'El portal no tiene la sesión iniciada.' };
+
+  const filas = [];
+  document.querySelectorAll('#tablaAnexosTrabajado tbody tr, #tablaAnexosBeneficiario tbody tr').forEach(tr => {
+    const celdas = [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
+    const ver = [...tr.querySelectorAll('button,a,input[type=button]')].find(e => /ver/i.test(e.innerText || e.value || ''));
+    const id = /visualziarAnexo\((\d+)\)/.exec(ver?.getAttribute('onclick') || '')?.[1];
+    if (id && celdas[2]) filas.push({ id, requerido: celdas[0], archivo: celdas[2] });
+  });
+
+  const pedir = id => new Promise(resolve => {
+    const reloj = setTimeout(() => resolve(null), 30000);
+    ejecutarAjax('CmndConsultarAnexoSesion', { idAnexo: id, usuario }, r => {
+      clearTimeout(reloj);
+      try { resolve(typeof r.respuesta === 'string' ? JSON.parse(r.respuesta) : r.respuesta); } catch { resolve(null); }
+    });
+  });
+
+  const docs = [];
+  for (const f of filas) {
+    const x = await pedir(f.id);
+    if (!x || !Array.isArray(x.archivo) || !x.archivo.length) { docs.push({ ...f, error: 'El portal no entregó el archivo.' }); continue; }
+    const bytes = Uint8Array.from(x.archivo, v => v & 255);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+    docs.push({
+      requerido: f.requerido,
+      nombre: x.nombreArchivo || f.archivo,
+      doc_beneficiario: x.idBeneficiario?.documento ? String(x.idBeneficiario.documento) : null,
+      tipo_doc_beneficiario: x.idBeneficiario?.tipoDocumento ?? null,
+      mime: /^%PDF/.test(String.fromCharCode(...bytes.subarray(0, 4))) ? 'application/pdf' : 'application/octet-stream',
+      base64: btoa(bin),
+    });
+  }
+
+  return { docs };
+}
+
 function pCcfEstado() {
   if (!/comfenalcovalle/.test(location.host)) return { sesion: false, enLogin: true, pagina: 'login' };
   const login = /index\.html/.test(location.pathname) || !!document.querySelector('#btnLoginAuth0');
@@ -1165,6 +1216,7 @@ async function atenderCcfcv(accion, d = {}) {
   if (accion === 'ccfConsultar') return ccfConsultar(pestana, d);
   if (accion === 'ccfPaso') return { ok: true, ...(await ejecutar(pestana.id, pCcfPaso, [d])) };
   if (accion === 'ccfResultado') return { ok: true, ...(await ejecutar(pestana.id, pCcfResultado)) };
+  if (accion === 'ccfDocumentos') return { ok: true, ...(await ejecutar(pestana.id, pCcfDocumentos)) };
   if (accion === 'ccfTrabajadores') return ccfTrabajadores(pestana);
   if (accion === 'ccfMorosos') return ccfMorosos(pestana);
   if (accion === 'ccfGrupoFamiliar') return ccfGrupoFamiliar(pestana, d);
