@@ -71,6 +71,9 @@
           <button class="ccf-btn sec" id="ccfFirmaOtra" style="display:none" onclick="ccfFirmarNueva()">✏️ Firmar de nuevo en vez de usar la guardada</button>
           <button class="ccf-btn" id="ccfFirmaBtn" onclick="ccfFirmarYAdjuntar()">✍️ Firmar y adjuntar la declaración</button>
         </div>
+        <div id="ccfFinalizarBox" style="display:none">
+          <button class="ccf-btn" id="ccfFinalizarBtn" onclick="ccfFinalizar()" style="background:linear-gradient(135deg,#1d4ed8,#2563eb)">🚀 Finalizar y radicar la afiliación</button>
+        </div>
 
         <div id="ccfRadicado" style="display:none">
           <div class="ccf-info" id="ccfRadicadoInfo"></div>
@@ -127,7 +130,7 @@ function ccfOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfenalco(contratoId) {
-    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; ccfEl('ccfFirmaBox').style.display = 'none'; clearInterval(ccfReloj);
+    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
@@ -308,7 +311,30 @@ async function ccfFirmarYAdjuntar() {
     ['ccfFirmaLienzo', 'ccfFirmaLimpiar', 'ccfFirmaOtra', 'ccfFirmaBtn'].forEach(id => ccfEl(id).style.display = 'none');
     caja.innerHTML = s.quedan
         ? `⚠️ Se adjuntó en ${s.subidos} de ${s.pendientes} beneficiarios; revisa el resto en el portal.`
-        : `✅ Declaración firmada y adjunta en ${s.subidos} beneficiario(s) y guardada en BryNex. Revisa el paso Anexos y pulsa <strong>Finalizar Afiliación</strong> en el portal.`;
+        : `✅ Declaración firmada y adjunta en ${s.subidos} beneficiario(s) y guardada en BryNex. Revisa el paso Anexos del portal y, si todo está bien, pulsa <strong>Finalizar y radicar</strong>.`;
+    if (!s.quedan) ccfEl('ccfFinalizarBox').style.display = 'block';
+}
+
+// Radica de verdad: el portal acepta los términos y condiciones y envía la afiliación a
+// Comfenalco. Solo corre cuando la persona pulsa el botón y confirma.
+async function ccfFinalizar() {
+    const r = ccfPrep.resumen || {};
+    if (!confirm(`¿Finalizar y radicar la afiliación a la caja Comfenalco Valle?\n\n${r.trabajador} — ${r.documento}\nIngreso: ${ccfFmt(r.fecha_ingreso)}\n\nEsto ACEPTA los términos y condiciones del portal y envía la afiliación a Comfenalco. No se puede deshacer.`)) return;
+    const btn = ccfEl('ccfFinalizarBtn');
+    clearInterval(ccfReloj);   // el sondeo de pasos no debe competir con la radicación
+    btn.disabled = true; btn.textContent = '⏳ Radicando en el portal…';
+    const f = await ccfExt('ccfFinalizar', {}, 150);
+    if (!f.ok || f.error) {
+        btn.disabled = false; btn.textContent = '🚀 Finalizar y radicar la afiliación';
+        alert((f.error || 'La extensión no pudo finalizar.') + (f.botones ? '\nBotones: ' + f.botones.join(' | ') : ''));
+        return;
+    }
+    if (!f.numero) { mostrarRadicadoCaja(f); btn.style.display = 'none'; return; }
+    ccfFinal = f;
+    btn.textContent = '✅ Radicada · registrando en BryNex…';
+    const g = await ccfPedir('aplicar', 'POST', { numero: f.numero, texto: f.texto || '' });
+    if (!g.ok) { mostrarRadicadoCaja(f); alert('Se radicó en el portal (formulario ' + f.numero + ') pero no se pudo registrar en BryNex: ' + (g.error || g.mensaje || '')); return; }
+    ccfTerminar(`✅ ${ccfEsc(g.mensaje)}`);
 }
 
 function mostrarRadicadoCaja(fin) {

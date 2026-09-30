@@ -41,6 +41,7 @@
  *  ccfResultado                        → {radicado, numero, texto} tras Finalizar Afiliación
  *  ccfDeclaracion                      → {base64} PDF oficial de la declaración juramentada (formato del portal, sin descargarlo)
  *  ccfSubirDeclaracion {base64}        → adjunta el PDF firmado en cada "Formato declaración juramentada caja" pendiente
+ *  ccfFinalizar                        → pulsa "Finalizar Afiliación", acepta los términos y espera el número de formulario
  *  ccfDocumentos                       → {docs:[{requerido, nombre, doc_beneficiario, mime, base64}]} anexos que la caja ya tiene (paso Anexos)
  *  ccfTrabajadores                     → {nit, empresa, filas} de "Trabajadores por Empresa" (conciliación)
  *  ccfGrupoFamiliar {documentos}       → {familias} beneficiarios de cada trabajador, uno por consulta
@@ -81,7 +82,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -1221,6 +1222,53 @@ async function pCcfSubirDeclaracion(base64, nombre) {
   return { subidos, pendientes: pendientes.length, quedan };
 }
 
+/**
+ * Finaliza la afiliación en el paso Anexos: pulsa "Finalizar Afiliación", marca la
+ * aceptación de términos y condiciones y espera la ventana de éxito con el número
+ * de formulario. Solo lo dispara el botón "Finalizar y radicar" de BryNex, que la
+ * persona pulsa después de confirmar; nunca corre solo.
+ */
+async function pCcfFinalizar() {
+  const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
+  const esperar = ms => new Promise(r => setTimeout(r, ms));
+  const textoVentanas = () => [...new Set([...document.querySelectorAll('.jconfirm-content, .jconfirm-box')].filter(vis)
+    .map(e => e.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean))].join(' — ');
+
+  // 1) Anexos obligatorios completos: si falta uno, no se radica.
+  const faltan = [];
+  document.querySelectorAll('#tablaAnexosTrabajado tbody tr, #tablaAnexosBeneficiario tbody tr').forEach(tr => {
+    const c = [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
+    if (/^SI$/i.test(c[1] || '') && !c[2]) faltan.push(c[0]);
+  });
+  if (faltan.length) return { error: 'Faltan anexos obligatorios: ' + [...new Set(faltan)].join(', ') };
+
+  const fin = document.getElementById('btnAfiliarDirecto');
+  if (!vis(fin)) return { error: 'El botón Finalizar Afiliación no está visible: no estás en el paso Anexos.' };
+  fin.click();
+
+  // 2) Términos y condiciones.
+  let chk = null;
+  for (let i = 0; i < 30 && !chk; i++) { await esperar(500); const c = document.getElementById('chkTerminos'); if (vis(c)) chk = c; }
+  if (!chk) return { error: 'No apareció la ventana de términos y condiciones.', texto: textoVentanas() };
+  if (!chk.checked) chk.click();
+
+  const ventana = chk.closest('.jconfirm-box, .jconfirm, .modal-content, [role=dialog]') || document;
+  const botones = [...ventana.querySelectorAll('button, a.btn, input[type=button]')].filter(vis);
+  const aceptar = botones.find(b => /acept|continu|afiliar|confirm|finaliz|enviar/i.test(b.innerText || b.value || '') && !/cancel|cerrar|regresar|no acepto/i.test(b.innerText || b.value || ''));
+  if (!aceptar) return { error: 'No se encontró el botón para aceptar los términos.', botones: botones.map(b => (b.innerText || b.value || '').trim()) };
+  aceptar.click();
+
+  // 3) Resultado: ventana de éxito con el número de formulario, o el error del portal.
+  for (let i = 0; i < 120; i++) {
+    await esperar(1000);
+    const texto = textoVentanas();
+    const m = texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i);
+    if (m) return { radicado: true, numero: m[1], texto: texto.slice(0, 1500) };
+    if (/error|no se pudo|inconsistenc|debe/i.test(texto) && !/t[eé]rminos/i.test(texto)) return { radicado: false, error: texto.slice(0, 500), texto: texto.slice(0, 1500) };
+  }
+  return { radicado: false, error: 'El portal no confirmó la afiliación a tiempo; revisa la pantalla antes de repetir.', texto: textoVentanas().slice(0, 500) };
+}
+
 function pCcfEstado() {
   if (!/comfenalcovalle/.test(location.host)) return { sesion: false, enLogin: true, pagina: 'login' };
   const login = /index\.html/.test(location.pathname) || !!document.querySelector('#btnLoginAuth0');
@@ -1283,6 +1331,7 @@ async function atenderCcfcv(accion, d = {}) {
   if (accion === 'ccfPaso') return { ok: true, ...(await ejecutar(pestana.id, pCcfPaso, [d])) };
   if (accion === 'ccfResultado') return { ok: true, ...(await ejecutar(pestana.id, pCcfResultado)) };
   if (accion === 'ccfDocumentos') return { ok: true, ...(await ejecutar(pestana.id, pCcfDocumentos)) };
+  if (accion === 'ccfFinalizar') return { ok: true, ...(await ejecutar(pestana.id, pCcfFinalizar)) };
   if (accion === 'ccfDeclaracion') return { ok: true, ...(await ejecutar(pestana.id, pCcfDeclaracion)) };
   if (accion === 'ccfSubirDeclaracion') return { ok: true, ...(await ejecutar(pestana.id, pCcfSubirDeclaracion, [d.base64, d.nombre || 'DeclaracionJuramentada.pdf'])) };
   if (accion === 'ccfTrabajadores') return ccfTrabajadores(pestana);
