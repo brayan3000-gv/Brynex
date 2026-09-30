@@ -268,6 +268,17 @@ try {
     salir({ ok: true, modo, paso, url: pagina.url(), marcos: pagina.frames().length, campos, texto: textos.join(' ⏐ ').slice(0, 1500) });
   }
 
+  // La pantalla trae el NIT del empleador con el que se entró. Se compara con el
+  // del contrato: si el usuario administra una sola empresa el portal no
+  // pregunta cuál, y sin esta comprobación se podría radicar a la persona en la
+  // empresa equivocada sin que nada avisara.
+  paso = 'empresa';
+  const nitPantalla = (await marco.evaluate(() => document.querySelector('[id$="TbxEmployerId"]')?.value || '').catch(() => '')).replace(/\D/g, '');
+  const nitEsperado = String(nitEmpresa).replace(/\D/g, '');
+  if (nitPantalla && nitEsperado && nitPantalla !== nitEsperado) {
+    throw new Error(`El portal está en la empresa ${nitPantalla} y el contrato es de la ${nitEsperado}: no se toca nada.`);
+  }
+
   // ── Persona ──
   paso = 'documento';
   const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || '1';
