@@ -1792,9 +1792,13 @@ function pCcfPaso(d) {
       dirBrynex = normalizarDireccion('CORR ' + String(d.direccion).replace(/[#\-]/g, ' '));
       origenDir = ' (rural: se antepuso CORR)';
     }
+    // 3) Si el portal ya trae una dirección válida (de la Registraduría o de un registro previo),
+    //    se respeta antes que la de la empresa: el respaldo de la empresa es el último recurso.
+    const dirValidaDelPortal = normalizarDireccion(campoDir?.value);
+    if (!dirBrynex && dirValidaDelPortal) { dirBrynex = dirValidaDelPortal; origenDir = ' (se conserva la que ya traía el portal: la de BryNex no tiene un formato válido)'; }
     if (!dirBrynex) {
       dirBrynex = normalizarDireccion(d.direccionEmpresa);
-      if (dirBrynex) origenDir = ' (respaldo: dirección de la empresa, porque la del trabajador no tiene un formato que el portal acepte)';
+      if (dirBrynex) origenDir = ' (respaldo: dirección de la empresa, porque ni la del trabajador ni la del portal tienen un formato que el portal acepte)';
     }
     const dirPortal = String(campoDir?.value || '').replace(/\s+/g, ' ').trim();
     if (campoDir && dirBrynex) {
