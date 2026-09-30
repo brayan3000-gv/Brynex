@@ -1416,7 +1416,9 @@ async function pCcfFinalizar() {
   for (let i = 0; i < 120; i++) {
     await esperar(1000);
     const texto = textoVentanas();
-    const m = texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i);
+    const m = /afiliaci[oó]n se encuentra registrada/i.test(texto)
+      ? (texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i))
+      : null;
     if (m) {
       // El PDF llega poco después de la ventana de éxito.
       paso('Comfenalco confirmó el formulario ' + m[1] + '. Capturando el PDF del formulario');
@@ -1986,8 +1988,12 @@ function pCcfResultado() {
   const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
   const textos = [...document.querySelectorAll('.jconfirm-content, .jconfirm-box')].filter(vis).map(e => e.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean);
   const texto = [...new Set(textos)].join(' — ');
-  const m = texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i);
-  if (!m && !/registrad|exito/i.test(texto)) return { radicado: false, texto };
+  // Solo cuenta como radicado con la frase de éxito del portal («La afiliación se encuentra registrada
+  // con número de formulario: N»). Un número suelto en otra ventana no basta: con Marcela se registró
+  // un formulario que el portal nunca envió.
+  const exito = /afiliaci[oó]n se encuentra registrada/i.test(texto);
+  const m = exito ? (texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i)) : null;
+  if (!exito) return { radicado: false, texto };
   return { radicado: !!m, numero: m ? m[1] : null, texto: texto.slice(0, 1500) };
 }
 
