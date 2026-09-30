@@ -282,6 +282,12 @@ async function ccfPrepararDeclaracion() {
     aviso('📄 Pidiendo al portal la declaración juramentada…');
     const r = await ccfExt('ccfDeclaracion', {}, 90);
     ccfDeclEnCurso = false;
+    if (r.ok && r.omitida) {
+        aviso('✅ Esta afiliación no lleva declaración juramentada (sin beneficiarios ni pareja): no hace falta firma.');
+        ccfDeclPdf = 'omitida';
+        ccfEl('ccfFinalizarBox').style.display = 'block'; ccfEl('ccfFinalizarBtn').style.display = 'block';
+        return;
+    }
     if (!r.ok || !r.base64) { aviso('❗ ' + ccfEsc(r.error || 'El portal no entregó la declaración.')); return; }
     ccfDeclPdf = r.base64;
     aviso('📄 Declaración juramentada lista: falta la firma del trabajador.');

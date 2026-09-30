@@ -1169,6 +1169,13 @@ async function pCcfDeclaracion() {
   const boton = document.getElementById('btnPdfDeclaracionR');
   if (!boton) return { error: 'No estás en el paso Anexos: el botón de la declaración no existe.' };
 
+  // Sin beneficiarios ni pareja el portal no pide la declaración (solo la cédula del trabajador):
+  // si no hay ninguna fila obligatoria de "declaración juramentada", no hace falta firmar.
+  const exige = [...document.querySelectorAll('#tablaAnexosConyuge tbody tr, #tablaAnexosBeneficiario tbody tr')]
+    .some(tr => /declaraci[oó]n juramentada/i.test(tr.innerText)
+      && /^SI$/i.test(([...tr.querySelectorAll('td')][1]?.innerText || '').trim()));
+  if (!exige) return { omitida: true };
+
   return new Promise(resolve => {
     const original = $.ajax;
     const fin = v => { $.ajax = original; clearTimeout(reloj); resolve(v); };
