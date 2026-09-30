@@ -949,6 +949,12 @@ function sortClass($col, $currSort, $currDir) {
                     onclick="reingresoNuevaEpsDesdeRadicado()">
                     🏥 Reingreso Nueva EPS
                 </button>
+                {{-- Radicados de EPS en SURA: reingreso por el portal de empleadores --}}
+                <button id="btnReingresoEpsSura" type="button"
+                    style="display:none;align-items:center;gap:0.35rem;padding:0.3rem 0.85rem;background:linear-gradient(135deg,#0033a0,#2563eb);color:#fff;border:none;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(37,99,235,0.3);"
+                    onclick="reingresoEpsSuraDesdeRadicado()">
+                    🏥 Reingreso EPS SURA
+                </button>
                 {{-- Radicados de EPS en Salud Total: novedad de inicio laboral por el portal --}}
                 <button id="btnNovedadSaludTotal" type="button"
                     style="display:none;align-items:center;gap:0.35rem;padding:0.3rem 0.85rem;background:linear-gradient(135deg,#15803d,#22c55e);color:#fff;border:none;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(34,197,94,0.3);"
@@ -1930,6 +1936,13 @@ function abrirModalRadicado(radId, radData, ctx = {}, contratoId = null, tieneFo
     btnNuevaEps.style.display = (PUEDE_AUTOMATIZAR && esNuevaEps && radData.estado !== 'ok') ? 'inline-flex' : 'none';
     btnNuevaEps._contratoId = contratoId || ctx.id || null;
 
+    // Reingreso por el portal: radicados de EPS de SURA que aún no están en OK.
+    // Ojo: "SURA" a secas también es la ARL, por eso se mira el tipo del radicado.
+    const btnEpsSura = document.getElementById('btnReingresoEpsSura');
+    const esEpsSura  = (radData.tipo === 'eps') && /\bSURA\b/i.test(ctx.eps || '');
+    btnEpsSura.style.display = (PUEDE_AUTOMATIZAR && esEpsSura && radData.estado !== 'ok') ? 'inline-flex' : 'none';
+    btnEpsSura._contratoId = contratoId || ctx.id || null;
+
     // Novedad de inicio laboral: radicados de EPS de Salud Total que aún no están en OK.
     const btnSaludTotal = document.getElementById('btnNovedadSaludTotal');
     const esSaludTotal  = (radData.tipo === 'eps') && /SALUD\s*TOTAL/i.test(ctx.eps || '');
@@ -2092,6 +2105,13 @@ function reingresoNuevaEpsDesdeRadicado() {
     if (!contratoId) { alert('No se pudo identificar el contrato.'); return; }
     cerrarModal('modalRadicado');
     abrirReingresoNuevaEps(contratoId);
+}
+
+function reingresoEpsSuraDesdeRadicado() {
+    const contratoId = document.getElementById('btnReingresoEpsSura')._contratoId;
+    if (!contratoId) { alert('No se pudo identificar el contrato.'); return; }
+    cerrarModal('modalRadicado');
+    abrirReingresoEpsSura(contratoId);
 }
 
 function novedadSaludTotalDesdeRadicado() {
@@ -3709,6 +3729,7 @@ function mostrarToast(msg, tipo) {
 @endcan
 @can('automatizar-portales')
 @include('admin.partials._reingreso_nueva_eps')
+@include('admin.partials._reingreso_eps_sura')
 @include('admin.partials._novedad_salud_total')
 @include('admin.partials._novedad_sos')
 @include('admin.partials._novedad_sanitas')

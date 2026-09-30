@@ -1054,6 +1054,12 @@ Route::middleware('auth')->group(function () {
             Route::get('/{contrato}/nueva-eps/precheck', [$nec, 'precheck'])->name('nueva-eps.precheck');
             Route::post('/{contrato}/nueva-eps/consultar', [$nec, 'consultar'])->name('nueva-eps.consultar');
             Route::post('/{contrato}/nueva-eps/registrar', [$nec, 'registrar'])->name('nueva-eps.registrar');
+            // Reingreso en el portal de EPS SURA desde el radicado de EPS.
+            $esr = \App\Http\Controllers\Admin\EpsSuraReingresoController::class;
+            Route::get('/{contrato}/eps-sura/precheck', [$esr, 'precheck'])->name('eps-sura.precheck');
+            Route::post('/{contrato}/eps-sura/explorar', [$esr, 'explorar'])->name('eps-sura.explorar');
+            Route::post('/{contrato}/eps-sura/consultar', [$esr, 'consultar'])->name('eps-sura.consultar');
+            Route::post('/{contrato}/eps-sura/registrar', [$esr, 'registrar'])->name('eps-sura.registrar');
             // Novedad de inicio laboral en Salud Total desde el radicado de EPS.
             $stc = \App\Http\Controllers\Admin\SaludTotalController::class;
             Route::get('/{contrato}/salud-total/precheck', [$stc, 'precheck'])->name('salud-total.precheck');
