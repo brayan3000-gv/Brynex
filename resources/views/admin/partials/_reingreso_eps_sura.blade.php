@@ -68,7 +68,7 @@ const esuEl = id => document.getElementById(id);
 function cerrarReingresoEpsSura() {
     esuEl('esuModal').classList.remove('open');
     // Por si el trámite terminó y la fila quedó sin repintar.
-    if (esuRadicadoNuevo) { pintarRadicadoEnLista(esuRadicadoNuevo); esuRadicadoNuevo = null; }
+    if (esuRadicadoNuevo) { pintarRadicadoEnLista(esuRadicadoNuevo, esuContratoId); esuRadicadoNuevo = null; }
 }
 
 // Lo que dejó el trámite, para poner al día la pastilla de EPS de la fila.
@@ -202,14 +202,14 @@ async function registrarEpsSura() {
     if (!d.ok) {
         btn.disabled = false; btn.textContent = '🏥 Reintentar';
         // El radicado quedó en error: la fila lo muestra sin recargar.
-        if (d.radicado) pintarRadicadoEnLista(d.radicado);
+        if (d.radicado) pintarRadicadoEnLista(d.radicado, esuContratoId);
         alert(d.error || d.alerta || 'No se pudo radicar.');
         return;
     }
 
     esuEl('esuContenido').style.display = 'none';
     // La fila queda en trámite al momento, sin recargar la página.
-    const pintado = pintarRadicadoEnLista(d.radicado);
+    const pintado = pintarRadicadoEnLista(d.radicado, esuContratoId);
     esuRadicadoNuevo = pintado ? null : (d.radicado || null);
 
     const caja = esuEl('esuResultado');

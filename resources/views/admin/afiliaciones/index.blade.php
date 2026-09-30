@@ -2114,11 +2114,20 @@ function reingresoNuevaEpsDesdeRadicado() {
  * color los arma BryNex con los mismos métodos del modelo que usa la vista, así
  * que lo que se ve aquí es lo mismo que saldría al recargar.
  */
-function pintarRadicadoEnLista(r) {
+function pintarRadicadoEnLista(r, contratoId = null) {
     if (!r?.id) return false;
 
-    const btn = document.querySelector(`.btn-rad[data-rad-id="${r.id}"]`);
+    // Un contrato sin radicado en la base traía el botón de «crear»: el trámite
+    // acaba de crearlo, así que esa casilla pasa a ser la pastilla de siempre.
+    const btn = document.querySelector(`.btn-rad[data-rad-id="${r.id}"]`)
+        || (contratoId && r.datos?.tipo
+            ? document.querySelector(`.btn-rad-crear[data-contrato-id="${contratoId}"][data-tipo="${r.datos.tipo}"]`)
+            : null);
     if (!btn) return false;
+
+    btn.classList.remove('btn-rad-crear');
+    btn.dataset.radId = r.id;
+    if (contratoId) btn.dataset.contratoId = contratoId;
 
     btn.className = `badge-estado badge-${r.clase} btn-rad`;
     btn.textContent = r.texto;
