@@ -1597,18 +1597,21 @@ async function ccfEntrar(tab, usuario, contrasena) {
     const estado = await ejecutar(tab, pCcfEstado).catch(() => null);
     if (estado?.sesion) return { ok: true, abierta: true, sesion: true, empresa: estado.empresa };
 
+    // El mensaje del portal va primero: con una clave mala NO se reintenta (cada intento cuenta para
+    // el bloqueo del usuario).
+    const error = await ejecutar(tab, () => {
+      const txt = (document.body.innerText || '').replace(/\s+/g, ' ');
+      const m = /(La contrase[^.]{0,80}incorrect[ao]|usuario[^.]{0,60}no existe|credenciales[^.]{0,60}inv[aá]lid[ao]s?|[^.]{0,60}inv[aá]lid[ao][^.]{0,40})/i.exec(txt);
+      return m ? m[0].trim() : (/incorrect|no existe/i.test(txt) ? txt.slice(0, 200) : null);
+    }).catch(() => null);
+
+    if (error && /incorrect|inv[aá]lid|no existe/i.test(error)) {
+      return { ok: false, abierta: true, error: `Comfenalco respondió «${error}» con el usuario guardado en BryNex (${usuario}). Corrige la clave en el módulo de claves; no se reintenta para no bloquear el usuario.` };
+    }
+
     if (!reintento && Date.now() - inicio > 15000 && estado?.enLogin) {
       reintento = true;
       await pulsar();
-    }
-
-    const error = await ejecutar(tab, () =>
-      /contrase|incorrect|inv[aá]lid|no existe/i.test(document.body.innerText || '')
-        ? (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 200)
-        : null).catch(() => null);
-
-    if (error && /incorrect|inv[aá]lid|no existe/i.test(error)) {
-      return { ok: false, abierta: true, error: 'Comfenalco rechazó el usuario o la clave guardada en BryNex.' };
     }
   }
 
