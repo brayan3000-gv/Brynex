@@ -151,6 +151,8 @@ class EpsSuraReingresoService
         $salida = $this->correr($contrato, 'registrar', $prep['datos']);
         $radicado = $this->radicadoEps($contrato);
         $nota = trim((string) ($salida['alerta'] ?? $salida['error'] ?? ''));
+        $ruta = $this->guardarSoporte($contrato, $salida['soporte'] ?? null);
+        $salida['soporte_guardado'] = (bool) $ruta;
 
         if (! ($salida['ok'] ?? false)) {
             EpsRadicado::marcar(
@@ -166,8 +168,9 @@ class EpsSuraReingresoService
         }
 
         EpsRadicado::marcar(
-            $radicado, (string) $radicado->numero_radicado, Radicado::ESTADO_TRAMITE, null,
+            $radicado, (string) $radicado->numero_radicado, Radicado::ESTADO_TRAMITE, $ruta,
             'EPS SURA (reingreso) radicado en el portal de empleadores'.($nota ? ': '.$nota : '.')
+                .($ruta ? ' Soporte guardado.' : ' El portal no entregó soporte: se puede bajar el certificado después.')
                 .' Queda en trámite hasta que la conciliación lo vea vigente.',
             $usuarioId
         );
@@ -177,6 +180,28 @@ class EpsSuraReingresoService
             // Con esto el listado repinta la pastilla de EPS sin recargar.
             'radicado' => $radicado->fresh()->paraLaLista(),
         ];
+    }
+
+    /**
+     * Guarda en los soportes del contrato el documento que entregó el portal.
+     *
+     * El script lo deja en un archivo temporal del servidor y solo devuelve la
+     * ruta: por la salida del proceso no cabe (se corta a 64 KB y un PDF pesa
+     * más). Aquí se lee, se guarda con los demás soportes y se borra el
+     * temporal.
+     */
+    private function guardarSoporte(Contrato $contrato, ?array $soporte): ?string
+    {
+        $temporal = $soporte['ruta'] ?? null;
+        if (! $temporal || ! is_file($temporal)) {
+            return null;
+        }
+
+        $ruta = EpsRadicado::guardarPdf($contrato, file_get_contents($temporal) ?: null, 'eps_sura_reingreso');
+        @unlink($temporal);
+        @rmdir(dirname($temporal));
+
+        return $ruta;
     }
 
     /** El radicado de EPS del contrato; se crea si el plan lo incluye y no existía. */

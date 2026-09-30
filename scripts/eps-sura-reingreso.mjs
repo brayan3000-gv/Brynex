@@ -22,14 +22,23 @@
  *                     tipoCotizante?, asesor?}
  * Salida por stdout: {ok, paso, modo, campos?, nombre?, mensajes, alerta?, error?}
  */
+import { mkdtemp, readdir, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
 import { entrarEmpresaEps, esperar, texto } from './eps-sura-sesion-comun.mjs';
 
 const URL_MENU = 'https://epsapps.suramericana.com/Semp/faces/pos/transNovedades/srvReingresos.jspx';
 
-// Tipos de documento de BryNex → los que usa el buscador de personas.
-const TIPOS = { CC: 'CC', CE: 'CE', PA: 'PA', PP: 'PA', TI: 'TI', RC: 'RC', PT: 'PT', PPT: 'PT', PE: 'PE', PEP: 'PE', SC: 'SC', CD: 'CD' };
+/**
+ * Tipos de documento de BryNex → los códigos del desplegable del portal, que
+ * son numéricos (leídos de la pantalla el 30-sep-2026):
+ * 1 CC · 2 CE · 3 Menor sin identificar · 4 NIT · 5 NUIP · 6 Pasaporte ·
+ * 7 Registro civil · 8 Tarjeta de identidad · 10 Certificado de nacido vivo ·
+ * 11 Salvoconducto · 14 Permiso de protección temporal.
+ */
+const TIPOS = { CC: '1', CE: '2', NI: '4', NUIP: '5', PA: '6', PP: '6', RC: '7', TI: '8', CN: '10', SC: '11', PT: '14', PPT: '14', PE: '14', PEP: '14' };
 
 // «1 Dependiente» en el desplegable de tipo de cotizante: el value NO es el
 // código de cotizante de la PILA (4 = doméstico, 51 = veterano…).
@@ -181,35 +190,51 @@ try {
 
   // ── Persona ──
   paso = 'documento';
-  const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || 'CC';
+  const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || '1';
   await marco.evaluate((t) => {
-    const s = Array.from(document.querySelectorAll('select')).find((x) => /idtype|tipoid|tipodoc/i.test(x.id + x.name));
+    const s = document.querySelector('[id$="Repeater1_ctl00_DdlTypeIdentification"]')
+      || document.querySelector('[id$="DdlTypeIdentification"]');
     if (!s) return;
-    const op = Array.from(s.options).find((o) => o.value === t || o.text.trim().toUpperCase().startsWith(t));
-    if (op) { s.value = op.value; s.dispatchEvent(new Event('change', { bubbles: true })); }
+    s.value = t;
+    s.dispatchEvent(new Event('change', { bubbles: true }));
   }, tipo).catch(() => {});
+  await esperar(1200);
 
-  const puesto = await escribir(marco, 'WucSearchPerson_txtId', String(persona.numero).replace(/\D/g, ''))
-    || await escribir(marco, 'txtId', String(persona.numero).replace(/\D/g, ''));
+  const puesto = await escribir(marco, 'WucSearchPerson_txtId', String(persona.numero).replace(/\D/g, ''));
   if (!puesto) throw new Error('No apareció el campo del documento en la pantalla de reingresos.');
 
-  const nombre = await marco.evaluate(() => document.querySelector('[id$="txtName"]')?.value || null).catch(() => null);
+  // El blur no siempre dispara la búsqueda: la lupa del buscador sí.
+  const nombreDe = () => marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_txtName"]')?.value?.trim() || '').catch(() => '');
+  let nombre = await nombreDe();
+  if (!nombre) {
+    paso = 'buscar persona';
+    await marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_LinkButton1"]')?.click()).catch(() => {});
+    for (let i = 0; i < 20 && !nombre; i++) { await esperar(900); nombre = await nombreDe(); }
+  }
+
   const enPantalla = (await texto(pagina)).replace(/\s+/g, ' ').trim();
 
   if (modo === 'consultar') {
+    // El formulario de la novedad se despliega recién cuando el portal
+    // encuentra a la persona: se inventaría aquí, con la pantalla ya abierta.
+    const despues = [];
+    for (const f of pagina.frames()) {
+      for (const c of await inventario(f)) if (c.visible || /salary|date|intermediary|save|settlement|option/i.test(c.id || '')) despues.push(c);
+    }
+
     salir({
-      ok: true, modo, paso, url: pagina.url(), nombre,
+      ok: true, modo, paso, url: pagina.url(), nombre: nombre || null,
       // Sin nombre no es un reingreso: la persona no está en SURA y lo que
       // corresponde es un traslado, que no se hace por esta pantalla.
-      esReingreso: !!(nombre && nombre.trim()),
-      alertas, texto: enPantalla.slice(0, 600),
+      esReingreso: !!nombre,
+      campos: despues, alertas, texto: enPantalla.slice(0, 900),
     });
   }
 
   // ── Novedad ──
   paso = 'datos de la novedad';
   await marco.evaluate((v) => {
-    const s = document.querySelector('[id$="DdlSettlementParam"]');
+    const s = document.querySelector('[id$="DdlSettlementParam"]') || document.querySelector('[id$="DdlContributorType"]');
     if (s) { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
   }, tipoCotizante).catch(() => {});
   await esperar(1500);
@@ -224,6 +249,12 @@ try {
   await escribir(marco, 'tbxIntermediaryCode', asesor);
 
   paso = 'aplicar novedad';
+  // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
+  // la novedad en cuanto la aplica, y si no hay dónde dejarlo se pierde.
+  const carpeta = await mkdtemp(join(tmpdir(), 'sura-reingreso-'));
+  const cdp = await pagina.target().createCDPSession();
+  await cdp.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: carpeta }).catch(() => {});
+
   const antes = alertas.length;
   await marco.evaluate(() => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
   for (let i = 0; i < 40 && alertas.length === antes; i++) await esperar(800);
@@ -232,10 +263,44 @@ try {
   const alerta = alertas.slice(antes).join(' | ');
   const conError = /error|no se pudo|no fue posible|inconsist/i.test(alerta + ' ' + despues);
 
+  // El soporte: el portal lo baja solo, y si no, deja el enlace «Informe
+  // principal» para pedirlo a mano. Se intenta, pero su ausencia no invalida
+  // la novedad: eso lo dice el portal, no el archivo.
+  paso = 'soporte';
+  let soporte = null;
+  const esperarArchivo = async (vueltas) => {
+    for (let i = 0; i < vueltas; i++) {
+      await esperar(1500);
+      const n = (await readdir(carpeta).catch(() => [])).find((x) => !x.endsWith('.crdownload'));
+      if (n) return n;
+    }
+    return null;
+  };
+
+  let archivo = await esperarArchivo(6);
+  if (!archivo && !conError) {
+    for (const f of pagina.frames()) {
+      const pulsado = await f.evaluate(() => {
+        const a = [...document.querySelectorAll('a, input[type=submit], input[type=button], button')]
+          .find((e) => /informe principal|soporte|certificad/i.test(e.innerText || e.value || ''));
+        if (!a) return false;
+        a.click();
+
+        return true;
+      }).catch(() => false);
+      if (pulsado) { archivo = await esperarArchivo(20); break; }
+    }
+  }
+  if (archivo) {
+    const ruta = join(carpeta, archivo);
+    soporte = { archivo, ruta, bytes: (await stat(ruta)).size };
+  }
+
   salir({
     ok: !conError,
-    modo, paso, nombre, alerta: alerta || null,
+    modo, paso: 'aplicar novedad', nombre, alerta: alerta || null,
     titulo: await pagina.title().catch(() => null),
+    soporte,
     texto: despues.slice(0, 800),
     error: conError ? (alerta || 'La pantalla quedó con un error tras aplicar la novedad.') : undefined,
   });
