@@ -139,6 +139,40 @@ class EpsSuraReingresoService
     }
 
     /**
+     * Baja el certificado de afiliación al PBS y lo guarda con los soportes del
+     * contrato. Solo lee del portal, así que se puede pedir cuantas veces haga
+     * falta —y también para quien ya estaba afiliado—.
+     *
+     * @return array{ok: bool, ruta?: ?string, error?: string}
+     */
+    public function certificado(Contrato $contrato, ?int $usuarioId = null): array
+    {
+        $prep = $this->preparar($contrato);
+        $datos = $prep['datos'] ?? [
+            'persona' => [
+                'tipo' => strtoupper((string) $contrato->cliente?->tipo_doc),
+                'numero' => (string) $contrato->cedula,
+            ],
+        ];
+
+        $salida = $this->correr($contrato, 'certificado', $datos);
+        $ruta = $this->guardarSoporte($contrato, $salida['soporte'] ?? null);
+
+        if ($ruta) {
+            $radicado = $this->radicadoEps($contrato);
+            EpsRadicado::marcar(
+                $radicado, (string) $radicado->numero_radicado, $radicado->estado, $ruta,
+                'Certificado de afiliación de EPS SURA guardado con los soportes.',
+                $usuarioId
+            );
+
+            return ['ok' => true, 'ruta' => $ruta, 'radicado' => $radicado->fresh()->paraLaLista()];
+        }
+
+        return ['ok' => false, 'error' => $salida['error'] ?? 'El portal no entregó el certificado.'];
+    }
+
+    /**
      * Radica el reingreso y deja el radicado de BryNex en trámite.
      */
     public function registrar(Contrato $contrato, ?int $usuarioId): array
@@ -152,6 +186,14 @@ class EpsSuraReingresoService
         $radicado = $this->radicadoEps($contrato);
         $nota = trim((string) ($salida['alerta'] ?? $salida['error'] ?? ''));
         $ruta = $this->guardarSoporte($contrato, $salida['soporte'] ?? null);
+
+        // El portal no siempre entrega el soporte de la novedad; el certificado
+        // de afiliación sí se puede pedir, y es el documento que hace falta.
+        if (! $ruta && ($salida['ok'] ?? false)) {
+            $cert = $this->correr($contrato, 'certificado', $prep['datos']);
+            $ruta = $this->guardarSoporte($contrato, $cert['soporte'] ?? null);
+            $salida['certificado_error'] = $ruta ? null : ($cert['error'] ?? null);
+        }
         $salida['soporte_guardado'] = (bool) $ruta;
 
         if (! ($salida['ok'] ?? false)) {

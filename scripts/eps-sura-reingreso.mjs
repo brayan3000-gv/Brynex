@@ -30,6 +30,10 @@ import { rutaChrome } from './arl-sura-sesion-comun.mjs';
 import { entrarEmpresaEps, esperar, texto } from './eps-sura-sesion-comun.mjs';
 
 const URL_MENU = 'https://epsapps.suramericana.com/Semp/faces/pos/transNovedades/srvReingresos.jspx';
+const URL_CERTIFICADO = 'https://epsapps.suramericana.com/Semp/faces/pos/certificados/afiliacionPos/parametros.jspx';
+
+// Esa pantalla usa las siglas, no los códigos numéricos del reingreso.
+const TIPOS_CERTIFICADO = { CC: 'CC', CE: 'CE', PA: 'PA', PP: 'PA', TI: 'TI', RC: 'RC', PT: 'PT', PPT: 'PT', PE: 'PE', PEP: 'PE', SC: 'SC', CD: 'CD' };
 
 /**
  * Tipos de documento de BryNex → los códigos del desplegable del portal, que
@@ -57,7 +61,7 @@ try { entrada = JSON.parse(await leerStdin() || '{}'); }
 catch { salir({ ok: false, error: 'Entrada JSON inválida.' }); }
 
 const { usuario, contrasena, nitEmpresa, persona = {}, ibc, fechaIngreso } = entrada;
-const modo = ['explorar', 'consultar', 'registrar'].includes(entrada.modo) ? entrada.modo : 'explorar';
+const modo = ['explorar', 'consultar', 'registrar', 'certificado'].includes(entrada.modo) ? entrada.modo : 'explorar';
 const asesor = String(entrada.asesor ?? '0');
 const tipoCotizante = String(entrada.tipoCotizante ?? COTIZANTE_DEPENDIENTE);
 
@@ -128,6 +132,82 @@ try {
 
   paso = 'login';
   await entrarEmpresaEps(pagina, entrada);
+
+  /**
+   * Deja las descargas en una carpeta propia y devuelve el primer archivo que llegue.
+   *
+   * El permiso va a nivel de NAVEGADOR, no de página: el portal entrega el
+   * certificado como respuesta de un POST de navegación (200 con
+   * Content-Disposition, que Chrome anota como ERR_ABORTED), y esa descarga no
+   * pasa por el CDP de la pestaña. Con `Page.setDownloadBehavior` a secas el
+   * archivo no aterrizaba en ninguna parte —comprobado en el portal el
+   * 30-sep-2026—. El de página se deja además, por si acaso.
+   */
+  const conDescargas = async () => {
+    const carpeta = await mkdtemp(join(tmpdir(), 'sura-'));
+    const cdpNavegador = await navegador.target().createCDPSession();
+    await cdpNavegador.send('Browser.setDownloadBehavior', {
+      behavior: 'allow', downloadPath: carpeta, eventsEnabled: true,
+    }).catch(() => {});
+    const cdp = await pagina.target().createCDPSession();
+    await cdp.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: carpeta }).catch(() => {});
+
+    return {
+      carpeta,
+      esperar: async (vueltas) => {
+        for (let i = 0; i < vueltas; i++) {
+          await esperar(1500);
+          const n = (await readdir(carpeta).catch(() => [])).find((x) => !x.endsWith('.crdownload'));
+          if (n) {
+            const ruta = join(carpeta, n);
+
+            return { archivo: n, ruta, bytes: (await stat(ruta)).size };
+          }
+        }
+
+        return null;
+      },
+    };
+  };
+
+  // ── Certificado de afiliación al PBS ──
+  // Solo lee: se puede pedir las veces que haga falta, y sirve igual para quien
+  // ya estaba afiliado. Es el documento que se guarda con el radicado.
+  if (modo === 'certificado') {
+    paso = 'certificado';
+    const descarga = await conDescargas();
+
+    await pagina.goto(URL_CERTIFICADO, { waitUntil: 'networkidle2', timeout: 60000 });
+    await pagina.waitForSelector('[id="certificadoAfiliacionPos:numeroIdentificacion"]', { visible: true, timeout: 30000 });
+
+    await pagina.select('[id="certificadoAfiliacionPos:tipoIdentificacion"]',
+      TIPOS_CERTIFICADO[String(persona.tipo || 'CC').toUpperCase()] || 'CC').catch(() => {});
+    await pagina.click('[id="certificadoAfiliacionPos:numeroIdentificacion"]', { clickCount: 3 });
+    await pagina.type('[id="certificadoAfiliacionPos:numeroIdentificacion"]', String(persona.numero).replace(/\D/g, ''), { delay: 30 });
+    await pagina.keyboard.press('Tab');
+    await esperar(2000);
+
+    const pulsado = await pagina.evaluate(() => {
+      const b = [...document.querySelectorAll('a, button, input[type=submit], input[type=button]')]
+        .find((e) => /generar|consultar/i.test(e.innerText || e.value || ''));
+      if (!b) return false;
+      b.click();
+
+      return true;
+    });
+    if (!pulsado) throw new Error('No apareció el botón de generar el certificado.');
+
+    const soporte = await descarga.esperar(25);
+    const pantalla = (await texto(pagina)).replace(/\s+/g, ' ').trim();
+
+    salir({
+      ok: !!soporte, modo, paso, soporte,
+      texto: pantalla.slice(0, 600),
+      // Sin certificado el portal suele decir por qué (no está afiliado, no es
+      // de esta empresa): ese texto vale más que un «no se pudo».
+      error: soporte ? undefined : 'El portal no entregó el certificado: '.concat(pantalla.slice(0, 300)),
+    });
+  }
 
   paso = 'abrir reingresos';
   await pagina.goto(URL_MENU, { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
@@ -251,9 +331,7 @@ try {
   paso = 'aplicar novedad';
   // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
   // la novedad en cuanto la aplica, y si no hay dónde dejarlo se pierde.
-  const carpeta = await mkdtemp(join(tmpdir(), 'sura-reingreso-'));
-  const cdp = await pagina.target().createCDPSession();
-  await cdp.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: carpeta }).catch(() => {});
+  const descarga = await conDescargas();
 
   const antes = alertas.length;
   await marco.evaluate(() => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
@@ -267,33 +345,19 @@ try {
   // principal» para pedirlo a mano. Se intenta, pero su ausencia no invalida
   // la novedad: eso lo dice el portal, no el archivo.
   paso = 'soporte';
-  let soporte = null;
-  const esperarArchivo = async (vueltas) => {
-    for (let i = 0; i < vueltas; i++) {
-      await esperar(1500);
-      const n = (await readdir(carpeta).catch(() => [])).find((x) => !x.endsWith('.crdownload'));
-      if (n) return n;
-    }
-    return null;
-  };
-
-  let archivo = await esperarArchivo(6);
-  if (!archivo && !conError) {
+  let soporte = await descarga.esperar(6);
+  if (!soporte && !conError) {
     for (const f of pagina.frames()) {
       const pulsado = await f.evaluate(() => {
-        const a = [...document.querySelectorAll('a, input[type=submit], input[type=button], button')]
+        const a = [...document.querySelectorAll('a, input[type=submit], input[type=button], button, span[onclick], td[onclick]')]
           .find((e) => /informe principal|soporte|certificad/i.test(e.innerText || e.value || ''));
         if (!a) return false;
         a.click();
 
         return true;
       }).catch(() => false);
-      if (pulsado) { archivo = await esperarArchivo(20); break; }
+      if (pulsado) { soporte = await descarga.esperar(20); break; }
     }
-  }
-  if (archivo) {
-    const ruta = join(carpeta, archivo);
-    soporte = { archivo, ruta, bytes: (await stat(ruta)).size };
   }
 
   salir({
