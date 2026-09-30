@@ -125,6 +125,8 @@ class ComfenalcoCajaController extends Controller
             'personas.*.doc' => 'required_with:personas|string|max:20',
             'personas.*.tipo' => 'nullable|string|max:5',
             'personas.*.nombre' => 'nullable|string|max:150',
+            'personas.*.nombres' => 'nullable|string|max:100',
+            'personas.*.apellidos' => 'nullable|string|max:100',
             'previa' => 'nullable|boolean',
         ]);
         $contrato = $this->contrato($contratoId);
@@ -178,7 +180,7 @@ class ComfenalcoCajaController extends Controller
         }
 
         try {
-            $firmado = $this->servicio->firmarDeclaracion($contrato, $pdf, $firmas, $docs, Auth::id(), $previa);
+            $firmado = $this->servicio->firmarDeclaracion($contrato, $pdf, $firmas, $docs, Auth::id(), $previa, $personas);
         } catch (Throwable $e) {
             return response()->json(['ok' => false, 'error' => 'No se pudo estampar la firma: '.$e->getMessage()], 500);
         }

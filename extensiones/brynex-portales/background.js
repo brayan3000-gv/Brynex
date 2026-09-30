@@ -1257,7 +1257,7 @@ async function pCcfDeclaracion() {
     const rol = /^padre$/i.test(c[3] || '') ? 'padre' : /^madre$/i.test(c[3] || '') ? 'madre' : null;
     const excluido = tr.querySelector('select')?.value === 'S';
     const m = /^([A-Z]{1,3})\.(\d+)/.exec(c[4] || '');
-    if (rol && !excluido && m) personas[rol] = { tipo: m[1], doc: m[2], nombre: [c[1], c[2]].filter(Boolean).join(' ') };
+    if (rol && !excluido && m) personas[rol] = { tipo: m[1], doc: m[2], nombre: [c[1], c[2]].filter(Boolean).join(' '), nombres: c[1] || '', apellidos: c[2] || '' };
   });
 
   // Sin beneficiarios ni pareja el portal no pide la declaración (solo la cédula del trabajador):

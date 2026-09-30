@@ -267,6 +267,25 @@ class ComfenalcoCajaService
     ];
 
     /**
+     * Filas de la sección 3 (padres o hermanos huérfanos): y de la línea de texto (mm) y x de cada
+     * columna. El portal llena la tabla de abajo hacia arriba y a veces deja fuera a la madre
+     * aunque esté incluida en la afiliación; en ese caso se escribe su fila.
+     */
+    private const FILAS_PADRES_Y = [1 => 147.6, 2 => 150.2, 3 => 152.8, 4 => 155.4];
+
+    private const COLUMNAS_PADRES_X = ['nombre' => 12.3, 'tipo' => 67.5, 'numero' => 72.0, 'parentesco' => 103.0];
+
+    /** Texto plano del PDF (para saber qué llenó el portal); vacío si no se puede leer. */
+    private function textoDelPdf(string $pdf): string
+    {
+        try {
+            return (new \Smalot\PdfParser\Parser())->parseContent($pdf)->getText();
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
      * ¿Hay firma guardada? Sin documento es la del trabajador; con documento, la de un beneficiario
      * (el padre o la madre que firman la sección 3). Es un documento más del cliente, en disco privado.
      */
@@ -302,8 +321,21 @@ class ComfenalcoCajaService
      * @param  array<string, string>  $docs    rol → texto del documento, p. ej. «CC 27261598»
      * @return string PDF con las firmas
      */
-    public function firmarDeclaracion(Contrato $contrato, string $pdf, array $firmas, array $docs, ?int $usuarioId, bool $previa = false): string
+    public function firmarDeclaracion(Contrato $contrato, string $pdf, array $firmas, array $docs, ?int $usuarioId, bool $previa = false, array $personas = []): string
     {
+        // ¿Quién de los padres quedó fuera de la tabla de la sección 3? Se busca su documento en el
+        // texto del PDF; los que falten se escriben en las filas libres (de abajo hacia arriba).
+        $faltantes = [];
+        $texto = preg_replace('/\D/', '', $this->textoDelPdf($pdf));
+        if ($texto !== '') {
+            foreach (['padre', 'madre'] as $rol) {
+                $p = $personas[$rol] ?? null;
+                if ($p && ! str_contains($texto, ltrim(preg_replace('/\D/', '', (string) $p['doc']), '0'))) {
+                    $faltantes[$rol] = $p;
+                }
+            }
+        }
+
         $tmp = sys_get_temp_dir().'/decl_'.\Illuminate\Support\Str::random(8);
         file_put_contents($tmp.'.pdf', $pdf);
         $archivos = [];
@@ -322,6 +354,24 @@ class ComfenalcoCajaService
                 $fpdi->useTemplate($id);
                 if ($n !== 1) {
                     continue;                                   // el formato es de una sola hoja
+                }
+                // Filas de la sección 3 que el portal no llenó: el primer hueco libre contando desde abajo
+                // (la fila 4 es la que usa el portal para el padre cuando lo lista).
+                $fila = count($personas) - count($faltantes) >= 1 ? 3 : 4;
+                foreach (['padre', 'madre'] as $rol) {
+                    if (! isset($faltantes[$rol])) {
+                        continue;
+                    }
+                    $p = $faltantes[$rol];
+                    $y = self::FILAS_PADRES_Y[$fila--];
+                    $apellidosNombres = trim(($p['apellidos'] ?? '').' '.($p['nombres'] ?? '')) ?: (string) ($p['nombre'] ?? '');
+                    $fpdi->SetFont('Arial', '', 6);
+                    $fpdi->SetTextColor(20, 20, 20);
+                    $t = fn ($v) => iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string) $v);
+                    $fpdi->Text(self::COLUMNAS_PADRES_X['nombre'], $y, $t(mb_strtoupper($apellidosNombres)));
+                    $fpdi->Text(self::COLUMNAS_PADRES_X['tipo'], $y, $t(strtoupper((string) ($p['tipo'] ?? 'CC'))));
+                    $fpdi->Text(self::COLUMNAS_PADRES_X['numero'], $y, $t($p['doc']));
+                    $fpdi->Text(self::COLUMNAS_PADRES_X['parentesco'], $y, $t(strtoupper($rol)));
                 }
                 foreach (self::FIRMA_EN_DECLARACION as $rol => $p) {
                     if (isset($archivos[$rol])) {
