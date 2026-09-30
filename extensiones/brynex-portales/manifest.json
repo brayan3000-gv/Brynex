@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BryNex Portales",
-  "version": "1.45.1",
+  "version": "1.45.2",
   "description": "Hace los trámites de afiliación de BryNex en los portales de las EPS, cajas y el Fondo de Solidaridad, y trae la exógena de la DIAN a BryNex Renta, con la sesión que la persona abre en su propio navegador.",
   "permissions": [
     "scripting",
@@ -50,6 +50,17 @@
         "puente-renta.js"
       ],
       "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.epssanitas.com/usuarios/web/nuevo-portal-eps/novedades-afiliacion*",
+        "https://epssanitas.com/usuarios/web/nuevo-portal-eps/novedades-afiliacion*"
+      ],
+      "js": [
+        "sanitas-sin-aviso.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ]
 }
