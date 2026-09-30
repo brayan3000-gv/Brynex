@@ -146,7 +146,7 @@ function ccfOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfenalco(contratoId) {
-    ccfContratoId = contratoId; ccfAutoIntentado = false; ccfAbriendo = false; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; clearInterval(ccfRelojBit); ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
+    ccfContratoId = contratoId; ccfAutoIntentado = false; ccfAbriendo = false; ccfCambioIntentado = false; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; clearInterval(ccfRelojBit); ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
@@ -195,6 +195,11 @@ async function revisarSesionCaja() {
     ccfEl('ccfBtnIniciar').style.display = 'none';
     if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
     if (ccfAbriendo) return;
+    if (ccfOtraEmpresa(e)) {
+        caja.innerHTML = `⚠️ El portal está abierto con <strong>${ccfEsc(e.empresa || 'otra empresa')}</strong> (NIT ${ccfEsc(e.nit)}) y este contrato es de <strong>${ccfEsc(ccfPrep.portal.empresa)}</strong>. Al pulsar «Buscar al trabajador y empezar» se cierra esa sesión y se entra con la clave de ${ccfEsc(ccfPrep.portal.empresa)}.`;
+        ccfEl('ccfBtnIniciar').style.display = 'block';
+        return;
+    }
     if ((!e.abierta || !e.sesion) && await ccfAbrirSolo()) return;
     if (ccfAbriendo) return;
     if (!e.abierta || !e.sesion) {
@@ -218,6 +223,34 @@ async function abrirPortalCaja() {
 // tiene en el módulo de claves. Se intenta UNA vez por apertura del modal: repetir logins con una
 // clave mala puede bloquear el usuario del portal.
 let ccfAutoIntentado = false, ccfAbriendo = false;
+// El portal puede estar abierto con OTRA empresa (p. ej. YEVI EXPRESS cuando el contrato es de GAVI).
+// Se compara el NIT de la sesión con el del contrato; al pulsar «Buscar al trabajador» se cierra esa
+// sesión y se entra con la clave de la empresa del contrato (una vez por apertura del modal).
+const ccfSoloDigitos = v => String(v || '').replace(/\D/g, '');
+function ccfOtraEmpresa(e) {
+    const esperado = ccfSoloDigitos(ccfPrep.portal?.nit);
+    return !!(e && e.sesion && e.nit && esperado && ccfSoloDigitos(e.nit) !== esperado);
+}
+let ccfCambioIntentado = false;
+async function ccfCambiarEmpresa(e) {
+    if (ccfCambioIntentado || ccfAbriendo) return false;
+    if (!ccfPrep.resumen?.usuario_portal) return false;           // sin la clave de esta empresa no se puede entrar con ella
+    ccfCambioIntentado = true; ccfAbriendo = true;
+    const caja = ccfEl('ccfSesion'), t0 = Date.now();
+    const pintar = () => { caja.innerHTML = `🔄 El portal está con <strong>${ccfEsc(e.empresa || 'otra empresa')}</strong> (NIT ${ccfEsc(e.nit)}) y este contrato es de <strong>${ccfEsc(ccfPrep.portal.empresa)}</strong> (NIT ${ccfEsc(ccfPrep.portal.nit)}). Cerrando esa sesión y entrando con la clave correcta… <strong>⏱ ${Math.floor((Date.now() - t0) / 1000)} s</strong>`; };
+    pintar(); const reloj = setInterval(pintar, 1000);
+    const c = await ccfExt('ccfCerrarSesion', {}, 60);
+    clearInterval(reloj); ccfAbriendo = false;
+    if (!c.ok) { caja.innerHTML = `⚠️ No se pudo cerrar la sesión de ${ccfEsc(e.empresa || 'la otra empresa')}: ${ccfEsc(c.error || 'sin respuesta')}. Ciérrala a mano en el portal.`; return false; }
+    ccfAutoIntentado = false;                                     // ahora sí: abrir con la clave de esta empresa
+    const ok = await ccfAbrirSolo();
+    if (ok) {
+        const n = await ccfExt('ccfEstado', {}, 20);
+        if (ccfOtraEmpresa(n)) { caja.innerHTML = `⚠️ Se entró, pero el portal sigue con <strong>${ccfEsc(n.empresa)}</strong> (NIT ${ccfEsc(n.nit)}). Revisa la sesión.`; ccfEl('ccfBtnIniciar').style.display = 'none'; return false; }
+    }
+    return ok;
+}
+
 async function ccfAbrirSolo() {
     if (ccfAutoIntentado || ccfAbriendo) return false;
     if (!ccfPrep.resumen?.usuario_portal) return false;           // sin clave guardada: lo hace la persona
@@ -249,7 +282,11 @@ async function iniciarCajaComfenalco() {
     btn.disabled = true; btn.textContent = '⏳ Buscando al trabajador en el portal...';
     // Sin sesión en el portal se abre solo antes de buscar.
     const est0 = await ccfExt('ccfEstado', {}, 20);
-    if (!est0.sesion && !est0.sinExtension) {
+    if (ccfOtraEmpresa(est0)) {
+        btn.textContent = '🔄 Cambiando de empresa en el portal…';
+        if (!(await ccfCambiarEmpresa(est0))) { btn.disabled = false; btn.textContent = '🔎 Buscar al trabajador y empezar'; return; }
+        btn.textContent = '⏳ Buscando al trabajador en el portal...';
+    } else if (!est0.sesion && !est0.sinExtension) {
         btn.textContent = '🔐 Abriendo el portal…';
         if (!(await ccfAbrirSolo())) { btn.disabled = false; btn.textContent = '🔎 Buscar al trabajador y empezar'; if (!ccfAutoIntentado) alert('El portal no tiene sesión y la empresa no tiene clave guardada: inicia sesión a mano.'); return; }
         btn.textContent = '⏳ Buscando al trabajador en el portal...';

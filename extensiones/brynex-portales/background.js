@@ -42,6 +42,7 @@
  *  ccfResultado                        → {radicado, numero, texto} tras Finalizar Afiliación
  *  ccfDeclaracion                      → {base64} PDF oficial de la declaración juramentada (formato del portal, sin descargarlo)
  *  ccfSubirDeclaracion {base64}        → adjunta el PDF firmado en cada "Formato declaración juramentada caja" pendiente
+ *  ccfCerrarSesion                     → cierra la sesión de la empresa abierta (para entrar con otra)
  *  ccfProgreso                         → {pasos:[{t,m}], t0, fin} lo que va haciendo ccfFinalizar (para mostrarlo en vivo)
  *  ccfFinalizar                        → pulsa "Finalizar Afiliación", acepta los términos y espera el número de formulario
  *  ccfDocumentos                       → {docs:[{requerido, nombre, doc_beneficiario, mime, base64}]} anexos que la caja ya tiene (paso Anexos)
@@ -84,7 +85,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'ccfCerrarSesion', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -1440,10 +1441,14 @@ async function pCcfFinalizar() {
 function pCcfEstado() {
   if (!/comfenalcovalle/.test(location.host)) return { sesion: false, enLogin: true, pagina: 'login' };
   const login = /index\.html/.test(location.pathname) || !!document.querySelector('#btnLoginAuth0');
-  let empresa = null;
-  try { empresa = (JSON.parse(localStorage.getItem('empresa') || 'null') || {}).razonSocial || null; } catch { /* sin empresa */ }
+  let empresa = null, nit = null;
+  try {
+    const e = JSON.parse(localStorage.getItem('empresa') || 'null') || {};
+    empresa = e.razonSocialEmpresa || e.razonSocial || null;
+    nit = String(e.numeroDocumentoEmpresa || '').replace(/\D/g, '') || null;       // NIT de la sesión abierta
+  } catch { /* sin empresa */ }
   if (!empresa) empresa = document.querySelector('#btnEmpresa, .nombre-empresa')?.innerText?.trim() || $('#txtRazonSocal').val() || null;
-  return { sesion: !!localStorage.getItem('usuario') && !login, empresa, pagina: location.pathname.split('/').pop() };
+  return { sesion: !!localStorage.getItem('usuario') && !login, empresa, nit, pagina: location.pathname.split('/').pop() };
 }
 
 async function atenderCcfcv(accion, d = {}) {
@@ -1490,6 +1495,8 @@ async function atenderCcfcv(accion, d = {}) {
   const pestana = await pestanaCcfcv();
   if (!pestana) return { ok: true, abierta: false, sesion: false };
 
+  if (accion === 'ccfCerrarSesion') return ccfCerrarSesion(pestana);
+
   if (accion === 'ccfEstado') {
     let e;
     try { e = await ejecutar(pestana.id, pCcfEstado); } catch { e = { sesion: false }; }
@@ -1517,6 +1524,38 @@ async function atenderCcfcv(accion, d = {}) {
  * Sucursal Virtual; la señal de que se entró es el `usuario` en localStorage
  * del portal, no la pantalla de AuthComfe.
  */
+/**
+ * Cierra la sesión del portal para poder entrar con otra empresa. Pulsa el «Cerrar Sesión» del
+ * propio portal (que también cierra la sesión de AuthComfe) y espera a quedar sin sesión. Si no
+ * hay botón a la vista (p. ej. en una página de login), limpia el almacenamiento de la sesión.
+ */
+async function ccfCerrarSesion(pestana) {
+  const tab = pestana.id;
+  const antes = await ejecutar(tab, pCcfEstado).catch(() => ({ sesion: false }));
+  if (!antes.sesion) return { ok: true, cerrada: true, sinSesion: true };
+
+  const pulsado = await ejecutar(tab, () => {
+    const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
+    const b = [...document.querySelectorAll('button,a,input[type=button]')].filter(vis).find(e => /cerrar\s+sesi/i.test(e.innerText || e.value || ''));
+    if (!b) return false;
+    b.click();
+    return true;
+  }).catch(() => false);
+
+  if (!pulsado) {
+    await ejecutar(tab, () => { try { localStorage.clear(); sessionStorage.clear(); } catch { /* sin acceso */ } return true; }).catch(() => {});
+    await chrome.tabs.update(tab, { url: CCFCV_LOGIN });
+  }
+
+  const limite = Date.now() + 30000;
+  while (Date.now() < limite) {
+    await esperar(1500);
+    const e = await ejecutar(tab, pCcfEstado).catch(() => null);
+    if (!e || !e.sesion) return { ok: true, cerrada: true, pulsado };
+  }
+  return { ok: false, error: 'El portal no cerró la sesión de ' + (antes.empresa || 'la empresa abierta') + '.' };
+}
+
 async function ccfEntrar(tab, usuario, contrasena) {
   // El autocompletado de Chrome puede pisar el correo con el de otra empresa
   // después de llenarlo (pasó con ELITES sobre GAVI). Justo antes de pulsar se
@@ -1792,6 +1831,11 @@ function pCcfPaso(d) {
         if ($('#BarrioResidencia option').length <= 1) falta.push('cargando barrios…');
         else {
           let b = candidato ? porTexto('BarrioResidencia', candidato) : null;
+          // Si la dirección es la de la empresa, el barrio también: el del registro de la empresa.
+          if (!b && usoEmpresa && empresaPortal?.barrioEmpresa?.descripcionTipo) {
+            b = porTexto('BarrioResidencia', empresaPortal.barrioEmpresa.descripcionTipo);
+            if (b) b += ' (el de la empresa, como respaldo: revísalo)';
+          }
           if (!b) {
             // «Lo más parecido»: el barrio de la lista que comparte más palabras (de 4+ letras)
             // con la dirección de BryNex; se anota como aproximado para que se revise.
@@ -1804,6 +1848,10 @@ function pCcfPaso(d) {
               if (p > puntos) { puntos = p; mejor = o; }
             }
             if (mejor) { $('#BarrioResidencia').val(mejor.value).trigger('change').trigger('chosen:updated'); b = mejor.text.trim() + ' (aproximado por la dirección: revísalo)'; }
+          }
+          if (!b && empresaPortal?.barrioEmpresa?.descripcionTipo) {       // último recurso: el barrio de la empresa
+            b = porTexto('BarrioResidencia', empresaPortal.barrioEmpresa.descripcionTipo);
+            if (b) b += ' (el de la empresa, como respaldo: revísalo)';
           }
           b ? hecho.push('barrio: ' + b) : falta.push('barrio ' + (candidato || '—') + ' (elígelo a mano: BryNex no lo tiene y nada en la lista se parece)');
         }
@@ -1826,9 +1874,14 @@ function pCcfPaso(d) {
     //    se respeta antes que la de la empresa: el respaldo de la empresa es el último recurso.
     const dirValidaDelPortal = normalizarDireccion(campoDir?.value);
     if (!dirBrynex && dirValidaDelPortal) { dirBrynex = dirValidaDelPortal; origenDir = ' (se conserva la que ya traía el portal: la de BryNex no tiene un formato válido)'; }
+    // La empresa de la sesión del portal trae su dirección y barrio exactos (localStorage.empresa):
+    // son mejores que los de BryNex para el respaldo.
+    let empresaPortal = null;
+    try { empresaPortal = JSON.parse(localStorage.getItem('empresa') || 'null'); } catch { /* sin datos */ }
+    let usoEmpresa = false;
     if (!dirBrynex) {
-      dirBrynex = normalizarDireccion(d.direccionEmpresa);
-      if (dirBrynex) origenDir = ' (respaldo: dirección de la empresa, porque ni la del trabajador ni la del portal tienen un formato que el portal acepte)';
+      dirBrynex = normalizarDireccion(empresaPortal?.direccionEmpresa) || normalizarDireccion(d.direccionEmpresa);
+      if (dirBrynex) { usoEmpresa = true; origenDir = ' (respaldo: dirección de la empresa, porque ni la del trabajador ni la del portal tienen un formato que el portal acepte)'; }
     }
     const dirPortal = String(campoDir?.value || '').replace(/\s+/g, ' ').trim();
     if (campoDir && dirBrynex) {
