@@ -125,14 +125,33 @@ try {
   // El menú JSF redirige solo a la aplicación de reingresos; darle tiempo.
   for (let i = 0; i < 20 && !/reingresos/i.test(pagina.url()); i++) await esperar(1000);
 
-  const marco = (await marcoConCampo(pagina, 'WucSearchPerson_txtId'))
+  // La pantalla se dibuja en varios tiempos (ScriptManager + UpdatePanel): leer
+  // el DOM al llegar devolvía solo los hidden de ASP.NET. Se espera a que haya
+  // algo con lo que trabajar antes de mirar.
+  paso = 'esperar formulario';
+  const campoDe = async () => (await marcoConCampo(pagina, 'WucSearchPerson_txtId'))
     ?? (await marcoConCampo(pagina, 'txtId'))
-    ?? pagina.mainFrame();
+    ?? null;
 
-  // Inventario de lo que hay en pantalla: con esto se ajustan los selectores
-  // sin tener que radicar nada para verlos.
+  let marco = null;
+  for (let i = 0; i < 30 && !marco; i++) {
+    marco = await campoDe();
+    if (!marco) {
+      // O el campo aún no existe, o el formulario está en otro marco: sirve
+      // cualquier marco que ya tenga controles de verdad, no solo los ocultos.
+      for (const f of pagina.frames()) {
+        const utiles = await f.evaluate(() => document.querySelectorAll('input:not([type=hidden]),select,textarea').length).catch(() => 0);
+        if (utiles > 0) { marco = f; break; }
+      }
+    }
+    if (!marco) await esperar(1000);
+  }
+  marco ??= pagina.mainFrame();
+
+  // Inventario de lo que hay en pantalla —de TODOS los marcos, con el suyo
+  // anotado—: con esto se ajustan los selectores sin radicar nada para verlos.
   paso = 'inventario';
-  const campos = await marco.evaluate(() => Array.from(document.querySelectorAll('input,select,textarea,a[id],button'))
+  const inventario = async (f) => f.evaluate(() => Array.from(document.querySelectorAll('input,select,textarea,a[id],button'))
     .filter((e) => e.id || e.name)
     .map((e) => ({
       id: e.id || null,
@@ -141,11 +160,23 @@ try {
       tipo: e.type || null,
       valor: e.tagName === 'SELECT' ? undefined : String(e.value ?? '').slice(0, 40),
       opciones: e.tagName === 'SELECT' ? Array.from(e.options).slice(0, 25).map((o) => `${o.value}|${o.text}`.slice(0, 60)) : undefined,
-      visible: !!(e.offsetParent || e.type === 'hidden'),
-    })));
+      // offsetParent es null en los position:fixed: se mira también el tamaño.
+      visible: e.type === 'hidden' ? false : !!(e.offsetParent || e.getClientRects().length),
+    }))).catch(() => []);
+
+  const campos = [];
+  for (const f of pagina.frames()) {
+    for (const c of await inventario(f)) campos.push({ ...c, marco: f.url().slice(-60) });
+  }
 
   if (modo === 'explorar') {
-    salir({ ok: true, modo, paso, url: pagina.url(), campos, texto: (await texto(pagina)).replace(/\s+/g, ' ').slice(0, 1200) });
+    const textos = [];
+    for (const f of pagina.frames()) {
+      const t = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
+      if (t.trim()) textos.push(t.replace(/\s+/g, ' ').trim().slice(0, 600));
+    }
+
+    salir({ ok: true, modo, paso, url: pagina.url(), marcos: pagina.frames().length, campos, texto: textos.join(' ⏐ ').slice(0, 1500) });
   }
 
   // ── Persona ──
