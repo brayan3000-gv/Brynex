@@ -27,7 +27,9 @@ una tarea con el motivo que dio el portal.
 
 Afiliaciones → radicado de EPS de un contrato con S.O.S. → **🏥 Novedad S.O.S.**
 Con Sanitas → **🏥 Radicar Sanitas**: abre el formulario de novedades, la extensión lo
-llena y adjunta el formulario, la persona pulsa Enviar y BryNex guarda el radicado.
+llena y adjunta el formulario (firmado por el trabajador), el robot pulsa Enviar y BryNex guarda el radicado.
+La pestaña de Sanitas trabaja de fondo y BryNex sigue al frente; solo se trae la de Sanitas
+si pide verificación de Radware o el formulario marca un error.
 Después de actualizar la carpeta hay que pulsar **Recargar** en `chrome://extensions`.
 El modal pide abrir S.O.S. en otra pestaña; se inicia sesión ahí (con captcha) y
 se vuelve a BryNex. Mientras corre el trámite no hay que usar la pestaña de S.O.S.

@@ -36,7 +36,7 @@ class SanitasNovedadService
     public function __construct(private FormularioEpsService $formularios) {}
 
     /**
-     * @return array{problemas: string[], avisos: string[], resumen: array, portal: array|null}
+     * @return array{problemas: string[], avisos: string[], resumen: array, falta_firma: bool, url_firma: string|null, portal: array|null}
      */
     public function preparar(Contrato $contrato): array
     {
@@ -93,6 +93,10 @@ class SanitasNovedadService
         } elseif ($correo === $cliente?->correo) {
             $avisos[] = 'El aliado no tiene buzón configurado: la respuesta de Sanitas llegará al correo del cliente.';
         }
+        // La plantilla de Sanitas lleva la firma del trabajador; sin la dibujada a mano
+        // el espacio sale en blanco y Sanitas devuelve la novedad. El robot no sube un
+        // formulario así: el modal pide la firma antes de radicar.
+        $faltaFirma = $cliente && ! FormularioEpsService::tieneFirma($cliente);
         if ($radicado?->numero_radicado && $radicado->estado === Radicado::ESTADO_TRAMITE) {
             $avisos[] = "Este radicado ya está en trámite con el número {$radicado->numero_radicado}. Radica otra vez solo si Sanitas no lo recibió.";
         }
@@ -113,7 +117,10 @@ class SanitasNovedadService
             'numero_radicado' => $radicado?->numero_radicado,
         ];
 
-        return ['problemas' => $problemas, 'avisos' => $avisos, 'resumen' => $resumen, 'portal' => $problemas ? null : [
+        return ['problemas' => $problemas, 'avisos' => $avisos, 'resumen' => $resumen,
+            'falta_firma' => $faltaFirma,
+            'url_firma'   => $contrato->id ? route('admin.afiliaciones.formulario.eps', $contrato->id, false) : null,
+            'portal' => $problemas ? null : [
             'tipoDoc'       => self::TIPOS[$tipo],
             'documento'     => (string) $contrato->cedula,
             'departamento'  => str_pad((string) $cliente->departamento_id, 2, '0', STR_PAD_LEFT),
@@ -132,6 +139,11 @@ class SanitasNovedadService
     /** Formulario de Sanitas como novedad de inicio laboral, guardado en los soportes del radicado. */
     public function formulario(Contrato $contrato): string
     {
+        $contrato->loadMissing('cliente');
+        if (! FormularioEpsService::tieneFirma($contrato->cliente)) {
+            throw new RuntimeException('El formulario no tiene la firma del trabajador: ábrelo en «✍️ Firmar» y que la dibuje antes de radicar. Sanitas devuelve las novedades sin firma.');
+        }
+
         $pdf = $this->formularios->generar($contrato, false, [], true);
         if (strlen($pdf) > 3_000_000) {
             throw new RuntimeException('El formulario pesa más de 3 MB, el límite del portal de Sanitas.');

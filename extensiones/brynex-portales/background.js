@@ -21,10 +21,11 @@
  * Pedidos Sanitas (portal: 'sanitas'):
  *  estado / abrir / estadoAfiliacion   Oficina Virtual de Empleadores (conciliación)
  *  novedadEstado                       → {abierta, listo, error} del formulario web de novedades
- *  novedadAbrir                        → abre (o enfoca) el formulario web de novedades
+ *  novedadAbrir                        → abre el formulario web de novedades DE FONDO (BryNex sigue al frente)
+ *  novedadMostrar                      → trae la pestaña de Sanitas al frente (captcha, errores)
  *  novedadLlenar {tipoDoc, documento, departamento, municipio, municipioDane, telefonoFijo,
- *                 celular, correo, tipoNovedad, observaciones, archivo, nombreArchivo}
- *                                      → llena y adjunta; el clic en Enviar lo da la persona
+ *                 celular, correo, tipoNovedad, observaciones, archivo, nombreArchivo, enviar}
+ *                                      → llena y adjunta; con enviar:true el robot pulsa Enviar (si el adjunto subió)
  *  novedadResultado {documento}        → {enviado, radicado, texto, errores, captura}
  *
  * Pedidos Boxalud (portal: 'boxalud', Emssanar; datos.host dice cuál):
@@ -83,7 +84,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -636,22 +637,45 @@ async function pestanaNovedades() {
   return pestanas.find(p => /novedades-afiliacion/.test(p.url || '')) || pestanas.find(p => /perfdrive/.test(p.url || '')) || null;
 }
 
+// Pestañas de Sanitas que ya se trajeron al frente por necesitar a una persona
+// (verificación de Radware o error del formulario): una sola vez, para no quitarle
+// el foco a BryNex en cada revisión.
+const sanitasMostradas = new Set();
+
+async function mostrarPestana(pestana) {
+  try {
+    await chrome.tabs.update(pestana.id, { active: true });
+    await chrome.windows.update(pestana.windowId, { focused: true });
+  } catch { /* la pestaña se cerró */ }
+}
+
+async function mostrarUnaVez(pestana, clave) {
+  const k = `${pestana.id}:${clave}`;
+  if (sanitasMostradas.has(k)) return;
+  sanitasMostradas.add(k);
+  await mostrarPestana(pestana);
+}
+
 async function atenderSanitasNovedad(accion, datos, origen) {
+  // BryNex sigue al frente: la pestaña de Sanitas se abre y trabaja de fondo.
   if (accion === 'novedadAbrir') {
     const p = await pestanaNovedades();
-    if (p) {
-      await chrome.tabs.update(p.id, { active: true });
-      await chrome.windows.update(p.windowId, { focused: true });
-    } else {
-      await chrome.tabs.create({ url: SANITAS_NOVEDADES, active: true });
-    }
+    if (!p) await chrome.tabs.create({ url: SANITAS_NOVEDADES, active: false });
     return { ok: true, abierta: true };
+  }
+
+  // La trae al frente cuando la persona la necesita (captcha, revisar un error).
+  if (accion === 'novedadMostrar') {
+    const p = await pestanaNovedades();
+    if (p) await mostrarPestana(p);
+    return { ok: true, abierta: !!p };
   }
 
   const pestana = await pestanaNovedades();
   if (!pestana) return { ok: true, abierta: false, listo: false };
   if (/perfdrive/.test(pestana.url || '')) {
-    return { ok: true, abierta: true, listo: false, error: 'Sanitas pide verificar que no eres un robot: resuélvelo en la pestaña de Sanitas.' };
+    await mostrarUnaVez(pestana, 'radware');
+    return { ok: true, abierta: true, listo: false, error: 'Sanitas pide verificar que no eres un robot: resuélvelo en la pestaña de Sanitas (se trajo al frente).' };
   }
 
   if (accion === 'novedadEstado') {
@@ -664,6 +688,8 @@ async function atenderSanitasNovedad(accion, datos, origen) {
 
   if (accion === 'novedadResultado') {
     const r = await ejecutar(pestana.id, pNovedadResultado, [SANITAS_NS, String(datos.documento || '')]);
+    // Sanitas frenó el Enviar (validación, captcha): que la persona lo vea en su pestaña.
+    if (r && !r.enviado && r.errores?.length) await mostrarUnaVez(pestana, 'errores');
     if (r?.enviado) {
       // La captura solo sale si la pestaña de Sanitas es la que se ve; si no, queda el texto.
       try {
@@ -775,22 +801,27 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
     return c?.checked ? true : null;
   }, [SANITAS_NS, d.nombreArchivo], 60000);
 
-  // 4. Deja todo a la vista con Enviar resaltado y marca el trámite en la pestaña.
-  await ejecutar(pestana.id, (ns, doc) => {
+  // 4. Marca el trámite en la pestaña y, si se pidió y el adjunto quedó subido,
+  // el robot pulsa Enviar. BryNex se queda al frente; solo si algo falta (adjunto,
+  // botón) se trae la pestaña de Sanitas para que la persona lo resuelva.
+  const quiereEnviar = !!(d.enviar && adjunto);
+  const envio = await ejecutar(pestana.id, (ns, doc, enviar) => {
     sessionStorage.setItem('brynexNovedad', JSON.stringify({ documento: doc, desde: Date.now() }));
     const b = document.getElementById(ns + 'btnSend');
-    if (b) { b.style.outline = '3px solid #f59e0b'; b.style.outlineOffset = '3px'; b.scrollIntoView({ block: 'center' }); }
-    return true;
-  }, [SANITAS_NS, String(d.documento)]);
-  await chrome.tabs.update(pestana.id, { active: true });
-  await chrome.windows.update(pestana.windowId, { focused: true });
+    if (!b) return { enviado: false, motivo: 'No se encontró el botón Enviar del formulario.' };
+    if (enviar) { b.click(); return { enviado: true }; }
+    b.style.outline = '3px solid #f59e0b'; b.style.outlineOffset = '3px'; b.scrollIntoView({ block: 'center' });
+    return { enviado: false };
+  }, [SANITAS_NS, String(d.documento), quiereEnviar]);
+  if (!envio?.enviado) await mostrarPestana(pestana);
 
   return {
     ok: true,
     municipio: ciudad.texto,
     requisitos,
     adjunto: !!adjunto,
-    aviso: adjunto ? null : 'El formulario quedó lleno pero Sanitas no confirmó el adjunto: adjúntalo a mano antes de Enviar.',
+    enviado: !!envio?.enviado,
+    aviso: adjunto ? (envio?.motivo || null) : 'El formulario quedó lleno pero Sanitas no confirmó el adjunto: adjúntalo a mano antes de Enviar.',
   };
 }
 
