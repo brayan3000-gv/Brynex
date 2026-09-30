@@ -208,7 +208,10 @@ class EpsSuraReingresoService
             $yaEstaba = (bool) preg_match('/vigente(,)? (con|para) (el|este) (mismo )?empleador|ya se encuentra|ya existe/i', $nota);
 
             EpsRadicado::marcar(
-                $radicado, (string) $radicado->numero_radicado,
+                $radicado,
+                // El número del formulario se guarda solo si se llegó al
+                // comprobante: si el portal rechazó, ese número no es de nadie.
+                $llegoAlComprobante ? (trim((string) ($salida['radicado'] ?? '')) ?: (string) $radicado->numero_radicado) : (string) $radicado->numero_radicado,
                 match (true) {
                     $yaEstaba => Radicado::ESTADO_PENDIENTE,
                     $llegoAlComprobante => Radicado::ESTADO_TRAMITE,
@@ -217,7 +220,9 @@ class EpsSuraReingresoService
                 null,
                 match (true) {
                     $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. '.$nota,
-                    $llegoAlComprobante => 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado. NO repetir sin revisarlo antes en el portal. '.$nota,
+                    $llegoAlComprobante => 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado'
+                        .(($salida['radicado'] ?? null) ? ' (la solicitud del formulario era la '.$salida['radicado'].', sin confirmar)' : '')
+                        .'. NO repetir sin revisarlo antes en el portal.',
                     default => 'EPS SURA (reingreso): no se pudo radicar. '.($nota ?: 'Sin detalle del portal.'),
                 },
                 $usuarioId

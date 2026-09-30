@@ -339,6 +339,11 @@ try {
   // queda «SIN ASESOR- SIN DIRECCIÓN COMERCIAL».
   await escribir(marco, 'tbxIntermediaryCode', asesor);
 
+  // El número de solicitud está en el formulario antes de aplicar y es el que
+  // sale en el comprobante (8692154 → «6I_8692154» en Génesis, 30-sep-2026).
+  // Sirve de respaldo cuando el visor del comprobante no se deja leer.
+  const solicitudPrevia = (await marco.evaluate(() => document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').catch(() => '')).trim();
+
   paso = 'aplicar novedad';
   // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
   // la novedad en cuanto la aplica, y si no hay dónde dejarlo se pierde.
@@ -372,10 +377,15 @@ try {
     // El reporte va en un iframe que el visor escribe por dentro (sin src), y
     // ese marco no siempre sale en pagina.frames(): se lee su contentDocument
     // desde la página, que es del mismo dominio.
-    const dentro = await pagina.evaluate(() => Array.from(document.querySelectorAll('iframe'))
-      .map((f) => { try { return f.contentDocument?.body?.innerText || ''; } catch { return ''; } })
-      .join(' \n ')).catch(() => '');
-    if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(dentro)) comprobante = dentro.replace(/\s+/g, ' ').trim();
+    for (const f of pagina.frames()) {
+      const dentro = await f.evaluate(() => Array.from(document.querySelectorAll('iframe'))
+        .map((x) => { try { return x.contentDocument?.body?.innerText || ''; } catch { return ''; } })
+        .join(' \n ')).catch(() => '');
+      if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(dentro)) {
+        comprobante = dentro.replace(/\s+/g, ' ').trim();
+        break;
+      }
+    }
   }
 
   const despues = (comprobante || (await texto(pagina))).replace(/\s+/g, ' ').trim();
@@ -417,7 +427,10 @@ try {
   salir({
     ok: !conError,
     modo, paso: 'aplicar novedad', nombre, alerta: alerta || null,
-    radicado: solicitud, transaccion, periodoPago: periodo,
+    radicado: solicitud || (enComprobante && !comprobante ? solicitudPrevia || null : null),
+    // Dice de dónde salió el número: del comprobante o del formulario.
+    numeroSinConfirmar: !solicitud && enComprobante && !comprobante && !!solicitudPrevia,
+    transaccion, periodoPago: periodo,
     soporte,
     texto: despues.slice(0, 900),
     // Se distingue «no se aplicó» de «se aplicó pero no pude leerlo»: en el
