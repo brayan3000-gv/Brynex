@@ -809,7 +809,18 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
     sessionStorage.setItem('brynexNovedad', JSON.stringify({ documento: doc, desde: Date.now() }));
     const b = document.getElementById(ns + 'btnSend');
     if (!b) return { enviado: false, motivo: 'No se encontró el botón Enviar del formulario.' };
-    if (enviar) { b.click(); return { enviado: true }; }
+    if (enviar) {
+      // El Enviar recarga la página y Chrome pregunta «¿Quieres salir del sitio web?»
+      // (beforeunload). Se anula aquí, solo en esta pestaña y justo antes del clic, para
+      // que el robot no quede esperando a una persona.
+      try {
+        window.onbeforeunload = null;
+        Object.defineProperty(window, 'onbeforeunload', { configurable: true, get: () => null, set: () => {} });
+      } catch { /* la página no lo permite: queda el oyente de abajo */ }
+      window.addEventListener('beforeunload', (ev) => { ev.stopImmediatePropagation(); }, true);
+      b.click();
+      return { enviado: true };
+    }
     b.style.outline = '3px solid #f59e0b'; b.style.outlineOffset = '3px'; b.scrollIntoView({ block: 'center' });
     return { enviado: false };
   }, [SANITAS_NS, String(d.documento), quiereEnviar]);

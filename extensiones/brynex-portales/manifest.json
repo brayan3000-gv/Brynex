@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "BryNex Portales",
-  "version": "1.45.0",
+  "version": "1.45.1",
   "description": "Hace los trámites de afiliación de BryNex en los portales de las EPS, cajas y el Fondo de Solidaridad, y trae la exógena de la DIAN a BryNex Renta, con la sesión que la persona abre en su propio navegador.",
   "permissions": [
     "scripting",
