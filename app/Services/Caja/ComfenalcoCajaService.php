@@ -378,6 +378,14 @@ class ComfenalcoCajaService
         return ['ok' => true, 'estado' => Radicado::ESTADO_TRAMITE, 'numero' => $numero, 'mensaje' => $mensaje, 'pdf_guardado' => $guardoPdf];
     }
 
+    /** Adjunta el PDF del formulario al radicado de caja del contrato (cuando no se capturó al radicar). */
+    public function adjuntarPdfRadicado(Contrato $contrato, string $base64, ?int $usuarioId): bool
+    {
+        $radicado = Radicado::where('contrato_id', $contrato->id)->where('tipo', 'caja')->first();
+
+        return $radicado ? $this->guardarPdfRadicado($contrato, $radicado, $base64, $usuarioId) : false;
+    }
+
     /** Guarda el PDF del formulario radicado en el mismo sitio que «Subir PDF» (disco privado). */
     private function guardarPdfRadicado(Contrato $contrato, Radicado $radicado, string $base64, ?int $usuarioId): bool
     {

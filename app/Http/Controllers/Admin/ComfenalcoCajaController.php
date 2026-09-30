@@ -84,6 +84,14 @@ class ComfenalcoCajaController extends Controller
         return response()->json(['ok' => true] + $this->servicio->guardarDocumentos($contrato, $datos['docs'], Auth::id()));
     }
 
+    /** Guarda en el radicado de caja el PDF del formulario recuperado del portal. */
+    public function pdfRadicado(Request $request, int $contratoId)
+    {
+        $datos = $request->validate(['pdf' => 'required|string|max:12000000']);
+
+        return response()->json(['ok' => $this->servicio->adjuntarPdfRadicado($this->contrato($contratoId), $datos['pdf'], Auth::id())]);
+    }
+
     /** ¿Hay firma guardada de este trabajador? */
     public function firma(int $contratoId)
     {

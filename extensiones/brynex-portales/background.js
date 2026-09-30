@@ -42,6 +42,7 @@
  *  ccfResultado                        → {radicado, numero, texto} tras Finalizar Afiliación
  *  ccfDeclaracion                      → {base64} PDF oficial de la declaración juramentada (formato del portal, sin descargarlo)
  *  ccfSubirDeclaracion {base64}        → adjunta el PDF firmado en cada "Formato declaración juramentada caja" pendiente
+ *  ccfFormulario                       → {base64} PDF del formulario de afiliación radicado (recuperarlo si no se capturó al radicar)
  *  ccfCerrarSesion                     → cierra la sesión de la empresa abierta (para entrar con otra)
  *  ccfProgreso                         → {pasos:[{t,m}], t0, fin} lo que va haciendo ccfFinalizar (para mostrarlo en vivo)
  *  ccfFinalizar                        → pulsa "Finalizar Afiliación", acepta los términos y espera el número de formulario
@@ -85,7 +86,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'ccfCerrarSesion', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'ccfCerrarSesion', 'ccfFormulario', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -1440,6 +1441,36 @@ async function pCcfFinalizar() {
   }
 }
 
+/**
+ * Pide al portal el PDF del formulario de afiliación (el del código de barras) con su propia
+ * función y lo devuelve en base64 sin descargarlo. Sirve para recuperar el PDF cuando no se
+ * capturó al radicar: mientras la página del formulario siga abierta, el portal lo vuelve a generar.
+ */
+async function pCcfFormulario() {
+  if (typeof window.generarFormularioUnicoPreafiliacion !== 'function') return { error: 'No estás en la página del formulario de afiliación.' };
+  return new Promise(resolve => {
+    const original = $.ajax, clickOriginal = HTMLAnchorElement.prototype.click;
+    const fin = v => { $.ajax = original; HTMLAnchorElement.prototype.click = clickOriginal; clearTimeout(reloj); resolve(v); };
+    const reloj = setTimeout(() => fin({ error: 'El portal no entregó el PDF a tiempo.' }), 45000);
+    HTMLAnchorElement.prototype.click = function () { if (this.download) return; return clickOriginal.apply(this, arguments); };
+    $.ajax = function (o) {
+      if (/CmndGenerarPdfPreafiliacion/.test(String(o.url))) {
+        o.success = r => {
+          try {
+            const x = typeof r === 'string' ? JSON.parse(r) : r;
+            let b64 = x?.respuesta;
+            if (typeof b64 === 'string' && b64.trim().startsWith('{')) { try { b64 = JSON.parse(b64).encodedString; } catch { /* queda */ } }
+            else if (b64 && typeof b64 === 'object') b64 = b64.encodedString;
+            fin(typeof b64 === 'string' && b64.startsWith('JVBER') ? { base64: b64 } : { error: 'El portal no devolvió un PDF.' });
+          } catch (e) { fin({ error: String(e) }); }
+        };
+      }
+      return original.apply(this, arguments);
+    };
+    try { window.generarFormularioUnicoPreafiliacion(); } catch (e) { fin({ error: String(e) }); }
+  });
+}
+
 function pCcfEstado() {
   if (!/comfenalcovalle/.test(location.host)) return { sesion: false, enLogin: true, pagina: 'login' };
   const login = /index\.html/.test(location.pathname) || !!document.querySelector('#btnLoginAuth0');
@@ -1498,6 +1529,7 @@ async function atenderCcfcv(accion, d = {}) {
   if (!pestana) return { ok: true, abierta: false, sesion: false };
 
   if (accion === 'ccfCerrarSesion') return ccfCerrarSesion(pestana);
+  if (accion === 'ccfFormulario') return { ok: true, ...(await ejecutar(pestana.id, pCcfFormulario)) };
 
   if (accion === 'ccfEstado') {
     let e;
