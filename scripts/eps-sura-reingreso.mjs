@@ -337,22 +337,47 @@ try {
   await marco.evaluate(() => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
   for (let i = 0; i < 40 && alertas.length === antes; i++) await esperar(800);
 
-  const despues = (await texto(pagina)).replace(/\s+/g, ' ').trim();
+  // El resultado sale en otra pantalla (AffiliationReadmissionsRepLoad.aspx) y
+  // dentro de un iframe de Crystal Reports: leer solo el marco principal
+  // devolvía «Informe principal L01» y nada más. Se espera al comprobante y se
+  // lee de todos los marcos.
+  paso = 'comprobante';
+  let comprobante = '';
+  for (let i = 0; i < 30 && !comprobante; i++) {
+    await esperar(1000);
+    for (const f of pagina.frames()) {
+      const t = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
+      if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(t)) { comprobante = t.replace(/\s+/g, ' ').trim(); break; }
+    }
+  }
+
+  const despues = (comprobante || (await texto(pagina))).replace(/\s+/g, ' ').trim();
   const alerta = alertas.slice(antes).join(' | ');
-  const conError = /error|no se pudo|no fue posible|inconsist/i.test(alerta + ' ' + despues);
+  const aplicada = /Novedad aplicada con [eé]xito/i.test(comprobante);
+  const conError = !aplicada || /error|no se pudo|no fue posible|inconsist/i.test(alerta);
+
+  // Lo que hay que guardar: el número de solicitud es el radicado del trámite y
+  // el código de transacción es su respaldo; el portal muestra los dos.
+  const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
+  const solicitud = dato(/N[uú]mero de Solicitud\s+([A-Z0-9_]+)/i);
+  const transaccion = dato(/C[oó]digo de Transacci[oó]n\s+(\d+)/i);
+  const periodo = dato(/per[ií]odo de inicio de pago es\s*([\d/]+)/i);
 
   // El soporte: el portal lo baja solo, y si no, deja el enlace «Informe
   // principal» para pedirlo a mano. Se intenta, pero su ausencia no invalida
   // la novedad: eso lo dice el portal, no el archivo.
+  // El comprobante se baja con «Descargar Documento», que abre una ventana
+  // aparte: la descarga nace en otro target del navegador y por eso el permiso
+  // va a nivel de navegador (ver conDescargas).
   paso = 'soporte';
-  let soporte = await descarga.esperar(6);
-  if (!soporte && !conError) {
+  let soporte = await descarga.esperar(4);
+  if (!soporte) {
     for (const f of pagina.frames()) {
       const pulsado = await f.evaluate(() => {
-        const a = [...document.querySelectorAll('a, input[type=submit], input[type=button], button, span[onclick], td[onclick]')]
-          .find((e) => /informe principal|soporte|certificad/i.test(e.innerText || e.value || ''));
-        if (!a) return false;
-        a.click();
+        const b = [...document.querySelectorAll('button, a, input[type=button], input[type=submit]')]
+          .find((e) => /descargar documento|informe principal/i.test(e.innerText || e.value || ''));
+        if (!b) return false;
+        b.click();
 
         return true;
       }).catch(() => false);
@@ -363,10 +388,12 @@ try {
   salir({
     ok: !conError,
     modo, paso: 'aplicar novedad', nombre, alerta: alerta || null,
-    titulo: await pagina.title().catch(() => null),
+    radicado: solicitud, transaccion, periodoPago: periodo,
     soporte,
-    texto: despues.slice(0, 800),
-    error: conError ? (alerta || 'La pantalla quedó con un error tras aplicar la novedad.') : undefined,
+    texto: despues.slice(0, 900),
+    error: conError
+      ? (alerta || (comprobante ? 'El portal no confirmó la novedad: '.concat(despues.slice(0, 300)) : 'No apareció el comprobante del reingreso.'))
+      : undefined,
   });
 } catch (e) {
   let captura = null;

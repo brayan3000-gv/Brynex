@@ -209,10 +209,19 @@ class EpsSuraReingresoService
             ];
         }
 
+        // El comprobante trae el número de solicitud —que es el radicado del
+        // trámite— y el código de transacción, que es su respaldo.
+        $numero = trim((string) ($salida['radicado'] ?? '')) ?: (string) $radicado->numero_radicado;
+        $detalle = collect([
+            $nota ?: null,
+            ($salida['transaccion'] ?? null) ? 'transacción '.$salida['transaccion'] : null,
+            ($salida['periodoPago'] ?? null) ? 'inicio de pago '.$salida['periodoPago'] : null,
+        ])->filter()->implode('; ');
+
         EpsRadicado::marcar(
-            $radicado, (string) $radicado->numero_radicado, Radicado::ESTADO_TRAMITE, $ruta,
-            'EPS SURA (reingreso) radicado en el portal de empleadores'.($nota ? ': '.$nota : '.')
-                .($ruta ? ' Soporte guardado.' : ' El portal no entregó soporte: se puede bajar el certificado después.')
+            $radicado, $numero, Radicado::ESTADO_TRAMITE, $ruta,
+            'EPS SURA: novedad de reingreso aplicada con éxito'.($detalle ? ' ('.$detalle.')' : '').'.'
+                .($ruta ? ' Comprobante guardado.' : ' El portal no entregó el comprobante.')
                 .' Queda en trámite hasta que la conciliación lo vea vigente.',
             $usuarioId
         );
