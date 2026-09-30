@@ -33,6 +33,7 @@ class ExtensionPortalesController extends Controller
         'puente.js',
         'puente-renta.js',
         'renta.js',
+        'sanitas-sin-aviso.js',
         'LEEME.md',
     ];
 
@@ -60,7 +61,7 @@ class ExtensionPortalesController extends Controller
             throw new RuntimeException('No se pudo crear el archivo de la extensión.');
         }
 
-        foreach (self::ARCHIVOS as $archivo) {
+        foreach ($this->archivosDelZip() as $archivo) {
             $ruta = base_path(self::CARPETA.'/'.$archivo);
 
             if (! is_file($ruta)) {
@@ -81,6 +82,28 @@ class ExtensionPortalesController extends Controller
         $zip->close();
 
         return response()->download($destino, $this->nombreArchivo())->deleteFileAfterSend();
+    }
+
+    /**
+     * La lista blanca más todo script que el manifiesto declare: sin ellos Chrome
+     * rechaza la extensión entera («No se ha podido cargar JavaScript … para el
+     * script», 30-sep-2026, cuando se agregó un content script y faltó sumarlo aquí).
+     *
+     * @return string[]
+     */
+    private function archivosDelZip(): array
+    {
+        $manifest = base_path(self::CARPETA.'/manifest.json');
+        $datos = is_file($manifest) ? json_decode((string) file_get_contents($manifest), true) : null;
+
+        $declarados = array_merge(
+            [$datos['background']['service_worker'] ?? null],
+            ...array_map(fn ($c) => $c['js'] ?? [], $datos['content_scripts'] ?? [])
+        );
+
+        $seguros = array_filter($declarados, fn ($f) => is_string($f) && preg_match('/^[\w.-]+\.js$/', $f));
+
+        return array_values(array_unique(array_merge(self::ARCHIVOS, $seguros)));
     }
 
     private function versionPublicada(): string
