@@ -65,7 +65,14 @@ const ESU_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '
 const esuEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const esuEl = id => document.getElementById(id);
 
-function cerrarReingresoEpsSura() { esuEl('esuModal').classList.remove('open'); }
+function cerrarReingresoEpsSura() {
+    esuEl('esuModal').classList.remove('open');
+    // Por si el trámite terminó y la fila quedó sin repintar.
+    if (esuRadicadoNuevo) { pintarRadicadoEnLista(esuRadicadoNuevo); esuRadicadoNuevo = null; }
+}
+
+// Lo que dejó el trámite, para poner al día la pastilla de EPS de la fila.
+let esuRadicadoNuevo = null;
 
 // Consultar y radicar abren un navegador en el servidor: cerca de un minuto.
 function esuEsperar(btn, texto) {
@@ -194,16 +201,21 @@ async function registrarEpsSura() {
 
     if (!d.ok) {
         btn.disabled = false; btn.textContent = '🏥 Reintentar';
+        // El radicado quedó en error: la fila lo muestra sin recargar.
+        if (d.radicado) pintarRadicadoEnLista(d.radicado);
         alert(d.error || d.alerta || 'No se pudo radicar.');
         return;
     }
 
     esuEl('esuContenido').style.display = 'none';
+    // La fila queda en trámite al momento, sin recargar la página.
+    const pintado = pintarRadicadoEnLista(d.radicado);
+    esuRadicadoNuevo = pintado ? null : (d.radicado || null);
+
     const caja = esuEl('esuResultado');
     caja.innerHTML = '✅ Reingreso aplicado en el portal de EPS SURA.' +
         (d.alerta ? `<br><span style="color:#475569">${esuEsc(d.alerta)}</span>` : '') +
         '<br><span style="color:#475569">El radicado de EPS quedó en trámite; pasa a OK cuando la conciliación lo vea vigente.</span>';
     caja.style.display = 'block';
-    setTimeout(() => location.reload(), 3500);
 }
 </script>

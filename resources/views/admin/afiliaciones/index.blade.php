@@ -2107,6 +2107,29 @@ function reingresoNuevaEpsDesdeRadicado() {
     abrirReingresoNuevaEps(contratoId);
 }
 
+/**
+ * Pone al día la pastilla de un radicado en el listado, sin recargar la página.
+ *
+ * Recibe lo que devuelve `Radicado::paraLaLista()`: el estado, el texto y el
+ * color los arma BryNex con los mismos métodos del modelo que usa la vista, así
+ * que lo que se ve aquí es lo mismo que saldría al recargar.
+ */
+function pintarRadicadoEnLista(r) {
+    if (!r?.id) return false;
+
+    const btn = document.querySelector(`.btn-rad[data-rad-id="${r.id}"]`);
+    if (!btn) return false;
+
+    btn.className = `badge-estado badge-${r.clase} btn-rad`;
+    btn.textContent = r.texto;
+    if (r.titulo) btn.title = r.titulo; else btn.removeAttribute('title');
+
+    // El modal de gestión del radicado lee de aquí: sin esto seguiría enseñando
+    // el radicado sin número hasta recargar.
+    if (r.datos) btn.dataset.rad = JSON.stringify(r.datos);
+    return true;
+}
+
 function reingresoEpsSuraDesdeRadicado() {
     const contratoId = document.getElementById('btnReingresoEpsSura')._contratoId;
     if (!contratoId) { alert('No se pudo identificar el contrato.'); return; }

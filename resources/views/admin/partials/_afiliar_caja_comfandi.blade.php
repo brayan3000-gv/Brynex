@@ -102,34 +102,15 @@ const cfdFmt = iso => iso ? iso.split('-').reverse().join('/') : '—';
 function cerrarCajaComfandi() {
     cfdEl('cfdModal').classList.remove('open');
     clearInterval(cfdReloj);
-    pintarRadicadoEnLista();
+    pintarRadicadoEnLista(cfdRadicadoNuevo);
+    cfdRadicadoNuevo = null;
 }
 
 // Lo que dejó el trámite, para repintar la fila al cerrar.
 let cfdRadicadoNuevo = null;
 
-/**
- * Pone al día la pastilla de la caja en el listado, sin recargar la página.
- *
- * El estado y el texto los arma BryNex con los mismos métodos del modelo que
- * usa la vista, así que lo que se ve aquí es lo mismo que saldría al recargar.
- */
-function pintarRadicadoEnLista() {
-    const r = cfdRadicadoNuevo;
-    cfdRadicadoNuevo = null;
-    if (!r?.id) return;
-
-    const btn = document.querySelector(`.btn-rad[data-rad-id="${r.id}"]`);
-    if (!btn) return;
-
-    btn.className = `badge-estado badge-${r.clase} btn-rad`;
-    btn.textContent = r.texto;
-    if (r.titulo) btn.title = r.titulo; else btn.removeAttribute('title');
-
-    // El modal de gestión del radicado lee de aquí: sin esto seguiría
-    // enseñando el radicado sin número hasta recargar.
-    if (r.datos) btn.dataset.rad = JSON.stringify(r.datos);
-}
+// La pastilla la repinta la función del listado (index.blade.php), que es la
+// misma para todos los trámites.
 
 async function cfdPedir(ruta, metodo = 'GET', cuerpo = null) {
     const r = await fetch(`/admin/afiliaciones/${cfdContratoId}/caja-comfandi/${ruta}`, {

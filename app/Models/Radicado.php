@@ -110,6 +110,34 @@ class Radicado extends BaseModel
         return $radicado;
     }
 
+    /**
+     * Cómo queda la pastilla de este radicado en el listado de afiliaciones.
+     *
+     * Lo arma el modelo, con los mismos métodos que usa la vista, para que lo
+     * que un trámite repinta sin recargar sea idéntico a lo que saldría al
+     * recargar la página.
+     */
+    public function paraLaLista(): array
+    {
+        return [
+            'id' => $this->id,
+            'clase' => $this->estadoClaseEfectiva(),
+            'texto' => $this->estadoTextoEfectivo(),
+            'titulo' => $this->esConfirmadoPorEntidad() ? $this->textoConfirmacion() : null,
+            'datos' => [
+                'id' => $this->id,
+                'tipo' => $this->tipo,
+                'estado' => $this->estado,
+                'numero_radicado' => $this->numero_radicado,
+                'canal_envio' => $this->canal_envio,
+                'canal_envio_cliente' => $this->canal_envio_cliente,
+                'enviado_al_cliente' => $this->enviado_al_cliente,
+                'ruta_pdf' => $this->ruta_pdf,
+                'observacion' => $this->observacion,
+            ],
+        ];
+    }
+
     // ── Constantes de estado ──
     const ESTADO_PENDIENTE = 'pendiente';
 

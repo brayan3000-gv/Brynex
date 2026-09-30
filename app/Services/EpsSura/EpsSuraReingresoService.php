@@ -159,7 +159,10 @@ class EpsSuraReingresoService
                 $usuarioId
             );
 
-            return $salida + ['radicado_brynex' => $radicado->fresh()->estado];
+            return $salida + [
+                'radicado_brynex' => $radicado->fresh()->estado,
+                'radicado' => $radicado->fresh()->paraLaLista(),
+            ];
         }
 
         EpsRadicado::marcar(
@@ -169,7 +172,11 @@ class EpsSuraReingresoService
             $usuarioId
         );
 
-        return $salida + ['radicado_brynex' => $radicado->fresh()->estado];
+        return $salida + [
+            'radicado_brynex' => $radicado->fresh()->estado,
+            // Con esto el listado repinta la pastilla de EPS sin recargar.
+            'radicado' => $radicado->fresh()->paraLaLista(),
+        ];
     }
 
     /** El radicado de EPS del contrato; se crea si el plan lo incluye y no existía. */
