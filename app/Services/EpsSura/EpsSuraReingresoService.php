@@ -197,9 +197,17 @@ class EpsSuraReingresoService
         $salida['soporte_guardado'] = (bool) $ruta;
 
         if (! ($salida['ok'] ?? false)) {
+            // Si el portal llegó a mostrar el comprobante, la novedad se envió
+            // aunque no se haya podido leer: queda en trámite, porque marcarlo
+            // como error invita a repetirlo y a duplicar el trámite en SURA.
+            $llegoAlComprobante = (bool) ($salida['enComprobante'] ?? false);
+
             EpsRadicado::marcar(
-                $radicado, (string) $radicado->numero_radicado, Radicado::ESTADO_ERROR, null,
-                'EPS SURA (reingreso): no se pudo radicar. '.($nota ?: 'Sin detalle del portal.'),
+                $radicado, (string) $radicado->numero_radicado,
+                $llegoAlComprobante ? Radicado::ESTADO_TRAMITE : Radicado::ESTADO_ERROR, null,
+                $llegoAlComprobante
+                    ? 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado. NO repetir sin revisarlo antes en el portal. '.$nota
+                    : 'EPS SURA (reingreso): no se pudo radicar. '.($nota ?: 'Sin detalle del portal.'),
                 $usuarioId
             );
 

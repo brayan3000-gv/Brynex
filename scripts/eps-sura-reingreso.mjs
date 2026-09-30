@@ -343,12 +343,28 @@ try {
   // lee de todos los marcos.
   paso = 'comprobante';
   let comprobante = '';
-  for (let i = 0; i < 30 && !comprobante; i++) {
+  let enComprobante = false;
+
+  for (let i = 0; i < 40 && !comprobante; i++) {
     await esperar(1000);
+
+    // La pantalla del comprobante se reconoce por su propio texto, aunque el
+    // reporte todavía no se pueda leer: que se haya llegado hasta aquí ya
+    // significa que la novedad se envió.
     for (const f of pagina.frames()) {
       const t = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
+      if (/documento soporte|Informe principal/i.test(t)) enComprobante = true;
       if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(t)) { comprobante = t.replace(/\s+/g, ' ').trim(); break; }
     }
+    if (comprobante) break;
+
+    // El reporte va en un iframe que el visor escribe por dentro (sin src), y
+    // ese marco no siempre sale en pagina.frames(): se lee su contentDocument
+    // desde la página, que es del mismo dominio.
+    const dentro = await pagina.evaluate(() => Array.from(document.querySelectorAll('iframe'))
+      .map((f) => { try { return f.contentDocument?.body?.innerText || ''; } catch { return ''; } })
+      .join(' \n ')).catch(() => '');
+    if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(dentro)) comprobante = dentro.replace(/\s+/g, ' ').trim();
   }
 
   const despues = (comprobante || (await texto(pagina))).replace(/\s+/g, ' ').trim();
@@ -391,8 +407,15 @@ try {
     radicado: solicitud, transaccion, periodoPago: periodo,
     soporte,
     texto: despues.slice(0, 900),
+    // Se distingue «no se aplicó» de «se aplicó pero no pude leerlo»: en el
+    // segundo caso repetir el trámite lo duplicaría.
+    enComprobante,
     error: conError
-      ? (alerta || (comprobante ? 'El portal no confirmó la novedad: '.concat(despues.slice(0, 300)) : 'No apareció el comprobante del reingreso.'))
+      ? (alerta || (comprobante
+        ? 'El portal no confirmó la novedad: '.concat(despues.slice(0, 300))
+        : (enComprobante
+          ? 'La novedad se envió y el portal mostró el comprobante, pero no se pudo leer el resultado: revísalo en el portal ANTES de repetirlo.'
+          : 'No apareció el comprobante del reingreso.')))
       : undefined,
   });
 } catch (e) {
