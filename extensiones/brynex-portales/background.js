@@ -1689,8 +1689,21 @@ function pCcfPaso(d) {
         const candidato = String(d.barrio || deDireccion || '').replace(/^(EL|LA|LOS|LAS)\s+/i, '');
         if ($('#BarrioResidencia option').length <= 1) falta.push('cargando barrios…');
         else {
-          const b = candidato ? porTexto('BarrioResidencia', candidato) : null;
-          b ? hecho.push('barrio: ' + b) : falta.push('barrio ' + (candidato || '—') + ' (elígelo a mano: BryNex no lo tiene o no coincide con la lista)');
+          let b = candidato ? porTexto('BarrioResidencia', candidato) : null;
+          if (!b) {
+            // «Lo más parecido»: el barrio de la lista que comparte más palabras (de 4+ letras)
+            // con la dirección de BryNex; se anota como aproximado para que se revise.
+            const palabras = norm(String(d.barrio || '') + ' ' + String(d.direccion || '')).split(' ').filter(w => w.length > 3);
+            let mejor = null, puntos = 0;
+            for (const o of document.getElementById('BarrioResidencia').options) {
+              if (o.value === '-1') continue;
+              const n = norm(o.text).split(' ');
+              const p = palabras.filter(w => n.includes(w)).length;
+              if (p > puntos) { puntos = p; mejor = o; }
+            }
+            if (mejor) { $('#BarrioResidencia').val(mejor.value).trigger('change').trigger('chosen:updated'); b = mejor.text.trim() + ' (aproximado por la dirección: revísalo)'; }
+          }
+          b ? hecho.push('barrio: ' + b) : falta.push('barrio ' + (candidato || '—') + ' (elígelo a mano: BryNex no lo tiene y nada en la lista se parece)');
         }
       } else hecho.push('barrio: ' + $('#BarrioResidencia option:selected').text());
     }
@@ -1698,11 +1711,23 @@ function pCcfPaso(d) {
     // («CR 4 0 B 1 3 6 0»): BryNex es la fuente, así que se sobrescribe una sola vez con la suya
     // normalizada. Si la de BryNex no empieza con una nomenclatura válida, se deja la del portal.
     const campoDir = document.getElementById('txtDireccionResidenciaPersonal');
-    const dirBrynex = normalizarDireccion(d.direccion);
+    // Respaldo cuando la dirección de BryNex no empieza con una nomenclatura del portal:
+    // 1) si es rural («HACIENDA…», «FINCA…», «VEREDA…») se antepone CORR; 2) si no, se usa la
+    // dirección de la razón social. Siempre queda anotado en la bitácora para que se revise.
+    let origenDir = '';
+    let dirBrynex = normalizarDireccion(d.direccion);
+    if (!dirBrynex && /^\s*(HACIENDA|FINCA|VEREDA|PARCELA|SECTOR|KM|KILOMETRO)\b/i.test(String(d.direccion || ''))) {
+      dirBrynex = normalizarDireccion('CORR ' + String(d.direccion).replace(/[#\-]/g, ' '));
+      origenDir = ' (rural: se antepuso CORR)';
+    }
+    if (!dirBrynex) {
+      dirBrynex = normalizarDireccion(d.direccionEmpresa);
+      if (dirBrynex) origenDir = ' (respaldo: dirección de la empresa, porque la del trabajador no tiene un formato que el portal acepte)';
+    }
     const dirPortal = String(campoDir?.value || '').replace(/\s+/g, ' ').trim();
     if (campoDir && dirBrynex) {
       if (dirPortal !== dirBrynex) { $(campoDir).val(dirBrynex).trigger('input').trigger('change'); }
-      hecho.push('dirección: ' + dirBrynex + (dirPortal !== dirBrynex ? ' (de BryNex; el portal traía «' + dirPortal + '»)' : ''));
+      hecho.push('dirección: ' + dirBrynex + origenDir + (dirPortal !== dirBrynex ? (origenDir ? '' : ' (de BryNex)') + '; el portal traía «' + dirPortal + '»' : ''));
     } else if (campoDir) {
       dirPortal ? hecho.push('dirección (la del portal, porque la de BryNex no empieza con CR, CL, AV, DG, TV ni CORR): ' + dirPortal)
                 : falta.push('dirección: escríbela con el formato del portal (BryNex tiene «' + (d.direccion || '—') + '»)');

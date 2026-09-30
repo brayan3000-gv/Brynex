@@ -170,6 +170,7 @@ class ComfenalcoCajaService
             'municipio'    => (string) $cliente->municipio?->nombre,
             'barrio'       => (string) $cliente->barrio,
             'direccion'    => (string) $cliente->direccion_vivienda,
+            'direccionEmpresa' => (string) ($rs->direccion ?? ''),   // respaldo cuando la del trabajador no sirve
             'celular'      => $celular,
             'correo'       => $correo,
             'fechaIngreso' => $contrato->fecha_ingreso->format('Y-m-d'),
