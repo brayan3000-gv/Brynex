@@ -202,12 +202,24 @@ class EpsSuraReingresoService
             // como error invita a repetirlo y a duplicar el trámite en SURA.
             $llegoAlComprobante = (bool) ($salida['enComprobante'] ?? false);
 
+            // Que el portal rechace por «ya está vigente con este empleador» no
+            // es un fallo del trámite: es que ya estaba hecho. Queda pendiente
+            // —no en error— y la conciliación lo cerrará cuando lo confirme.
+            $yaEstaba = (bool) preg_match('/vigente(,)? (con|para) (el|este) (mismo )?empleador|ya se encuentra|ya existe/i', $nota);
+
             EpsRadicado::marcar(
                 $radicado, (string) $radicado->numero_radicado,
-                $llegoAlComprobante ? Radicado::ESTADO_TRAMITE : Radicado::ESTADO_ERROR, null,
-                $llegoAlComprobante
-                    ? 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado. NO repetir sin revisarlo antes en el portal. '.$nota
-                    : 'EPS SURA (reingreso): no se pudo radicar. '.($nota ?: 'Sin detalle del portal.'),
+                match (true) {
+                    $yaEstaba => Radicado::ESTADO_PENDIENTE,
+                    $llegoAlComprobante => Radicado::ESTADO_TRAMITE,
+                    default => Radicado::ESTADO_ERROR,
+                },
+                null,
+                match (true) {
+                    $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. '.$nota,
+                    $llegoAlComprobante => 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado. NO repetir sin revisarlo antes en el portal. '.$nota,
+                    default => 'EPS SURA (reingreso): no se pudo radicar. '.($nota ?: 'Sin detalle del portal.'),
+                },
                 $usuarioId
             );
 
