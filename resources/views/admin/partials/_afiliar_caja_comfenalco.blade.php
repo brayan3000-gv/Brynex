@@ -65,6 +65,7 @@
         <div id="ccfFirmaBox" class="ccf-info" style="display:none">
           <strong>✍️ Declaración juramentada</strong>
           <div id="ccfFirmaTexto" style="margin:.3rem 0"></div>
+          <div style="font-size:.68rem;color:#64748b;margin-bottom:.3rem">Solo firma el trabajador (declarante). Las firmas del padre/madre o del cónyuge cuidador(a) aplican únicamente si esas secciones traen filas.</div>
           <canvas id="ccfFirmaLienzo" width="520" height="150" style="display:none;width:100%;max-width:520px;height:150px;background:#fff;border:1px dashed #6ee7b7;border-radius:8px;touch-action:none"></canvas>
           <button class="ccf-btn sec" id="ccfFirmaLimpiar" style="display:none" onclick="ccfLimpiarFirma()">🧽 Borrar y firmar de nuevo</button>
           <button class="ccf-btn sec" id="ccfFirmaOtra" style="display:none" onclick="ccfFirmarNueva()">✏️ Firmar de nuevo en vez de usar la guardada</button>
@@ -154,7 +155,9 @@ async function abrirCajaComfenalco(contratoId) {
     ccfEl('ccfAvisos').style.display = avisos.length ? 'block' : 'none';
     ccfEl('ccfAvisos').innerHTML = avisos.map(ccfEsc).join('<br>');
 
-    ccfOpciones(ccfEl('ccfEstadoCivil'), ccfPrep.listas?.estados_civil, 1);
+    // Con compañero(a) o cónyuge en BryNex se propone Unión libre; si no, Soltero.
+    const conPareja = (ccfPrep.portal?.listaBeneficiarios || []).some(b => /compa[ñn]er|espos|c[oó]nyug/i.test(b.parentesco || ''));
+    ccfOpciones(ccfEl('ccfEstadoCivil'), ccfPrep.listas?.estados_civil, conPareja ? 4 : 1);
     ccfOpciones(ccfEl('ccfContrato'), ccfPrep.listas?.contratos, 1);
     ccfOpciones(ccfEl('ccfFormaPago'), ccfPrep.listas?.formas_pago, 13);
     ccfEl('ccfCargo').value = ccfPrep.portal?.cargoTexto || 'APOYO ADMINISTRATIVO';

@@ -251,10 +251,14 @@ class ComfenalcoCajaService
     /**
      * Posiciones (mm, desde la esquina superior izquierda de la hoja carta) donde se
      * estampa la firma en la declaración juramentada oficial del portal.
-     * Se miden con `pdftotext -bbox` sobre el PDF real que entrega la caja.
+     * La hoja es tamaño oficio (215,9 × 330,2 mm). El único recuadro que lleva firma
+     * del trabajador es «Firma del declarante», al pie; «Firma del padre/madre» (sección 3)
+     * y «Firma del cónyuge… cuidador(a)» (sección 4) solo aplican si esas secciones
+     * traen filas. Medido a ojo sobre el PDF real de la caja (30-sep-2026): verificar
+     * con pdftoppm si la caja cambia el formato.
      */
     private const FIRMA_EN_DECLARACION = [
-        ['pagina' => 1, 'x' => 20.0, 'y' => 0.0, 'ancho' => 45.0, 'alto' => 14.0],
+        ['pagina' => 1, 'x' => 16.0, 'y' => 299.0, 'ancho' => 45.0, 'alto' => 13.0],
     ];
 
     /** ¿El cliente ya tiene su firma guardada? La firma es un documento más del cliente, en disco privado. */

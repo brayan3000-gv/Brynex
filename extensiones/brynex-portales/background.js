@@ -1585,7 +1585,26 @@ function pCcfPaso(d) {
       .forEach(f => falta.push(`${f.nombre} está en la caja pero no en BryNex: confirma si sigue a cargo`));
     if (!enCaja.length && !deBrynex.length) hecho.push('sin beneficiarios: continúa');
   } else if (/Conyuge|Cónyuge/i.test(paso)) {
-    falta.push('los datos del cónyuge los escribes tú');
+    // La caja precarga a la pareja de su registro previo (nombre, cédula, fecha de inicio de la
+    // relación, si trabaja). Regla de BryNex: siempre unión libre ("Compañero"), y si la caja no
+    // trae fecha de inicio se propone 2 años antes del ingreso; si no trae "Trabaja", No.
+    if (($('#tipoConyugue').val() || '-1') !== '8') { sel('tipoConyugue', 8); }
+    $('#tipoConyugue').val() === '8' && hecho.push('tipo de pareja: Compañero (unión libre)');
+    if (!$('#numDocConyu').val()) {
+      falta.push('la pareja no viene en la caja: escribe su documento, nombre, sexo y nacimiento');
+    } else {
+      hecho.push(`pareja: ${[$('#primNombCony').val(), $('#primerApellCony').val()].filter(Boolean).join(' ')} (${$('#numDocConyu').val()})`);
+    }
+    if (!$('#fechaInicioMaritalConyugue').val() && d.fechaIngreso) {
+      const f = new Date(d.fechaIngreso + 'T00:00:00'); f.setFullYear(f.getFullYear() - 2);
+      const iso = f.toISOString().slice(0, 10);
+      $('#fechaInicioMaritalConyugue').val(iso).trigger('change');
+      hecho.push('inicio de la unión libre: ' + iso + ' (2 años antes del ingreso — confírmalo con el trabajador)');
+    } else if ($('#fechaInicioMaritalConyugue').val()) {
+      hecho.push('inicio de la unión libre (de la caja): ' + $('#fechaInicioMaritalConyugue').val());
+    }
+    if (($('#cmbTrabajaConyugue').val() || '-1') === '-1') { sel('cmbTrabajaConyugue', 22) && hecho.push('la pareja no labora'); }
+    else hecho.push('¿la pareja trabaja?: ' + $('#cmbTrabajaConyugue option:selected').text());
   } else if (/Anexos/i.test(paso)) {
     const tabla = [...document.querySelectorAll('table')].filter(vis).find(t => /Obligatorio/i.test(t.innerText));
     const pendientes = tabla ? [...tabla.querySelectorAll('tbody tr')].filter(r => /SI/.test(r.cells[1]?.innerText || '') && !(r.cells[2]?.innerText || '').trim()).map(r => r.cells[0].innerText.trim()) : [];
