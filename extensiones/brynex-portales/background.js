@@ -1629,21 +1629,38 @@ function pCcfPaso(d) {
       if ($('#cmbClasesAfiliado').val() !== '1') sel('cmbClasesAfiliado', 1);
       $('#cmbClasesAfiliado').val() === '1' ? hecho.push('tipo y clase de afiliado: Dependiente') : falta.push('clase de afiliado');
     }
-    sel('cmbEstadosCivilPersonal', d.estadoCivil) && hecho.push('estado civil');
-    sel('cmbPaisResidenciaPersonal', 42);
-    if ($('#cmbDepartamentos option').length > 1) {
-      const dep = porTexto('cmbDepartamentos', d.departamento);
-      dep ? hecho.push('departamento: ' + dep) : falta.push('departamento ' + d.departamento);
-    }
-    if ($('#cmbMunicipioResidencia option').length > 1) {
-      if (($('#cmbMunicipioResidencia').val() || '-1') === '-1') porTexto('cmbMunicipioResidencia', d.municipio);
-      ($('#cmbMunicipioResidencia').val() || '-1') !== '-1'
-        ? hecho.push('municipio: ' + $('#cmbMunicipioResidencia option:selected').text())
-        : falta.push('municipio ' + d.municipio + ' (elígelo a mano en la lista)');
-    }
-    if ($('#BarrioResidencia option').length > 1 && ($('#BarrioResidencia').val() || '-1') === '-1') {
-      const b = porTexto('BarrioResidencia', String(d.barrio || '').replace(/^(EL|LA|LOS|LAS)\s+/i, ''));
-      b ? hecho.push('barrio: ' + b) : falta.push('barrio ' + (d.barrio || '—'));
+    if ($('#cmbEstadosCivilPersonal').val() !== String(d.estadoCivil)) sel('cmbEstadosCivilPersonal', d.estadoCivil);
+    hecho.push('estado civil: ' + $('#cmbEstadosCivilPersonal option:selected').text());
+
+    // País → departamento → municipio → barrio. Cada cambio hace que el portal recargue la lista
+    // de abajo y vacíe lo que ya se había elegido, y este paso se repite cada pocos segundos:
+    // por eso cada nivel se toca UNA sola vez y solo cuando el de arriba ya quedó puesto. Si
+    // se vuelve a fijar un nivel ya puesto, se borran municipio y barrio en cada pasada.
+    const vacio = id => ($('#' + id).val() || '-1') === '-1';
+    if ($('#cmbPaisResidenciaPersonal').val() !== '42') { sel('cmbPaisResidenciaPersonal', 42); falta.push('cargando departamentos…'); }
+    else if (vacio('cmbDepartamentos')) {
+      if ($('#cmbDepartamentos option').length > 1) {
+        const dep = porTexto('cmbDepartamentos', d.departamento);
+        dep ? falta.push('cargando municipios de ' + dep + '…') : falta.push('departamento ' + d.departamento + ' (elígelo a mano)');
+      } else falta.push('cargando departamentos…');
+    } else if (vacio('cmbMunicipioResidencia')) {
+      if ($('#cmbMunicipioResidencia option').length > 1) {
+        const mun = porTexto('cmbMunicipioResidencia', d.municipio);
+        mun ? falta.push('cargando barrios de ' + mun + '…') : falta.push('municipio ' + d.municipio + ' (elígelo a mano en la lista)');
+      } else falta.push('cargando municipios…');
+    } else {
+      hecho.push('departamento: ' + $('#cmbDepartamentos option:selected').text());
+      hecho.push('municipio: ' + $('#cmbMunicipioResidencia option:selected').text());
+      if (vacio('BarrioResidencia')) {
+        // Sin barrio en BryNex se intenta sacar de la dirección («… B/ SELVA», «BARRIO X»).
+        const deDireccion = /(?:\bB\/|\bBARRIO\b|\bBR\.?\b)\s*([A-ZÁÉÍÓÚÑ0-9 ]{3,})$/i.exec(String(d.direccion || '').trim())?.[1];
+        const candidato = String(d.barrio || deDireccion || '').replace(/^(EL|LA|LOS|LAS)\s+/i, '');
+        if ($('#BarrioResidencia option').length <= 1) falta.push('cargando barrios…');
+        else {
+          const b = candidato ? porTexto('BarrioResidencia', candidato) : null;
+          b ? hecho.push('barrio: ' + b) : falta.push('barrio ' + (candidato || '—') + ' (elígelo a mano: BryNex no lo tiene o no coincide con la lista)');
+        }
+      } else hecho.push('barrio: ' + $('#BarrioResidencia option:selected').text());
     }
     txt('txtDireccionResidenciaPersonal', direccion(d.direccion)) && hecho.push('dirección: ' + direccion(d.direccion));
     txt('txtCelularPersonal', d.celular) && hecho.push('celular');
