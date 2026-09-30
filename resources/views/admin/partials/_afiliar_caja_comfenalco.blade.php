@@ -73,6 +73,7 @@
         </div>
         <div id="ccfFinalizarBox" style="display:none">
           <button class="ccf-btn" id="ccfFinalizarBtn" onclick="ccfFinalizar()" style="background:linear-gradient(135deg,#1d4ed8,#2563eb)">🚀 Finalizar y radicar la afiliación</button>
+          <div id="ccfFinalizarLog" class="ccf-texto" style="display:none;max-height:none"></div>
         </div>
 
         <div id="ccfRadicado" style="display:none">
@@ -320,18 +321,35 @@ async function ccfFirmarYAdjuntar() {
 async function ccfFinalizar() {
     const r = ccfPrep.resumen || {};
     if (!confirm(`¿Finalizar y radicar la afiliación a la caja Comfenalco Valle?\n\n${r.trabajador} — ${r.documento}\nIngreso: ${ccfFmt(r.fecha_ingreso)}\n\nEsto ACEPTA los términos y condiciones del portal y envía la afiliación a Comfenalco. No se puede deshacer.`)) return;
-    const btn = ccfEl('ccfFinalizarBtn');
+    const btn = ccfEl('ccfFinalizarBtn'), log = ccfEl('ccfFinalizarLog');
     clearInterval(ccfReloj);   // el sondeo de pasos no debe competir con la radicación
-    btn.disabled = true; btn.textContent = '⏳ Radicando en el portal…';
-    const f = await ccfExt('ccfFinalizar', {}, 150);
+    btn.style.display = 'none'; log.style.display = 'block';
+    const inicio = Date.now();
+    let pasos = [];
+    const pintar = () => {
+        const seg = Math.floor((Date.now() - inicio) / 1000);
+        log.innerHTML = `<strong>⏱ ${seg} s — radicando en el portal de Comfenalco…</strong><br>` +
+            (pasos.length ? pasos.map((p, i) => (i === pasos.length - 1 && !/^[✅❗]/.test(p.m) ? '⏳ ' : (/^[✅❗]/.test(p.m) ? '' : '✔ ')) + ccfEsc(p.m)).join('<br>') : 'Iniciando…');
+    };
+    pintar();
+    const reloj = setInterval(pintar, 1000);
+    const sondeo = setInterval(async () => {
+        const e = await ccfExt('ccfProgreso', {}, 10);
+        if (e.ok && e.progreso?.pasos) pasos = e.progreso.pasos;
+    }, 1500);
+    const f = await ccfExt('ccfFinalizar', {}, 180);
+    clearInterval(reloj); clearInterval(sondeo);
+    const ult = await ccfExt('ccfProgreso', {}, 10);
+    if (ult.ok && ult.progreso?.pasos) pasos = ult.progreso.pasos;
+    pintar();
     if (!f.ok || f.error) {
-        btn.disabled = false; btn.textContent = '🚀 Finalizar y radicar la afiliación';
+        btn.style.display = 'block'; btn.disabled = false; btn.textContent = '🚀 Reintentar: finalizar y radicar';
         alert((f.error || 'La extensión no pudo finalizar.') + (f.botones ? '\nBotones: ' + f.botones.join(' | ') : ''));
         return;
     }
-    if (!f.numero) { mostrarRadicadoCaja(f); btn.style.display = 'none'; return; }
+    if (!f.numero) { mostrarRadicadoCaja(f); return; }
     ccfFinal = f;
-    btn.textContent = '✅ Radicada · registrando en BryNex…';
+    log.insertAdjacentHTML('beforeend', '<br>⏳ Registrando en BryNex…');
     const g = await ccfPedir('aplicar', 'POST', { numero: f.numero, texto: f.texto || '', pdf: f.pdf || null });
     if (!g.ok) { mostrarRadicadoCaja(f); alert('Se radicó en el portal (formulario ' + f.numero + ') pero no se pudo registrar en BryNex: ' + (g.error || g.mensaje || '')); return; }
     ccfTerminar(`✅ ${ccfEsc(g.mensaje)}`);
