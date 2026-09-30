@@ -1416,7 +1416,7 @@ async function pCcfFinalizar() {
   for (let i = 0; i < 120; i++) {
     await esperar(1000);
     const texto = textoVentanas();
-    const m = /afiliaci[oó]n se encuentra registrada/i.test(texto)
+    const m = /afiliaci[oó]n se encuentra registrada|se realiz[oó] [eé]xitosamente/i.test(texto)
       ? (texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i))
       : null;
     if (m) {
@@ -1994,7 +1994,7 @@ function pCcfResultado() {
   // Solo cuenta como radicado con la frase de éxito del portal («La afiliación se encuentra registrada
   // con número de formulario: N»). Un número suelto en otra ventana no basta: con Marcela se registró
   // un formulario que el portal nunca envió.
-  const exito = /afiliaci[oó]n se encuentra registrada/i.test(texto);
+  const exito = /afiliaci[oó]n se encuentra registrada|se realiz[oó] [eé]xitosamente/i.test(texto);   // el portal usa dos redacciones
   const m = exito ? (texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i)) : null;
   if (!exito) return { radicado: false, texto };
   return { radicado: !!m, numero: m ? m[1] : null, texto: texto.slice(0, 1500) };
