@@ -1397,8 +1397,12 @@ function pCcfPaso(d) {
   const falta = [];
 
   if (/Personal/i.test(paso)) {
-    sel('cmbTipoAfiliadoPersonal', 1) && hecho.push('tipo de afiliado: Dependiente');
-    sel('cmbClasesAfiliado', 1) && hecho.push('clase: Dependiente');
+    // Cambiar el tipo de afiliado recarga y vacía la clase: solo se toca si hace falta.
+    if ($('#cmbTipoAfiliadoPersonal').val() !== '1') sel('cmbTipoAfiliadoPersonal', 1);
+    if ($('#cmbClasesAfiliado option').length > 1) {
+      if ($('#cmbClasesAfiliado').val() !== '1') sel('cmbClasesAfiliado', 1);
+      $('#cmbClasesAfiliado').val() === '1' ? hecho.push('tipo y clase de afiliado: Dependiente') : falta.push('clase de afiliado');
+    }
     sel('cmbEstadosCivilPersonal', d.estadoCivil) && hecho.push('estado civil');
     sel('cmbPaisResidenciaPersonal', 42);
     if ($('#cmbDepartamentos option').length > 1) {
@@ -1406,8 +1410,10 @@ function pCcfPaso(d) {
       dep ? hecho.push('departamento: ' + dep) : falta.push('departamento ' + d.departamento);
     }
     if ($('#cmbMunicipioResidencia option').length > 1) {
-      const mun = porTexto('cmbMunicipioResidencia', d.municipio);
-      mun ? hecho.push('municipio: ' + mun) : falta.push('municipio ' + d.municipio);
+      if (($('#cmbMunicipioResidencia').val() || '-1') === '-1') porTexto('cmbMunicipioResidencia', d.municipio);
+      ($('#cmbMunicipioResidencia').val() || '-1') !== '-1'
+        ? hecho.push('municipio: ' + $('#cmbMunicipioResidencia option:selected').text())
+        : falta.push('municipio ' + d.municipio + ' (elígelo a mano en la lista)');
     }
     if ($('#BarrioResidencia option').length > 1 && ($('#BarrioResidencia').val() || '-1') === '-1') {
       const b = porTexto('BarrioResidencia', String(d.barrio || '').replace(/^(EL|LA|LOS|LAS)\s+/i, ''));
@@ -1430,11 +1436,38 @@ function pCcfPaso(d) {
     }
     sel('cmbTipoSalarioLaboral', 23) && hecho.push('tipo de salario: Fijo');
     txt('txtValorSalarioBasicoLaboral', String(d.salario)) && hecho.push('salario');
-    if (($('#cmbFormaPagoLaboral').val() || '-1') === '-1' && d.formaPago) { sel('cmbFormaPagoLaboral', d.formaPago) && hecho.push('forma de pago del subsidio'); }
+    // El portal propone Kupi por defecto: se impone la forma elegida en BryNex.
+    if (d.formaPago && $('#cmbFormaPagoLaboral').val() !== String(d.formaPago)) {
+      sel('cmbFormaPagoLaboral', d.formaPago);
+    }
+    if (d.formaPago && $('#cmbFormaPagoLaboral').val() === String(d.formaPago)) {
+      hecho.push('forma de pago del subsidio: ' + $('#cmbFormaPagoLaboral option:selected').text());
+      // Daviplata: la cuenta es el celular de la persona (Kupi ya trae la cédula).
+      if (String(d.formaPago) === '10') {
+        const cta = document.getElementById('txtNumeroCuentaBancariaLaboral');
+        if (cta && d.celular && cta.value !== String(d.celular)) { $(cta).val(String(d.celular)).trigger('input').trigger('change'); hecho.push('cuenta Daviplata: ' + d.celular); }
+        if (($('#cmbTiposCuentaBancariaLaboral').val() || '-1') === '-1') sel('cmbTiposCuentaBancariaLaboral', 2);
+      }
+    }
   } else if (/Otro Empleador/i.test(paso)) {
     hecho.push('no aplica: continúa');
   } else if (/Beneficiarios/i.test(paso)) {
-    hecho.push(d.beneficiarios ? 'agrega los beneficiarios a mano y continúa' : 'sin beneficiarios: continúa');
+    // La caja trae su grupo familiar previo en `tableBeneficiarioReactiva`, todos con
+    // "Excluir = No" (quedan incluidos). Se cruza con los de BryNex; lo que BryNex
+    // tiene y la caja no, se agrega a mano (el formulario pide fechas que BryNex no guarda).
+    const limpio = v => String(v || '').replace(/\D/g, '').replace(/^0+/, '');
+    const enCaja = [...document.querySelectorAll('#tableBeneficiarioReactiva tbody tr')].map(tr => {
+      const cels = [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
+      const doc = limpio((cels.find(c => /^[A-Z]{2}\.\d+/.test(c)) || '').replace(/^[A-Z]{2}\./, ''));
+      return { doc, nombre: [cels[1], cels[2]].filter(Boolean).join(' '), excluir: tr.querySelector('select')?.value };
+    }).filter(f => f.doc);
+    const deBrynex = (d.listaBeneficiarios || []).map(b => ({ ...b, doc: limpio(b.documento) }));
+    enCaja.forEach(f => hecho.push(`${f.nombre} (${f.doc}): ${f.excluir === 'N' ? 'incluido' : 'EXCLUIDO'} — ya estaba en la caja`));
+    deBrynex.filter(b => !enCaja.some(f => f.doc === b.doc))
+      .forEach(b => falta.push(`agrega a mano: ${b.nombre} (${b.tipo_doc} ${b.documento}, ${b.parentesco || '—'}) — no está en el grupo familiar de la caja`));
+    enCaja.filter(f => !deBrynex.some(b => b.doc === f.doc))
+      .forEach(f => falta.push(`${f.nombre} está en la caja pero no en BryNex: confirma si sigue a cargo`));
+    if (!enCaja.length && !deBrynex.length) hecho.push('sin beneficiarios: continúa');
   } else if (/Conyuge|Cónyuge/i.test(paso)) {
     falta.push('los datos del cónyuge los escribes tú');
   } else if (/Anexos/i.test(paso)) {

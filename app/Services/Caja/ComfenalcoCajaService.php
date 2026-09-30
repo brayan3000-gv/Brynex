@@ -175,6 +175,12 @@ class ComfenalcoCajaService
             'fechaIngreso' => $contrato->fecha_ingreso->format('Y-m-d'),
             'salario'      => $base['salario'],
             'cargoTexto'   => mb_strtoupper(trim((string) $contrato->cargo)) ?: 'APOYO ADMINISTRATIVO',
+            'listaBeneficiarios' => $beneficiarios->map(fn ($b) => [
+                'tipo_doc'   => $b->tipo_doc,
+                'documento'  => (string) $b->n_documento,
+                'nombre'     => trim((string) $b->nombres),
+                'parentesco' => $b->parentesco,
+            ])->values()->all(),
         ]];
     }
 
