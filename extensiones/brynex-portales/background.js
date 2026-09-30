@@ -1149,7 +1149,7 @@ async function atenderCcfcv(accion, d = {}) {
       // formulario lleno y alguien pulsaba. AuthComfe es un login normal de
       // correo y contraseña —sin código ni imagen que descifrar—, así que la
       // sesión se abre sola y la revisión de subsidios puede correr sin nadie.
-      if (d.contrasena) return ccfEntrar(p.id);
+      if (d.contrasena) return ccfEntrar(p.id, String(d.usuario), String(d.contrasena));
     }
     return { ok: true, abierta: true };
   }
@@ -1179,17 +1179,36 @@ async function atenderCcfcv(accion, d = {}) {
  * Sucursal Virtual; la señal de que se entró es el `usuario` en localStorage
  * del portal, no la pantalla de AuthComfe.
  */
-async function ccfEntrar(tab) {
-  const pulsado = await esperarQue(tab, () => {
+async function ccfEntrar(tab, usuario, contrasena) {
+  // El autocompletado de Chrome puede pisar el correo con el de otra empresa
+  // después de llenarlo (pasó con ELITES sobre GAVI). Justo antes de pulsar se
+  // revisa el valor y, si no es el esperado, se vuelve a escribir.
+  const pulsar = () => esperarQue(tab, (u, c) => {
+    const campo = document.querySelector('input[name=email], input[type=email]');
+    const clave = document.querySelector('input[name=password], input[type=password]');
     const btn = [...document.querySelectorAll('button,input[type=submit]')]
       .find(b => /iniciar sesi/i.test(b.innerText || b.value || ''));
-    if (!btn || btn.disabled) return false;
+    if (!campo || !clave || !btn) return false;
+    const poner = (e, v) => {
+      const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      set.call(e, v);
+      e.dispatchEvent(new Event('input', { bubbles: true }));
+      e.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    if (campo.value !== u) poner(campo, u);
+    if (clave.value !== c) poner(clave, c);
+    if (btn.disabled || campo.value !== u || clave.value !== c) return false;
     btn.click();
 
     return true;
-  }, [], 20000);
+  }, [usuario, contrasena], 20000);
 
-  if (!pulsado) return { ok: false, abierta: true, error: 'No se encontró el botón de acceso de Comfenalco.' };
+  const pulsado = await pulsar();
+
+  if (!pulsado) return { ok: false, abierta: true, error: 'No se pudo llenar el acceso de Comfenalco con el usuario y la clave de la empresa (el botón no se habilitó o Chrome cambió el correo).' };
+
+  let reintento = false;
+  const inicio = Date.now();
 
   const limite = Date.now() + 90000;
 
@@ -1198,6 +1217,11 @@ async function ccfEntrar(tab) {
 
     const estado = await ejecutar(tab, pCcfEstado).catch(() => null);
     if (estado?.sesion) return { ok: true, abierta: true, sesion: true, empresa: estado.empresa };
+
+    if (!reintento && Date.now() - inicio > 15000 && estado?.enLogin) {
+      reintento = true;
+      await pulsar();
+    }
 
     const error = await ejecutar(tab, () =>
       /contrase|incorrect|inv[aá]lid|no existe/i.test(document.body.innerText || '')
