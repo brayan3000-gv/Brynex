@@ -579,6 +579,7 @@ function sortClass($col, $currSort, $currDir) {
             'caja'            => $ctxCaja,
             'salario'         => $ctxSalario,
             'fecha_ingreso'   => $ctxFechaIngreso,
+            'fecha_arl'       => $c->fecha_arl?->toDateString(),
             'cargo'           => $ctxCargo,
             'direccion'       => $ctxDireccion,
             'barrio'          => $ctxBarrio,
@@ -1866,7 +1867,16 @@ function abrirModalRadicado(radId, radData, ctx = {}, contratoId = null, tieneFo
     const btnColmenaAnular = document.getElementById('btnAnularColmena');
     const esArlColmena = (radData.tipo === 'arl') && /COLMENA/i.test(ctx.arl || '');
     btnColmena.style.display = (PUEDE_ARL && esArlColmena && radData.estado !== 'ok') ? 'inline-flex' : 'none';
-    btnColmenaAnular.style.display = (PUEDE_ARL && esArlColmena && radData.estado === 'ok') ? 'inline-flex' : 'none';
+    // Colmena solo anula hasta un día calendario después de que empieza la
+    // vigencia; pasado eso el botón solo estorba y lo que toca es retirar.
+    const dentroDelPlazoColmena = (() => {
+        if (!ctx.fecha_arl) return true; // sin fecha no se puede saber: que decida el servidor
+        const limite = new Date(ctx.fecha_arl + 'T00:00:00');
+        limite.setDate(limite.getDate() + 1);
+        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+        return hoy <= limite;
+    })();
+    btnColmenaAnular.style.display = (PUEDE_ARL && esArlColmena && radData.estado === 'ok' && dentroDelPlazoColmena) ? 'inline-flex' : 'none';
     btnColmena._contratoId = btnColmenaAnular._contratoId = contratoId || ctx.id || null;
 
     // Reingreso por el portal: radicados de EPS de Nueva EPS que aún no están en OK.

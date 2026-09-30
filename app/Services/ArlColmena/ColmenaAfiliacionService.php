@@ -322,6 +322,8 @@ class ColmenaAfiliacionService
                 'fecha_confirmacion' => null,
                 'confirmado_por' => null,
                 'confirmado_en' => null,
+                // El certificado describía una cobertura que ya no existe.
+                'ruta_pdf' => null,
                 'observacion' => 'Ingreso anulado en ARL Colmena el '.now()->format('d/m/Y H:i').
                     ($vigente?->codigo_transaccion ? ' (radicación '.$vigente->codigo_transaccion.').' : '.'),
             ]);
