@@ -490,7 +490,7 @@ function sortClass($col, $currSort, $currDir) {
                         @foreach($epsDisponibles as $e)<option value="{{ $e->id }}" {{ $epsF == $e->id ? 'selected' : '' }}>{{ $e->nombre }} ({{ $conteoEps[(string) $e->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
-                @if(epsF)
+                @if($epsF)
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
                     @foreach(request()->except(['eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="eps_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['eps']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
@@ -510,7 +510,7 @@ function sortClass($col, $currSort, $currDir) {
                         @foreach($arlDisponibles as $a)<option value="{{ $a->id }}" {{ $arlF == $a->id ? 'selected' : '' }}>{{ $a->nombre_arl }} ({{ $conteoArl[(string) $a->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
-                @if(arlF)
+                @if($arlF)
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
                     @foreach(request()->except(['arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="arl_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['arl']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
@@ -530,7 +530,7 @@ function sortClass($col, $currSort, $currDir) {
                         @foreach($cajaDisponibles as $ca)<option value="{{ $ca->id }}" {{ $cajaF == $ca->id ? 'selected' : '' }}>{{ $ca->nombre }} ({{ $conteoCaja[(string) $ca->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
-                @if(cajaF)
+                @if($cajaF)
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
                     @foreach(request()->except(['caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="caja_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['caja']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
@@ -550,7 +550,7 @@ function sortClass($col, $currSort, $currDir) {
                         @foreach($pensionDisponibles as $p)<option value="{{ $p->id }}" {{ $pensionF == $p->id ? 'selected' : '' }}>{{ $p->razon_social }} ({{ $conteoPension[(string) $p->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
-                @if(pensionF)
+                @if($pensionF)
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
                     @foreach(request()->except(['pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="pension_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['pension']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
