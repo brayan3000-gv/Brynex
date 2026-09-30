@@ -1628,6 +1628,18 @@ function pCcfPaso(d) {
     $(s).val(op.value).trigger('change').trigger('chosen:updated');
     return op.text.trim();
   };
+  // Dirección de BryNex en el formato que el portal acepta: debe empezar con su nomenclatura
+  // (CR carrera, CL calle, AV avenida, DG diagonal, TV transversal, CORR corregimiento), sin «#»
+  // ni guiones, y sin el barrio («B/ SELVA»), que va en su propio campo.
+  const normalizarDireccion = t => {
+    let x = String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+    x = x.replace(/\s*(?:\bB\/|\bBARRIO\b|\bBR\.)\s.*$/, '');
+    x = x.replace(/[#\-.,°]/g, ' ').replace(/\b(?:NRO|NUM|NUMERO)\b/g, ' ').replace(/\bNO\s+(?=\d)/g, ' ').replace(/\s+/g, ' ').trim();
+    const prefijos = [[/^(?:CARRERA|CRA|KRA|KR|CRR|CR)\b/, 'CR'], [/^(?:CALLE|CLL|CLLE|CL)\b/, 'CL'], [/^(?:AVENIDA|AVDA|AVE|AV)\b/, 'AV'],
+      [/^(?:DIAGONAL|DIAG|DG)\b/, 'DG'], [/^(?:TRANSVERSAL|TRANSV|TRV|TV)\b/, 'TV'], [/^(?:CORREGIMIENTO|CORR)\b/, 'CORR']];
+    for (const [re, pref] of prefijos) if (re.test(x)) return x.replace(re, pref).replace(/\s+/g, ' ').trim();
+    return null;
+  };
   const direccion = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
   const paso = [...document.querySelectorAll('fieldset, .sf-step')].filter(vis)
@@ -1675,7 +1687,19 @@ function pCcfPaso(d) {
         }
       } else hecho.push('barrio: ' + $('#BarrioResidencia option:selected').text());
     }
-    txt('txtDireccionResidenciaPersonal', direccion(d.direccion)) && hecho.push('dirección: ' + direccion(d.direccion));
+    // La dirección que trae el portal viene de un registro viejo y a veces deformada
+    // («CR 4 0 B 1 3 6 0»): BryNex es la fuente, así que se sobrescribe una sola vez con la suya
+    // normalizada. Si la de BryNex no empieza con una nomenclatura válida, se deja la del portal.
+    const campoDir = document.getElementById('txtDireccionResidenciaPersonal');
+    const dirBrynex = normalizarDireccion(d.direccion);
+    const dirPortal = String(campoDir?.value || '').replace(/\s+/g, ' ').trim();
+    if (campoDir && dirBrynex) {
+      if (dirPortal !== dirBrynex) { $(campoDir).val(dirBrynex).trigger('input').trigger('change'); }
+      hecho.push('dirección: ' + dirBrynex + (dirPortal !== dirBrynex ? ' (de BryNex; el portal traía «' + dirPortal + '»)' : ''));
+    } else if (campoDir) {
+      dirPortal ? hecho.push('dirección (la del portal, porque la de BryNex no empieza con CR, CL, AV, DG, TV ni CORR): ' + dirPortal)
+                : falta.push('dirección: escríbela con el formato del portal (BryNex tiene «' + (d.direccion || '—') + '»)');
+    }
     txt('txtCelularPersonal', d.celular) && hecho.push('celular');
     txt('txtCorreoPersonal', d.correo) && hecho.push('correo');
     if (($('#cmbOrientacionSexualPersonal').val() || '-1') === '-1') sel('cmbOrientacionSexualPersonal', 4);
