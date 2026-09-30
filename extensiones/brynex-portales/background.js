@@ -1176,7 +1176,11 @@ async function pCcfDeclaracion() {
         o.success = r => {
           try {
             const x = typeof r === 'string' ? JSON.parse(r) : r;
-            fin(x?.respuesta ? { base64: x.respuesta } : { error: 'El portal no devolvió el PDF.' });
+            // `respuesta` viene como texto JSON {"encodedString": "<base64>"}.
+            let b64 = x?.respuesta;
+            if (typeof b64 === 'string' && b64.trim().startsWith('{')) { try { b64 = JSON.parse(b64).encodedString; } catch { /* queda el texto */ } }
+            else if (b64 && typeof b64 === 'object') b64 = b64.encodedString;
+            fin(b64 ? { base64: b64 } : { error: 'El portal no devolvió el PDF.' });
           } catch (e) { fin({ error: String(e) }); }
         };
       }

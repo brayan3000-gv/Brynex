@@ -102,7 +102,12 @@ class ComfenalcoCajaController extends Controller
         ]);
         $contrato = $this->contrato($contratoId);
 
-        $pdf = base64_decode($datos['pdf'], true);
+        // El portal entrega el PDF envuelto: {"encodedString":"<base64>"}.
+        $crudo = $datos['pdf'];
+        if (str_starts_with(ltrim($crudo), '{')) {
+            $crudo = (string) (json_decode($crudo, true)['encodedString'] ?? '');
+        }
+        $pdf = base64_decode($crudo, true);
         if ($pdf === false || ! str_starts_with($pdf, '%PDF')) {
             return response()->json(['ok' => false, 'error' => 'El archivo de la declaración no es un PDF.'], 422);
         }
