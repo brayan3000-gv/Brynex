@@ -471,14 +471,14 @@ class AfiliacionController extends Controller
         // Encabezado
         $headers = [
             'Aliado', 'Razón Social', 'Día', 'Factura', 'Cédula', 'Nombres',
-            'EPS', 'Estado EPS', 'ARL', 'Estado ARL',
+            'EPS', 'Estado EPS', 'ARL', 'Nivel ARL', 'Estado ARL',
             'Caja', 'Estado Caja', 'Pensión', 'Estado Pensión',
             'Encargado', 'Observación', 'Estado',
         ];
         $sheet->fromArray($headers, null, 'A1');
 
         // Estilo encabezado
-        $sheet->getStyle('A1:Q1')->applyFromArray([
+        $sheet->getStyle('A1:R1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1e40af']],
         ]);
@@ -497,6 +497,7 @@ class AfiliacionController extends Controller
                 $c->eps?->nombre ?? '—',
                 strtoupper($radicados->get('eps')?->estado ?? '—'),
                 $c->arl_efectiva_nombre,
+                $c->n_arl ?? '',
                 strtoupper($radicados->get('arl')?->estado ?? '—'),
                 $c->caja?->nombre ?? '—',
                 strtoupper($radicados->get('caja')?->estado ?? '—'),
@@ -510,7 +511,7 @@ class AfiliacionController extends Controller
         }
 
         // Auto-ancho columnas
-        foreach (range('A', 'Q') as $col) {
+        foreach (range('A', 'R') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 
