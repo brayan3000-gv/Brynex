@@ -1678,7 +1678,7 @@ function pCcfPaso(d) {
     let x = String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     x = x.replace(/\s*(?:\bB\/|\bBARRIO\b|\bBR\.)\s.*$/, '');
     x = x.replace(/[#\-.,°]/g, ' ').replace(/\b(?:NRO|NUM|NUMERO)\b/g, ' ').replace(/\bNO\s+(?=\d)/g, ' ').replace(/\s+/g, ' ').trim();
-    const prefijos = [[/^(?:CARRERA|CRA|KRA|KR|CRR|CR)\b/, 'CR'], [/^(?:CALLE|CLL|CLLE|CL)\b/, 'CL'], [/^(?:AVENIDA|AVDA|AVE|AV)\b/, 'AV'],
+    const prefijos = [[/^(?:CARRERA|CARRA|CARR|CRRA|CRA|KRA|KR|CRR|CR)\b/, 'CR'], [/^(?:CALLE|CALL|CLL|CLLE|CL)\b/, 'CL'], [/^(?:AVENIDA|AVDA|AVD|AVE|AV)\b/, 'AV'],
       [/^(?:DIAGONAL|DIAG|DG)\b/, 'DG'], [/^(?:TRANSVERSAL|TRANSV|TRV|TV)\b/, 'TV'], [/^(?:CORREGIMIENTO|CORR)\b/, 'CORR']];
     for (const [re, pref] of prefijos) if (re.test(x)) return x.replace(re, pref).replace(/\s+/g, ' ').trim();
     return null;
