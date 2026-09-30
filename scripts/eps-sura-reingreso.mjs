@@ -375,7 +375,9 @@ try {
   // Lo que hay que guardar: el número de solicitud es el radicado del trámite y
   // el código de transacción es su respaldo; el portal muestra los dos.
   const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
-  const solicitud = dato(/N[uú]mero de Solicitud\s+([A-Z0-9_]+)/i);
+  // El número lleva dígitos: sin eso, en la pantalla de rechazo se capturaba
+  // «Autogenerar», que es la etiqueta de la casilla de al lado.
+  const solicitud = dato(/N[uú]mero de Solicitud\s+([A-Z0-9]*\d[A-Z0-9_]*)/i);
   const transaccion = dato(/C[oó]digo de Transacci[oó]n\s+(\d+)/i);
   const periodo = dato(/per[ií]odo de inicio de pago es\s*([\d/]+)/i);
 
