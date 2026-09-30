@@ -367,7 +367,41 @@ class ComfenalcoCajaService
         $this->marcar($radicado, $numero, Radicado::ESTADO_TRAMITE, $mensaje, $usuarioId);
         $this->bitacora($contrato, $radicado, 'exitosa', $numero, $texto, null, $usuarioId);
 
-        return ['ok' => true, 'estado' => Radicado::ESTADO_TRAMITE, 'numero' => $numero, 'mensaje' => $mensaje];
+        // El formulario radicado (PDF con el código de barras) queda en el radicado, como si se
+        // hubiera subido a mano con «Subir PDF».
+        $guardoPdf = ! empty($entrada['pdf']) && $this->guardarPdfRadicado($contrato, $radicado, (string) $entrada['pdf'], $usuarioId);
+        if ($guardoPdf) {
+            $mensaje .= ' El PDF del formulario quedó guardado en el radicado.';
+        }
+
+        return ['ok' => true, 'estado' => Radicado::ESTADO_TRAMITE, 'numero' => $numero, 'mensaje' => $mensaje, 'pdf_guardado' => $guardoPdf];
+    }
+
+    /** Guarda el PDF del formulario radicado en el mismo sitio que «Subir PDF» (disco privado). */
+    private function guardarPdfRadicado(Contrato $contrato, Radicado $radicado, string $base64, ?int $usuarioId): bool
+    {
+        if (str_starts_with(ltrim($base64), '{')) {
+            $base64 = (string) (json_decode($base64, true)['encodedString'] ?? '');
+        }
+        $bin = base64_decode($base64, true);
+        if ($bin === false || ! str_starts_with($bin, '%PDF')) {
+            return false;
+        }
+
+        $disco = \Illuminate\Support\Facades\Storage::disk('local');
+        if ($radicado->ruta_pdf && $disco->exists($radicado->ruta_pdf)) {
+            $disco->delete($radicado->ruta_pdf);
+        }
+        $ruta = "radicados/{$contrato->aliado_id}/{$contrato->id}/{$contrato->cedula}/caja_".now()->format('Ymd_His').'.pdf';
+        $disco->put($ruta, $bin);
+        $radicado->update(['ruta_pdf' => $ruta]);
+        RadicadoMovimiento::create([
+            'radicado_id' => $radicado->id, 'contrato_id' => $contrato->id, 'tipo_proceso' => 'afiliacion',
+            'entidad' => 'caja', 'user_id' => $usuarioId, 'estado_anterior' => $radicado->estado,
+            'estado_nuevo' => $radicado->estado, 'observacion' => 'PDF del formulario radicado guardado desde el portal de Comfenalco Valle.',
+        ]);
+
+        return true;
     }
 
     private function marcar(Radicado $radicado, ?string $numero, string $estado, string $observacion, ?int $usuarioId): void

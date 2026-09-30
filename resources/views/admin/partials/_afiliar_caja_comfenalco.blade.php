@@ -332,7 +332,7 @@ async function ccfFinalizar() {
     if (!f.numero) { mostrarRadicadoCaja(f); btn.style.display = 'none'; return; }
     ccfFinal = f;
     btn.textContent = '✅ Radicada · registrando en BryNex…';
-    const g = await ccfPedir('aplicar', 'POST', { numero: f.numero, texto: f.texto || '' });
+    const g = await ccfPedir('aplicar', 'POST', { numero: f.numero, texto: f.texto || '', pdf: f.pdf || null });
     if (!g.ok) { mostrarRadicadoCaja(f); alert('Se radicó en el portal (formulario ' + f.numero + ') pero no se pudo registrar en BryNex: ' + (g.error || g.mensaje || '')); return; }
     ccfTerminar(`✅ ${ccfEsc(g.mensaje)}`);
 }
@@ -353,7 +353,7 @@ async function guardarCajaComfenalco() {
     if (!numero) { alert('Escribe el número de formulario que dio el portal.'); return; }
     const btn = ccfEl('ccfBtnGuardar');
     btn.disabled = true; btn.textContent = '⏳ Registrando...';
-    const r = await ccfPedir('aplicar', 'POST', { numero, texto: ccfFinal?.texto || '' });
+    const r = await ccfPedir('aplicar', 'POST', { numero, texto: ccfFinal?.texto || '', pdf: ccfFinal?.pdf || null });
     btn.disabled = false; btn.textContent = '💾 Registrar en BryNex';
     if (!r.ok) { alert(r.error || r.mensaje || 'No se pudo registrar.'); return; }
     ccfTerminar(`✅ ${ccfEsc(r.mensaje)}`);

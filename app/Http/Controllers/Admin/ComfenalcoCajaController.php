@@ -54,6 +54,7 @@ class ComfenalcoCajaController extends Controller
             'numero' => 'nullable|string|max:40',
             'texto' => 'nullable|string|max:20000',
             'error' => 'nullable|string|max:1000',
+            'pdf' => 'nullable|string|max:12000000',   // formulario radicado, base64
         ]);
 
         try {

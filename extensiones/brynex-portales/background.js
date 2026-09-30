@@ -1244,6 +1244,34 @@ async function pCcfFinalizar() {
 
   const fin = document.getElementById('btnAfiliarDirecto');
   if (!vis(fin)) return { error: 'El botón Finalizar Afiliación no está visible: no estás en el paso Anexos.' };
+
+  // Al radicar, el portal genera el formulario en PDF (`CmndGenerarPdfPreafiliacion`) y lo
+  // descarga. Se captura esa respuesta para guardarla en BryNex y se impide la descarga a la
+  // carpeta de la persona mientras dura la radicación.
+  let pdf = null;
+  const ajaxOriginal = $.ajax;
+  const clickOriginal = HTMLAnchorElement.prototype.click;
+  const restaurar = () => { $.ajax = ajaxOriginal; HTMLAnchorElement.prototype.click = clickOriginal; };
+  $.ajax = function (o) {
+    if (/CmndGenerarPdfPreafiliacion/.test(String(o.url))) {
+      const exito = o.success;
+      o.success = function (r) {
+        try {
+          const x = typeof r === 'string' ? JSON.parse(r) : r;
+          let b64 = x?.respuesta;
+          if (typeof b64 === 'string' && b64.trim().startsWith('{')) { try { b64 = JSON.parse(b64).encodedString; } catch { /* queda el texto */ } }
+          else if (b64 && typeof b64 === 'object') b64 = b64.encodedString;
+          if (typeof b64 === 'string' && b64.startsWith('JVBER')) pdf = b64;   // "%PDF" en base64
+        } catch { /* sin PDF capturado */ }
+        return exito ? exito.apply(this, arguments) : undefined;
+      };
+    }
+    return ajaxOriginal.apply(this, arguments);
+  };
+  HTMLAnchorElement.prototype.click = function () { if (this.download) return; return clickOriginal.apply(this, arguments); };
+
+  try {
+    return await (async () => {
   fin.click();
 
   // 2) Términos y condiciones.
@@ -1263,10 +1291,18 @@ async function pCcfFinalizar() {
     await esperar(1000);
     const texto = textoVentanas();
     const m = texto.match(/n[uú]mero de formulario:?\s*([0-9]{6,})/i) || texto.match(/formulario:?\s*([0-9]{6,})/i);
-    if (m) return { radicado: true, numero: m[1], texto: texto.slice(0, 1500) };
+    if (m) {
+      // El PDF llega poco después de la ventana de éxito.
+      for (let j = 0; j < 20 && !pdf; j++) await esperar(500);
+      return { radicado: true, numero: m[1], texto: texto.slice(0, 1500), pdf };
+    }
     if (/error|no se pudo|inconsistenc|debe/i.test(texto) && !/t[eé]rminos/i.test(texto)) return { radicado: false, error: texto.slice(0, 500), texto: texto.slice(0, 1500) };
   }
   return { radicado: false, error: 'El portal no confirmó la afiliación a tiempo; revisa la pantalla antes de repetir.', texto: textoVentanas().slice(0, 500) };
+    })();
+  } finally {
+    restaurar();
+  }
 }
 
 function pCcfEstado() {
