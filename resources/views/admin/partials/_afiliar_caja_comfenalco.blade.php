@@ -92,6 +92,21 @@
 
 <script>
 let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null, ccfDocsGuardados = false, ccfDeclPdf = null, ccfFirmaGuardada = false, ccfUsarNueva = false, ccfTrazo = false;
+// ── Bitácora en vivo del robot: lo que va haciendo, con contador de tiempo desde que se pulsa «Buscar» ──
+let ccfT0 = 0, ccfNotas = [], ccfRelojBit = null, ccfVistos = new Set(), ccfUltimoPaso = null;
+const ccfMMSS = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+function ccfPintarBitacora() {
+    const c = ccfEl('ccfPasoActual'); if (!c) return;
+    const s = Math.floor((Date.now() - ccfT0) / 1000);
+    const abajo = c.scrollTop + c.clientHeight >= c.scrollHeight - 8;
+    c.innerHTML = `<strong>⏱ ${ccfMMSS(s)} — robot de la caja</strong><br>` +
+        ccfNotas.map(n => `<span style="color:#64748b">[${ccfMMSS(n.s)}]</span> ${n.m}`).join('<br>');
+    if (abajo) c.scrollTop = c.scrollHeight;
+}
+function ccfNota(m) { ccfNotas.push({ s: Math.floor((Date.now() - ccfT0) / 1000), m }); ccfPintarBitacora(); }
+function ccfIniciarBitacora() { ccfT0 = Date.now(); ccfNotas = []; ccfVistos = new Set(); ccfUltimoPaso = null; clearInterval(ccfRelojBit); ccfRelojBit = setInterval(ccfPintarBitacora, 1000); }
+function ccfDetenerBitacora() { clearInterval(ccfRelojBit); ccfPintarBitacora(); }
+
 const CCF_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const ccfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ccfEl = id => document.getElementById(id);
@@ -131,7 +146,7 @@ function ccfOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfenalco(contratoId) {
-    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
+    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; clearInterval(ccfRelojBit); ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
@@ -208,20 +223,24 @@ function ccfDatosPortal() {
 async function iniciarCajaComfenalco() {
     const btn = ccfEl('ccfBtnIniciar');
     btn.disabled = true; btn.textContent = '⏳ Buscando al trabajador en el portal...';
-    const r = await ccfExt('ccfConsultar', ccfDatosPortal(), 90);
+    // La bitácora arranca al pulsar, antes de que exista el panel de pasos.
+    const caja0 = ccfEl('ccfPasos'); caja0.style.display = 'block';
+    caja0.innerHTML = '<div id="ccfPasoActual" class="ccf-texto" style="max-height:240px"></div>';
+    ccfIniciarBitacora();
+    const d0 = ccfDatosPortal();
+    ccfNota(`🔎 Buscando a ${ccfEsc(ccfPrep.resumen?.trabajador || '')} (${ccfEsc(ccfPrep.resumen?.documento || '')}) en el portal de Comfenalco…`);
+    const r = await ccfExt('ccfConsultar', d0, 90);
     btn.disabled = false; btn.textContent = '🔎 Buscar al trabajador y empezar';
-    if (!r.ok) { alert(r.error || 'No se pudo consultar al trabajador.'); return; }
+    if (!r.ok) { ccfNota('❗ ' + ccfEsc(r.error || 'No se pudo consultar al trabajador.')); ccfDetenerBitacora(); alert(r.error || 'No se pudo consultar al trabajador.'); return; }
 
     const nueva = (r.opciones || []).find(o => /Nueva/i.test(o.texto));
     const caja = ccfEl('ccfPasos');
-    caja.style.display = 'block';
     btn.style.display = 'none';
-    caja.innerHTML = `<div class="ccf-info">👤 ${ccfEsc(r.nombre || '')}<br>` +
-        `Opciones del portal: ${(r.opciones || []).map(o => ccfEsc(o.texto.split(' Realiza')[0])).join(' · ') || '—'}` +
-        (r.familia ? `<br>Grupo familiar que ya tiene en la caja: ${ccfEsc(r.familia)}` : '') + '</div>' +
-        `<div class="ccf-aviso">👉 En el portal pulsa <strong>${nueva ? 'Nueva' : 'la opción que corresponda'}</strong> y ve avanzando con <strong>Continuar</strong>. ` +
-        'BryNex va llenando cada paso; revisa siempre antes de continuar. Al final aceptas los términos y pulsas <strong>Finalizar Afiliación</strong>.</div>' +
-        '<div id="ccfPasoActual" class="ccf-texto">Esperando el formulario…</div>';
+    ccfNota(`✅ El portal encontró a ${ccfEsc(r.nombre || '')}. Opciones: ${(r.opciones || []).map(o => ccfEsc(o.texto.split(' Realiza')[0])).join(' · ') || '—'}`);
+    if (r.familia) ccfNota(`👪 Grupo familiar que ya tiene en la caja: ${ccfEsc(r.familia)}`);
+    caja.insertAdjacentHTML('afterbegin', `<div class="ccf-aviso">👉 En el portal pulsa <strong>${nueva ? 'Nueva' : 'la opción que corresponda'}</strong> y ve avanzando con <strong>Continuar</strong>. ` +
+        'BryNex va llenando cada paso; revisa siempre antes de continuar. Al final pulsas <strong>Finalizar y radicar</strong>.</div>');
+    ccfNota('⏳ Esperando que abras el formulario en el portal (botón «Nueva»)…');
 
     clearInterval(ccfReloj);
     const desde = Date.now();
@@ -231,10 +250,12 @@ async function iniciarCajaComfenalco() {
         if (fin.ok && fin.radicado) { clearInterval(ccfReloj); mostrarRadicadoCaja(fin); return; }
         const p = await ccfExt('ccfPaso', ccfDatosPortal(), 30);
         if (!p.ok) return;
-        ccfEl('ccfPasoActual').innerHTML = `<strong>Paso: ${ccfEsc(p.paso || '—')}</strong>` +
-            (p.hecho?.length ? '<br>✅ ' + p.hecho.map(ccfEsc).join('<br>✅ ') : '') +
-            (p.falta?.length ? '<br>⚠️ ' + p.falta.map(ccfEsc).join('<br>⚠️ ') : '') +
-            (p.errores?.length ? '<br>❗ ' + p.errores.map(ccfEsc).join('<br>❗ ') : '');
+        if (p.paso && p.paso !== ccfUltimoPaso) { ccfUltimoPaso = p.paso; ccfNota(`➡️ <strong>Paso: ${ccfEsc(p.paso)}</strong>`); }
+        const nuevos = (icono, lista) => (lista || []).forEach(t => {
+            const k = icono + '|' + (p.paso || '') + '|' + t;
+            if (!ccfVistos.has(k)) { ccfVistos.add(k); ccfNota(`${icono} ${ccfEsc(t)}`); }
+        });
+        nuevos('✅', p.hecho); nuevos('⚠️', p.falta); nuevos('❗', p.errores);
         if (/Anexos/i.test(p.paso || '') && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos().then(ccfPrepararDeclaracion); }
     }, 4000);
 }
@@ -242,8 +263,7 @@ async function iniciarCajaComfenalco() {
 // En el paso Anexos la caja ya tiene guardados algunos documentos (cédula, registros
 // civiles, ADRES…): se bajan y se guardan en BryNex una sola vez por afiliación.
 async function ccfGuardarDocumentos() {
-    const caja = ccfEl('ccfPasoActual');
-    const aviso = t => { if (caja) caja.insertAdjacentHTML('beforeend', `<br>${t}`); };
+    const aviso = t => ccfNota(t);
     aviso('📎 Bajando los documentos que la caja ya tiene…');
     const r = await ccfExt('ccfDocumentos', {}, 180);
     const docs = (r.docs || []).filter(d => d.base64);
@@ -258,13 +278,13 @@ let ccfDeclEnCurso = false;
 async function ccfPrepararDeclaracion() {
     if (ccfDeclEnCurso || ccfDeclPdf) return;
     ccfDeclEnCurso = true;
-    const caja = ccfEl('ccfPasoActual');
-    const aviso = t => { if (caja) caja.insertAdjacentHTML('beforeend', `<br>${t}`); };
+    const aviso = t => ccfNota(t);
     aviso('📄 Pidiendo al portal la declaración juramentada…');
     const r = await ccfExt('ccfDeclaracion', {}, 90);
     ccfDeclEnCurso = false;
     if (!r.ok || !r.base64) { aviso('❗ ' + ccfEsc(r.error || 'El portal no entregó la declaración.')); return; }
     ccfDeclPdf = r.base64;
+    aviso('📄 Declaración juramentada lista: falta la firma del trabajador.');
     const f = await ccfPedir('firma');
     ccfFirmaGuardada = !!f.tiene; ccfUsarNueva = !f.tiene;
     ccfEl('ccfFirmaBox').style.display = 'block';
@@ -385,7 +405,7 @@ async function rechazoCajaComfenalco() {
 }
 
 function ccfTerminar(html) {
-    clearInterval(ccfReloj);
+    clearInterval(ccfReloj); ccfDetenerBitacora();
     ccfEl('ccfContenido').style.display = 'none';
     ccfEl('ccfResultado').style.display = 'block';
     ccfEl('ccfResultado').innerHTML = html + '<br><span style="color:#475569">Comfenalco verifica en máximo 2 días y manda el correo «Afiliación exitosa».</span>';
