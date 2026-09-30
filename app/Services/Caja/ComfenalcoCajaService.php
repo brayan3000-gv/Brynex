@@ -259,40 +259,58 @@ class ComfenalcoCajaService
      * con pdftoppm si la caja cambia el formato.
      */
     private const FIRMA_EN_DECLARACION = [
-        ['pagina' => 1, 'x' => 16.0, 'y' => 299.0, 'ancho' => 45.0, 'alto' => 13.0],
+        // Firma del declarante (el trabajador) + su número de documento en «Documento de identidad:».
+        'declarante' => ['x' => 16.0, 'y' => 299.0, 'ancho' => 45.0, 'alto' => 13.0, 'doc_x' => 42.0, 'doc_y' => 315.6],
+        // Sección 3 (padres o hermanos huérfanos): una caja para el padre y otra para la madre.
+        'padre' => ['x' => 16.0, 'y' => 161.5, 'ancho' => 45.0, 'alto' => 12.0, 'doc_x' => 16.0, 'doc_y' => 175.6],
+        'madre' => ['x' => 118.0, 'y' => 161.5, 'ancho' => 45.0, 'alto' => 12.0, 'doc_x' => 118.0, 'doc_y' => 175.6],
     ];
 
-    /** ¿El cliente ya tiene su firma guardada? La firma es un documento más del cliente, en disco privado. */
-    public function firmaGuardada(Contrato $contrato): ?string
+    /**
+     * ¿Hay firma guardada? Sin documento es la del trabajador; con documento, la de un beneficiario
+     * (el padre o la madre que firman la sección 3). Es un documento más del cliente, en disco privado.
+     */
+    public function firmaGuardada(Contrato $contrato, ?string $docBeneficiario = null): ?string
     {
-        $doc = \App\Models\DocumentoCliente::where('aliado_id', $contrato->aliado_id)->where('cc_cliente', (string) $contrato->cedula)
-            ->where('tipo_documento', 'firma')->orderByDesc('id')->first();
+        $doc = $docBeneficiario ? ltrim(preg_replace('/\D/', '', $docBeneficiario), '0') : null;
+        $fila = \App\Models\DocumentoCliente::where('aliado_id', $contrato->aliado_id)->where('cc_cliente', (string) $contrato->cedula)
+            ->where('tipo_documento', 'firma')
+            ->when($doc, fn ($q) => $q->where('doc_beneficiario', $doc), fn ($q) => $q->whereNull('doc_beneficiario'))
+            ->orderByDesc('id')->first();
         $disco = \Illuminate\Support\Facades\Storage::disk('local');
 
-        return $doc && $disco->exists($doc->ruta) ? $disco->get($doc->ruta) : null;
+        return $fila && $disco->exists($fila->ruta) ? $disco->get($fila->ruta) : null;
     }
 
-    public function guardarFirma(Contrato $contrato, string $png, ?int $usuarioId): void
+    public function guardarFirma(Contrato $contrato, string $png, ?int $usuarioId, ?string $docBeneficiario = null): void
     {
-        $ruta = "documentos/{$contrato->aliado_id}/{$contrato->cedula}/firma_".time().'_'.\Illuminate\Support\Str::random(6).'.png';
+        $doc = $docBeneficiario ? ltrim(preg_replace('/\D/', '', $docBeneficiario), '0') : null;
+        $ruta = "documentos/{$contrato->aliado_id}/{$contrato->cedula}/firma_".($doc ?: 'trabajador').'_'.time().'_'.\Illuminate\Support\Str::random(6).'.png';
         \Illuminate\Support\Facades\Storage::disk('local')->put($ruta, $png);
         \App\Models\DocumentoCliente::create([
-            'aliado_id' => $contrato->aliado_id, 'cc_cliente' => (string) $contrato->cedula, 'doc_beneficiario' => null,
+            'aliado_id' => $contrato->aliado_id, 'cc_cliente' => (string) $contrato->cedula, 'doc_beneficiario' => $doc,
             'tipo_documento' => 'firma', 'nombre_archivo' => 'firma.png', 'ruta' => $ruta, 'subido_por' => $usuarioId,
         ]);
     }
 
     /**
-     * Estampa la firma sobre la declaración juramentada que generó el portal y
-     * guarda el resultado como documento del cliente.
+     * Estampa las firmas sobre la declaración juramentada que generó el portal, con el número de
+     * documento de cada firmante, y (salvo en la vista previa) guarda el resultado como documento
+     * del cliente.
      *
-     * @return string PDF firmado
+     * @param  array<string, string>  $firmas  rol (declarante|padre|madre) → PNG de la firma
+     * @param  array<string, string>  $docs    rol → texto del documento, p. ej. «CC 27261598»
+     * @return string PDF con las firmas
      */
-    public function firmarDeclaracion(Contrato $contrato, string $pdf, string $firmaPng, ?int $usuarioId): string
+    public function firmarDeclaracion(Contrato $contrato, string $pdf, array $firmas, array $docs, ?int $usuarioId, bool $previa = false): string
     {
         $tmp = sys_get_temp_dir().'/decl_'.\Illuminate\Support\Str::random(8);
         file_put_contents($tmp.'.pdf', $pdf);
-        file_put_contents($tmp.'.png', $firmaPng);
+        $archivos = [];
+        foreach ($firmas as $rol => $png) {
+            $archivos[$rol] = $tmp."_{$rol}.png";
+            file_put_contents($archivos[$rol], $png);
+        }
 
         try {
             $fpdi = new \setasign\Fpdi\Fpdi('P', 'mm');
@@ -302,24 +320,36 @@ class ComfenalcoCajaService
                 $tam = $fpdi->getTemplateSize($id);
                 $fpdi->AddPage($tam['orientation'], [$tam['width'], $tam['height']]);
                 $fpdi->useTemplate($id);
-                foreach (self::FIRMA_EN_DECLARACION as $p) {
-                    if ($p['pagina'] === $n) {
-                        $fpdi->Image($tmp.'.png', $p['x'], $p['y'], $p['ancho'], $p['alto']);
+                if ($n !== 1) {
+                    continue;                                   // el formato es de una sola hoja
+                }
+                foreach (self::FIRMA_EN_DECLARACION as $rol => $p) {
+                    if (isset($archivos[$rol])) {
+                        $fpdi->Image($archivos[$rol], $p['x'], $p['y'], $p['ancho'], $p['alto']);
+                    }
+                    if (! empty($docs[$rol]) && (isset($archivos[$rol]) || $rol === 'declarante')) {
+                        $fpdi->SetFont('Arial', '', 7.5);
+                        $fpdi->SetTextColor(20, 20, 20);
+                        $fpdi->Text($p['doc_x'], $p['doc_y'], iconv('UTF-8', 'ISO-8859-1//TRANSLIT', (string) $docs[$rol]));
                     }
                 }
             }
             $firmado = $fpdi->Output('S');
         } finally {
             @unlink($tmp.'.pdf');
-            @unlink($tmp.'.png');
+            foreach ($archivos as $f) {
+                @unlink($f);
+            }
         }
 
-        $this->guardarDocumentos($contrato, [[
-            'requerido' => 'Formato declaracion juramentada caja',
-            'nombre' => 'DeclaracionJuramentada_'.$contrato->cedula.'_'.now()->format('Ymd').'.pdf',
-            'doc_beneficiario' => null,
-            'base64' => base64_encode($firmado),
-        ]], $usuarioId);
+        if (! $previa) {
+            $this->guardarDocumentos($contrato, [[
+                'requerido' => 'Formato declaracion juramentada caja',
+                'nombre' => 'DeclaracionJuramentada_'.$contrato->cedula.'_'.now()->format('Ymd').'.pdf',
+                'doc_beneficiario' => null,
+                'base64' => base64_encode($firmado),
+            ]], $usuarioId);
+        }
 
         return $firmado;
     }

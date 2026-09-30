@@ -65,10 +65,10 @@
         <div id="ccfFirmaBox" class="ccf-info" style="display:none">
           <strong>✍️ Declaración juramentada</strong>
           <div id="ccfFirmaTexto" style="margin:.3rem 0"></div>
-          <div style="font-size:.68rem;color:#64748b;margin-bottom:.3rem">Solo firma el trabajador (declarante). Las firmas del padre/madre o del cónyuge cuidador(a) aplican únicamente si esas secciones traen filas.</div>
-          <canvas id="ccfFirmaLienzo" width="520" height="150" style="display:none;width:100%;max-width:520px;height:150px;background:#fff;border:1px dashed #6ee7b7;border-radius:8px;touch-action:none"></canvas>
-          <button class="ccf-btn sec" id="ccfFirmaLimpiar" style="display:none" onclick="ccfLimpiarFirma()">🧽 Borrar y firmar de nuevo</button>
-          <button class="ccf-btn sec" id="ccfFirmaOtra" style="display:none" onclick="ccfFirmarNueva()">✏️ Firmar de nuevo en vez de usar la guardada</button>
+          <div style="font-size:.68rem;color:#64748b;margin-bottom:.3rem">Firma el trabajador (declarante) y, si hay padres en la sección 3, también el padre y la madre. Cada firma lleva su número de documento. La firma del cónyuge cuidador(a) solo aplica si esa sección trae filas.</div>
+          <div id="ccfFirmasLista"></div>
+          <button class="ccf-btn sec" id="ccfFirmaPrevia" onclick="ccfVistaPrevia()">👁️ Ver cómo queda la declaración (vista previa)</button>
+          <iframe id="ccfPreviaVisor" style="display:none;width:100%;height:480px;border:1px solid #cbd5e1;border-radius:8px;margin-top:.4rem;background:#fff"></iframe>
           <button class="ccf-btn" id="ccfFirmaBtn" onclick="ccfFirmarYAdjuntar()">✍️ Firmar y adjuntar la declaración</button>
         </div>
         <div id="ccfFinalizarBox" style="display:none">
@@ -91,7 +91,7 @@
 </div>
 
 <script>
-let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null, ccfDocsGuardados = false, ccfDeclPdf = null, ccfFirmaGuardada = false, ccfUsarNueva = false, ccfTrazo = false;
+let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null, ccfDocsGuardados = false, ccfDeclPdf = null, ccfFirmantes = [];
 // ── Bitácora en vivo del robot: lo que va haciendo, con contador de tiempo desde que se pulsa «Buscar» ──
 let ccfT0 = 0, ccfNotas = [], ccfRelojBit = null, ccfVistos = new Set(), ccfUltimoPaso = null;
 const ccfMMSS = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
@@ -358,55 +358,89 @@ async function ccfPrepararDeclaracion() {
     }
     if (!r.ok || !r.base64) { aviso('❗ ' + ccfEsc(r.error || 'El portal no entregó la declaración.')); return; }
     ccfDeclPdf = r.base64;
-    aviso('📄 Declaración juramentada lista: falta la firma del trabajador.');
-    const f = await ccfPedir('firma');
-    ccfFirmaGuardada = !!f.tiene; ccfUsarNueva = !f.tiene;
+    const personas = r.personas || {};
+    const docsP = Object.values(personas).map(p => p.doc);
+    const f = await ccfPedir('firma' + (docsP.length ? '?' + docsP.map(d => 'docs[]=' + encodeURIComponent(d)).join('&') : ''));
+    const rs = ccfPrep.resumen || {};
+    ccfFirmantes = [{ rol: 'declarante', etiqueta: `${rs.trabajador || 'Trabajador'} — trabajador (declarante)`, doc: rs.documento || '', guardada: !!f.tiene, nueva: !f.tiene, trazo: false }];
+    for (const rol of ['padre', 'madre']) {
+        const p = personas[rol];
+        if (p) ccfFirmantes.push({ rol, etiqueta: `${p.nombre} — ${rol}`, doc: `${p.tipo} ${p.doc}`, guardada: !!f.beneficiarios?.[p.doc], nueva: !f.beneficiarios?.[p.doc], trazo: false, persona: p });
+    }
+    aviso(`📄 Declaración juramentada lista: firman ${ccfFirmantes.length} persona(s): ${ccfFirmantes.map(x => x.rol).join(', ')}.`);
     ccfEl('ccfFirmaBox').style.display = 'block';
-    ccfMostrarFirma();
+    ccfMostrarFirmas();
 }
 
-function ccfMostrarFirma() {
-    const pad = ccfUsarNueva || !ccfFirmaGuardada;
-    ccfEl('ccfFirmaLienzo').style.display = pad ? 'block' : 'none';
-    ccfEl('ccfFirmaLimpiar').style.display = pad ? 'block' : 'none';
-    ccfEl('ccfFirmaOtra').style.display = pad ? 'none' : 'block';
-    ccfEl('ccfFirmaTexto').innerHTML = pad
-        ? 'La declaración ya está lista con los datos del portal. <strong>El trabajador firma aquí</strong> (la firma queda guardada para las próximas afiliaciones).'
-        : 'La declaración ya está lista con los datos del portal. Se usará la <strong>firma guardada</strong> de este trabajador.';
-    if (pad) ccfIniciarLienzo();
+// Un recuadro de firma por cada persona que firma la declaración (trabajador, y padre/madre si están).
+function ccfMostrarFirmas() {
+    ccfEl('ccfFirmaTexto').innerHTML = `La declaración ya está lista con los datos del portal. <strong>Firman ${ccfFirmantes.length}:</strong> cada firma queda guardada para las próximas afiliaciones y lleva su número de documento. <strong>Al firmar se radica la afiliación en Comfenalco.</strong>`;
+    ccfEl('ccfFirmasLista').innerHTML = ccfFirmantes.map(f => {
+        const pad = f.nueva || !f.guardada;
+        return `<div style="border:1px solid #a7f3d0;border-radius:8px;padding:.45rem .55rem;margin:.4rem 0;background:#fff">
+            <strong>✍️ ${ccfEsc(f.etiqueta)}</strong> <span style="color:#64748b">· ${ccfEsc(f.doc)}</span>
+            ${pad
+                ? `<canvas id="ccfL_${f.rol}" width="520" height="130" style="display:block;width:100%;max-width:520px;height:130px;background:#fff;border:1px dashed #6ee7b7;border-radius:8px;touch-action:none;margin-top:.3rem"></canvas>
+                   <button class="ccf-btn sec" style="margin-top:.3rem" onclick="ccfBorrarFirma('${f.rol}')">🧽 Borrar y firmar de nuevo</button>`
+                : `<div style="margin:.3rem 0">✅ Se usará la <strong>firma guardada</strong>.</div>
+                   <button class="ccf-btn sec" onclick="ccfFirmarNueva('${f.rol}')">✏️ Firmar de nuevo en vez de usar la guardada</button>`}
+        </div>`;
+    }).join('');
+    ccfFirmantes.forEach(f => { if (f.nueva || !f.guardada) ccfIniciarLienzo(f); });
 }
 
-function ccfFirmarNueva() { ccfUsarNueva = true; ccfMostrarFirma(); }
+function ccfFirmarNueva(rol) { const f = ccfFirmantes.find(x => x.rol === rol); if (f) { f.nueva = true; ccfMostrarFirmas(); } }
+function ccfBorrarFirma(rol) { const f = ccfFirmantes.find(x => x.rol === rol); if (f) ccfIniciarLienzo(f); }
 
-function ccfIniciarLienzo() {
-    const c = ccfEl('ccfFirmaLienzo'), g = c.getContext('2d');
-    g.clearRect(0, 0, c.width, c.height); g.lineWidth = 2.5; g.lineCap = 'round'; g.strokeStyle = '#0b1f6b'; ccfTrazo = false;
+function ccfIniciarLienzo(f) {
+    const c = ccfEl('ccfL_' + f.rol); if (!c) return;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height); g.lineWidth = 2.5; g.lineCap = 'round'; g.strokeStyle = '#0b1f6b'; f.trazo = false;
     let dibujando = false;
     const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
     c.onpointerdown = e => { dibujando = true; c.setPointerCapture(e.pointerId); const [x, y] = pos(e); g.beginPath(); g.moveTo(x, y); };
-    c.onpointermove = e => { if (!dibujando) return; const [x, y] = pos(e); g.lineTo(x, y); g.stroke(); ccfTrazo = true; };
+    c.onpointermove = e => { if (!dibujando) return; const [x, y] = pos(e); g.lineTo(x, y); g.stroke(); f.trazo = true; };
     c.onpointerup = () => { dibujando = false; };
 }
-function ccfLimpiarFirma() { ccfIniciarLienzo(); }
+
+// Cuerpo para el servidor: las firmas dibujadas (las guardadas las pone el servidor) y quién firma además del trabajador.
+function ccfCuerpoDeclaracion() {
+    const cuerpo = { pdf: ccfDeclPdf, firmas: {}, personas: {} };
+    for (const f of ccfFirmantes) {
+        if (f.persona) cuerpo.personas[f.rol] = f.persona;
+        if ((f.nueva || !f.guardada) && f.trazo) cuerpo.firmas[f.rol] = ccfEl('ccfL_' + f.rol).toDataURL('image/png');
+    }
+    return cuerpo;
+}
+
+// Vista previa: el PDF con lo que haya firmado hasta ahora (y las firmas guardadas), sin guardar nada ni adjuntar.
+async function ccfVistaPrevia() {
+    const btn = ccfEl('ccfFirmaPrevia'), visor = ccfEl('ccfPreviaVisor');
+    btn.disabled = true; btn.textContent = '⏳ Armando la vista previa…';
+    const r = await ccfPedir('declaracion', 'POST', Object.assign(ccfCuerpoDeclaracion(), { previa: true }));
+    btn.disabled = false; btn.textContent = '👁️ Ver cómo queda la declaración (vista previa)';
+    if (!r.ok) { alert(r.error || 'No se pudo armar la vista previa.'); return; }
+    const bytes = Uint8Array.from(atob(r.pdf), c => c.charCodeAt(0));
+    visor.src = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' })) + '#zoom=70';
+    visor.style.display = 'block';
+}
 
 async function ccfFirmarYAdjuntar() {
     const btn = ccfEl('ccfFirmaBtn');
-    const pad = ccfUsarNueva || !ccfFirmaGuardada;
-    if (pad && !ccfTrazo) { alert('Falta la firma: dibújala en el recuadro.'); return; }
+    const sinFirma = ccfFirmantes.filter(f => (f.nueva || !f.guardada) && !f.trazo);
+    if (sinFirma.length) { alert('Faltan firmas: ' + sinFirma.map(f => f.etiqueta).join('; ') + '.'); return; }
     btn.disabled = true; btn.textContent = '⏳ Firmando…';
-    const cuerpo = { pdf: ccfDeclPdf };
-    if (pad) cuerpo.firma = ccfEl('ccfFirmaLienzo').toDataURL('image/png');
-    const r = await ccfPedir('declaracion', 'POST', cuerpo);
-    if (!r.ok) { btn.disabled = false; btn.textContent = '✍️ Firmar y adjuntar la declaración'; alert(r.error || 'No se pudo firmar la declaración.'); return; }
+    const r = await ccfPedir('declaracion', 'POST', ccfCuerpoDeclaracion());
+    if (!r.ok) { btn.disabled = false; btn.textContent = '✍️ Firmar y radicar la afiliación'; alert(r.error || 'No se pudo firmar la declaración.'); return; }
     btn.textContent = '⏳ Adjuntando en el portal…';
     const s = await ccfExt('ccfSubirDeclaracion', { base64: r.pdf, nombre: `DeclaracionJuramentada_${ccfPrep.resumen?.documento?.replace(/\D/g, '') || ''}.pdf` }, 120);
-    btn.disabled = false; btn.textContent = '✍️ Firmar y adjuntar la declaración';
+    btn.disabled = false; btn.textContent = '✍️ Firmar y radicar la afiliación';
     const caja = ccfEl('ccfFirmaTexto');
     if (!s.ok) { caja.innerHTML = '❗ ' + ccfEsc(s.error || 'La extensión no pudo adjuntar la declaración.'); return; }
-    ['ccfFirmaLienzo', 'ccfFirmaLimpiar', 'ccfFirmaOtra', 'ccfFirmaBtn'].forEach(id => ccfEl(id).style.display = 'none');
+    ['ccfFirmasLista', 'ccfFirmaPrevia', 'ccfFirmaBtn'].forEach(id => ccfEl(id).style.display = 'none');
     caja.innerHTML = s.quedan
-        ? `⚠️ Se adjuntó en ${s.subidos} de ${s.pendientes} beneficiarios; revisa el resto en el portal.`
-        : `✅ Declaración firmada y adjunta en ${s.subidos} beneficiario(s) y guardada en BryNex. Revisa el paso Anexos del portal y, si todo está bien, pulsa <strong>Finalizar y radicar</strong>.`;
+        ? `⚠️ Se adjuntó en ${s.subidos} de ${s.pendientes} documentos; revisa el resto en el portal.`
+        : `✅ Declaración firmada por ${r.firmantes.join(', ')} y adjunta en ${s.subidos} lugar(es) del portal, y guardada en BryNex. Revisa el paso Anexos y pulsa <strong>Finalizar y radicar</strong>.`;
     if (!s.quedan) ccfEl('ccfFinalizarBox').style.display = 'block';
 }
 

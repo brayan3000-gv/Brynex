@@ -92,26 +92,45 @@ class ComfenalcoCajaController extends Controller
         return response()->json(['ok' => $this->servicio->adjuntarPdfRadicado($this->contrato($contratoId), $datos['pdf'], Auth::id())]);
     }
 
-    /** ¿Hay firma guardada de este trabajador? */
-    public function firma(int $contratoId)
+    /**
+     * ¿Hay firma guardada? Del trabajador y, si llegan `docs[]`, de cada beneficiario que firma
+     * (el padre y la madre de la sección 3 de la declaración).
+     */
+    public function firma(Request $request, int $contratoId)
     {
-        return response()->json(['ok' => true, 'tiene' => (bool) $this->servicio->firmaGuardada($this->contrato($contratoId))]);
+        $contrato = $this->contrato($contratoId);
+        $beneficiarios = [];
+        foreach (array_filter((array) $request->query('docs', [])) as $doc) {
+            $beneficiarios[(string) $doc] = (bool) $this->servicio->firmaGuardada($contrato, (string) $doc);
+        }
+
+        return response()->json(['ok' => true, 'tiene' => (bool) $this->servicio->firmaGuardada($contrato), 'beneficiarios' => $beneficiarios]);
     }
 
     /**
-     * Estampa la firma del trabajador sobre la declaración juramentada oficial del
-     * portal. Si llega una firma nueva (dibujada en pantalla) se guarda para las
-     * próximas veces; si no llega, se usa la guardada.
+     * Estampa las firmas sobre la declaración juramentada oficial del portal: la del trabajador
+     * (declarante) y, si hay padres en la sección 3, la del padre y la de la madre, cada una con su
+     * documento. Las firmas nuevas (dibujadas en pantalla) se guardan para las próximas veces; si
+     * no llega una, se usa la guardada. Con `previa` solo se genera el PDF para verlo: no se guarda
+     * nada.
      */
     public function firmarDeclaracion(Request $request, int $contratoId)
     {
         $datos = $request->validate([
             'pdf' => 'required|string|max:20000000',
-            'firma' => 'nullable|string|max:3000000',
+            'firma' => 'nullable|string|max:3000000',                      // compatibilidad: firma del trabajador
+            'firmas' => 'nullable|array',
+            'firmas.*' => 'nullable|string|max:3000000',
+            'personas' => 'nullable|array',                                // rol → {doc, tipo, nombre} de quien firma además del trabajador
+            'personas.*.doc' => 'required_with:personas|string|max:20',
+            'personas.*.tipo' => 'nullable|string|max:5',
+            'personas.*.nombre' => 'nullable|string|max:150',
+            'previa' => 'nullable|boolean',
         ]);
         $contrato = $this->contrato($contratoId);
+        $previa = (bool) ($datos['previa'] ?? false);
 
-        // El portal entrega el PDF envuelto: {"encodedString":"<base64>"}.
+        // El PDF del portal llega envuelto: {"encodedString":"<base64>"}.
         $crudo = $datos['pdf'];
         if (str_starts_with(ltrim($crudo), '{')) {
             $crudo = (string) (json_decode($crudo, true)['encodedString'] ?? '');
@@ -121,26 +140,50 @@ class ComfenalcoCajaController extends Controller
             return response()->json(['ok' => false, 'error' => 'El archivo de la declaración no es un PDF.'], 422);
         }
 
-        if (! empty($datos['firma'])) {
-            $png = base64_decode(preg_replace('#^data:image/png;base64,#', '', $datos['firma']), true);
-            if ($png === false || ! str_starts_with($png, "\x89PNG")) {
-                return response()->json(['ok' => false, 'error' => 'La firma no es una imagen PNG válida.'], 422);
+        $personas = array_intersect_key((array) ($datos['personas'] ?? []), array_flip(['padre', 'madre']));
+        $roles = array_merge(['declarante'], array_keys($personas));
+        $nuevas = (array) ($datos['firmas'] ?? []);
+        if (! empty($datos['firma']) && empty($nuevas['declarante'])) {
+            $nuevas['declarante'] = $datos['firma'];
+        }
+
+        $firmas = [];
+        $faltan = [];
+        foreach ($roles as $rol) {
+            $doc = $rol === 'declarante' ? null : (string) $personas[$rol]['doc'];
+            if (! empty($nuevas[$rol])) {
+                $png = base64_decode(preg_replace('#^data:image/png;base64,#', '', $nuevas[$rol]), true);
+                if ($png === false || ! str_starts_with($png, "\x89PNG")) {
+                    return response()->json(['ok' => false, 'error' => "La firma de {$rol} no es una imagen PNG válida."], 422);
+                }
+                if (! $previa) {
+                    $this->servicio->guardarFirma($contrato, $png, Auth::id(), $doc);
+                }
+                $firmas[$rol] = $png;
+            } elseif ($png = $this->servicio->firmaGuardada($contrato, $doc)) {
+                $firmas[$rol] = $png;
+            } elseif (! $previa) {
+                $faltan[] = $rol;
             }
-            $this->servicio->guardarFirma($contrato, $png, Auth::id());
-        } else {
-            $png = $this->servicio->firmaGuardada($contrato);
-            if (! $png) {
-                return response()->json(['ok' => false, 'necesita_firma' => true, 'error' => 'Este trabajador aún no tiene firma guardada.'], 409);
-            }
+        }
+        if ($faltan) {
+            return response()->json(['ok' => false, 'necesita_firma' => $faltan, 'error' => 'Faltan firmas: '.implode(', ', $faltan).'.'], 409);
+        }
+
+        // Número de documento bajo cada firma: «CC 27261598».
+        $cliente = $contrato->loadMissing('cliente')->cliente;
+        $docs = ['declarante' => trim(strtoupper((string) $cliente?->tipo_doc).' '.$contrato->cedula)];
+        foreach ($personas as $rol => $p) {
+            $docs[$rol] = trim(strtoupper((string) ($p['tipo'] ?? '')).' '.$p['doc']);
         }
 
         try {
-            $firmado = $this->servicio->firmarDeclaracion($contrato, $pdf, $png, Auth::id());
+            $firmado = $this->servicio->firmarDeclaracion($contrato, $pdf, $firmas, $docs, Auth::id(), $previa);
         } catch (Throwable $e) {
             return response()->json(['ok' => false, 'error' => 'No se pudo estampar la firma: '.$e->getMessage()], 500);
         }
 
-        return response()->json(['ok' => true, 'pdf' => base64_encode($firmado)]);
+        return response()->json(['ok' => true, 'pdf' => base64_encode($firmado), 'previa' => $previa, 'firmantes' => array_keys($firmas)]);
     }
 
     /**

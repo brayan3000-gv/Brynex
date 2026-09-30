@@ -1249,6 +1249,17 @@ async function pCcfDeclaracion() {
   };
   if (!(await esperarAnexos())) return { error: 'La lista de anexos del portal no terminó de cargar (60 s): no se sabe si hace falta la declaración.' };
 
+  // Quién más firma: si entre los beneficiarios incluidos hay padre y/o madre, la sección 3 de la
+  // declaración trae sus cajas de firma. Se leen de la tabla de beneficiarios (Excluir = No).
+  const personas = {};
+  document.querySelectorAll('#tableBeneficiarioReactiva tbody tr').forEach(tr => {
+    const c = [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
+    const rol = /^padre$/i.test(c[3] || '') ? 'padre' : /^madre$/i.test(c[3] || '') ? 'madre' : null;
+    const excluido = tr.querySelector('select')?.value === 'S';
+    const m = /^([A-Z]{1,3})\.(\d+)/.exec(c[4] || '');
+    if (rol && !excluido && m) personas[rol] = { tipo: m[1], doc: m[2], nombre: [c[1], c[2]].filter(Boolean).join(' ') };
+  });
+
   // Sin beneficiarios ni pareja el portal no pide la declaración (solo la cédula del trabajador):
   // si no hay ninguna fila obligatoria de "declaración juramentada", no hace falta firmar.
   const exige = [...document.querySelectorAll('#tablaAnexosConyuge tbody tr, #tablaAnexosBeneficiario tbody tr')]
@@ -1269,7 +1280,7 @@ async function pCcfDeclaracion() {
             let b64 = x?.respuesta;
             if (typeof b64 === 'string' && b64.trim().startsWith('{')) { try { b64 = JSON.parse(b64).encodedString; } catch { /* queda el texto */ } }
             else if (b64 && typeof b64 === 'object') b64 = b64.encodedString;
-            fin(b64 ? { base64: b64 } : { error: 'El portal no devolvió el PDF.' });
+            fin(b64 ? { base64: b64, personas } : { error: 'El portal no devolvió el PDF.' });
           } catch (e) { fin({ error: String(e) }); }
         };
       }
