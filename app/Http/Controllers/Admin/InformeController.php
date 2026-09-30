@@ -193,7 +193,7 @@ class InformeController extends Controller
             ->leftJoin('planes_contrato AS pl','pl.id','=','c.plan_id')
             ->where('c.aliado_id',$aid)
             ->where('c.estado','vigente')
-            ->select('c.id','c.cedula','c.fecha_ingreso','c.salario',
+            ->select('c.id','c.cedula','c.fecha_ingreso','c.salario','c.n_arl','cl.celular',
                 DB::raw("LTRIM(RTRIM(cl.primer_nombre+' '+ISNULL(cl.segundo_nombre,'')+' '+cl.primer_apellido+' '+ISNULL(cl.segundo_apellido,''))) AS nombre_completo"),
                 'rs.razon_social','em.empresa','e.nombre AS eps_nombre',
                 'cj.nombre AS caja_nombre','p.razon_social AS pension_nombre',
