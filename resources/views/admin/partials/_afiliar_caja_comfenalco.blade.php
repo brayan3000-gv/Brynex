@@ -146,7 +146,7 @@ function ccfOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfenalco(contratoId) {
-    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; clearInterval(ccfRelojBit); ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
+    ccfContratoId = contratoId; ccfAutoIntentado = false; ccfAbriendo = false; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; clearInterval(ccfRelojBit); ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
@@ -194,7 +194,11 @@ async function revisarSesionCaja() {
     ccfEl('ccfBtnAbrir').style.display = 'none';
     ccfEl('ccfBtnIniciar').style.display = 'none';
     if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
+    if (ccfAbriendo) return;
+    if ((!e.abierta || !e.sesion) && await ccfAbrirSolo()) return;
+    if (ccfAbriendo) return;
     if (!e.abierta || !e.sesion) {
+        if (ccfAutoIntentado) return;                              // ya se intentó solo: queda el mensaje y el botón
         caja.innerHTML = `1️⃣ Abre la <strong>Sucursal Virtual Afiliación</strong> e inicia sesión con el usuario de <strong>${ccfEsc(ccfPrep.portal.empresa)}</strong>` +
             (ccfPrep.resumen?.usuario_portal ? ` (<strong>${ccfEsc(ccfPrep.resumen.usuario_portal)}</strong>)` : '') + '. BryNex deja escrito el usuario; solo confirma e ingresa.';
         ccfEl('ccfBtnAbrir').style.display = 'block';
@@ -207,7 +211,27 @@ async function revisarSesionCaja() {
 async function abrirPortalCaja() {
     let cred = {};
     try { cred = await ccfPedir('credencial', 'POST'); } catch (e) {}
-    await ccfExt('ccfAbrir', { usuario: cred.usuario || '', contrasena: cred.contrasena || '' }, 40);
+    return await ccfExt('ccfAbrir', { usuario: cred.usuario || '', contrasena: cred.contrasena || '' }, 150);
+}
+
+// Si el portal no está abierto (o no tiene sesión), se abre solo y entra con la clave que la empresa
+// tiene en el módulo de claves. Se intenta UNA vez por apertura del modal: repetir logins con una
+// clave mala puede bloquear el usuario del portal.
+let ccfAutoIntentado = false, ccfAbriendo = false;
+async function ccfAbrirSolo() {
+    if (ccfAutoIntentado || ccfAbriendo) return false;
+    if (!ccfPrep.resumen?.usuario_portal) return false;           // sin clave guardada: lo hace la persona
+    ccfAutoIntentado = true; ccfAbriendo = true;
+    const caja = ccfEl('ccfSesion'), t0 = Date.now();
+    const pintar = () => { caja.innerHTML = `🔐 Abriendo el portal e iniciando sesión con la clave de <strong>${ccfEsc(ccfPrep.portal.empresa)}</strong>… <strong>⏱ ${Math.floor((Date.now() - t0) / 1000)} s</strong>`; };
+    pintar(); const reloj = setInterval(pintar, 1000);
+    ccfEl('ccfBtnAbrir').style.display = 'none';
+    const r = await abrirPortalCaja();
+    clearInterval(reloj); ccfAbriendo = false;
+    if (r.ok && r.sesion) { caja.innerHTML = `✅ Portal abierto e iniciado solo${r.empresa ? ' con <strong>' + ccfEsc(r.empresa) + '</strong>' : ''} (${Math.floor((Date.now() - t0) / 1000)} s).`; ccfEl('ccfBtnIniciar').style.display = 'block'; return true; }
+    caja.innerHTML = `⚠️ No se pudo entrar solo al portal: ${ccfEsc(r.error || 'sin respuesta')}. Inicia sesión a mano con el botón.`;
+    ccfEl('ccfBtnAbrir').style.display = 'block';
+    return false;
 }
 
 function ccfDatosPortal() {
@@ -223,6 +247,13 @@ function ccfDatosPortal() {
 async function iniciarCajaComfenalco() {
     const btn = ccfEl('ccfBtnIniciar');
     btn.disabled = true; btn.textContent = '⏳ Buscando al trabajador en el portal...';
+    // Sin sesión en el portal se abre solo antes de buscar.
+    const est0 = await ccfExt('ccfEstado', {}, 20);
+    if (!est0.sesion && !est0.sinExtension) {
+        btn.textContent = '🔐 Abriendo el portal…';
+        if (!(await ccfAbrirSolo())) { btn.disabled = false; btn.textContent = '🔎 Buscar al trabajador y empezar'; if (!ccfAutoIntentado) alert('El portal no tiene sesión y la empresa no tiene clave guardada: inicia sesión a mano.'); return; }
+        btn.textContent = '⏳ Buscando al trabajador en el portal...';
+    }
     // La bitácora arranca al pulsar, antes de que exista el panel de pasos.
     const caja0 = ccfEl('ccfPasos'); caja0.style.display = 'block';
     caja0.innerHTML = '<div id="ccfPasoActual" class="ccf-texto" style="max-height:240px"></div>';

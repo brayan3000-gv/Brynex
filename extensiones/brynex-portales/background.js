@@ -1165,13 +1165,29 @@ async function pCcfDocumentos() {
   try { usuario = JSON.parse(localStorage.getItem('usuario')); } catch { /* sin usuario */ }
   if (!usuario) return { docs: [], error: 'El portal no tiene la sesión iniciada.' };
 
-  const filas = [];
-  document.querySelectorAll('#tablaAnexosTrabajado tbody tr, #tablaAnexosConyuge tbody tr, #tablaAnexosBeneficiario tbody tr').forEach(tr => {
-    const celdas = [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
-    const ver = [...tr.querySelectorAll('button,a,input[type=button]')].find(e => /ver/i.test(e.innerText || e.value || ''));
-    const id = /visualziarAnexo\((\d+)\)/.exec(ver?.getAttribute('onclick') || '')?.[1];
-    if (id && celdas[2]) filas.push({ id, requerido: celdas[0], archivo: celdas[2] });
-  });
+  // Las tablas de anexos se llenan por AJAX: al llegar al paso pueden estar vacías o tener el
+  // nombre del archivo sin su botón «Ver» todavía. Se espera hasta 15 s a que carguen (antes se
+  // leían de inmediato y a veces salía «la caja no tiene documentos» con la cédula a la vista).
+  const leerFilas = () => {
+    const res = [];
+    let conArchivo = 0;
+    document.querySelectorAll('#tablaAnexosTrabajado tbody tr, #tablaAnexosConyuge tbody tr, #tablaAnexosBeneficiario tbody tr').forEach(tr => {
+      const celdas = [...tr.querySelectorAll('td')].map(td => td.innerText.replace(/\s+/g, ' ').trim());
+      if (celdas[2]) conArchivo++;
+      const ver = [...tr.querySelectorAll('button,a,input[type=button]')].find(e => /ver/i.test(e.innerText || e.value || ''));
+      const id = /visualziarAnexo\((\d+)\)/.exec(ver?.getAttribute('onclick') || '')?.[1];
+      if (id && celdas[2]) res.push({ id, requerido: celdas[0], archivo: celdas[2] });
+    });
+    return { res, conArchivo };
+  };
+  let lectura = leerFilas();
+  for (let i = 0; i < 15; i++) {
+    if (lectura.conArchivo > 0 && lectura.res.length >= lectura.conArchivo) break;   // ya están todos con su «Ver»
+    if (lectura.conArchivo === 0 && i >= 8) break;                                     // de verdad no hay documentos
+    await new Promise(r => setTimeout(r, 1000));
+    lectura = leerFilas();
+  }
+  const filas = lectura.res;
 
   const pedir = id => new Promise(resolve => {
     const reloj = setTimeout(() => resolve(null), 30000);
@@ -1669,6 +1685,14 @@ async function ccfConsultar(pestana, d) {
  */
 function pCcfPaso(d) {
   const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
+  // Mientras el portal tiene peticiones en vuelo o el círculo de carga a la vista, tocar el
+  // formulario provoca el aviso «Se ha presentado un error…». Se espera a la siguiente pasada.
+  const cargando = (window.$ && $.active > 0)
+    || [...document.querySelectorAll('.loader, .loading, .overlay, [class*=spinner], [class*=preloader]')].some(vis);
+  if (cargando) {
+    return { paso: [...document.querySelectorAll('fieldset, .sf-step')].filter(vis).map(f => f.querySelector('legend, h4, .titulo')?.innerText?.trim()).filter(Boolean)[0] || '',
+      hecho: [], falta: ['esperando a que el portal termine de cargar…'], errores: [] };
+  }
   const sel = (id, v) => { const e = document.getElementById(id); if (!e || v == null || v === '') return false; $(e).val(String(v)).trigger('change').trigger('chosen:updated'); return true; };
   const txt = (id, v) => { const e = document.getElementById(id); if (!e || !v || e.value) return false; $(e).val(v).trigger('change'); return true; };
   const norm = t => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -1689,6 +1713,7 @@ function pCcfPaso(d) {
     let x = String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
     x = x.replace(/\s*(?:\bB\/|\bBARRIO\b|\bBR\.)\s.*$/, '');
     x = x.replace(/[#\-.,°]/g, ' ').replace(/\b(?:NRO|NUM|NUMERO)\b/g, ' ').replace(/\bNO\s+(?=\d)/g, ' ').replace(/\s+/g, ' ').trim();
+    x = x.replace(/^([A-Z]+)(?=\d)/, '$1 ');                    // «CALLE72J2» → «CALLE 72J2»
     const prefijos = [[/^(?:CARRERA|CARRA|CARR|CRRA|CRA|KRA|KR|CRR|CR)\b/, 'CR'], [/^(?:CALLE|CALL|CLL|CLLE|CL)\b/, 'CL'], [/^(?:AVENIDA|AVDA|AVD|AVE|AV)\b/, 'AV'],
       [/^(?:DIAGONAL|DIAG|DG)\b/, 'DG'], [/^(?:TRANSVERSAL|TRANSV|TRV|TV)\b/, 'TV'], [/^(?:CORREGIMIENTO|CORR)\b/, 'CORR']];
     for (const [re, pref] of prefijos) if (re.test(x)) return x.replace(re, pref).replace(/\s+/g, ' ').trim();
