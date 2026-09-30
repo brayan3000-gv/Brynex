@@ -174,7 +174,10 @@ class AfiliacionController extends Controller
         // Segundo filtro de cada columna: elegida la entidad, el estado de SU radicado.
         $radColF = $this->estadosPorColumna($request, compact('epsF', 'arlF', 'cajaF', 'pensionF'));
         foreach ($radColF as $tipoRad => $estadoCol) {
-            $query->whereHas('radicados', fn($q) => $q->where('tipo', $tipoRad)->where('estado', $estadoCol));
+            // La pantalla solo dibuja la celda si el plan incluye el componente: un
+            // radicado viejo de algo que el plan ya no cubre no debe contar.
+            $query->whereHas('plan', fn($p) => $p->where('incluye_'.$tipoRad, true))
+                  ->whereHas('radicados', fn($q) => $q->where('tipo', $tipoRad)->where('estado', $estadoCol));
         }
 
         // Ordenamiento
@@ -454,7 +457,10 @@ class AfiliacionController extends Controller
         }
 
         foreach ($this->estadosPorColumna($request, compact('epsF', 'arlF', 'cajaF', 'pensionF')) as $tipoRad => $estadoCol) {
-            $query->whereHas('radicados', fn($q) => $q->where('tipo', $tipoRad)->where('estado', $estadoCol));
+            // La pantalla solo dibuja la celda si el plan incluye el componente: un
+            // radicado viejo de algo que el plan ya no cubre no debe contar.
+            $query->whereHas('plan', fn($p) => $p->where('incluye_'.$tipoRad, true))
+                  ->whereHas('radicados', fn($q) => $q->where('tipo', $tipoRad)->where('estado', $estadoCol));
         }
 
         $contratos = $query->orderBy('fecha_ingreso', 'asc')->get();
