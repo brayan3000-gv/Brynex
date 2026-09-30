@@ -287,7 +287,7 @@ async function iniciarCajaComfenalco() {
             if (!ccfVistos.has(k)) { ccfVistos.add(k); ccfNota(`${icono} ${ccfEsc(t)}`); }
         });
         nuevos('✅', p.hecho); nuevos('⚠️', p.falta); nuevos('❗', p.errores);
-        if (/Anexos/i.test(p.paso || '') && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos().then(ccfPrepararDeclaracion); }
+        if (/Anexos/i.test(p.paso || '') && p.anexosListos && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos().then(ccfPrepararDeclaracion); }
     }, 4000);
 }
 

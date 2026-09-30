@@ -1161,9 +1161,19 @@ async function pestanaCcfcv() {
  */
 async function pCcfDocumentos() {
   const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
+  const esperarAnexos = async () => {
+    for (let i = 0; i < 60; i++) {
+      const listas = [...document.querySelectorAll('#tablaAnexosTrabajado tbody tr')]
+        .filter(tr => tr.querySelectorAll('td').length > 1 && !/ning[uú]n dato/i.test(tr.innerText));
+      if (listas.length && (!window.$ || $.active === 0)) return true;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    return false;
+  };
   let usuario = null;
   try { usuario = JSON.parse(localStorage.getItem('usuario')); } catch { /* sin usuario */ }
   if (!usuario) return { docs: [], error: 'El portal no tiene la sesión iniciada.' };
+  if (!(await esperarAnexos())) return { docs: [], error: 'La lista de anexos del portal no terminó de cargar (60 s).' };
 
   // Las tablas de anexos se llenan por AJAX: al llegar al paso pueden estar vacías o tener el
   // nombre del archivo sin su botón «Ver» todavía. Se espera hasta 15 s a que carguen (antes se
@@ -1226,6 +1236,16 @@ async function pCcfDocumentos() {
 async function pCcfDeclaracion() {
   const boton = document.getElementById('btnPdfDeclaracionR');
   if (!boton) return { error: 'No estás en el paso Anexos: el botón de la declaración no existe.' };
+  const esperarAnexos = async () => {
+    for (let i = 0; i < 60; i++) {
+      const listas = [...document.querySelectorAll('#tablaAnexosTrabajado tbody tr')]
+        .filter(tr => tr.querySelectorAll('td').length > 1 && !/ning[uú]n dato/i.test(tr.innerText));
+      if (listas.length && (!window.$ || $.active === 0)) return true;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    return false;
+  };
+  if (!(await esperarAnexos())) return { error: 'La lista de anexos del portal no terminó de cargar (60 s): no se sabe si hace falta la declaración.' };
 
   // Sin beneficiarios ni pareja el portal no pide la declaración (solo la cédula del trabajador):
   // si no hay ninguna fila obligatoria de "declaración juramentada", no hace falta firmar.
@@ -1305,6 +1325,15 @@ async function pCcfFinalizar() {
   window.__ccfProgreso = { pasos: [], t0: Date.now(), fin: false };
   const paso = m => window.__ccfProgreso.pasos.push({ t: Date.now(), m });
   const terminar = r => { paso(r.error ? '❗ ' + r.error : '✅ Radicada: formulario ' + r.numero); window.__ccfProgreso.fin = true; return r; };
+
+  paso('Esperando a que la lista de anexos termine de cargar');
+  let listaLista = false;
+  for (let i = 0; i < 60 && !listaLista; i++) {
+    listaLista = [...document.querySelectorAll('#tablaAnexosTrabajado tbody tr')].some(tr => tr.querySelectorAll('td').length > 1 && !/ning[uú]n dato/i.test(tr.innerText))
+      && (!window.$ || $.active === 0);
+    if (!listaLista) await esperar(1000);
+  }
+  if (!listaLista) return terminar({ error: 'La lista de anexos del portal no terminó de cargar (60 s): no se radica sin verla completa.' });
 
   paso('Revisando que los anexos obligatorios estén completos');
   // 1) Anexos obligatorios completos: si falta uno, no se radica.
@@ -1725,6 +1754,7 @@ function pCcfPaso(d) {
     .map(f => f.querySelector('legend, h4, .titulo')?.innerText?.trim()).filter(Boolean)[0] || '';
   const hecho = [];
   const falta = [];
+  let anexosListos = true;       // solo el paso Anexos lo pone en falso mientras carga la lista
 
   if (/Personal/i.test(paso)) {
     // Cambiar el tipo de afiliado recarga y vacía la clase: solo se toca si hace falta.
@@ -1878,13 +1908,24 @@ function pCcfPaso(d) {
     if (($('#cmbTrabajaConyugue').val() || '-1') === '-1') { sel('cmbTrabajaConyugue', 22) && hecho.push('la pareja no labora'); }
     else hecho.push('¿la pareja trabaja?: ' + $('#cmbTrabajaConyugue option:selected').text());
   } else if (/Anexos/i.test(paso)) {
-    const tabla = [...document.querySelectorAll('table')].filter(vis).find(t => /Obligatorio/i.test(t.innerText));
-    const pendientes = tabla ? [...tabla.querySelectorAll('tbody tr')].filter(r => /SI/.test(r.cells[1]?.innerText || '') && !(r.cells[2]?.innerText || '').trim()).map(r => r.cells[0].innerText.trim()) : [];
-    pendientes.length ? falta.push('adjunta: ' + pendientes.join(', ')) : hecho.push('anexos obligatorios completos');
+    // La lista de anexos se llena por AJAX y en este portal puede tardar más de 30 s: mientras la
+    // tabla del trabajador no tenga filas reales, no se sabe qué hay ni qué falta. Si se da por
+    // completo antes de tiempo, luego se omiten documentos y hasta la declaración juramentada.
+    const filasTrabajador = [...document.querySelectorAll('#tablaAnexosTrabajado tbody tr')]
+      .filter(tr => tr.querySelectorAll('td').length > 1 && !/ning[uú]n dato/i.test(tr.innerText));
+    anexosListos = filasTrabajador.length > 0;
+    if (!anexosListos) {
+      falta.push('cargando la lista de anexos…');
+    } else {
+      const tabla = [...document.querySelectorAll('table')].filter(vis).find(t => /Obligatorio/i.test(t.innerText));
+      const pendientes = tabla ? [...tabla.querySelectorAll('tbody tr')].filter(r => /SI/.test(r.cells[1]?.innerText || '') && !(r.cells[2]?.innerText || '').trim()).map(r => r.cells[0].innerText.trim()) : [];
+      pendientes.length ? falta.push('adjunta: ' + pendientes.join(', ')) : hecho.push('anexos obligatorios completos');
+    }
   }
 
-  const errores = [...document.querySelectorAll('.jconfirm-content')].filter(vis).map(e => e.innerText.replace(/\s+/g, ' ').trim().slice(0, 300));
-  return { paso, hecho, falta, errores };
+  const errores = [...document.querySelectorAll('.jconfirm-content')].filter(vis).map(e => e.innerText.replace(/\s+/g, ' ').trim().slice(0, 300))
+    .filter(t => !/^App Kupi\b/i.test(t));                     // aviso informativo de la forma de pago Kupi
+  return { paso, hecho, falta, errores, anexosListos };
 }
 
 /** Lee el mensaje de éxito con el número de formulario después de Finalizar Afiliación. */
