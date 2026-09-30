@@ -49,10 +49,15 @@
         </div>
         <div class="sann-aviso" id="sannAvisos" style="display:none"></div>
 
+        {{-- Sin la firma dibujada la plantilla de Sanitas sale en blanco y la devuelven:
+             se dibuja aquí mismo y al guardarla queda habilitado Radicar. --}}
         <div class="sann-aviso" id="sannFirma" style="display:none">
-          ✍️ <strong>Falta la firma del trabajador.</strong> La plantilla de Sanitas la lleva y devuelven el formulario sin ella.
-          Ábrele el formulario, que la dibuje en <strong>✍️ Firmar</strong> y vuelve aquí: se detecta sola.
-          <button class="sann-btn" onclick="window.open(sannPrep.url_firma, '_blank')">✍️ Abrir el formulario para firmar</button>
+          ✍️ <strong>Falta la firma del trabajador.</strong> Que la dibuje aquí con el dedo o el mouse y pulsa Guardar firma.
+          <canvas id="sannCanvas" width="600" height="200" style="width:100%;height:auto;background:#fff;border:1px dashed #94a3b8;border-radius:8px;margin-top:.5rem;touch-action:none;cursor:crosshair;display:block"></canvas>
+          <div style="display:flex;gap:.5rem">
+            <button class="sann-btn sec" style="flex:1" onclick="sannLimpiarFirma()">🧹 Limpiar</button>
+            <button class="sann-btn" style="flex:2" id="sannBtnFirma" onclick="sannGuardarFirma()">💾 Guardar firma</button>
+          </div>
         </div>
 
         <div class="sann-info" id="sannSesion"></div>
@@ -115,6 +120,60 @@ function sannExt(accion, datos = {}, limiteSeg = 180) {
     });
 }
 
+// ── Pad de firma ──────────────────────────────────────────────
+let sannTrazo = false, sannDibuja = false, sannX = 0, sannY = 0, sannPadListo = false;
+
+function sannIniciarPad() {
+    if (sannPadListo) return;
+    sannPadListo = true;
+    const c = sannEl('sannCanvas'), ctx = c.getContext('2d');
+    ctx.lineJoin = ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+    const pos = (e) => {
+        const r = c.getBoundingClientRect(), t = e.touches?.[0] ?? e;
+        return [(t.clientX - r.left) * (c.width / r.width), (t.clientY - r.top) * (c.height / r.height)];
+    };
+    const ini = (e) => { sannDibuja = true; sannTrazo = true; [sannX, sannY] = pos(e); };
+    const mover = (e) => {
+        if (!sannDibuja) return;
+        e.preventDefault();
+        const [x, y] = pos(e);
+        ctx.beginPath(); ctx.moveTo(sannX, sannY); ctx.lineTo(x, y); ctx.stroke();
+        [sannX, sannY] = [x, y];
+    };
+    const fin = () => sannDibuja = false;
+    c.addEventListener('mousedown', ini); c.addEventListener('mousemove', mover);
+    c.addEventListener('mouseup', fin); c.addEventListener('mouseleave', fin);
+    c.addEventListener('touchstart', ini, { passive: false }); c.addEventListener('touchmove', mover, { passive: false });
+    c.addEventListener('touchend', fin);
+}
+
+function sannLimpiarFirma() {
+    const c = sannEl('sannCanvas');
+    c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    sannTrazo = false;
+}
+
+async function sannGuardarFirma() {
+    if (!sannTrazo) { alert('Dibuja la firma antes de guardar.'); return; }
+    const btn = sannEl('sannBtnFirma');
+    btn.disabled = true; btn.textContent = '⏳ Guardando...';
+    try {
+        const form = new FormData();
+        form.append('_token', SANN_CSRF);
+        form.append('firma', sannEl('sannCanvas').toDataURL('image/png'));
+        const r = await fetch(sannPrep.url_firma, { method: 'POST', headers: { 'Accept': 'application/json' }, body: form });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error('El servidor no guardó la firma.');
+        // Con la firma guardada ya se puede radicar: se revalida y se habilita el botón.
+        sannPrep = await sannPedir('precheck');
+        sannLimpiarFirma();
+        await revisarFormularioSanitas();
+    } catch (e) {
+        alert('No se pudo guardar la firma: ' + e.message);
+    }
+    btn.disabled = false; btn.textContent = '💾 Guardar firma';
+}
+
 async function abrirNovedadSanitas(contratoId) {
     sannContratoId = contratoId; sannEnvio = null; sannAbrio = false; clearInterval(sannReloj);
     ['sannContenido', 'sannResultado', 'sannLleno', 'sannEnviado', 'sannBtnAbrir', 'sannBtnMostrar', 'sannBtnLlenar', 'sannAvisos', 'sannFirma'].forEach(id => sannEl(id).style.display = 'none');
@@ -160,10 +219,11 @@ async function revisarFormularioSanitas() {
 
     // Sin firma no se radica: se vuelve a mirar hasta que el trabajador la dibuje.
     if (sannPrep.falta_firma && !lleno) {
-        try { const nuevo = await sannPedir('precheck'); if (nuevo.resumen) sannPrep = nuevo; } catch (err) { /* se reintenta */ }
+        if (!sannDibuja && !sannTrazo) { try { const nuevo = await sannPedir('precheck'); if (nuevo.resumen) sannPrep = nuevo; } catch (err) { /* se reintenta */ } }
         sannEl('sannFirma').style.display = sannPrep.falta_firma ? 'block' : 'none';
         if (sannPrep.falta_firma) {
-            caja.innerHTML = '⏳ Esperando la firma del trabajador...';
+            sannIniciarPad();
+            caja.innerHTML = '✍️ Dibuja la firma y guárdala para poder radicar.';
             sannEl('sannBtnLlenar').style.display = 'none';
             return;
         }

@@ -119,7 +119,7 @@ class SanitasNovedadService
 
         return ['problemas' => $problemas, 'avisos' => $avisos, 'resumen' => $resumen,
             'falta_firma' => $faltaFirma,
-            'url_firma'   => $contrato->id ? route('admin.afiliaciones.formulario.eps', $contrato->id, false) : null,
+            'url_firma'   => $contrato->id ? route('admin.afiliaciones.formulario.eps.firma', $contrato->id, false) : null,
             'portal' => $problemas ? null : [
             'tipoDoc'       => self::TIPOS[$tipo],
             'documento'     => (string) $contrato->cedula,
