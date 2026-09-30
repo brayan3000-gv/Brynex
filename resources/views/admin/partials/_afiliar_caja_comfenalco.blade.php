@@ -378,7 +378,8 @@ async function ccfFinalizar() {
     log.insertAdjacentHTML('beforeend', '<br>⏳ Registrando en BryNex…');
     const g = await ccfPedir('aplicar', 'POST', { numero: f.numero, texto: f.texto || '', pdf: f.pdf || null });
     if (!g.ok) { mostrarRadicadoCaja(f); alert('Se radicó en el portal (formulario ' + f.numero + ') pero no se pudo registrar en BryNex: ' + (g.error || g.mensaje || '')); return; }
-    ccfTerminar(`✅ ${ccfEsc(g.mensaje)}`);
+    ccfTerminar(`✅ ${ccfEsc(g.mensaje)}` + (g.pdf_guardado ? '' :
+        '<br>⚠️ <strong>El PDF del formulario no se pudo capturar.</strong> Descárgalo del portal (o del correo «Afiliación exitosa» de sirap@comfenalcovalle.com.co) y súbelo con «Subir PDF» en el radicado.'));
 }
 
 function mostrarRadicadoCaja(fin) {

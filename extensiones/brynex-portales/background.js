@@ -1332,7 +1332,12 @@ async function pCcfFinalizar() {
     if (m) {
       // El PDF llega poco después de la ventana de éxito.
       paso('Comfenalco confirmó el formulario ' + m[1] + '. Capturando el PDF del formulario');
-      for (let j = 0; j < 20 && !pdf; j++) await esperar(500);
+      // El PDF llega poco después de la ventana de éxito; a veces tarda. Se espera hasta 40 s y,
+      // si a los 12 s no llegó, se le pide otra vez al portal con su propia función.
+      for (let j = 0; j < 80 && !pdf; j++) {
+        await esperar(500);
+        if (j === 24 && !pdf) { paso('El PDF tarda: se lo pido otra vez al portal'); try { window.generarFormularioUnicoPreafiliacion(); } catch { /* sin reintento */ } }
+      }
       paso(pdf ? 'PDF del formulario capturado' : 'El portal no entregó el PDF del formulario (se registra solo el número)');
       return terminar({ radicado: true, numero: m[1], texto: texto.slice(0, 1500), pdf });
     }
