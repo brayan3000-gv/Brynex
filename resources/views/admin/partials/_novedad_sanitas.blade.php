@@ -329,6 +329,7 @@ async function guardarNovedadSanitas() {
     const r = await sannPedir('aplicar', 'POST', { radicado: numero, texto: sannEnvio?.texto || '', captura: sannEnvio?.captura || null });
     btn.disabled = false; btn.textContent = '💾 Guardar radicado en BryNex';
     if (!r.ok) { alert(r.error || r.mensaje || 'No se pudo guardar.'); return; }
+    sannActualizarFila(r.badge);
     sannTerminar(`✅ Radicado <strong>${sannEsc(r.radicado)}</strong> guardado: el radicado de EPS queda <strong>en trámite</strong>` +
         (r.pdf ? ' y la constancia quedó en los soportes.' : '.') + '<br><span style="color:#475569">Sanitas responde por correo; la conciliación lo pasará a OK.</span>');
 }
@@ -338,7 +339,25 @@ async function rechazoNovedadSanitas() {
     if (motivo === null) return;
     const r = await sannPedir('aplicar', 'POST', { error: motivo || 'Sanitas no recibió la novedad.', texto: sannEnvio?.texto || '' });
     if (r.error) { alert(r.error); return; }
+    sannActualizarFila(r.badge);
     sannTerminar(`⛔ ${sannEsc(r.mensaje)}`);
+}
+
+/** Deja la insignia del radicado en la tabla con su estado nuevo, sin recargar la página. */
+function sannActualizarFila(b) {
+    if (!b) return;
+    const btn = document.querySelector(`.btn-rad[data-rad-id="${b.id}"]`)
+        || document.querySelector(`.btn-rad-crear[data-contrato-id="${sannContratoId}"][data-tipo="eps"]`);
+    if (!btn) return;
+    // Un contrato sin radicado en BD traía el botón de "crear": ya existe, pasa a ser el normal.
+    btn.classList.remove('btn-rad-crear');
+    btn.classList.add('btn-rad');
+    btn.className = btn.className.replace(/\bbadge-(?!estado\b)[\w-]+/g, '').trim() + ' badge-' + b.clase;
+    btn.dataset.radId = b.id;
+    btn.dataset.contratoId = sannContratoId;
+    btn.dataset.rad = JSON.stringify(b.rad);
+    btn.textContent = b.texto;
+    if (b.titulo) btn.title = b.titulo; else btn.removeAttribute('title');
 }
 
 function sannTerminar(html) {
@@ -346,6 +365,6 @@ function sannTerminar(html) {
     sannEl('sannContenido').style.display = 'none';
     sannEl('sannResultado').style.display = 'block';
     sannEl('sannResultado').innerHTML = html;
-    if (typeof mostrarToast === 'function') mostrarToast('Radicado de Sanitas actualizado. Recarga para verlo.', 'success');
+    if (typeof mostrarToast === 'function') mostrarToast('Radicado de Sanitas actualizado.', 'success');
 }
 </script>

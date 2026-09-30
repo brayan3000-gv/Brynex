@@ -177,7 +177,7 @@ class SanitasNovedadService
             EpsRadicado::marcar($radicado, null, Radicado::ESTADO_ERROR, null, $mensaje, $usuarioId);
             EpsRadicado::bitacora($contrato, $radicado, self::ENTIDAD, 'inicio_laboral', 'fallida', null, $payload, ['texto' => mb_substr($texto, 0, 2000)], (string) $entrada['error'], $usuarioId);
 
-            return ['ok' => false, 'estado' => Radicado::ESTADO_ERROR, 'mensaje' => $mensaje];
+            return ['ok' => false, 'estado' => Radicado::ESTADO_ERROR, 'mensaje' => $mensaje, 'badge' => $this->badge($radicado)];
         }
         if (! $numero) {
             throw new RuntimeException('Falta el número de radicado que dio Sanitas.');
@@ -190,7 +190,29 @@ class SanitasNovedadService
         EpsRadicado::marcar($radicado, $numero, Radicado::ESTADO_TRAMITE, $ruta, $observacion, $usuarioId);
         EpsRadicado::bitacora($contrato, $radicado, self::ENTIDAD, 'inicio_laboral', 'exitosa', $numero, $payload, ['texto' => mb_substr($texto, 0, 2000)], null, $usuarioId, $ruta);
 
-        return ['ok' => true, 'estado' => $radicado->estado, 'radicado' => $numero, 'mensaje' => $observacion, 'pdf' => (bool) $ruta];
+        return ['ok' => true, 'estado' => $radicado->estado, 'radicado' => $numero, 'mensaje' => $observacion, 'pdf' => (bool) $ruta, 'badge' => $this->badge($radicado)];
+    }
+
+    /**
+     * Cómo queda la insignia del radicado en el listado de Afiliaciones, para que el
+     * modal la actualice en su sitio sin recargar la página (mismos datos que pinta
+     * la fila en el servidor).
+     */
+    private function badge(Radicado $radicado): array
+    {
+        $r = $radicado->fresh();
+
+        return [
+            'id'     => $r->id,
+            'clase'  => $r->estadoClaseEfectiva(),
+            'texto'  => $r->estadoTextoEfectivo(),
+            'titulo' => $r->textoConfirmacion(),
+            'rad'    => [
+                'id' => $r->id, 'tipo' => $r->tipo, 'estado' => $r->estado, 'numero_radicado' => $r->numero_radicado,
+                'canal_envio' => $r->canal_envio, 'canal_envio_cliente' => $r->canal_envio_cliente,
+                'enviado_al_cliente' => $r->enviado_al_cliente, 'ruta_pdf' => $r->ruta_pdf, 'observacion' => $r->observacion,
+            ],
+        ];
     }
 
     /** PDF con lo que mostró Sanitas al radicar: número, texto de la página y la captura si la hubo. */
