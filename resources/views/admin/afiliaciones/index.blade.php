@@ -57,7 +57,10 @@ body {
 .tbl-afil thead th a.sort-desc::after { content:'\2193';color:#3b82f6;margin-left:0.15rem; }
 /* Select integrado en th */
 .th-select { width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.15);color:#fff;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:0.22rem 0.2rem;cursor:pointer;outline:none;appearance:auto;-webkit-appearance:auto; }
-.th-sub { font-size:0.62rem;color:#fbbf24;border-bottom-color:rgba(251,191,36,0.4); }
+.th-sub { font-size:0.66rem;color:#fbbf24;border-bottom:none; }
+/* El estado flota bajo su columna: no suma altura al encabezado ni empuja la tabla. */
+.th-sub-host { position:relative;height:0; }
+.th-sub-flota { position:absolute;top:0;left:0;right:0;z-index:40;background:#0f172a;border:1px solid rgba(251,191,36,0.55);border-top:none;border-radius:0 0 8px 8px;padding:0.2rem 0.3rem;box-shadow:0 6px 14px rgba(0,0,0,0.35); }
 .th-select:hover { border-bottom-color:rgba(255,255,255,0.5); }
 .th-select:focus { border-bottom-color:#3b82f6;outline:none; }
 .th-select option { background:#0f172a;color:#fff;font-weight:600;text-transform:none; }
@@ -491,13 +494,13 @@ function sortClass($col, $currSort, $currDir) {
                     </select>
                 </form>
                 @if($epsF)
-                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                <div class="th-sub-host"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="eps_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['eps']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos los estados</option>
+                        <option value="">Todos</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['eps'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
-                </form>
+                </form></div>
                 @endif
             </th>
 
@@ -511,13 +514,13 @@ function sortClass($col, $currSort, $currDir) {
                     </select>
                 </form>
                 @if($arlF)
-                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                <div class="th-sub-host"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="arl_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['arl']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos los estados</option>
+                        <option value="">Todos</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['arl'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
-                </form>
+                </form></div>
                 @endif
             </th>
 
@@ -531,13 +534,13 @@ function sortClass($col, $currSort, $currDir) {
                     </select>
                 </form>
                 @if($cajaF)
-                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                <div class="th-sub-host"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="caja_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['caja']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos los estados</option>
+                        <option value="">Todos</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['caja'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
-                </form>
+                </form></div>
                 @endif
             </th>
 
@@ -551,13 +554,13 @@ function sortClass($col, $currSort, $currDir) {
                     </select>
                 </form>
                 @if($pensionF)
-                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                <div class="th-sub-host"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="pension_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['pension']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos los estados</option>
+                        <option value="">Todos</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['pension'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
-                </form>
+                </form></div>
                 @endif
             </th>
 
