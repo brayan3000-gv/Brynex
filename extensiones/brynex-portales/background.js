@@ -1285,9 +1285,20 @@ async function pCcfFinalizar() {
   fin.click();
   paso('Esperando la ventana de términos y condiciones');
 
-  // 2) Términos y condiciones.
-  let chk = null;
-  for (let i = 0; i < 30 && !chk; i++) { await esperar(500); const c = document.getElementById('chkTerminos'); if (vis(c)) chk = c; }
+  // 2) Antes de los términos el portal pregunta «¿Está seguro de realizar afiliación con esta
+  //    información?» (Volver / Sí). Esta función solo corre cuando la persona pulsó el botón
+  //    «Finalizar y radicar» de BryNex y confirmó, así que esa pregunta ya está respondida.
+  let chk = null, confirmado = false;
+  for (let i = 0; i < 60 && !chk; i++) {
+    await esperar(500);
+    const c = document.getElementById('chkTerminos');
+    if (vis(c)) { chk = c; break; }
+    if (!confirmado) {
+      const caja = [...document.querySelectorAll('.jconfirm-box')].filter(vis).find(b => /seguro de realizar afiliaci/i.test(b.innerText));
+      const si = caja && [...caja.querySelectorAll('button')].filter(vis).find(b => /^\s*s[ií]\s*$/i.test(b.innerText));
+      if (si) { paso('Confirmando «¿Está seguro de realizar afiliación con esta información?» con «Sí»'); confirmado = true; si.click(); }
+    }
+  }
   if (!chk) {
     // Si el portal rechazó antes de llegar a los términos, su mensaje es la causa (p. ej. "Validación de Anexos").
     const motivo = textoVentanas();
