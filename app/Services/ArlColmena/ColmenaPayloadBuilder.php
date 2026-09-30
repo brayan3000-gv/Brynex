@@ -65,7 +65,7 @@ class ColmenaPayloadBuilder
 
         $centro = $this->centro($contrato);
         $eps = $this->deCatalogo($this->api->eps(), $this->nombreEntidad($contrato->eps ?: $cliente->eps), 'EPS');
-        $afp = $this->deCatalogo($this->api->afp(), $this->nombreEntidad($contrato->pension ?: $cliente->pension), 'AFP');
+        $afp = $this->afpDe($contrato, $cliente);
         $arl = $this->arlAnterior($arlAnteriorId);
 
         $fecha = $inicio->toDateString();
@@ -161,7 +161,7 @@ class ColmenaPayloadBuilder
             fn () => $this->cargo($contrato),
             fn () => $this->centro($contrato),
             fn () => $this->deCatalogo($this->api->eps(), $this->nombreEntidad($contrato->eps ?: $cliente->eps), 'EPS'),
-            fn () => $this->deCatalogo($this->api->afp(), $this->nombreEntidad($contrato->pension ?: $cliente->pension), 'AFP'),
+            fn () => $this->afpDe($contrato, $cliente),
             fn () => $this->direccion($cliente, $contrato->razonSocial, $contrato),
         ] as $comprobar) {
             try {
@@ -315,6 +315,32 @@ class ColmenaPayloadBuilder
         }
 
         throw new RuntimeException("La {$etiqueta} '{$nombre}' no cruza con ninguna del catálogo de Colmena.");
+    }
+
+    /**
+     * La AFP que se manda a Colmena.
+     *
+     * Primero una AFP real: la del contrato y, si no tiene, la de la ficha del
+     * cliente. Quien no cotiza pensión (planes «Solo ARL» y «EPS + ARL», con el
+     * RUAF diciendo «ninguna») no tiene ninguna, y para eso el catálogo de
+     * Colmena trae «SIN AFP». Si el plan SÍ incluye pensión, que falte la AFP
+     * sigue siendo un dato por completar, no algo que se rellene.
+     */
+    private function afpDe(Contrato $contrato, $cliente): array
+    {
+        foreach ([$contrato->pension, $cliente->pension] as $fondo) {
+            $nombre = $this->nombreEntidad($fondo);
+
+            if ($nombre !== '' && ! preg_match('/ninguna/i', $nombre)) {
+                return $this->deCatalogo($this->api->afp(), $nombre, 'AFP');
+            }
+        }
+
+        if (! $contrato->plan?->incluye_pension) {
+            return $this->deCatalogo($this->api->afp(), 'SIN AFP', 'AFP');
+        }
+
+        throw new RuntimeException('El contrato no tiene AFP asignada.');
     }
 
     private function nombreEntidad($entidad): string

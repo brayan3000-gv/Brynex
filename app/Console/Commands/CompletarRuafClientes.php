@@ -47,6 +47,7 @@ class CompletarRuafClientes extends Command
     protected $signature = 'clientes:completar-ruaf
         {--limite=100        : Cuántos clientes procesar en esta corrida}
         {--aliado=           : Procesar solo este aliado (id)}
+        {--ids=              : Procesar solo estos clientes (ids separados por coma)}
         {--fase=auto         : auto | activos | retirados | faltantes}
         {--pausa=0           : Milisegundos de espera entre consultas}
         {--aplicar           : Escribir en la BD. Sin esto solo simula}
@@ -158,6 +159,12 @@ class CompletarRuafClientes extends Command
 
         if ($aliado = $this->option('aliado')) {
             $q->where('c.aliado_id', (int) $aliado);
+        }
+
+        // Una lista puntual de clientes (p. ej. los de un lote a afiliar), sin
+        // recorrer a todo el aliado.
+        if ($ids = array_filter(array_map('intval', explode(',', (string) $this->option('ids'))))) {
+            $q->whereIn('c.id', $ids);
         }
 
         $ninguna = self::ID_NINGUNA;
