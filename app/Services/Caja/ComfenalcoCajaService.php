@@ -59,7 +59,7 @@ class ComfenalcoCajaService
 
     public const CONTRATOS = [1 => 'Término indefinido', 2 => 'Término fijo', 3 => 'Labor contratada'];
 
-    public const FORMAS_PAGO = [13 => 'Kupi', 10 => 'Daviplata'];
+    public const FORMAS_PAGO = [10 => 'Daviplata', 13 => 'Kupi'];
 
     /**
      * @return array{problemas: string[], avisos: string[], resumen: array, portal: array|null}

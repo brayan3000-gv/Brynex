@@ -147,7 +147,7 @@ async function abrirCajaComfenalco(contratoId) {
 
     ccfOpciones(ccfEl('ccfEstadoCivil'), ccfPrep.listas?.estados_civil, 1);
     ccfOpciones(ccfEl('ccfContrato'), ccfPrep.listas?.contratos, 1);
-    ccfOpciones(ccfEl('ccfFormaPago'), ccfPrep.listas?.formas_pago, 13);
+    ccfOpciones(ccfEl('ccfFormaPago'), ccfPrep.listas?.formas_pago, 10);   // Daviplata por defecto
     ccfEl('ccfCargo').value = ccfPrep.portal?.cargoTexto || 'APOYO ADMINISTRATIVO';
     ccfEl('ccfEstadoCivil').onchange = () => { ccfEl('ccfAvisoCony').style.display = ['2', '4'].includes(ccfEl('ccfEstadoCivil').value) ? 'block' : 'none'; };
 
