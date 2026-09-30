@@ -779,22 +779,22 @@ class AfiliacionController extends Controller
 
     /**
      * Segundo filtro de las columnas EPS, ARL, Caja y Pensión: el estado del
-     * radicado de esa entidad (`eps_estado`, `arl_estado`, …). Solo vale cuando
-     * la columna ya tiene una entidad elegida; sin ella la pantalla no muestra el
-     * selector y aplicarlo a ciegas dejaría un filtro invisible.
+     * radicado de esa entidad (`eps_estado`, `arl_estado`, …). Es independiente
+     * de la entidad: sirve para ver todos los pendientes de EPS sin escoger una.
+     * Los parámetros de entidad ya no condicionan nada; se conservan en la
+     * firma para no tocar los dos llamadores.
      *
-     * @param  array{epsF:mixed, arlF:mixed, cajaF:mixed, pensionF:mixed}  $entidades
+     * @param  array<string,mixed>  $entidades
      * @return array<string,string>  tipo de radicado => estado
      */
-    private function estadosPorColumna(Request $request, array $entidades): array
+    private function estadosPorColumna(Request $request, array $entidades = []): array
     {
         $validos = array_keys(\App\Models\Radicado::todosEstados());
-        $porTipo = ['eps' => $entidades['epsF'], 'arl' => $entidades['arlF'], 'caja' => $entidades['cajaF'], 'pension' => $entidades['pensionF']];
 
         $filtros = [];
-        foreach ($porTipo as $tipo => $entidad) {
+        foreach (['eps', 'arl', 'caja', 'pension'] as $tipo) {
             $estado = $request->get($tipo.'_estado');
-            if ($entidad && in_array($estado, $validos, true)) {
+            if (in_array($estado, $validos, true)) {
                 $filtros[$tipo] = $estado;
             }
         }
