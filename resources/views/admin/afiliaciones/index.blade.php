@@ -57,6 +57,7 @@ body {
 .tbl-afil thead th a.sort-desc::after { content:'\2193';color:#3b82f6;margin-left:0.15rem; }
 /* Select integrado en th */
 .th-select { width:100%;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,0.15);color:#fff;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;padding:0.22rem 0.2rem;cursor:pointer;outline:none;appearance:auto;-webkit-appearance:auto; }
+.th-sub { font-size:0.62rem;color:#fbbf24;border-bottom-color:rgba(251,191,36,0.4); }
 .th-select:hover { border-bottom-color:rgba(255,255,255,0.5); }
 .th-select:focus { border-bottom-color:#3b82f6;outline:none; }
 .th-select option { background:#0f172a;color:#fff;font-weight:600;text-transform:none; }
@@ -473,45 +474,81 @@ function sortClass($col, $currSort, $currDir) {
             {{-- EPS --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['eps_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    @foreach(request()->except(['eps_id','eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="eps_id" onchange="this.form.submit()" class="th-select {{ $epsF ? 'activo' : '' }}">
                         <option value="">↓ EPS</option>
                         @foreach($epsDisponibles as $e)<option value="{{ $e->id }}" {{ $epsF == $e->id ? 'selected' : '' }}>{{ $e->nombre }} ({{ $conteoEps[(string) $e->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
+                @if(epsF)
+                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                    @foreach(request()->except(['eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <select name="eps_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['eps']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
+                        <option value="">Todos los estados</option>
+                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['eps'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
+                    </select>
+                </form>
+                @endif
             </th>
 
             {{-- ARL --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['arl_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    @foreach(request()->except(['arl_id','arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="arl_id" onchange="this.form.submit()" class="th-select {{ $arlF ? 'activo' : '' }}">
                         <option value="">↓ ARL</option>
                         @foreach($arlDisponibles as $a)<option value="{{ $a->id }}" {{ $arlF == $a->id ? 'selected' : '' }}>{{ $a->nombre_arl }} ({{ $conteoArl[(string) $a->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
+                @if(arlF)
+                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                    @foreach(request()->except(['arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <select name="arl_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['arl']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
+                        <option value="">Todos los estados</option>
+                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['arl'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
+                    </select>
+                </form>
+                @endif
             </th>
 
             {{-- Caja --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['caja_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    @foreach(request()->except(['caja_id','caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="caja_id" onchange="this.form.submit()" class="th-select {{ $cajaF ? 'activo' : '' }}">
                         <option value="">↓ Caja</option>
                         @foreach($cajaDisponibles as $ca)<option value="{{ $ca->id }}" {{ $cajaF == $ca->id ? 'selected' : '' }}>{{ $ca->nombre }} ({{ $conteoCaja[(string) $ca->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
+                @if(cajaF)
+                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                    @foreach(request()->except(['caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <select name="caja_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['caja']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
+                        <option value="">Todos los estados</option>
+                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['caja'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
+                    </select>
+                </form>
+                @endif
             </th>
 
             {{-- Pensión --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['pension_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    @foreach(request()->except(['pension_id','pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="pension_id" onchange="this.form.submit()" class="th-select {{ $pensionF ? 'activo' : '' }}">
                         <option value="">↓ Pensión</option>
                         @foreach($pensionDisponibles as $p)<option value="{{ $p->id }}" {{ $pensionF == $p->id ? 'selected' : '' }}>{{ $p->razon_social }} ({{ $conteoPension[(string) $p->id] ?? 0 }})</option>@endforeach
                     </select>
                 </form>
+                @if(pensionF)
+                <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0.15rem 0 0;">
+                    @foreach(request()->except(['pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <select name="pension_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['pension']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
+                        <option value="">Todos los estados</option>
+                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['pension'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
+                    </select>
+                </form>
+                @endif
             </th>
 
             {{-- Empresa --}}

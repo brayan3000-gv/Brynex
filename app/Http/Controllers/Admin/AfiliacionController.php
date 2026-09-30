@@ -171,6 +171,12 @@ class AfiliacionController extends Controller
             $query->whereHas('radicados', fn($q) => $q->where('estado', $estadoRad));
         }
 
+        // Segundo filtro de cada columna: elegida la entidad, el estado de SU radicado.
+        $radColF = $this->estadosPorColumna($request, compact('epsF', 'arlF', 'cajaF', 'pensionF'));
+        foreach ($radColF as $tipoRad => $estadoCol) {
+            $query->whereHas('radicados', fn($q) => $q->where('tipo', $tipoRad)->where('estado', $estadoCol));
+        }
+
         // Ordenamiento
         if ($sort === 'fecha_ingreso') {
             $query->orderBy('fecha_ingreso', $dir)->orderBy('id', 'asc');
@@ -349,7 +355,7 @@ class AfiliacionController extends Controller
             'razonesConciliar',
             'contratos', 'mes', 'anio', 'encId', 'encargados',
             'alidoId', 'alidosDisponibles', 'user', 'gestionados',
-            'rsId', 'tipoModId', 'epsF', 'arlF', 'cajaF', 'pensionF', 'empresaF', 'estadoRad', 'estadoCont',
+            'rsId', 'tipoModId', 'epsF', 'arlF', 'cajaF', 'pensionF', 'empresaF', 'estadoRad', 'estadoCont', 'radColF',
             'sort', 'dir', 'razonesDisponibles', 'tiposModalidad',
             'epsDisponibles', 'arlDisponibles', 'cajaDisponibles', 'pensionDisponibles',
             'empresasDisponibles',
@@ -445,6 +451,10 @@ class AfiliacionController extends Controller
         $estadosPermitidos = ['pendiente','tramite','traslado','error','ok'];
         if ($estadoRad && in_array($estadoRad, $estadosPermitidos)) {
             $query->whereHas('radicados', fn($q) => $q->where('estado', $estadoRad));
+        }
+
+        foreach ($this->estadosPorColumna($request, compact('epsF', 'arlF', 'cajaF', 'pensionF')) as $tipoRad => $estadoCol) {
+            $query->whereHas('radicados', fn($q) => $q->where('tipo', $tipoRad)->where('estado', $estadoCol));
         }
 
         $contratos = $query->orderBy('fecha_ingreso', 'asc')->get();
@@ -765,5 +775,30 @@ class AfiliacionController extends Controller
         );
         return Aliado::whereIn('id', $ids->unique()->filter())
             ->orderBy('nombre')->get(['id', 'nombre']);
+    }
+
+    /**
+     * Segundo filtro de las columnas EPS, ARL, Caja y Pensión: el estado del
+     * radicado de esa entidad (`eps_estado`, `arl_estado`, …). Solo vale cuando
+     * la columna ya tiene una entidad elegida; sin ella la pantalla no muestra el
+     * selector y aplicarlo a ciegas dejaría un filtro invisible.
+     *
+     * @param  array{epsF:mixed, arlF:mixed, cajaF:mixed, pensionF:mixed}  $entidades
+     * @return array<string,string>  tipo de radicado => estado
+     */
+    private function estadosPorColumna(Request $request, array $entidades): array
+    {
+        $validos = array_keys(\App\Models\Radicado::todosEstados());
+        $porTipo = ['eps' => $entidades['epsF'], 'arl' => $entidades['arlF'], 'caja' => $entidades['cajaF'], 'pension' => $entidades['pensionF']];
+
+        $filtros = [];
+        foreach ($porTipo as $tipo => $entidad) {
+            $estado = $request->get($tipo.'_estado');
+            if ($entidad && in_array($estado, $validos, true)) {
+                $filtros[$tipo] = $estado;
+            }
+        }
+
+        return $filtros;
     }
 }
