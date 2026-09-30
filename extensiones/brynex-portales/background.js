@@ -1234,7 +1234,7 @@ async function pCcfSubirDeclaracion(base64, nombre) {
 async function pCcfFinalizar() {
   const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
   const esperar = ms => new Promise(r => setTimeout(r, ms));
-  const textoVentanas = () => [...new Set([...document.querySelectorAll('.jconfirm-content, .jconfirm-box')].filter(vis)
+  const textoVentanas = () => [...new Set([...document.querySelectorAll('.jconfirm-content, .jconfirm-box, .ui-dialog-content')].filter(vis)
     .map(e => e.innerText.replace(/\s+/g, ' ').trim()).filter(Boolean))].join(' — ');
   // Lo que va haciendo se deja en la página para que BryNex lo muestre en vivo (ccfProgreso).
   window.__ccfProgreso = { pasos: [], t0: Date.now(), fin: false };
@@ -1294,7 +1294,9 @@ async function pCcfFinalizar() {
     const c = document.getElementById('chkTerminos');
     if (vis(c)) { chk = c; break; }
     if (!confirmado) {
-      const caja = [...document.querySelectorAll('.jconfirm-box')].filter(vis).find(b => /seguro de realizar afiliaci/i.test(b.innerText));
+      // Es un diálogo de jQuery UI (#DialogAceptaRealizarAfiliacionConEstaInformacion) con
+      // botones Volver / Sí en su panel de botones.
+      const caja = [...document.querySelectorAll('.ui-dialog, .jconfirm-box')].filter(vis).find(b => /seguro de realizar afiliaci/i.test(b.innerText));
       const si = caja && [...caja.querySelectorAll('button')].filter(vis).find(b => /^\s*s[ií]\s*$/i.test(b.innerText));
       if (si) { paso('Confirmando «¿Está seguro de realizar afiliación con esta información?» con «Sí»'); confirmado = true; si.click(); }
     }
@@ -1307,7 +1309,7 @@ async function pCcfFinalizar() {
   paso('Marcando la aceptación de términos y condiciones');
   if (!chk.checked) chk.click();
 
-  const ventana = chk.closest('.jconfirm-box, .jconfirm, .modal-content, [role=dialog]') || document;
+  const ventana = chk.closest('.ui-dialog, .jconfirm-box, .jconfirm, .modal-content, [role=dialog]') || document;
   const botones = [...ventana.querySelectorAll('button, a.btn, input[type=button]')].filter(vis);
   const aceptar = botones.find(b => /acept|continu|afiliar|confirm|finaliz|enviar/i.test(b.innerText || b.value || '') && !/cancel|cerrar|regresar|no acepto/i.test(b.innerText || b.value || ''));
   if (!aceptar) return terminar({ error: 'No se encontró el botón para aceptar los términos.', botones: botones.map(b => (b.innerText || b.value || '').trim()) });
