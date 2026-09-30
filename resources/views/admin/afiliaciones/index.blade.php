@@ -410,8 +410,18 @@ body {
 <div style="flex:1;display:flex;align-items:center;justify-content:center;">
 <div style="text-align:center;padding:3rem;color:#94a3b8;background:#fff;border-radius:12px;border:1px solid #e2e8f0;width:100%;max-width:420px;">
     <div style="font-size:3rem;">📋</div>
-    <div style="font-size:1rem;font-weight:600;margin-top:0.5rem;">Sin contratos para este período</div>
-    <div style="font-size:0.8rem;margin-top:0.25rem;">No hay ingresos en el mes/año seleccionado.</div>
+    @php
+        // Con la tabla vacía no se dibujan los selectores de columna: sin este
+        // enlace, un filtro que no deja nada obligaba a volver atrás.
+        $filtrosDeTabla = ['razon_social_id','tipo_modalidad_id','eps_id','arl_id','caja_id','pension_id','empresa_id','eps_estado','arl_estado','caja_estado','pension_estado','estado_rad','estado_contrato'];
+        $hayFiltros = collect($filtrosDeTabla)->contains(fn ($k) => request()->filled($k));
+    @endphp
+    <div style="font-size:1rem;font-weight:600;margin-top:0.5rem;">{{ $hayFiltros ? 'Ningún contrato cumple los filtros' : 'Sin contratos para este período' }}</div>
+    <div style="font-size:0.8rem;margin-top:0.25rem;">{{ $hayFiltros ? 'Prueba con otro estado o quita los filtros.' : 'No hay ingresos en el mes/año seleccionado.' }}</div>
+    @if($hayFiltros)
+    <a href="{{ route('admin.afiliaciones.index', request()->except(array_merge($filtrosDeTabla, ['page']))) }}"
+       style="display:inline-block;margin-top:0.9rem;padding:0.4rem 1rem;background:#1e3a5f;color:#fff;border-radius:8px;font-size:0.8rem;font-weight:700;text-decoration:none;">✖ Quitar filtros</a>
+    @endif
 </div>
 </div>
 @else
