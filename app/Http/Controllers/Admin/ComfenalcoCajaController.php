@@ -83,6 +83,52 @@ class ComfenalcoCajaController extends Controller
         return response()->json(['ok' => true] + $this->servicio->guardarDocumentos($contrato, $datos['docs'], Auth::id()));
     }
 
+    /** ¿Hay firma guardada de este trabajador? */
+    public function firma(int $contratoId)
+    {
+        return response()->json(['ok' => true, 'tiene' => (bool) $this->servicio->firmaGuardada($this->contrato($contratoId))]);
+    }
+
+    /**
+     * Estampa la firma del trabajador sobre la declaración juramentada oficial del
+     * portal. Si llega una firma nueva (dibujada en pantalla) se guarda para las
+     * próximas veces; si no llega, se usa la guardada.
+     */
+    public function firmarDeclaracion(Request $request, int $contratoId)
+    {
+        $datos = $request->validate([
+            'pdf' => 'required|string|max:20000000',
+            'firma' => 'nullable|string|max:3000000',
+        ]);
+        $contrato = $this->contrato($contratoId);
+
+        $pdf = base64_decode($datos['pdf'], true);
+        if ($pdf === false || ! str_starts_with($pdf, '%PDF')) {
+            return response()->json(['ok' => false, 'error' => 'El archivo de la declaración no es un PDF.'], 422);
+        }
+
+        if (! empty($datos['firma'])) {
+            $png = base64_decode(preg_replace('#^data:image/png;base64,#', '', $datos['firma']), true);
+            if ($png === false || ! str_starts_with($png, "\x89PNG")) {
+                return response()->json(['ok' => false, 'error' => 'La firma no es una imagen PNG válida.'], 422);
+            }
+            $this->servicio->guardarFirma($contrato, $png, Auth::id());
+        } else {
+            $png = $this->servicio->firmaGuardada($contrato);
+            if (! $png) {
+                return response()->json(['ok' => false, 'necesita_firma' => true, 'error' => 'Este trabajador aún no tiene firma guardada.'], 409);
+            }
+        }
+
+        try {
+            $firmado = $this->servicio->firmarDeclaracion($contrato, $pdf, $png, Auth::id());
+        } catch (Throwable $e) {
+            return response()->json(['ok' => false, 'error' => 'No se pudo estampar la firma: '.$e->getMessage()], 500);
+        }
+
+        return response()->json(['ok' => true, 'pdf' => base64_encode($firmado)]);
+    }
+
     /**
      * Conciliación de los radicados de caja con "Trabajadores por Empresa" que
      * baja la extensión. BryNex concilia la empresa en todos los aliados del NIT.

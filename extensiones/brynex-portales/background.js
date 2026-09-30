@@ -39,6 +39,8 @@
  *  ccfConsultar {tipoDoc, documento}   → busca al trabajador y devuelve las opciones del portal
  *  ccfPaso {…datos, opciones}          → llena el paso que esté a la vista (Personal, Laboral, Beneficiarios…)
  *  ccfResultado                        → {radicado, numero, texto} tras Finalizar Afiliación
+ *  ccfDeclaracion                      → {base64} PDF oficial de la declaración juramentada (formato del portal, sin descargarlo)
+ *  ccfSubirDeclaracion {base64}        → adjunta el PDF firmado en cada "Formato declaración juramentada caja" pendiente
  *  ccfDocumentos                       → {docs:[{requerido, nombre, doc_beneficiario, mime, base64}]} anexos que la caja ya tiene (paso Anexos)
  *  ccfTrabajadores                     → {nit, empresa, filas} de "Trabajadores por Empresa" (conciliación)
  *  ccfGrupoFamiliar {documentos}       → {familias} beneficiarios de cada trabajador, uno por consulta
@@ -79,7 +81,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -1155,6 +1157,66 @@ async function pCcfDocumentos() {
   return { docs };
 }
 
+/**
+ * Pide al portal el PDF oficial de la declaración juramentada (el mismo del botón
+ * "Generar Declaración Juramentada") y lo devuelve en base64 sin descargarlo: la
+ * respuesta de `CmndGenerarPdfDeclaracion` ya trae el PDF, y se descarta el
+ * manejador original, que lo guardaría en la carpeta de descargas.
+ */
+async function pCcfDeclaracion() {
+  const boton = document.getElementById('btnPdfDeclaracionR');
+  if (!boton) return { error: 'No estás en el paso Anexos: el botón de la declaración no existe.' };
+
+  return new Promise(resolve => {
+    const original = $.ajax;
+    const fin = v => { $.ajax = original; clearTimeout(reloj); resolve(v); };
+    const reloj = setTimeout(() => fin({ error: 'El portal no generó la declaración a tiempo.' }), 40000);
+    $.ajax = function (o) {
+      if (/CmndGenerarPdfDeclaracion/.test(String(o.url))) {
+        o.success = r => {
+          try {
+            const x = typeof r === 'string' ? JSON.parse(r) : r;
+            fin(x?.respuesta ? { base64: x.respuesta } : { error: 'El portal no devolvió el PDF.' });
+          } catch (e) { fin({ error: String(e) }); }
+        };
+      }
+      return original.apply(this, arguments);
+    };
+    boton.click();
+  });
+}
+
+/**
+ * Adjunta el PDF firmado en cada fila "Formato declaración juramentada caja" que
+ * aún no tenga archivo. El portal sube el archivo al cambiar el input.
+ */
+async function pCcfSubirDeclaracion(base64, nombre) {
+  const bin = atob(base64);
+  const bytes = Uint8Array.from(bin, c => c.charCodeAt(0));
+  const filas = [...document.querySelectorAll('#tablaAnexosBeneficiario tbody tr')]
+    .filter(tr => /juramentada/i.test(tr.innerText));
+  const pendientes = filas.filter(tr => !([...tr.querySelectorAll('td')][2]?.innerText || '').trim());
+  let subidos = 0;
+
+  for (const tr of pendientes) {
+    const input = tr.querySelector('input[type=file]');
+    if (!input) continue;
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], nombre, { type: 'application/pdf' }));
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    subidos++;
+    await new Promise(r => setTimeout(r, 2500));
+  }
+
+  await new Promise(r => setTimeout(r, 2000));
+  const quedan = [...document.querySelectorAll('#tablaAnexosBeneficiario tbody tr')]
+    .filter(tr => /juramentada/i.test(tr.innerText))
+    .filter(tr => !([...tr.querySelectorAll('td')][2]?.innerText || '').trim()).length;
+
+  return { subidos, pendientes: pendientes.length, quedan };
+}
+
 function pCcfEstado() {
   if (!/comfenalcovalle/.test(location.host)) return { sesion: false, enLogin: true, pagina: 'login' };
   const login = /index\.html/.test(location.pathname) || !!document.querySelector('#btnLoginAuth0');
@@ -1217,6 +1279,8 @@ async function atenderCcfcv(accion, d = {}) {
   if (accion === 'ccfPaso') return { ok: true, ...(await ejecutar(pestana.id, pCcfPaso, [d])) };
   if (accion === 'ccfResultado') return { ok: true, ...(await ejecutar(pestana.id, pCcfResultado)) };
   if (accion === 'ccfDocumentos') return { ok: true, ...(await ejecutar(pestana.id, pCcfDocumentos)) };
+  if (accion === 'ccfDeclaracion') return { ok: true, ...(await ejecutar(pestana.id, pCcfDeclaracion)) };
+  if (accion === 'ccfSubirDeclaracion') return { ok: true, ...(await ejecutar(pestana.id, pCcfSubirDeclaracion, [d.base64, d.nombre || 'DeclaracionJuramentada.pdf'])) };
   if (accion === 'ccfTrabajadores') return ccfTrabajadores(pestana);
   if (accion === 'ccfMorosos') return ccfMorosos(pestana);
   if (accion === 'ccfGrupoFamiliar') return ccfGrupoFamiliar(pestana, d);

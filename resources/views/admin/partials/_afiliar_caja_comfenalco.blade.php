@@ -62,6 +62,15 @@
         <button class="ccf-btn" id="ccfBtnIniciar" style="display:none" onclick="iniciarCajaComfenalco()">🔎 Buscar al trabajador y empezar</button>
         <div id="ccfPasos" style="display:none"></div>
 
+        <div id="ccfFirmaBox" class="ccf-info" style="display:none">
+          <strong>✍️ Declaración juramentada</strong>
+          <div id="ccfFirmaTexto" style="margin:.3rem 0"></div>
+          <canvas id="ccfFirmaLienzo" width="520" height="150" style="display:none;width:100%;max-width:520px;height:150px;background:#fff;border:1px dashed #6ee7b7;border-radius:8px;touch-action:none"></canvas>
+          <button class="ccf-btn sec" id="ccfFirmaLimpiar" style="display:none" onclick="ccfLimpiarFirma()">🧽 Borrar y firmar de nuevo</button>
+          <button class="ccf-btn sec" id="ccfFirmaOtra" style="display:none" onclick="ccfFirmarNueva()">✏️ Firmar de nuevo en vez de usar la guardada</button>
+          <button class="ccf-btn" id="ccfFirmaBtn" onclick="ccfFirmarYAdjuntar()">✍️ Firmar y adjuntar la declaración</button>
+        </div>
+
         <div id="ccfRadicado" style="display:none">
           <div class="ccf-info" id="ccfRadicadoInfo"></div>
           <div class="ccf-texto" id="ccfRadicadoTexto" style="display:none"></div>
@@ -77,7 +86,7 @@
 </div>
 
 <script>
-let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null, ccfDocsGuardados = false;
+let ccfContratoId = null, ccfPrep = {}, ccfReloj = null, ccfFinal = null, ccfDocsGuardados = false, ccfDeclPdf = null, ccfFirmaGuardada = false, ccfUsarNueva = false, ccfTrazo = false;
 const CCF_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const ccfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ccfEl = id => document.getElementById(id);
@@ -117,7 +126,7 @@ function ccfOpciones(sel, lista, porDefecto) {
 }
 
 async function abrirCajaComfenalco(contratoId) {
-    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; clearInterval(ccfReloj);
+    ccfContratoId = contratoId; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; ccfEl('ccfFirmaBox').style.display = 'none'; clearInterval(ccfReloj);
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
@@ -219,7 +228,7 @@ async function iniciarCajaComfenalco() {
             (p.hecho?.length ? '<br>✅ ' + p.hecho.map(ccfEsc).join('<br>✅ ') : '') +
             (p.falta?.length ? '<br>⚠️ ' + p.falta.map(ccfEsc).join('<br>⚠️ ') : '') +
             (p.errores?.length ? '<br>❗ ' + p.errores.map(ccfEsc).join('<br>❗ ') : '');
-        if (/Anexos/i.test(p.paso || '') && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos(); }
+        if (/Anexos/i.test(p.paso || '') && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos().then(ccfPrepararDeclaracion); }
     }, 4000);
 }
 
@@ -235,6 +244,68 @@ async function ccfGuardarDocumentos() {
     const g = await ccfPedir('documentos', 'POST', { docs });
     if (!g.ok) { aviso('❗ No se pudieron guardar los documentos: ' + ccfEsc(g.message || g.error || '')); return; }
     aviso(`✅ Documentos en BryNex: ${g.guardados} nuevos, ${g.repetidos} ya estaban.` + (g.rechazados ? ` ${g.rechazados} rechazados.` : ''));
+}
+
+// ── Declaración juramentada: formato oficial del portal + firma en pantalla ──────────
+let ccfDeclEnCurso = false;
+async function ccfPrepararDeclaracion() {
+    if (ccfDeclEnCurso || ccfDeclPdf) return;
+    ccfDeclEnCurso = true;
+    const caja = ccfEl('ccfPasoActual');
+    const aviso = t => { if (caja) caja.insertAdjacentHTML('beforeend', `<br>${t}`); };
+    aviso('📄 Pidiendo al portal la declaración juramentada…');
+    const r = await ccfExt('ccfDeclaracion', {}, 90);
+    ccfDeclEnCurso = false;
+    if (!r.ok || !r.base64) { aviso('❗ ' + ccfEsc(r.error || 'El portal no entregó la declaración.')); return; }
+    ccfDeclPdf = r.base64;
+    const f = await ccfPedir('firma');
+    ccfFirmaGuardada = !!f.tiene; ccfUsarNueva = !f.tiene;
+    ccfEl('ccfFirmaBox').style.display = 'block';
+    ccfMostrarFirma();
+}
+
+function ccfMostrarFirma() {
+    const pad = ccfUsarNueva || !ccfFirmaGuardada;
+    ccfEl('ccfFirmaLienzo').style.display = pad ? 'block' : 'none';
+    ccfEl('ccfFirmaLimpiar').style.display = pad ? 'block' : 'none';
+    ccfEl('ccfFirmaOtra').style.display = pad ? 'none' : 'block';
+    ccfEl('ccfFirmaTexto').innerHTML = pad
+        ? 'La declaración ya está lista con los datos del portal. <strong>El trabajador firma aquí</strong> (la firma queda guardada para las próximas afiliaciones).'
+        : 'La declaración ya está lista con los datos del portal. Se usará la <strong>firma guardada</strong> de este trabajador.';
+    if (pad) ccfIniciarLienzo();
+}
+
+function ccfFirmarNueva() { ccfUsarNueva = true; ccfMostrarFirma(); }
+
+function ccfIniciarLienzo() {
+    const c = ccfEl('ccfFirmaLienzo'), g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height); g.lineWidth = 2.5; g.lineCap = 'round'; g.strokeStyle = '#0b1f6b'; ccfTrazo = false;
+    let dibujando = false;
+    const pos = e => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height]; };
+    c.onpointerdown = e => { dibujando = true; c.setPointerCapture(e.pointerId); const [x, y] = pos(e); g.beginPath(); g.moveTo(x, y); };
+    c.onpointermove = e => { if (!dibujando) return; const [x, y] = pos(e); g.lineTo(x, y); g.stroke(); ccfTrazo = true; };
+    c.onpointerup = () => { dibujando = false; };
+}
+function ccfLimpiarFirma() { ccfIniciarLienzo(); }
+
+async function ccfFirmarYAdjuntar() {
+    const btn = ccfEl('ccfFirmaBtn');
+    const pad = ccfUsarNueva || !ccfFirmaGuardada;
+    if (pad && !ccfTrazo) { alert('Falta la firma: dibújala en el recuadro.'); return; }
+    btn.disabled = true; btn.textContent = '⏳ Firmando…';
+    const cuerpo = { pdf: ccfDeclPdf };
+    if (pad) cuerpo.firma = ccfEl('ccfFirmaLienzo').toDataURL('image/png');
+    const r = await ccfPedir('declaracion', 'POST', cuerpo);
+    if (!r.ok) { btn.disabled = false; btn.textContent = '✍️ Firmar y adjuntar la declaración'; alert(r.error || 'No se pudo firmar la declaración.'); return; }
+    btn.textContent = '⏳ Adjuntando en el portal…';
+    const s = await ccfExt('ccfSubirDeclaracion', { base64: r.pdf, nombre: `DeclaracionJuramentada_${ccfPrep.resumen?.documento?.replace(/\D/g, '') || ''}.pdf` }, 120);
+    btn.disabled = false; btn.textContent = '✍️ Firmar y adjuntar la declaración';
+    const caja = ccfEl('ccfFirmaTexto');
+    if (!s.ok) { caja.innerHTML = '❗ ' + ccfEsc(s.error || 'La extensión no pudo adjuntar la declaración.'); return; }
+    ['ccfFirmaLienzo', 'ccfFirmaLimpiar', 'ccfFirmaOtra', 'ccfFirmaBtn'].forEach(id => ccfEl(id).style.display = 'none');
+    caja.innerHTML = s.quedan
+        ? `⚠️ Se adjuntó en ${s.subidos} de ${s.pendientes} beneficiarios; revisa el resto en el portal.`
+        : `✅ Declaración firmada y adjunta en ${s.subidos} beneficiario(s) y guardada en BryNex. Revisa el paso Anexos y pulsa <strong>Finalizar Afiliación</strong> en el portal.`;
 }
 
 function mostrarRadicadoCaja(fin) {

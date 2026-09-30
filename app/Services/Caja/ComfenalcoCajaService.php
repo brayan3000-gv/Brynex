@@ -248,6 +248,77 @@ class ComfenalcoCajaService
         };
     }
 
+    /**
+     * Posiciones (mm, desde la esquina superior izquierda de la hoja carta) donde se
+     * estampa la firma en la declaración juramentada oficial del portal.
+     * Se miden con `pdftotext -bbox` sobre el PDF real que entrega la caja.
+     */
+    private const FIRMA_EN_DECLARACION = [
+        ['pagina' => 1, 'x' => 20.0, 'y' => 0.0, 'ancho' => 45.0, 'alto' => 14.0],
+    ];
+
+    /** ¿El cliente ya tiene su firma guardada? La firma es un documento más del cliente, en disco privado. */
+    public function firmaGuardada(Contrato $contrato): ?string
+    {
+        $doc = \App\Models\DocumentoCliente::where('aliado_id', $contrato->aliado_id)->where('cc_cliente', (string) $contrato->cedula)
+            ->where('tipo_documento', 'firma')->orderByDesc('id')->first();
+        $disco = \Illuminate\Support\Facades\Storage::disk('local');
+
+        return $doc && $disco->exists($doc->ruta) ? $disco->get($doc->ruta) : null;
+    }
+
+    public function guardarFirma(Contrato $contrato, string $png, ?int $usuarioId): void
+    {
+        $ruta = "documentos/{$contrato->aliado_id}/{$contrato->cedula}/firma_".time().'_'.\Illuminate\Support\Str::random(6).'.png';
+        \Illuminate\Support\Facades\Storage::disk('local')->put($ruta, $png);
+        \App\Models\DocumentoCliente::create([
+            'aliado_id' => $contrato->aliado_id, 'cc_cliente' => (string) $contrato->cedula, 'doc_beneficiario' => null,
+            'tipo_documento' => 'firma', 'nombre_archivo' => 'firma.png', 'ruta' => $ruta, 'subido_por' => $usuarioId,
+        ]);
+    }
+
+    /**
+     * Estampa la firma sobre la declaración juramentada que generó el portal y
+     * guarda el resultado como documento del cliente.
+     *
+     * @return string PDF firmado
+     */
+    public function firmarDeclaracion(Contrato $contrato, string $pdf, string $firmaPng, ?int $usuarioId): string
+    {
+        $tmp = sys_get_temp_dir().'/decl_'.\Illuminate\Support\Str::random(8);
+        file_put_contents($tmp.'.pdf', $pdf);
+        file_put_contents($tmp.'.png', $firmaPng);
+
+        try {
+            $fpdi = new \setasign\Fpdi\Fpdi('P', 'mm');
+            $paginas = $fpdi->setSourceFile($tmp.'.pdf');
+            for ($n = 1; $n <= $paginas; $n++) {
+                $id = $fpdi->importPage($n);
+                $tam = $fpdi->getTemplateSize($id);
+                $fpdi->AddPage($tam['orientation'], [$tam['width'], $tam['height']]);
+                $fpdi->useTemplate($id);
+                foreach (self::FIRMA_EN_DECLARACION as $p) {
+                    if ($p['pagina'] === $n) {
+                        $fpdi->Image($tmp.'.png', $p['x'], $p['y'], $p['ancho'], $p['alto']);
+                    }
+                }
+            }
+            $firmado = $fpdi->Output('S');
+        } finally {
+            @unlink($tmp.'.pdf');
+            @unlink($tmp.'.png');
+        }
+
+        $this->guardarDocumentos($contrato, [[
+            'requerido' => 'Formato declaracion juramentada caja',
+            'nombre' => 'DeclaracionJuramentada_'.$contrato->cedula.'_'.now()->format('Ymd').'.pdf',
+            'doc_beneficiario' => null,
+            'base64' => base64_encode($firmado),
+        ]], $usuarioId);
+
+        return $firmado;
+    }
+
     /** Usuario (y clave, según permiso) del portal de la razón social. */
     public function credencial(Contrato $contrato): array
     {

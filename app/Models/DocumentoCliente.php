@@ -46,6 +46,7 @@ class DocumentoCliente extends BaseModel
             'registro_civil'      => 'Registro Civil',
             'tarjeta_identidad'   => 'Tarjeta Identidad',
             'decl_juramentada'    => 'Declaración Juramentada',
+            'firma'               => 'Firma',
             'acta_matrimonio'     => 'Acta de Matrimonio',
             'otro'                => 'Otro',
         ];

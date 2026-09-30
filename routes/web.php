@@ -1081,6 +1081,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/{contrato}/caja-comfenalco/credencial', [$ccc, 'credencial'])->name('caja-comfenalco.credencial');
             Route::post('/{contrato}/caja-comfenalco/aplicar', [$ccc, 'aplicar'])->name('caja-comfenalco.aplicar');
             Route::post('/{contrato}/caja-comfenalco/documentos', [$ccc, 'documentos'])->name('caja-comfenalco.documentos');
+            Route::get('/{contrato}/caja-comfenalco/firma', [$ccc, 'firma'])->name('caja-comfenalco.firma');
+            Route::post('/{contrato}/caja-comfenalco/declaracion', [$ccc, 'firmarDeclaracion'])->name('caja-comfenalco.declaracion');
             Route::post('/caja-comfenalco/conciliar', [$ccc, 'conciliar'])->name('caja-comfenalco.conciliar');
             Route::get('/caja-comfenalco/conciliar/estado', [$ccc, 'estado'])->name('caja-comfenalco.conciliar.estado');
             Route::post('/caja-comfenalco/beneficiarios', [$ccc, 'beneficiarios'])->name('caja-comfenalco.beneficiarios');
