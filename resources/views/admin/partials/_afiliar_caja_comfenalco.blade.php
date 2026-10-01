@@ -374,6 +374,9 @@ async function ccfPrepararDeclaracion() {
 
 // Un recuadro de firma por cada persona que firma la declaración (trabajador, y padre/madre si están).
 function ccfMostrarFirmas() {
+    // Tras firmar a un trabajador el modal queda con estos tres ocultos; al armar otra declaración se vuelven a mostrar.
+    ['ccfFirmasLista', 'ccfFirmaPrevia', 'ccfFirmaBtn'].forEach(id => ccfEl(id).style.display = '');
+    ccfEl('ccfFirmaBtn').disabled = false; ccfEl('ccfFirmaBtn').textContent = '✍️ Firmar y adjuntar la declaración';
     ccfEl('ccfFirmaTexto').innerHTML = `La declaración ya está lista con los datos del portal. <strong>Firman ${ccfFirmantes.length}:</strong> cada firma queda guardada para las próximas afiliaciones y lleva su número de documento. <strong>Al firmar se radica la afiliación en Comfenalco.</strong>`;
     ccfEl('ccfFirmasLista').innerHTML = ccfFirmantes.map(f => {
         const pad = f.nueva || !f.guardada;
