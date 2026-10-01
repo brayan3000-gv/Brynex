@@ -4206,7 +4206,6 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
     if (sel) { sel.value = cot; sel.dispatchEvent(new Event('change', { bubbles: true })); }
 
     poner('Repeater1_ctl00_TxtSalary', String(salario));
-    await ponerFecha(fecha);
 
     // El asesor no vale con escribirlo: el 0 queda como «sin asesor» solo
     // cuando el foco pasa al campo de al lado —el del nombre—, que es lo que
@@ -4218,6 +4217,12 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
     campoNombre?.focus();                       // el foco se va al de al lado
     campoAse?.dispatchEvent(new Event('blur', { bubbles: true }));
     await esperar(1500);
+
+    // La fecha va de última: validar el asesor repinta parte del formulario
+    // (ASP.NET) y se llevaba por delante lo que ya estuviera escrito aquí.
+    await ponerFecha(fecha);
+    await esperar(400);
+    if (!document.querySelector('[id$="TxtInitialdate"]')?.value) await ponerFecha(fecha);
 
     return {
       solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim(),
