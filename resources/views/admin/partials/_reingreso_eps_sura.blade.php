@@ -47,19 +47,7 @@
         <div class="esu-info" id="esuPortal" style="display:none"></div>
         <div class="esu-aviso" id="esuAviso" style="display:none"></div>
 
-        <button class="esu-btn sec" id="esuBtnConsultar" onclick="consultarEpsSura()">🔎 Consultar en SURA</button>
-        <button class="esu-btn" id="esuBtnRegistrar" style="display:none" onclick="registrarEpsSura()">🏥 Radicar reingreso</button>
-
-        {{-- Por extensión: el comprobante del portal —el que muestra solo esta
-             empresa— solo se puede capturar desde el navegador de una persona.
-             Por el servidor se radica igual, pero ese documento no se obtiene. --}}
-        <div style="border-top:1px dashed #e2e8f0;margin:.7rem 0 .4rem"></div>
-        <div style="font-size:.7rem;color:#64748b;margin-bottom:.35rem">🧩 Con la extensión se guarda además el comprobante del portal</div>
-        <button class="esu-btn sec" id="esuBtnExtAbrir" onclick="abrirPortalEpsSura()">🌐 Abrir EPS SURA</button>
-        <button class="esu-btn" id="esuBtnExtRadicar" onclick="radicarConExtensionEpsSura()">🧩 Radicar con la extensión</button>
-        {{-- Los ids de la pantalla del portal cambian entre versiones: esto los
-             lista tal como están hoy, sin escribir nada. --}}
-        <button class="esu-link" id="esuBtnExplorar" onclick="explorarEpsSura()">🔧 Ver los campos del portal (no radica nada)</button>
+        <button class="esu-btn" id="esuBtnRadicar" onclick="realizarReingresoEpsSura()">🏥 Realizar reingreso</button>
       </div>
 
       <div id="esuResultado" class="esu-ok" style="display:none"></div>
@@ -124,7 +112,6 @@ async function abrirReingresoEpsSura(contratoId) {
     ['esuContenido', 'esuResultado', 'esuPortal', 'esuAviso'].forEach(id => esuEl(id).style.display = 'none');
     esuEl('esuCargando').style.display = 'block';
     esuEl('esuCargando').textContent = '⏳ Revisando los datos del contrato...';
-    esuEl('esuBtnRegistrar').style.display = 'none';
     esuEl('esuModal').classList.add('open');
 
     let d;
@@ -144,64 +131,16 @@ async function abrirReingresoEpsSura(contratoId) {
     esuEl('esuAviso').innerHTML = avisos.map(a => '⚠️ ' + esuEsc(a)).join('<br>');
     esuEl('esuAviso').style.display = avisos.length ? 'block' : 'none';
 
-    const btn = esuEl('esuBtnConsultar');
+    const btn = esuEl('esuBtnRadicar');
     btn.disabled = problemas.length > 0;
-    btn.textContent = problemas.length ? '🚫 Completa los datos primero' : '🔎 Consultar en SURA';
-}
-
-async function consultarEpsSura() {
-    const btn = esuEl('esuBtnConsultar');
-    const parar = esuEsperar(btn, 'Consultando en SURA...');
-    let d;
-    try { d = await esuPedir('consultar', 'POST', 280); }
-    catch (e) { d = { ok: false, error: 'Se perdió la conexión con el servidor.' }; }
-    parar();
-    btn.disabled = false; btn.textContent = '🔎 Consultar de nuevo';
-
-    if (!d.ok) { alert(d.error || (d.problemas || []).join('\n') || 'No se pudo consultar.'); return; }
-    if (d.resumen) esuPintarResumen(d.resumen);
-
-    const portal = esuEl('esuPortal');
-    portal.innerHTML = `<div>En SURA: <strong>${esuEsc(d.nombre || 'NO ENCONTRADO')}</strong></div>`;
-    portal.style.display = 'block';
-
-    const aviso = esuEl('esuAviso');
-    if (!d.esReingreso) {
-        aviso.innerHTML = '⚠️ SURA no trae el nombre de la persona: no es un reingreso sino un traslado, y eso no se hace por esta pantalla del portal.';
-        aviso.style.display = 'block';
-    } else {
-        aviso.style.display = 'none';
-    }
-
-    const reg = esuEl('esuBtnRegistrar');
-    reg.style.display = d.esReingreso ? 'block' : 'none';
-    reg.disabled = false;
-    reg.textContent = '🏥 Radicar reingreso';
-}
-
-async function explorarEpsSura() {
-    const btn = esuEl('esuBtnExplorar');
-    const parar = esuEsperar(btn, 'Abriendo la pantalla del portal...');
-    let d;
-    try { d = await esuPedir('explorar', 'POST', 280); }
-    catch (e) { d = { ok: false, error: 'Se perdió la conexión con el servidor.' }; }
-    parar();
-    btn.disabled = false; btn.textContent = '🔧 Ver los campos del portal (no radica nada)';
-
-    if (!d.ok) { alert(d.error || 'No se pudo abrir la pantalla.'); return; }
-
-    const visibles = (d.campos || []).filter(c => c.id && c.visible);
-    const portal = esuEl('esuPortal');
-    portal.innerHTML = `<div><strong>${visibles.length}</strong> campos en ${esuEsc(d.url || '')}</div>` +
-        `<pre style="max-height:220px;overflow:auto;font-size:.66rem;margin:.4rem 0 0;white-space:pre-wrap">${esuEsc(visibles.map(c => `${c.id} (${c.etiqueta}${c.tipo ? '/' + c.tipo : ''})`).join('\n'))}</pre>`;
-    portal.style.display = 'block';
+    btn.textContent = problemas.length ? '🚫 Completa los datos primero' : '🏥 Realizar reingreso';
 }
 
 /** Habla con la extensión BryNex Portales, igual que los demás modales. */
 function esuExt(accion, datos = {}, limiteSeg = 300) {
     return new Promise((resolve) => {
         if (!document.documentElement.dataset.brynexPortales) {
-            resolve({ ok: false, sinExtension: true, error: 'La extensión BryNex Portales no está instalada en este navegador. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → 🧩 Extensión.' });
+            resolve({ ok: false, sinExtension: true, error: 'La extensión BryNex Portales no está instalada en este navegador.' });
             return;
         }
         const id = Date.now() + '-' + Math.random().toString(36).slice(2);
@@ -216,56 +155,67 @@ function esuExt(accion, datos = {}, limiteSeg = 300) {
     });
 }
 
-async function abrirPortalEpsSura() {
-    const d = await esuExt('suraAbrir', {}, 60);
-    if (!d.ok) { alert(d.error || 'No se pudo abrir el portal.'); return; }
-    esuEl('esuPortal').innerHTML = 'Se abrió el portal de EPS SURA en otra pestaña. Inicia sesión ahí y vuelve a este modal.';
-    esuEl('esuPortal').style.display = 'block';
-}
-
-async function radicarConExtensionEpsSura() {
+/**
+ * Hace el reingreso de principio a fin.
+ *
+ * Con la extensión, porque es la única que trae el comprobante del portal —el
+ * que muestra solo esta empresa—; si no está instalada, lo radica el servidor,
+ * que hace el trámite igual pero sin ese documento.
+ */
+async function realizarReingresoEpsSura() {
+    const btn = esuEl('esuBtnRadicar');
     const r = esuPrep?.resumen || {};
-    if (!confirm('¿Radicar el reingreso en EPS SURA desde la pestaña del portal?\n\nQueda aplicado y no se puede anular desde aquí.')) return;
+    const hayExtension = !!document.documentElement.dataset.brynexPortales;
 
-    const btn = esuEl('esuBtnExtRadicar');
-    const parar = esuEsperar(btn, 'Radicando con la extensión...');
+    if (!confirm(`¿Realizar el reingreso de ${r.trabajador || 'este trabajador'} en EPS SURA?\n\n` +
+        (hayExtension ? '' : 'La extensión no está instalada: lo hará el servidor y no se podrá guardar el comprobante.\n\n') +
+        'Queda aplicado en el portal y no se puede anular desde aquí.')) return;
 
-    // La empresa de la pestaña debe ser la del contrato: el portal no avisa si
-    // se radica en otra, y el error sería de los que cuesta deshacer.
+    const parar = esuEsperar(btn, 'Haciendo el reingreso...');
+    const soltar = (texto = '🏥 Realizar reingreso') => { parar(); btn.disabled = false; btn.textContent = texto; };
+
+    if (!hayExtension) { await reingresoPorServidor(soltar); return; }
+
+    // La pestaña del portal: si no está abierta, se abre y se espera a la persona.
     const estado = await esuExt('suraEstado', {}, 60);
-    if (!estado.ok) { parar(); btn.disabled = false; btn.textContent = '🧩 Radicar con la extensión'; alert(estado.error || 'No hay pestaña de EPS SURA.'); return; }
-
-    const nitContrato = String(r.nit || '').replace(/\D/g, '');
-    if (estado.empresa && nitContrato && estado.empresa !== nitContrato) {
-        parar(); btn.disabled = false; btn.textContent = '🧩 Radicar con la extensión';
-        alert(`La pestaña está en la empresa ${estado.empresa} y el contrato es de la ${nitContrato}. Entra con la empresa correcta.`);
+    if (!estado.ok) {
+        await esuExt('suraAbrir', {}, 60);
+        soltar('🏥 Reintentar cuando entres');
+        esuEl('esuPortal').innerHTML = 'Se abrió el portal de EPS SURA en otra pestaña: <strong>inicia sesión ahí</strong> con la empresa y vuelve a pulsar el botón.';
+        esuEl('esuPortal').style.display = 'block';
         return;
     }
 
-    // El servicio arma los datos para el robot del servidor; la extensión los
-    // pide en plano.
+    // La empresa de la pestaña tiene que ser la del contrato: el portal no avisa
+    // si se radica en otra, y ese error cuesta deshacerlo.
+    const nitContrato = String(r.nit || '').replace(/\D/g, '');
+    if (estado.empresa && nitContrato && estado.empresa !== nitContrato) {
+        soltar();
+        alert(`La pestaña del portal está en la empresa ${estado.empresa} y el contrato es de la ${nitContrato}. Entra con la empresa correcta y vuelve a intentar.`);
+        return;
+    }
+
     const p = esuPrep?.datos || {};
     const d = await esuExt('suraRadicar', {
         tipo: p.persona?.tipo, documento: p.persona?.numero,
         ibc: p.ibc, fechaIngreso: p.fechaIngreso, asesor: p.asesor,
     }, 300);
-    parar();
-    btn.disabled = false; btn.textContent = '🧩 Radicar con la extensión';
+    soltar();
 
-    if (d.sinExtension) { alert(d.error); return; }
-
-    // Lo que trajo se registra igual si falló: el motivo del portal vale.
-    let g;
+    // Lo que trajo se registra aunque el portal haya rechazado: el motivo vale.
+    let g = {};
     try {
         g = await esuPedir('aplicar', 'POST', 120, {
             ok: !!d.ok, radicado: d.radicado || null, transaccion: d.transaccion || null,
             periodoPago: d.periodoPago || null, resultado: d.resultado || null,
             error: d.error || null, pdf: d.pdf || null,
         });
-    } catch (e) { alert('Se radicó, pero no se pudo guardar en BryNex: ' + (d.radicado || 'sin número')); return; }
+    } catch (e) {
+        alert('Se hizo el trámite, pero no se pudo guardar en BryNex: ' + (d.radicado || 'sin número') + '. Anótalo.');
+        return;
+    }
 
     if (g.radicado) pintarRadicadoEnLista(g.radicado, esuContratoId);
-
     if (!d.ok) { alert(d.error || 'El portal no aplicó la novedad.'); return; }
 
     esuEl('esuContenido').style.display = 'none';
@@ -277,36 +227,21 @@ async function radicarConExtensionEpsSura() {
     caja.style.display = 'block';
 }
 
-async function registrarEpsSura() {
-    if (!confirm('¿Radicar el reingreso en el portal de EPS SURA con estos datos?\n\nQueda aplicado en el portal y no se puede anular desde aquí.')) return;
-
-    const btn = esuEl('esuBtnRegistrar');
-    const parar = esuEsperar(btn, 'Radicando en SURA...');
+/** Camino de respaldo: lo hace el servidor, sin comprobante. */
+async function reingresoPorServidor(soltar) {
     let d;
-    try { d = await esuPedir('registrar', 'POST', 280); }
-    catch (e) {
-        // No se reintenta solo: pudo quedar aplicado. Consultar lo detecta.
-        d = { ok: false, error: 'Se perdió la conexión. Antes de reintentar usa «Consultar»: si quedó radicado, se verá.' };
-    }
-    parar();
+    try { d = await esuPedir('registrar', 'POST', 420); }
+    catch (e) { d = { ok: false, error: 'Se perdió la conexión. Antes de reintentar revisa en el portal: pudo quedar radicado.' }; }
+    soltar('🏥 Reintentar');
 
-    if (!d.ok) {
-        btn.disabled = false; btn.textContent = '🏥 Reintentar';
-        // El radicado quedó en error: la fila lo muestra sin recargar.
-        if (d.radicado) pintarRadicadoEnLista(d.radicado, esuContratoId);
-        alert(d.error || d.alerta || 'No se pudo radicar.');
-        return;
-    }
+    if (d.radicado) pintarRadicadoEnLista(d.radicado, esuContratoId);
+    if (!d.ok) { alert(d.error || 'No se pudo radicar.'); return; }
 
     esuEl('esuContenido').style.display = 'none';
-    // La fila queda en trámite al momento, sin recargar la página.
-    const pintado = pintarRadicadoEnLista(d.radicado, esuContratoId);
-    esuRadicadoNuevo = pintado ? null : (d.radicado || null);
-
     const caja = esuEl('esuResultado');
-    caja.innerHTML = '✅ Reingreso aplicado en el portal de EPS SURA.' +
-        (d.alerta ? `<br><span style="color:#475569">${esuEsc(d.alerta)}</span>` : '') +
-        '<br><span style="color:#475569">El radicado de EPS quedó en trámite; pasa a OK cuando la conciliación lo vea vigente.</span>';
+    caja.innerHTML = '✅ Reingreso aplicado en EPS SURA.' +
+        '<br><span style="color:#475569">El radicado quedó en trámite; pasa a OK cuando la conciliación lo vea vigente.</span>';
     caja.style.display = 'block';
 }
+
 </script>
