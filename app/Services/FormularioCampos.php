@@ -96,6 +96,7 @@ class FormularioCampos
             // El formulario que se envía va sin ellos: el número lo da la entidad al
             // recibirlo. Se estampan sobre el mismo PDF enviado (ver estamparRadicado).
             'radicado.numero' => '🧾 Radicado — Número que dio la entidad',
+            'radicado.sello' => '🧾 Radicado — Sello «Radicado: 0014986923» (con recuadro: opción recuadro)',
             'radicado.fecha' => '🧾 Radicado — Fecha completa (dd/mm/aaaa)',
             'radicado.fecha_d1' => '🧾 Radicado — DÍA dígito 1',
             'radicado.fecha_d2' => '🧾 Radicado — DÍA dígito 2',

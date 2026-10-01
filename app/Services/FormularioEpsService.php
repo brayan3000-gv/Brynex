@@ -239,7 +239,7 @@ class FormularioEpsService
         }
 
         $f = $fecha->format('dmY');
-        $datos = ['radicado.numero' => $numero, 'radicado.fecha' => $fecha->format('d/m/Y')];
+        $datos = ['radicado.numero' => $numero, 'radicado.sello' => "Radicado: {$numero}", 'radicado.fecha' => $fecha->format('d/m/Y')];
         foreach (['d1' => 0, 'd2' => 1, 'm1' => 2, 'm2' => 3, 'a1' => 4, 'a2' => 5, 'a3' => 6, 'a4' => 7] as $sufijo => $i) {
             $datos["radicado.fecha_{$sufijo}"] = $f[$i];
         }
@@ -466,6 +466,21 @@ class FormularioEpsService
                     $pdf->Cell($w, $cellH, $valor, 0, 0, $align);
                 } else {
                     $pdf->Write($cellH, $valor);
+                }
+
+                // Texto como sello: un recuadro del mismo color ceñido al texto.
+                if (! empty($campo['recuadro'])) {
+                    $anchoTexto = $pdf->GetStringWidth($valor);
+                    $inicio = match (true) {
+                        $w > 0 && $align === 'C' => $x + ($w - $anchoTexto) / 2,
+                        $w > 0 && $align === 'R' => $x + $w - $anchoTexto - 1,
+                        default                  => $x + 1,
+                    };
+                    $pdf->SetDrawColor((int) ($campo['color_r'] ?? 0), (int) ($campo['color_g'] ?? 0), (int) ($campo['color_b'] ?? 0));
+                    $pdf->SetLineWidth(1.2);
+                    $pdf->Rect($inicio - 4, $textY - 2.5, $anchoTexto + 8, $cellH + 5);
+                    $pdf->SetLineWidth(0.2);
+                    $pdf->SetDrawColor(0, 0, 0);
                 }
             }
         }
