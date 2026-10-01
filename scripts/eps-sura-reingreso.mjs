@@ -477,7 +477,16 @@ try {
 
   const antes = alertas.length;
   await marco.evaluate(() => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
-  for (let i = 0; i < 40 && alertas.length === antes; i++) await esperar(800);
+
+  // Se espera a lo que llegue primero: la alerta —que es como avisa el rechazo—
+  // o la pantalla del comprobante, que es como termina cuando sale bien. Antes
+  // solo miraba la alerta y, como un reingreso aplicado no muestra ninguna, se
+  // comía los 32 s enteros en TODOS los que salían bien (medido el 1-oct-2026:
+  // 32,0 s clavados en las cinco corridas).
+  for (let i = 0; i < 40 && alertas.length === antes; i++) {
+    await esperar(800);
+    if (/AffiliationReadmissionsRepLoad/i.test(pagina.url())) break;
+  }
 
   // El resultado sale en otra pantalla (AffiliationReadmissionsRepLoad.aspx) y
   // dentro de un iframe de Crystal Reports: leer solo el marco principal
@@ -487,7 +496,11 @@ try {
   let comprobante = '';
   let enComprobante = false;
 
-  for (let i = 0; i < 40 && !comprobante; i++) {
+  // Diez vueltas, no cuarenta: el resultado se saca del PDF que se exporta más
+  // abajo, que no depende de que el visor llegue a dibujarse. Esperar a que
+  // pintara costaba 40 s en cada trámite —otros 40 s clavados en las cinco
+  // corridas— para acabar leyéndolo del PDF igualmente.
+  for (let i = 0; i < 10 && !comprobante; i++) {
     await esperar(1000);
 
     // La pantalla del comprobante se reconoce por su propio texto, aunque el
