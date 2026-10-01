@@ -3817,8 +3817,18 @@ const SURA_SSO = 'https://login.sura.com/sso/servicelogin.aspx'
 const SURA_TIPOS = { CC: '1', CE: '2', NI: '4', NUIP: '5', PA: '6', PP: '6', RC: '7', TI: '8', CN: '10', SC: '11', PT: '14', PPT: '14', PE: '14', PEP: '14' };
 
 async function pestanaSura() {
-  const ps = await chrome.tabs.query({ url: 'https://solucionesenlineaeps.suramericana.com/*' });
-  return ps[0] || (await chrome.tabs.query({ url: 'https://epsapps.suramericana.com/*' }))[0] || null;
+  // También el SSO: la pestaña nace ahí al abrir el portal, y sin incluirlo la
+  // extensión abría la pestaña y acto seguido decía que no la encontraba.
+  for (const patron of [
+    'https://solucionesenlineaeps.suramericana.com/*',
+    'https://epsapps.suramericana.com/*',
+    'https://login.sura.com/*',
+  ]) {
+    const ps = await chrome.tabs.query({ url: patron });
+    if (ps[0]) return ps[0];
+  }
+
+  return null;
 }
 
 async function atenderSura(accion, d = {}) {
@@ -3833,7 +3843,8 @@ async function atenderSura(accion, d = {}) {
       }
       return { ok: true, abierta: true };
     }
-    await chrome.tabs.create({ url: SURA_SSO, active: true });
+    const nueva = await chrome.tabs.create({ url: SURA_SSO, active: true });
+    await esperarCarga(nueva.id);
 
     return { ok: true, abierta: false };
   }
