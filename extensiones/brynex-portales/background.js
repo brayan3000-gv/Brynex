@@ -3974,12 +3974,9 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
     }
   }
 
-  // Ya con la sesión, el menú lleva a la pantalla de reingresos (que vive en
-  // otra aplicación: el JSF redirige solo).
-  const alMenu = esperarCarga(tabId);
-  await chrome.tabs.update(tabId, { url: SURA_MENU });
-  await alMenu;
-  await esperar(2500);
+  // Aquí NO se va al menú todavía: primero hay que decirle al portal con qué
+  // empresa se entra, y eso lo pregunta él mismo al terminar el login.
+  await esperar(1500);
 
   // Tras el SSO, el portal pregunta por la empresa (si el usuario tiene varias).
   let empresa = await suraElegirEmpresa(tabId, nit);
@@ -3995,7 +3992,26 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
 
   if (empresa?.error) return { ok: false, error: empresa.error };
 
-  return { ok: true, ...(await suraEstado(tabId)) };
+  // Con la empresa ya escogida, el portal se queda en su pagina principal: el
+  // menu es el que lleva a la aplicación de reingresos, y hay que pasar por él
+  // DESPUÉS de elegir la empresa (antes no hay nada que abrir).
+  let estado = await suraEstado(tabId);
+  if (!estado.sesion) {
+    const alMenu = esperarCarga(tabId);
+    await chrome.tabs.update(tabId, { url: SURA_MENU });
+    await alMenu;
+
+    for (let i = 0; i < 20 && !estado.sesion; i++) {
+      await esperar(1000);
+      estado = await suraEstado(tabId);
+    }
+  }
+
+  if (!estado.sesion) {
+    return { ok: false, error: 'Se entró y se escogió la empresa, pero la pantalla de reingresos no abrió: revisa la pestaña del portal.' };
+  }
+
+  return { ok: true, ...estado };
 }
 
 /** Cierra la sesión del portal para poder entrar con otro usuario. */
