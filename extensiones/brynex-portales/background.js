@@ -3951,8 +3951,20 @@ async function suraEstado(tabId) {
 }
 
 /** Escribe el documento y espera a que el portal traiga el nombre. */
-async function suraConsultar(tabId, { tipo = 'CC', documento }) {
+async function suraConsultar(tabId, { tipo = 'CC', documento, nit }) {
   const codigo = SURA_TIPOS[String(tipo).toUpperCase()] || '1';
+
+  // Sin la pantalla de reingresos delante no hay nada que consultar: decirlo
+  // así evita el diagnóstico de antes —«no está en esa EPS»— cuando lo que
+  // pasaba es que la pestaña estaba en otra parte.
+  const estado = await suraEstado(tabId);
+  if (!estado.sesion) {
+    return { ok: false, nombre: null, error: 'La pestaña del portal no está en la pantalla de reingresos (o se cayó la sesión). Vuelve a pulsar para que BryNex entre.' };
+  }
+  const esperado = String(nit || '').replace(/\D/g, '');
+  if (esperado && estado.empresa && estado.empresa !== esperado) {
+    return { ok: false, nombre: null, error: `El portal está en la empresa ${estado.empresa} y el contrato es de la ${esperado}.` };
+  }
 
   await ejecutar(tabId, (cod, doc) => {
     const sel = document.querySelector('[id$="Repeater1_ctl00_DdlTypeIdentification"]');
@@ -3975,7 +3987,7 @@ async function suraConsultar(tabId, { tipo = 'CC', documento }) {
     if (i === 6) await ejecutar(tabId, () => document.querySelector('[id$="WucSearchPerson_LinkButton1"]')?.click());
   }
 
-  return { ok: false, nombre: null, error: 'EPS SURA no devolvió el nombre: si la persona no está en esa EPS, el reingreso no aplica (sería un traslado).' };
+  return { ok: false, nombre: null, error: 'EPS SURA no devolvió el nombre de esta persona. Si está en otra EPS, el reingreso no aplica (sería un traslado); si sabes que sí está en SURA, revisa la pestaña del portal.' };
 }
 
 /**
@@ -3984,8 +3996,8 @@ async function suraConsultar(tabId, { tipo = 'CC', documento }) {
  * El número de solicitud se guarda ANTES de aplicar porque es el que sale en el
  * comprobante, y sirve de respaldo si el visor tarda en dibujarse.
  */
-async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2', ibc, fechaIngreso, asesor = '0' }) {
-  const consulta = await suraConsultar(tabId, { tipo, documento });
+async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2', ibc, fechaIngreso, asesor = '0', nit }) {
+  const consulta = await suraConsultar(tabId, { tipo, documento, nit });
   if (!consulta.nombre) return consulta;
 
   const [a, m, dia] = String(fechaIngreso).split('-');

@@ -220,6 +220,7 @@ async function realizarReingresoEpsSura() {
     const d = await esuExt('suraRadicar', {
         tipo: p.persona?.tipo, documento: p.persona?.numero,
         ibc: p.ibc, fechaIngreso: p.fechaIngreso, asesor: p.asesor,
+        nit: nitContrato,
     }, 300);
     soltar();
 
