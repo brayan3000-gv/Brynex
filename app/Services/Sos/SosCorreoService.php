@@ -67,11 +67,10 @@ class SosCorreoService
         }
 
         // La firma del contratista va dibujada: en letra del PDF las EPS
-        // devuelven el formulario (le pasó a Comfenalco el 16-sep-2026). Sin
-        // ella el envío se frena, no es un aviso más.
+        // devuelven el formulario (le pasó a Comfenalco el 16-sep-2026). Si
+        // falta, el modal la pide dibujada ahí mismo, como en Sanitas.
         $faltaFirma = $cliente && ! FormularioEpsService::tieneFirma($cliente);
         if ($faltaFirma) {
-            $avisos[] = 'Falta la firma del contratista: ábrele el formulario y pídele que la dibuje. Sin ella no se puede enviar.';
         }
 
         $beneficiarios = $cliente ? $cliente->beneficiarios()->where('aliado_id', $contrato->aliado_id)->get() : collect();
@@ -150,6 +149,8 @@ class SosCorreoService
             'problemas'     => $problemas,
             'avisos'        => $avisos,
             'falta_firma'   => $faltaFirma,
+            'tiene_firma'   => $cliente && ! $faltaFirma,
+            'url_firma'     => route('admin.afiliaciones.formulario.eps.firma', $contrato->id, false),
             'independiente' => $independiente,
             'buzon'         => DatosAfiliacion::buzon($contrato->aliado_id),
             'para'          => $principal,
@@ -264,6 +265,21 @@ class SosCorreoService
         }
 
         return $dia;
+    }
+
+    /**
+     * El formulario tal como saldría en el correo, para revisarlo antes de
+     * enviar. No se guarda: al enviar se vuelve a generar.
+     */
+    public function vistaPrevia(Contrato $contrato, bool $conBeneficiarios): string
+    {
+        $contrato->loadMissing(['cliente.municipio', 'cliente.departamento', 'cliente.beneficiarios', 'razonSocial', 'eps', 'arl', 'pension']);
+        $pdf = $this->formularios->generar($contrato, $conBeneficiarios, []);
+        if (! str_starts_with($pdf, '%PDF')) {
+            throw new RuntimeException('No se pudo generar el formulario de EPS del contrato.');
+        }
+
+        return $pdf;
     }
 
     /**

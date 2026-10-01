@@ -193,6 +193,22 @@ class SosController extends Controller
         ));
     }
 
+    /** El formulario que se adjuntaría, para verlo en el modal antes de enviar. */
+    public function correoFormulario(Request $request, SosCorreoService $correo, int $contratoId)
+    {
+        try {
+            $pdf = $correo->vistaPrevia($this->contrato($contratoId), $request->boolean('con_beneficiarios', true));
+        } catch (Throwable $e) {
+            return response($e->getMessage(), 422)->header('Content-Type', 'text/plain; charset=utf-8');
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="formulario_sos.pdf"',
+            'Cache-Control' => 'no-store',
+        ]);
+    }
+
     /** Sube la copia del documento de identidad del cliente, para poder enviarla. */
     public function correoDocumento(Request $request, SosCorreoService $correo, int $contratoId)
     {

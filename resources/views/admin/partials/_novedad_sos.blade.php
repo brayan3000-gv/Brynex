@@ -35,6 +35,13 @@
 .sosn-adj { font-size:.74rem;margin:.2rem 0 0 1rem;padding:0;line-height:1.6 }
 .sosn-chip { display:inline-block;margin-top:.25rem;font-size:.7rem;color:#1d4ed8;background:#eff6ff;border:1px solid #bfdbfe;border-radius:999px;padding:.05rem .5rem;cursor:pointer }
 .sosn-pasos { font-size:.74rem;color:#475569;margin:.4rem 0 0 1.1rem;padding:0;line-height:1.6 }
+.sosn-ver { background:none;border:none;color:#1d4ed8;font-size:.72rem;font-weight:700;cursor:pointer;padding:0 0 0 .3rem;text-decoration:underline }
+.sosn-firma { font-size:.74rem;font-weight:700;margin-top:.45rem }
+.sosv-bg { display:none;position:fixed;inset:0;background:rgba(15,23,42,.7);z-index:10001;align-items:center;justify-content:center;padding:1rem }
+.sosv-bg.open { display:flex }
+.sosv-box { background:#fff;border-radius:14px;width:100%;max-width:900px;height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 50px rgba(0,0,0,.35) }
+.sosv-box iframe { flex:1;border:none;width:100% }
+.sosv-msg { flex:1;display:flex;align-items:center;justify-content:center;font-size:.82rem;color:#64748b;padding:1rem;text-align:center }
 </style>
 
 <div class="sosn-bg" id="sosnModal">
@@ -86,12 +93,14 @@
           <div class="sosn-aviso" id="sosnCorreoAvisos" style="display:none"></div>
 
           {{-- Sin la firma dibujada el formulario sale en blanco y S.O.S. lo
-               devuelve: aquí están las dos salidas, firmar o revisar si ya firmó. --}}
-          <div id="sosnCorreoFirma" style="display:none;border:1px solid #fbbf24;background:#fffbeb;border-radius:9px;padding:.55rem .7rem;margin-bottom:.5rem">
-            <div style="font-size:.76rem;color:#92400e;font-weight:700;margin-bottom:.4rem">✍️ Falta la firma del contratista</div>
-            <div style="display:flex;gap:.4rem;flex-wrap:wrap">
-              <button class="sosn-btn" style="flex:1;min-width:190px" onclick="firmarParaCorreoSos()">✍️ Abrir formulario y firmar</button>
-              <button class="sosn-btn sec" style="flex:1;min-width:150px" onclick="abrirCorreoSos(sosnCorreoMotivoActual, true)">✅ Ya firmó, revisar</button>
+               devuelve: se dibuja aquí mismo, como en Sanitas, y al guardarla
+               el formulario ya sale firmado. --}}
+          <div class="sosn-aviso" id="sosnCorreoFirma" style="display:none">
+            ✍️ <strong>Falta la firma del contratista.</strong> Que la dibuje aquí con el dedo o el mouse y pulsa Guardar firma.
+            <canvas id="sosnCanvas" width="600" height="200" style="width:100%;height:auto;background:#fff;border:1px dashed #94a3b8;border-radius:8px;margin-top:.5rem;touch-action:none;cursor:crosshair;display:block"></canvas>
+            <div style="display:flex;gap:.5rem">
+              <button class="sosn-btn sec" style="flex:1" onclick="sosnLimpiarFirma()">🧹 Limpiar</button>
+              <button class="sosn-btn" style="flex:2" id="sosnBtnFirma" onclick="sosnGuardarFirma()">💾 Guardar firma</button>
             </div>
           </div>
 
@@ -107,6 +116,8 @@
           <label id="sosnCorreoBenefFila" style="display:none;font-size:.74rem;margin-top:.4rem"><input type="checkbox" id="sosnCorreoBenef" checked onchange="abrirCorreoSos(sosnCorreoMotivoActual, true)"> Incluir beneficiarios</label>
           <div class="sosn-campo">Adjuntos</div>
           <ul class="sosn-adj" id="sosnCorreoAdjuntos"></ul>
+          <div class="sosn-firma" id="sosnCorreoFirmaEstado"></div>
+          <button class="sosn-btn sec" onclick="verFormularioSos()">👁️ Ver el formulario que se envía</button>
           <div id="sosnCorreoInfo" style="font-size:.72rem;color:#64748b;margin-top:.4rem"></div>
           <button class="sosn-btn" id="sosnBtnEnviarCorreo" onclick="enviarCorreoSos()">📧 Enviar correo</button>
         </div>
@@ -114,6 +125,18 @@
 
       <div id="sosnResultado" class="sosn-ok" style="display:none"></div>
     </div>
+  </div>
+</div>
+
+{{-- Vista previa del formulario: el mismo PDF que se adjunta al enviar. --}}
+<div class="sosv-bg" id="sosvModal" onclick="if (event.target === this) cerrarVistaSos()">
+  <div class="sosv-box">
+    <div class="sosn-head">
+      <h3>📄 Formulario que se envía a S.O.S.</h3>
+      <button class="sosn-x" onclick="cerrarVistaSos()">✕</button>
+    </div>
+    <div class="sosv-msg" id="sosvMsg">⏳ Generando el formulario...</div>
+    <iframe id="sosvFrame" title="Formulario de S.O.S." style="display:none"></iframe>
   </div>
 </div>
 
@@ -388,10 +411,57 @@ async function registrarSos() {
 // ── Plan B: correo al asesor ────────────────────────────────────────────
 let sosnCorreoMotivoActual = 'manual', sosnCorreoPrep = null, sosnCorreoDetalle = '';
 
-// Abre el formulario del contrato en otra pestaña: ahí sale el lienzo para que
-// el contratista firme. Al volver, «Ya firmó, revisar» rehace la vista previa.
-function firmarParaCorreoSos() {
-    window.open(`/admin/afiliaciones/${sosnContratoId}/formulario/eps`, '_blank');
+// ── Pad de firma (igual que en Sanitas) ─────────────────────────────────
+let sosnTrazo = false, sosnDibuja = false, sosnX = 0, sosnY = 0, sosnPadListo = false;
+
+function sosnIniciarPad() {
+    if (sosnPadListo) return;
+    sosnPadListo = true;
+    const c = sosnEl('sosnCanvas'), ctx = c.getContext('2d');
+    ctx.lineJoin = ctx.lineCap = 'round'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3;
+    const pos = (e) => {
+        const r = c.getBoundingClientRect(), t = e.touches?.[0] ?? e;
+        return [(t.clientX - r.left) * (c.width / r.width), (t.clientY - r.top) * (c.height / r.height)];
+    };
+    const ini = (e) => { sosnDibuja = true; sosnTrazo = true; [sosnX, sosnY] = pos(e); };
+    const mover = (e) => {
+        if (!sosnDibuja) return;
+        e.preventDefault();
+        const [x, y] = pos(e);
+        ctx.beginPath(); ctx.moveTo(sosnX, sosnY); ctx.lineTo(x, y); ctx.stroke();
+        [sosnX, sosnY] = [x, y];
+    };
+    const fin = () => sosnDibuja = false;
+    c.addEventListener('mousedown', ini); c.addEventListener('mousemove', mover);
+    c.addEventListener('mouseup', fin); c.addEventListener('mouseleave', fin);
+    c.addEventListener('touchstart', ini, { passive: false }); c.addEventListener('touchmove', mover, { passive: false });
+    c.addEventListener('touchend', fin);
+}
+
+function sosnLimpiarFirma() {
+    const c = sosnEl('sosnCanvas');
+    c.getContext('2d').clearRect(0, 0, c.width, c.height);
+    sosnTrazo = false;
+}
+
+async function sosnGuardarFirma() {
+    if (!sosnTrazo) { alert('Dibuja la firma antes de guardar.'); return; }
+    const btn = sosnEl('sosnBtnFirma');
+    btn.disabled = true; btn.textContent = '⏳ Guardando...';
+    try {
+        const form = new FormData();
+        form.append('_token', SOSN_CSRF);
+        form.append('firma', sosnEl('sosnCanvas').toDataURL('image/png'));
+        const r = await fetch(sosnCorreoPrep.url_firma, { method: 'POST', headers: { 'Accept': 'application/json' }, body: form });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error('El servidor no guardó la firma.');
+        // Con la firma guardada se rehace la vista previa: el formulario ya sale firmado.
+        sosnLimpiarFirma();
+        await abrirCorreoSos(sosnCorreoMotivoActual, true);
+    } catch (e) {
+        alert('No se pudo guardar la firma: ' + e.message);
+    }
+    btn.disabled = false; btn.textContent = '💾 Guardar firma';
 }
 
 async function abrirCorreoSos(motivo, conservarTexto = false, detalle = '') {
@@ -423,11 +493,12 @@ async function abrirCorreoSos(motivo, conservarTexto = false, detalle = '') {
     sosnEl('sosnCorreoAvisos').innerHTML = av.map(a => '⚠️ ' + sosnEsc(a)).join('<br>');
     sosnEl('sosnCorreoAvisos').style.display = av.length ? 'block' : 'none';
 
-    // Mientras falte la firma no hay correo que enviar: el asesor lo devolvería.
+    // Sin firma el asesor lo devolvería: se pide dibujada aquí mismo.
     sosnEl('sosnCorreoFirma').style.display = d.falta_firma ? 'block' : 'none';
+    if (d.falta_firma) sosnIniciarPad();
     const btnEnviar = sosnEl('sosnBtnEnviarCorreo');
-    btnEnviar.disabled = !!d.falta_firma;
-    btnEnviar.textContent = d.falta_firma ? '📧 Enviar correo (falta la firma)' : '📧 Enviar correo';
+    btnEnviar.disabled = false;
+    btnEnviar.textContent = d.falta_firma ? '✍️ Falta la firma: dibújala arriba' : '📧 Enviar correo';
 
     sosnEl('sosnCorreoPara').value = previo ? previo.para : d.para.correo;
     sosnEl('sosnCorreoCc').value = previo ? previo.cc : '';
@@ -438,15 +509,50 @@ async function abrirCorreoSos(motivo, conservarTexto = false, detalle = '') {
     if (d.reemplazo) rem.textContent = `↪ ¿${d.para.nombre} de vacaciones? Enviar a ${d.reemplazo.nombre} (${d.reemplazo.correo})`;
     sosnEl('sosnCorreoBenefFila').style.display = d.beneficiarios ? 'block' : 'none';
 
-    sosnEl('sosnCorreoAdjuntos').innerHTML = (d.adjuntos || []).map(a => `<li>📎 ${sosnEsc(a.nombre)} <span style="color:#94a3b8">— ${sosnEsc(a.origen)}</span></li>`).join('');
+    const pagina = { formulario: 1, carta: 3 };
+    sosnEl('sosnCorreoAdjuntos').innerHTML = (d.adjuntos || []).map(a => `<li>📎 ${sosnEsc(a.nombre)} <span style="color:#94a3b8">— ${sosnEsc(a.origen)}</span>` +
+        (pagina[a.clave] ? `<button class="sosn-ver" onclick="verFormularioSos(${pagina[a.clave]})">Ver</button>` : '') + '</li>').join('');
+    const firmaEstado = sosnEl('sosnCorreoFirmaEstado');
+    firmaEstado.innerHTML = d.tiene_firma ? '✍️ Firma del contratista: ✅ registrada, va dibujada en el formulario.' : '✍️ Firma del contratista: ❌ falta, el formulario saldría sin firma.';
+    firmaEstado.style.color = d.tiene_firma ? '#166534' : '#b91c1c';
     const previos = (d.previos || []).map(p => `${sosnEsc(p.estado)} · ${sosnEsc((p.enviado_at || '').slice(0, 16).replace('T', ' '))} → ${sosnEsc(p.para)}`).join('<br>');
     sosnEl('sosnCorreoInfo').innerHTML = `Sale desde <strong>${sosnEsc(d.buzon)}</strong>. Si no hay respuesta, se avisa el ${sosnEsc(d.vence)}.` +
         (previos ? `<br>Correos anteriores:<br>${previos}` : '');
 
-    const btn = sosnEl('sosnBtnEnviarCorreo');
-    btn.disabled = prob.length > 0;
-    btn.textContent = prob.length ? '🚫 Resuelve lo que falta para enviar' : '📧 Enviar correo';
+    if (prob.length) {
+        btnEnviar.disabled = true;
+        btnEnviar.textContent = '🚫 Resuelve lo que falta para enviar';
+    }
     caja.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+let sosvUrl = null;
+
+/** Muestra el formulario tal como saldría en el correo (se genera, no se guarda). */
+async function verFormularioSos(pagina = 1) {
+    const frame = sosnEl('sosvFrame'), msg = sosnEl('sosvMsg');
+    frame.style.display = 'none';
+    msg.style.display = 'flex';
+    msg.textContent = '⏳ Generando el formulario...';
+    sosnEl('sosvModal').classList.add('open');
+
+    const benef = sosnEl('sosnCorreoBenef').checked ? 1 : 0;
+    try {
+        const r = await fetch(`/admin/afiliaciones/${sosnContratoId}/sos/correo/formulario?con_beneficiarios=${benef}`, { headers: { 'Accept': 'application/pdf' } });
+        if (!r.ok) throw new Error(await r.text() || 'No se pudo generar el formulario.');
+        if (sosvUrl) URL.revokeObjectURL(sosvUrl);
+        sosvUrl = URL.createObjectURL(await r.blob());
+        frame.src = `${sosvUrl}#page=${pagina}`;
+        frame.style.display = 'block';
+        msg.style.display = 'none';
+    } catch (e) {
+        msg.textContent = '⚠️ ' + (e.message.length > 300 ? 'No se pudo generar el formulario.' : e.message);
+    }
+}
+
+function cerrarVistaSos() {
+    sosnEl('sosvModal').classList.remove('open');
+    sosnEl('sosvFrame').src = 'about:blank';
 }
 
 function usarReemplazoSos() {
@@ -471,6 +577,12 @@ async function subirDocumentoSos() {
 }
 
 async function enviarCorreoSos() {
+    if (sosnCorreoPrep?.falta_firma) {
+        // No se bloquea: se lleva a la persona al lienzo para que firme primero.
+        sosnEl('sosnCorreoFirma').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        alert('Primero falta la firma del contratista: dibújala en el recuadro y pulsa Guardar firma.');
+        return;
+    }
     const para = sosnEl('sosnCorreoPara').value.trim();
     if (!para) { alert('Indica a quién va el correo.'); return; }
     if (!confirm(`¿Enviar la afiliación por correo a ${para}?\n\nSale desde ${sosnCorreoPrep?.buzon} con ${(sosnCorreoPrep?.adjuntos || []).length} adjuntos.`)) return;

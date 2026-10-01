@@ -1083,6 +1083,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/sos/conciliar/estado', [$sosc, 'estadoConciliacion'])->name('sos.conciliar.estado');
             // Plan B: afiliación por correo al asesor de S.O.S. (portal rechaza o independientes).
             Route::get('/{contrato}/sos/correo', [$sosc, 'correoPreparar'])->name('sos.correo');
+            Route::get('/{contrato}/sos/correo/formulario', [$sosc, 'correoFormulario'])->name('sos.correo.formulario');
             Route::post('/{contrato}/sos/correo/documento', [$sosc, 'correoDocumento'])->name('sos.correo.documento')->middleware('permiso:documentos.subir');
             Route::post('/{contrato}/sos/correo/enviar', [$sosc, 'correoEnviar'])->name('sos.correo.enviar');
             // EPS sin portal de empleador (Comfenalco Valle): afiliación por correo al asesor.
