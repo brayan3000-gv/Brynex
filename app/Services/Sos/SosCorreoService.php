@@ -273,8 +273,9 @@ class SosCorreoService
      */
     public function vistaPrevia(Contrato $contrato, bool $conBeneficiarios): string
     {
+        $adjuntos = $this->preparar($contrato, 'manual', $conBeneficiarios)['adjuntos'];
         $contrato->loadMissing(['cliente.municipio', 'cliente.departamento', 'cliente.beneficiarios', 'razonSocial', 'eps', 'arl', 'pension']);
-        $pdf = $this->formularios->generar($contrato, $conBeneficiarios, []);
+        $pdf = $this->formularios->generar($contrato, $conBeneficiarios, $this->anexos($contrato, $adjuntos));
         if (! str_starts_with($pdf, '%PDF')) {
             throw new RuntimeException('No se pudo generar el formulario de EPS del contrato.');
         }
@@ -296,7 +297,8 @@ class SosCorreoService
             throw new RuntimeException('El formulario no tiene la firma del contratista. Ábrelo y dibújala en «✍️ Firmar» antes de enviarlo: las EPS devuelven los formularios sin firma a mano alzada.');
         }
 
-        $rutaFormulario = EpsRadicado::guardarPdf($contrato, $this->formularios->generar($contrato, $conBeneficiarios, []), 'eps_formulario_sos_correo');
+        $pdf = $this->formularios->generar($contrato, $conBeneficiarios, $this->anexos($contrato, $previstos));
+        $rutaFormulario = EpsRadicado::guardarPdf($contrato, $pdf, 'eps_formulario_sos_correo');
         if (! $rutaFormulario) {
             throw new RuntimeException('No se pudo generar el formulario de EPS del contrato.');
         }
@@ -334,6 +336,59 @@ class SosCorreoService
         }
 
         return [$enviar, $guardados];
+    }
+
+    /**
+     * Sección X «Anexos» del formulario, con los documentos que de verdad se
+     * adjuntan: la casilla 82 y cuántos documentos de identidad van de cada
+     * tipo (CN, RC, TI, CC…), y el total de anexos. Van como datos `custom.*`.
+     *
+     * @param  array<int, array{clave: string}>  $adjuntos  los de preparar()
+     * @return array<string, string>
+     */
+    private function anexos(Contrato $contrato, array $adjuntos): array
+    {
+        $ids = collect($adjuntos)->pluck('clave')
+            ->filter(fn ($c) => str_starts_with($c, 'doc:'))->map(fn ($c) => (int) substr($c, 4));
+        if ($ids->isEmpty()) {
+            return [];
+        }
+
+        $docs = DocumentoCliente::where('aliado_id', $contrato->aliado_id)->where('cc_cliente', $contrato->cedula)
+            ->whereIn('id', $ids)->get();
+        $tipoBenef = $contrato->cliente
+            ? $contrato->cliente->beneficiarios()->where('aliado_id', $contrato->aliado_id)->pluck('tipo_doc', 'n_documento')
+            : collect();
+
+        // Casillas del formulario; PPT es como BryNex guarda el PT.
+        $casilla = fn (?string $tipo) => match ($t = strtoupper((string) $tipo)) {
+            'CN', 'RC', 'TI', 'CC', 'PA', 'CE', 'CD', 'SC', 'PT' => strtolower($t),
+            'PPT' => 'pt',
+            default => null,
+        };
+
+        $cantidad = [];
+        foreach ($docs as $d) {
+            $tipo = match ($d->tipo_documento) {
+                'registro_civil'    => 'rc',
+                'tarjeta_identidad' => 'ti',
+                'cedula'            => $casilla($d->doc_beneficiario ? $tipoBenef->get($d->doc_beneficiario, 'CC') : $contrato->cliente?->tipo_doc),
+                default             => null, // declaraciones y otros: cuentan en el total, no son identidad
+            };
+            if ($tipo) {
+                $cantidad[$tipo] = ($cantidad[$tipo] ?? 0) + 1;
+            }
+        }
+
+        $datos = ['total_anexos' => (string) $docs->count()];
+        if ($cantidad) {
+            $datos['anexo_82_x'] = 'X';
+            foreach ($cantidad as $tipo => $n) {
+                $datos["anexo_{$tipo}"] = (string) $n;
+            }
+        }
+
+        return $datos;
     }
 
     /** El documento de identidad más reciente del cliente (no de beneficiarios). */

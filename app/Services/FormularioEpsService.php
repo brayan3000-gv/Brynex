@@ -167,10 +167,13 @@ class FormularioEpsService
             'empresa.dv'               => $rs?->dv             ?? '',
             'empresa.nit_dv'           => ($rs?->nit ?? $rs?->id ?? '') . ($rs?->dv ? '-' . $rs->dv : ''),
             'empresa.tipo_doc'         => 'NIT',
-            'empresa.razon_social'     => strtoupper($rs?->razon_social ?? ''),
-            'empresa.direccion'        => strtoupper($rs?->direccion   ?? ''),
-            'empresa.telefono'         => $rs?->telefonos ?? '',
-            'empresa.correo'           => $rs?->correos   ?? '',
+            // «SOCIEDAD POR ACCIONES SIMPLIFICADA» no cabe en la casilla y salía cortada.
+            'empresa.razon_social'     => self::razonSocialCorta($rs?->razon_social),
+            // Primero el contacto «para formularios PILA» de la razón social, que
+            // es el que se imprime; si no lo tiene, el general.
+            'empresa.direccion'        => strtoupper($rs?->dir_formulario ?: ($rs?->direccion ?? '')),
+            'empresa.telefono'         => $rs?->tel_formulario ?: ($rs?->telefonos ?? ''),
+            'empresa.correo'           => $rs?->correo_formulario ?: ($rs?->correos ?? ''),
             // Departamento y municipio de la empresa: QUEMADOS (Valle del Cauca / Cali)
             'empresa.departamento'     => 'VALLE DEL CAUCA',
             'empresa.municipio'        => 'CALI',
@@ -269,6 +272,12 @@ class FormularioEpsService
         $guardada = storage_path('app/firmas/'.$cliente->cedula.'.png');
 
         return file_exists($guardada) ? $guardada : '';
+    }
+
+    /** «GAVI CONFECCIONES SOCIEDAD POR ACCIONES SIMPLIFICADA» → «GAVI CONFECCIONES SAS». */
+    public static function razonSocialCorta(?string $razonSocial): string
+    {
+        return trim(preg_replace('/\bSOCIEDAD\s+POR\s+ACCIONES\s+SIMPLIFICADA\b/u', 'SAS', mb_strtoupper(trim((string) $razonSocial))));
     }
 
     /** Si el cliente ya tiene firma dibujada guardada. */
