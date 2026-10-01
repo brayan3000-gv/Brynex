@@ -91,6 +91,20 @@ class FormularioCampos
             'contrato.fecha_ingreso_a2' => '📅 Ing. — AÑO dígito 2  (ej: 0)',
             'contrato.fecha_ingreso_a3' => '📅 Ing. — AÑO dígito 3  (ej: 2)',
             'contrato.fecha_ingreso_a4' => '📅 Ing. — AÑO dígito 4  (ej: 6)',
+
+            // ── Radicado (solo en la copia que guarda BryNex, ya radicada) ──
+            // El formulario que se envía va sin ellos: el número lo da la entidad al
+            // recibirlo. Se estampan sobre el mismo PDF enviado (ver estamparRadicado).
+            'radicado.numero' => '🧾 Radicado — Número que dio la entidad',
+            'radicado.fecha' => '🧾 Radicado — Fecha completa (dd/mm/aaaa)',
+            'radicado.fecha_d1' => '🧾 Radicado — DÍA dígito 1',
+            'radicado.fecha_d2' => '🧾 Radicado — DÍA dígito 2',
+            'radicado.fecha_m1' => '🧾 Radicado — MES dígito 1',
+            'radicado.fecha_m2' => '🧾 Radicado — MES dígito 2',
+            'radicado.fecha_a1' => '🧾 Radicado — AÑO dígito 1',
+            'radicado.fecha_a2' => '🧾 Radicado — AÑO dígito 2',
+            'radicado.fecha_a3' => '🧾 Radicado — AÑO dígito 3',
+            'radicado.fecha_a4' => '🧾 Radicado — AÑO dígito 4',
         ];
     }
 }

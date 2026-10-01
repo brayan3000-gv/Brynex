@@ -244,7 +244,7 @@ class SanitasNovedadService
         }
 
         $constancia = $this->constancia($contrato, $numero, $texto, $entrada['captura'] ?? null);
-        $soporte    = $this->conFormulario($contrato, $constancia);
+        $soporte    = $this->conFormulario($contrato, $constancia, $numero);
         $ruta = EpsRadicado::guardarPdf($contrato, $soporte ?? $constancia, 'eps_radicado_sanitas');
         $observacion = sprintf('Sanitas: novedad de cambio de empleador radicada por el formulario web con el número %s el %s. Responde por correo en unos 3 días hábiles.',
             $numero, now()->format('d/m/Y H:i'));
@@ -257,11 +257,12 @@ class SanitasNovedadService
 
     /**
      * Constancia y formulario enviado en un solo PDF: la primera hoja dice que
-     * Sanitas lo recibió y las siguientes muestran qué se le mandó, con la firma.
-     * El formulario es el último que se generó para adjuntar, que es el que tomó
-     * el robot. Si no está o no se puede leer queda la constancia sola.
+     * Sanitas lo recibió y las siguientes muestran qué se le mandó, con la firma y,
+     * en el encabezado, la fecha de radicado y el número que dio Sanitas. El
+     * formulario es el último que se generó para adjuntar, que es el que tomó el
+     * robot. Si no está o no se puede leer queda la constancia sola.
      */
-    private function conFormulario(Contrato $contrato, ?string $constancia): ?string
+    private function conFormulario(Contrato $contrato, ?string $constancia, string $numero): ?string
     {
         if (! $constancia) {
             return null;
@@ -274,9 +275,16 @@ class SanitasNovedadService
             return null;
         }
 
+        $enviado = $disco->get($formulario);
+        try {
+            $enviado = $this->formularios->estamparRadicado($contrato, $enviado, $numero, now());
+        } catch (\Throwable $e) {
+            Log::warning("Sanitas: no se pudo poner el radicado en el formulario del contrato {$contrato->id}: {$e->getMessage()}");
+        }
+
         try {
             $pdf = new Fpdi;
-            foreach ([$constancia, $disco->get($formulario)] as $binario) {
+            foreach ([$constancia, $enviado] as $binario) {
                 $paginas = $pdf->setSourceFile(StreamReader::createByString($binario));
                 for ($n = 1; $n <= $paginas; $n++) {
                     $pagina = $pdf->importPage($n);

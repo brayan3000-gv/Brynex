@@ -225,6 +225,35 @@ class FormularioEpsService
     }
 
     /**
+     * El número y la fecha de radicado sobre el formulario que se envió (el mismo
+     * PDF, con la firma): solo los campos `radicado.*` del mapeo de la EPS. Así la
+     * copia que guarda BryNex muestra el encabezado como lo deja la entidad. Sin
+     * esos campos mapeados devuelve el PDF tal cual.
+     */
+    public function estamparRadicado(Contrato $contrato, string $pdf, string $numero, \DateTimeInterface $fecha): string
+    {
+        $entidad = $contrato->eps ?: $contrato->cliente?->eps;
+        $campos = array_values(array_filter($entidad?->formulario_campos ?? [], fn ($c) => str_starts_with((string) ($c['dato'] ?? ''), 'radicado.')));
+        if (! $campos) {
+            return $pdf;
+        }
+
+        $f = $fecha->format('dmY');
+        $datos = ['radicado.numero' => $numero, 'radicado.fecha' => $fecha->format('d/m/Y')];
+        foreach (['d1' => 0, 'd2' => 1, 'm1' => 2, 'm2' => 3, 'a1' => 4, 'a2' => 5, 'a3' => 6, 'a4' => 7] as $sufijo => $i) {
+            $datos["radicado.fecha_{$sufijo}"] = $f[$i];
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'radicado_').'.pdf';
+        file_put_contents($tmp, $pdf);
+        try {
+            return $this->rellenarPdf($tmp, $campos, $datos);
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    /**
      * Ruta del PNG de la firma del cliente: solo la que se dibujó a mano alzada
      * en el modal.
      *
