@@ -39,6 +39,7 @@
  *  ccfAbrir {usuario, contrasena}      → abre el login y deja escrito el usuario
  *  ccfConsultar {tipoDoc, documento}   → busca al trabajador y devuelve las opciones del portal
  *  ccfPaso {…datos, opciones}          → llena el paso que esté a la vista (Personal, Laboral, Beneficiarios…)
+ *  ccfAvanzar {que}                    → pulsa «Nueva» / «Continuar» / «Solo afiliar cotizante» llamando a las funciones del portal (sin mouse)
  *  ccfResultado                        → {radicado, numero, texto} tras Finalizar Afiliación
  *  ccfDeclaracion                      → {base64} PDF oficial de la declaración juramentada (formato del portal, sin descargarlo)
  *  ccfSubirDeclaracion {base64}        → adjunta el PDF firmado en cada "Formato declaración juramentada caja" pendiente
@@ -1550,6 +1551,7 @@ async function atenderCcfcv(accion, d = {}) {
   }
   if (accion === 'ccfConsultar') return ccfConsultar(pestana, d);
   if (accion === 'ccfPaso') return { ok: true, ...(await ejecutar(pestana.id, pCcfPaso, [d])) };
+  if (accion === 'ccfAvanzar') return { ok: true, ...(await ejecutar(pestana.id, pCcfAvanzar, [String(d.que || 'continuar')])) };
   if (accion === 'ccfResultado') return { ok: true, ...(await ejecutar(pestana.id, pCcfResultado)) };
   if (accion === 'ccfDocumentos') return { ok: true, ...(await ejecutar(pestana.id, pCcfDocumentos)) };
   if (accion === 'ccfProgreso') return { ok: true, progreso: await ejecutar(pestana.id, () => window.__ccfProgreso || null) };
@@ -1805,6 +1807,41 @@ async function ccfConsultar(pestana, d) {
 }
 
 /**
+ * Avanza el formulario SIN mouse. En el portal «Continuar» y «Solo afiliar cotizante» responden a
+ * `onmousedown="continuar(this)"` (no a click ni a Enter), y llamarla dos veces seguidas calcula mal el
+ * paso siguiente («FieldSet no encontrado con el paso dado: 8»). Por eso se llama a la función del
+ * portal una sola vez, con el portal quieto y sin avisos a la vista.
+ *  que: 'nueva' | 'continuar' | 'solo'
+ */
+function pCcfAvanzar(que) {
+  const vis = e => !!(e && (e.offsetWidth || e.offsetHeight));
+  // Avisos informativos que no bloquean (explicación de Kupi): se cierran para poder seguir.
+  [...document.querySelectorAll('.jconfirm')].filter(vis).forEach(j => {
+    if (/Kupi/i.test(j.innerText || '')) j.querySelectorAll('button').forEach(b => b.click());
+  });
+  const avisos = [...document.querySelectorAll('.jconfirm-content')].filter(vis).map(e => e.innerText.replace(/\s+/g, ' ').trim());
+  if (avisos.length) return { avanzo: false, motivo: 'hay un aviso del portal: ' + avisos.join(' | ').slice(0, 300) };
+  if (window.$ && $.active > 0) return { avanzo: false, motivo: 'el portal está cargando' };
+  const ahora = Date.now();
+  if (window.__ccfAvance && ahora - window.__ccfAvance < 20000) return { avanzo: false, motivo: 'acaba de avanzar hace menos de 20 s' };
+
+  if (que === 'nueva') {
+    const b = [...document.querySelectorAll('#panelAcciones button, #panelAcciones a, #panelAcciones input')]
+      .filter(vis).find(e => /^\s*nueva\s*$/i.test(e.innerText || e.value || ''));
+    if (!b) return { avanzo: false, motivo: 'no hay botón «Nueva» a la vista' };
+    window.__ccfAvance = ahora; b.click();
+    return { avanzo: true, accion: 'nueva' };
+  }
+  if (typeof window.continuar !== 'function') return { avanzo: false, motivo: 'el portal no tiene la función continuar en esta pantalla' };
+  const solo = document.getElementById('btnSoloCotizante'), cont = document.getElementById('btnContinuar');
+  const boton = (que === 'solo' && vis(solo)) ? solo : (vis(cont) ? cont : null);
+  if (!boton) return { avanzo: false, motivo: 'no hay botón Continuar a la vista' };
+  window.__ccfAvance = ahora;
+  Promise.resolve(window.continuar(boton)).catch(() => { /* el portal ya muestra su propio aviso */ });
+  return { avanzo: true, accion: boton === solo ? 'solo' : 'continuar' };
+}
+
+/**
  * Llena el paso que esté a la vista. Se llama cada pocos segundos desde BryNex:
  * la persona pulsa Continuar y en el siguiente llamado se llena el paso nuevo.
  */
@@ -2013,7 +2050,7 @@ function pCcfPaso(d) {
       if (f.excluir === 'N') hecho.push(`${f.nombre} (${f.doc}): incluido — ya estaba en la caja`);
       else falta.push(`${f.nombre} (${f.doc}): el portal aún lo marca para excluir; esperando a que termine de cargar…`);
     });
-    deBrynex.filter(b => !enCaja.some(f => f.doc === b.doc))
+    deBrynex.filter(b => !enCaja.some(f => f.doc === b.doc) && !/compa[ñn]er|espos|c[oó]nyug/i.test(b.parentesco || ''))   // la pareja va en su propio paso
       .forEach(b => falta.push(`agrega a mano: ${b.nombre} (${b.tipo_doc} ${b.documento}, ${b.parentesco || '—'}) — no está en el grupo familiar de la caja`));
     enCaja.filter(f => !deBrynex.some(b => b.doc === f.doc))
       .forEach(f => falta.push(`${f.nombre} está en la caja pero no en BryNex: confirma si sigue a cargo`));

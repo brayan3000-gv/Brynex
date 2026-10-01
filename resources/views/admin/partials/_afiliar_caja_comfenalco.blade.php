@@ -60,6 +60,10 @@
         <div class="ccf-info" id="ccfSesion"></div>
         <button class="ccf-btn sec" id="ccfBtnAbrir" style="display:none" onclick="abrirPortalCaja()">🌐 Abrir el portal para iniciar sesión</button>
         <button class="ccf-btn" id="ccfBtnIniciar" style="display:none" onclick="iniciarCajaComfenalco()">🔎 Buscar al trabajador y empezar</button>
+        <label id="ccfAutoBox" style="display:flex;gap:.45rem;align-items:flex-start;font-size:.74rem;color:#065f46;margin:.55rem 0 0;line-height:1.4;cursor:pointer">
+          <input type="checkbox" id="ccfAuto" style="margin-top:.15rem" onchange="try{localStorage.setItem('ccfAvanzarSolo',this.checked?'1':'0')}catch(e){}">
+          <span><strong>⏩ Avanzar solo.</strong> El robot pulsa «Nueva» y «Continuar» cuando el paso está completo y sin avisos. «Finalizar y radicar» sigue siendo tuyo.</span>
+        </label>
         <div id="ccfPasos" style="display:none"></div>
 
         <div id="ccfFirmaBox" class="ccf-info" style="display:none">
@@ -317,6 +321,10 @@ async function iniciarCajaComfenalco() {
     ccfNota('⏳ Esperando que abras el formulario en el portal (botón «Nueva»)…');
 
     ccfArrancarSondeo();
+    if (ccfAutoActivo() && nueva) {
+        const rn = await ccfExt('ccfAvanzar', { que: 'nueva' }, 20);
+        ccfNota(rn.ok && rn.avanzo ? '⏩ Abrí «Nueva» solo.' : `⏸ No abrí «Nueva»: ${ccfEsc(rn.motivo || rn.error || '')}`);
+    }
 }
 
 // Sondeo de pasos del portal (cada 4 s). Aparte para poder arrancarlo también al retomar un formulario.
@@ -337,6 +345,7 @@ function ccfArrancarSondeo() {
         });
         nuevos('✅', p.hecho); nuevos('⚠️', p.falta); nuevos('❗', p.errores);
         if (/Anexos/i.test(p.paso || '') && p.anexosListos && !ccfDocsGuardados) { ccfDocsGuardados = true; ccfGuardarDocumentos().then(ccfPrepararDeclaracion); }
+        ccfAvanzarSiCorresponde(p);
     }, 4000);
 }
 
@@ -585,4 +594,27 @@ async function ccfRetomarFormulario(id) {
         } else if (intentos > 40) { clearInterval(esperar); }
     }, 500);
 })();
+
+// ── Avanzar solo ─────────────────────────────────────────────────────────────────────────────
+// Con la casilla marcada, cuando el paso lleva dos pasadas seguidas completo (sin faltantes ni errores)
+// se le pide a la extensión que llame a la función del portal que avanza. Anexos y Finalizar quedan
+// siempre a mano de la persona.
+let ccfEstable = { paso: null, n: 0 }, ccfAvanzado = { paso: null, t: 0 };
+try { document.addEventListener('DOMContentLoaded', () => { const c = ccfEl('ccfAuto'); if (c) c.checked = localStorage.getItem('ccfAvanzarSolo') === '1'; }); } catch (e) {}
+const ccfAutoActivo = () => !!ccfEl('ccfAuto')?.checked;
+
+async function ccfAvanzarSiCorresponde(p) {
+    if (!ccfAutoActivo()) return;
+    const paso = p.paso || '';
+    if (!paso || /Anexos|Informaci[oó]n de la empresa/i.test(paso)) return;
+    if ((p.falta || []).length || (p.errores || []).length) { ccfEstable = { paso: null, n: 0 }; return; }
+    if (ccfEstable.paso !== paso) ccfEstable = { paso, n: 0 };
+    if (++ccfEstable.n < 2) return;                                   // dos pasadas seguidas (≈8 s) sin cambios
+    if (ccfAvanzado.paso === paso && Date.now() - ccfAvanzado.t < 90000) return;   // ya se pulsó en este paso
+    ccfAvanzado = { paso, t: Date.now() };
+    const sinFamilia = !(ccfPrep.resumen?.beneficiarios > 0) && !/Conyuge|Cónyuge/i.test(paso);
+    const r = await ccfExt('ccfAvanzar', { que: sinFamilia ? 'solo' : 'continuar' }, 20);
+    if (r.ok && r.avanzo) ccfNota(`⏩ Avancé solo desde «${ccfEsc(paso)}» (${ccfEsc(r.accion)}).`);
+    else { ccfAvanzado = { paso: null, t: 0 }; if (r.motivo && !/cargando|acaba de avanzar/.test(r.motivo)) ccfNota(`⏸ No avancé: ${ccfEsc(r.motivo)}`); }
+}
 </script>
