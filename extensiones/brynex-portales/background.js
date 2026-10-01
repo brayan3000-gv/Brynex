@@ -3881,8 +3881,17 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
 
   const entro = await ejecutar(tabId, async (tipo, user, clave) => {
     const esperar = (ms) => new Promise(r => setTimeout(r, ms));
-    const campoClave = document.querySelector('#suraPassword');
-    if (!campoClave) return { ya: true };     // la sesión seguía viva
+
+    // El formulario tarda en pintarse: mirar una sola vez y no verlo hacía
+    // creer que la sesión ya estaba viva, y de ahí en adelante todo iba contra
+    // una pantalla de login que nadie llenó.
+    let campoClave = null;
+    for (let i = 0; i < 30 && !campoClave; i++) {
+      campoClave = document.querySelector('#suraPassword');
+      if (/\/Semp\//i.test(location.href) && !campoClave) return { ya: true };   // sesión viva
+      if (!campoClave) await esperar(500);
+    }
+    if (!campoClave) return { ya: true };
 
     const tipoSel = document.querySelector('#ctl00_ContentMain_suraType');
     if (tipoSel) { tipoSel.value = tipo; tipoSel.dispatchEvent(new Event('change', { bubbles: true })); }
@@ -3916,6 +3925,16 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
   if (!entro?.ya) {
     await esperarCarga(tabId);
     await esperar(3000);
+
+    // Si el formulario sigue ahí, el portal no aceptó lo que se le dio: mejor
+    // decirlo que seguir y achacárselo a otra pantalla.
+    const sigue = await ejecutar(tabId, () => ({
+      login: !!document.querySelector('#suraPassword'),
+      texto: (document.body?.innerText || '').replace(/\s+/g, ' ').slice(0, 200),
+    }));
+    if (sigue?.login) {
+      return { ok: false, error: `EPS SURA no aceptó el ingreso con el usuario guardado. ${sigue.texto}`.trim() };
+    }
   }
 
   // Ya con la sesión, el menú lleva a la pantalla de reingresos (que vive en
