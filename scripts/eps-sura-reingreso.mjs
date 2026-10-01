@@ -402,11 +402,25 @@ try {
 
   // ── Novedad ──
   paso = 'datos de la novedad';
-  await marco.evaluate((v) => {
-    const s = document.querySelector('[id$="DdlSettlementParam"]') || document.querySelector('[id$="DdlContributorType"]');
-    if (s) { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
-  }, tipoCotizante).catch(() => {});
+
+  // El tipo de cotizante es AutoPostBack y recarga la página ENTERA, así que
+  // hay que esperar esa recarga antes de escribir lo demás. Con una espera
+  // fija era una carrera: el salario, la fecha y el asesor se escribían
+  // mientras la página se reemplazaba y el formulario quedaba vacío, con lo
+  // que el portal no aplicaba nada —y sin decir por qué— (Dora Oime,
+  // 30-sep-2026; antes había salido bien once veces por pura suerte de
+  // tiempos).
+  await Promise.all([
+    pagina.waitForNavigation({ waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {}),
+    marco.evaluate((v) => {
+      const s = document.querySelector('[id$="DdlSettlementParam"]') || document.querySelector('[id$="DdlContributorType"]');
+      if (s) { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
+    }, tipoCotizante).catch(() => {}),
+  ]);
   await esperar(1500);
+
+  // Tras la recarga el marco anterior ya no sirve: hay que volver a buscarlo.
+  marco = (await marcoConCampo(pagina, 'TxtSalary')) ?? (await campoDe()) ?? marco;
 
   await escribir(marco, 'TxtSalary', String(Math.round(Number(ibc))), { conBlur: false });
 
@@ -421,6 +435,28 @@ try {
   // sale en el comprobante (8692154 → «6I_8692154» en Génesis, 30-sep-2026).
   // Sirve de respaldo cuando el visor del comprobante no se deja leer.
   const solicitudPrevia = (await marco.evaluate(() => document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').catch(() => '')).trim();
+
+  // Con el formulario a medio llenar el portal no aplica nada y tampoco dice
+  // qué faltó: se mira antes y se corta aquí, que es donde se ve.
+  const llenado = await marco.evaluate(() => {
+    const v = (sufijo) => document.querySelector(`[id$="${sufijo}"]`)?.value?.trim() || '';
+
+    return { salario: v('TxtSalary'), fecha: v('TxtInitialdate'), asesor: v('hddIntermediary') };
+  }).catch(() => ({}));
+
+  const falta = [
+    !llenado.salario && 'el salario',
+    !llenado.fecha && 'la fecha de ingreso',
+    !llenado.asesor && 'el asesor',
+  ].filter(Boolean);
+
+  if (falta.length) {
+    salir({
+      ok: false, modo, paso: 'datos de la novedad', nombre,
+      formulario: llenado, solicitudPrevia,
+      error: `El formulario no se llenó: falta ${falta.join(', ')}. No se aplicó nada.`,
+    });
+  }
 
   paso = 'aplicar novedad';
   // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
