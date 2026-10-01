@@ -1867,6 +1867,18 @@ function pCcfPaso(d) {
     if ($('#cmbEstadosCivilPersonal').val() !== String(d.estadoCivil)) sel('cmbEstadosCivilPersonal', d.estadoCivil);
     hecho.push('estado civil: ' + $('#cmbEstadosCivilPersonal option:selected').text());
 
+    // Con un permiso (PT/PPT) el portal habilita «Fecha Registro Documento», obligatoria, y «Fecha Fin
+    // Vigencia» (de solo lectura): sin la primera el «Continuar» no avanza y no sale ningún aviso.
+    const fechaReg = document.getElementById('fechaRegistroPersonal');
+    if (vis(fechaReg)) {
+      if (!fechaReg.value && /^\d{4}-\d{2}-\d{2}$/.test(String(d.fechaExpedicion || ''))) {
+        $(fechaReg).val(d.fechaExpedicion).trigger('input').trigger('change').trigger('blur');
+        hecho.push('fecha de registro del documento (PT): ' + d.fechaExpedicion + ' (la fecha de expedición que tiene BryNex)');
+      } else if (!fechaReg.value) {
+        falta.push('«Fecha Registro Documento» del permiso: BryNex no tiene la fecha de expedición, escríbela tú');
+      }
+    }
+
     // País → departamento → municipio → barrio. Cada cambio hace que el portal recargue la lista
     // de abajo y vacíe lo que ya se había elegido, y este paso se repite cada pocos segundos:
     // por eso cada nivel se toca UNA sola vez y solo cuando el de arriba ya quedó puesto. Si

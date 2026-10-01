@@ -174,6 +174,8 @@ class ComfenalcoCajaService
             'celular'      => $celular,
             'correo'       => $correo,
             'fechaIngreso' => $contrato->fecha_ingreso->format('Y-m-d'),
+            // El portal pide «Fecha Registro Documento» cuando el documento es un permiso (PT/PPT).
+            'fechaExpedicion' => $cliente->fecha_expedicion ? \Carbon\Carbon::parse($cliente->fecha_expedicion)->format('Y-m-d') : null,
             'salario'      => $base['salario'],
             'cargoTexto'   => mb_strtoupper(trim((string) $contrato->cargo)) ?: 'APOYO ADMINISTRATIVO',
             'listaBeneficiarios' => $beneficiarios->map(fn ($b) => [
