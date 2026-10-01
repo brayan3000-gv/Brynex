@@ -263,6 +263,31 @@ class EpsSuraReingresoService
     }
 
     /**
+     * Cómo se lanza el script: en el servidor, con un display virtual.
+     *
+     * El comprobante del reingreso lo pinta un visor de Crystal Reports que en
+     * un navegador sin ventana no dibuja nada —de ahí que no se pudiera leer el
+     * resultado ni imprimir la pantalla—. `xvfb-run` le da esa ventana sin
+     * necesidad de pantalla de verdad. Donde no hay Xvfb (el Mac) se corre sin
+     * ventana, que sirve para todo menos para el comprobante.
+     */
+    private function comando(): string
+    {
+        $node = ArlSuraSesionService::binarioNode().' scripts/eps-sura-reingreso.mjs';
+
+        return $this->hayXvfb()
+            ? 'xvfb-run -a --server-args="-screen 0 1400x900x24" '.$node
+            : $node;
+    }
+
+    private function hayXvfb(): bool
+    {
+        static $hay = null;
+
+        return $hay ??= is_executable('/usr/bin/xvfb-run');
+    }
+
+    /**
      * Guarda en los soportes del contrato el documento que entregó el portal.
      *
      * El script lo deja en un archivo temporal del servidor y solo devuelve la
@@ -320,12 +345,15 @@ class EpsSuraReingresoService
         ] + $datos, JSON_UNESCAPED_UNICODE);
 
         $resultado = Process::path(base_path())
+            // Con ventana el visor del comprobante se dibuja y el portal
+            // entrega el documento; sin ella no pinta nada (ver el script).
+            ->env(['SURA_CON_VENTANA' => $this->hayXvfb() ? '1' : '0'])
             // El login ronda los 40 s y el trámite otro tanto; con 240 s una
             // corrida con tropiezos se cortaba a la mitad, dejando la novedad
             // aplicada en SURA sin registrar en BryNex.
             ->timeout(420)
             ->input($entrada)
-            ->run(ArlSuraSesionService::binarioNode().' scripts/eps-sura-reingreso.mjs');
+            ->run($this->comando());
 
         $salida = json_decode(trim($resultado->output()), true) ?: [];
 

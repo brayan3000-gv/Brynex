@@ -80,7 +80,10 @@ if (!ejecutable) salir({ ok: false, error: 'No se encontró Chrome. Define CHROM
 
 const navegador = await puppeteer.launch({
   executablePath: ejecutable,
-  headless: 'new',
+  // Con ventana (xvfb-run pone el display en el servidor) el visor del
+  // comprobante sí se dibuja: sin ella, Crystal Reports no pinta nada y por eso
+  // ni se podía leer el resultado ni imprimir la pantalla.
+  headless: process.env.SURA_CON_VENTANA === '1' ? false : 'new',
   args: [
     '--no-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled',
     // El comprobante se baja desde una ventana emergente: con el bloqueo puesto
