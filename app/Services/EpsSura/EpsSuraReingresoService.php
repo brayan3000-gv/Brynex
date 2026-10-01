@@ -9,7 +9,9 @@ use App\Services\EpsPortal\EpsRadicado;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Smalot\PdfParser\Parser;
 use Throwable;
 
 /**
@@ -283,6 +285,25 @@ class EpsSuraReingresoService
         }
         $salida['soporte_guardado'] = (bool) $ruta;
 
+        // El visor del portal solo se deja leer si llega a dibujarse, y a veces
+        // no lo hace. Cuando pasa, el trámite quedaba bien hecho pero anotado
+        // como dudoso —sin número completo y con un aviso de «revísalo antes de
+        // repetirlo»— y había que mirarlo a mano. El comprobante en PDF dice lo
+        // mismo y no depende de que nada se pinte, así que se lee de ahí.
+        if (! ($salida['ok'] ?? false) && $ruta) {
+            $delPdf = $this->leerComprobante($ruta);
+
+            if ($delPdf['aplicada']) {
+                $salida['ok'] = true;
+                $salida['leidoDelPdf'] = true;
+                $salida['radicado'] = $delPdf['radicado'] ?: ($salida['radicado'] ?? null);
+                $salida['transaccion'] = $salida['transaccion'] ?? $delPdf['transaccion'];
+                $salida['periodoPago'] = $salida['periodoPago'] ?? $delPdf['periodoPago'];
+                unset($salida['error']);
+                $nota = '';
+            }
+        }
+
         if (! ($salida['ok'] ?? false)) {
             // Si el portal llegó a mostrar el comprobante, la novedad se envió
             // aunque no se haya podido leer: queda en trámite, porque marcarlo
@@ -367,6 +388,42 @@ class EpsSuraReingresoService
         return $this->hayXvfb()
             ? 'xvfb-run -a --server-args="-screen 0 1400x900x24" '.$node
             : $node;
+    }
+
+    /**
+     * Saca del comprobante en PDF lo que el visor no se dejó leer.
+     *
+     * @return array{aplicada: bool, radicado: ?string, transaccion: ?string, periodoPago: ?string}
+     */
+    private function leerComprobante(?string $rutaRelativa): array
+    {
+        $nada = ['aplicada' => false, 'radicado' => null, 'transaccion' => null, 'periodoPago' => null];
+
+        if (! $rutaRelativa) {
+            return $nada;
+        }
+
+        try {
+            $archivo = Storage::disk('local')->path($rutaRelativa);
+            if (! is_file($archivo)) {
+                return $nada;
+            }
+
+            $texto = (new Parser())->parseFile($archivo)->getText();
+        } catch (Throwable $e) {
+            // Puede no ser el comprobante —cuando no llegó, se guarda el
+            // certificado— o no dejarse leer: ninguna de las dos es un fallo.
+            return $nada;
+        }
+
+        $dato = fn (string $patron) => preg_match($patron, $texto, $m) ? trim($m[1]) : null;
+
+        return [
+            'aplicada' => (bool) preg_match('/Novedad aplicada con [eé]xito/iu', $texto),
+            'radicado' => $dato('/N[uú]mero de Solicitud\s+([A-Z0-9_]*\d[A-Z0-9_]*)/iu'),
+            'transaccion' => $dato('/C[oó]digo de Transacci[oó]n\s+(\d+)/iu'),
+            'periodoPago' => $dato('/inicio de pago es\s+([\d\/]+)/iu'),
+        ];
     }
 
     public static function claveDelPaso(int $contratoId): string
