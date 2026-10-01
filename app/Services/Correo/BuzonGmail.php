@@ -33,8 +33,39 @@ class BuzonGmail
             throw new RuntimeException('El aliado no tiene buzón de Gmail configurado para enviar afiliaciones, ni tiene el servicio de afiliaciones de BryNex para usar el de Brygar.');
         }
 
+        return self::conClaveDeAplicacion($cuenta, $dueno);
+    }
+
+    /**
+     * El buzón de una empresa: su correo de formularios, al que responden las
+     * entidades que contestan al correo del formulario (Sanitas). La contraseña
+     * de aplicación es de la cuenta, la haya guardado el aliado que sea.
+     */
+    public static function deCuenta(string $cuenta): self
+    {
+        return self::conClaveDeAplicacion($cuenta, null);
+    }
+
+    /** ¿Hay contraseña de aplicación guardada para esa cuenta? */
+    public static function tieneClave(string $cuenta): bool
+    {
+        return self::claveDeAplicacion($cuenta, null) !== null;
+    }
+
+    private static function conClaveDeAplicacion(string $cuenta, ?int $aliadoId): self
+    {
+        $clave = self::claveDeAplicacion($cuenta, $aliadoId);
+        if (! $clave) {
+            throw new RuntimeException("No hay contraseña de aplicación de {$cuenta} en el módulo de claves (entidad con GMAIL, 16 letras).");
+        }
+
+        return new self($cuenta, $clave);
+    }
+
+    private static function claveDeAplicacion(string $cuenta, ?int $aliadoId): ?string
+    {
         $fila = DB::table('clave_accesos')
-            ->where('aliado_id', $dueno)
+            ->when($aliadoId !== null, fn ($q) => $q->where('aliado_id', $aliadoId), fn ($q) => $q->where('aliado_id', '<>', 1))
             ->where('usuario', $cuenta)
             ->where('entidad', 'like', '%GMAIL%')
             ->where('activo', true)
@@ -43,11 +74,7 @@ class BuzonGmail
             // La contraseña de aplicación de Google son 16 letras (a veces guardadas con espacios).
             ->first(fn ($c) => strlen(preg_replace('/\s+/', '', (string) $c->contrasena)) === 16);
 
-        if (! $fila) {
-            throw new RuntimeException("No hay contraseña de aplicación de {$cuenta} en el módulo de claves (entidad con GMAIL, 16 letras).");
-        }
-
-        return new self($cuenta, preg_replace('/\s+/', '', $fila->contrasena));
+        return $fila ? preg_replace('/\s+/', '', $fila->contrasena) : null;
     }
 
     public function cuenta(): string

@@ -251,8 +251,10 @@ class Kernel extends ConsoleKernel
         // Agente del buzón de afiliaciones (seguridadsocial.brygar@gmail.com): cada
         // 30 min lee lo que llega de las entidades, aplica los radicados que
         // envían los asesores y avisa por WhatsApp. Solo lectura en Gmail.
-        // Ejecución manual: php artisan correos:revisar-buzon --aliado=2 --simular
-        $schedule->command('correos:revisar-buzon --aliado=2 --dias=2')
+        // Con --empresas lee además los correos de formularios de las empresas que
+        // tengan contraseña de aplicación (ahí responde Sanitas).
+        // Ejecución manual: php artisan correos:revisar-buzon --aliado=2 --empresas --simular
+        $schedule->command('correos:revisar-buzon --aliado=2 --empresas --dias=2')
             ->everyThirtyMinutes()
             ->timezone('America/Bogota')
             ->name('correos-revisar-buzon')

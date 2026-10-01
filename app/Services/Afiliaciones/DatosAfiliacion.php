@@ -5,6 +5,7 @@ namespace App\Services\Afiliaciones;
 use App\Models\Contrato;
 use App\Models\RazonSocial;
 use App\Models\User;
+use App\Services\Correo\BuzonGmail;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -114,6 +115,28 @@ class DatosAfiliacion
         $ids = array_filter(self::aliadosGestionados(), fn ($id) => self::aliadoBuzon($id) === $aliadoBuzon);
 
         return array_values(array_unique([$aliadoBuzon, ...$ids]));
+    }
+
+    /**
+     * Buzones de las empresas que BryNex puede leer: los correos de formularios de
+     * las razones sociales de Brygar y de los aliados gestionados que tienen
+     * contraseña de aplicación de Gmail en el módulo de claves. Ahí responde Sanitas,
+     * que contesta al correo que se puso en el formulario.
+     *
+     * @return string[]
+     */
+    public static function buzonesDeEmpresas(): array
+    {
+        $propios = array_map('strtolower', array_filter(config('afiliaciones_correo.buzones', [])));
+
+        return RazonSocial::whereIn('aliado_id', array_values(array_unique([self::ALIADO_PRINCIPAL, ...self::aliadosGestionados()])))
+            ->whereNotNull('correo_formulario')
+            ->pluck('correo_formulario')
+            ->map(fn ($c) => strtolower(trim((string) $c)))
+            ->filter(fn ($c) => filter_var($c, FILTER_VALIDATE_EMAIL) && ! in_array($c, $propios, true))
+            ->unique()
+            ->filter(fn ($c) => BuzonGmail::tieneClave($c))
+            ->values()->all();
     }
 
     /**

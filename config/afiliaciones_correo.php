@@ -54,6 +54,8 @@ return [
         'comunicaciones.sura.com' => ['clave' => 'sura', 'tipo' => 'eps_arl', 'nombre' => 'SURA'],
         'epssanitas.com'        => ['clave' => 'sanitas', 'tipo' => 'eps', 'nombre' => 'Sanitas'],
         'colsanitas.com'        => ['clave' => 'sanitas', 'tipo' => 'eps', 'nombre' => 'Sanitas'],
+        // Avisos de trámites en línea de Sanitas (tramitesenlinea@epssanitas.notify-it.com).
+        'epssanitas.notify-it.com' => ['clave' => 'sanitas', 'tipo' => 'eps', 'nombre' => 'Sanitas'],
         'comfenalcovalle.com.co' => ['clave' => 'comfenalco', 'tipo' => 'eps_caja', 'nombre' => 'Comfenalco Valle'],
         'epsdelagente.com.co'   => ['clave' => 'comfenalco', 'tipo' => 'eps', 'nombre' => 'Comfenalco Valle (delagente)'],
         'comfandi.com.co'       => ['clave' => 'comfandi', 'tipo' => 'caja', 'nombre' => 'Comfandi'],

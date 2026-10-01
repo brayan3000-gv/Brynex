@@ -53,9 +53,24 @@ class AgenteBuzonAfiliaciones
 
     public function revisar(int $aliadoId, int $dias = 2, bool $simular = false): array
     {
+        return $this->revisarBuzon(BuzonGmail::delAliado($aliadoId), DatosAfiliacion::aliadoBuzon($aliadoId), $dias, $simular);
+    }
+
+    /**
+     * El buzón de una empresa (su correo de formularios, DatosAfiliacion::buzonesDeEmpresas).
+     * Desde ahí BryNex no envía nada: se lee lo que contestan las entidades, como
+     * Sanitas, que responde al correo puesto en el formulario.
+     */
+    public function revisarCuenta(string $cuenta, int $dias = 2, bool $simular = false): array
+    {
+        return $this->revisarBuzon(BuzonGmail::deCuenta($cuenta), DatosAfiliacion::ALIADO_PRINCIPAL, $dias, $simular);
+    }
+
+    private function revisarBuzon(BuzonGmail $buzon, int $aliadoId, int $dias, bool $simular): array
+    {
+        $this->resultado = ['leidos' => 0, 'nuevos' => 0, 'aplicados' => 0, 'por_revisar' => 0, 'informativos' => 0, 'vencidos' => 0, 'detalle' => []];
         $this->aliadoId = $aliadoId;
-        $buzon    = BuzonGmail::delAliado($aliadoId);
-        $this->aliados = DatosAfiliacion::aliadosDelBuzon(DatosAfiliacion::aliadoBuzon($aliadoId));
+        $this->aliados = DatosAfiliacion::aliadosDelBuzon($aliadoId);
         $enviados = CorreoAfiliacion::where('buzon', $buzon->cuenta())
             ->whereIn('estado', ['enviado', 'observaciones', 'respondido'])
             ->where('enviado_at', '>=', now()->subDays(90))
@@ -217,6 +232,10 @@ class AgenteBuzonAfiliaciones
     /** Otros correos de entidades: a la bandeja, con la cédula si se reconoce. */
     private function otraEntidad(int $aliadoId, array $base, array $m, ?array $entidad): void
     {
+        if (($entidad['clave'] ?? null) === 'sanitas' && $this->respuestaSanitas($base, $m)) {
+            return;
+        }
+
         preg_match_all('/(?<!\d)(\d{6,10})(?!\d)/', $m['asunto'].' '.implode(' ', array_column($base['adjuntos'], 'nombre')).' '.Str::limit($m['texto'], 800, ''), $x);
         $cedulas = array_values(array_unique($x[1]));
         $contratos = $cedulas ? Contrato::whereIn('aliado_id', $this->aliados)->whereIn('cedula', $cedulas)->where('estado', 'vigente')->pluck('aliado_id', 'id') : collect();
@@ -232,6 +251,40 @@ class AgenteBuzonAfiliaciones
             'accion'        => ($entidad['nombre'] ?? 'Entidad').($contratos->count() === 1 ? ': correo de un contrato vigente.' : ($contratos->count() > 1 ? ': menciona varios contratos.' : ': sin contrato reconocido.')),
         ]);
         $this->anotar('por_revisar', ($entidad['nombre'] ?? $m['de'])." «{$m['asunto']}»");
+    }
+
+    /**
+     * Correo de Sanitas sobre una novedad radicada por el formulario web: trae el
+     * número («Envio de Solicitud 14987576») y se liga al radicado que lo tiene
+     * (BryNex lo guarda con ceros adelante: 0014987576). La confirmación de que
+     * creó la solicitud es informativa; cualquier otra respuesta queda por revisar.
+     */
+    private function respuestaSanitas(array $base, array $m): bool
+    {
+        preg_match_all('/(?<!\d)(\d{7,10})(?!\d)/', $m['asunto'].' '.Str::limit($m['texto'], 1500, ''), $x);
+        // Como texto: unique() compara como números y "0014987576" sería igual a "14987576".
+        $numeros = array_values(array_unique(array_merge($x[1], array_map(fn ($n) => str_pad($n, 10, '0', STR_PAD_LEFT), $x[1])), SORT_STRING));
+        $radicado = $numeros ? Radicado::with('contrato.cliente')->where('tipo', Radicado::TIPO_EPS)->whereIn('numero_radicado', $numeros)
+            ->whereHas('contrato', fn ($q) => $q->whereIn('aliado_id', $this->aliados))->first() : null;
+        if (! $radicado?->contrato) {
+            return false;
+        }
+
+        $contrato = $radicado->contrato;
+        $nombre   = trim(($contrato->cliente?->primer_nombre ?? '').' '.($contrato->cliente?->primer_apellido ?? '')) ?: "contrato {$contrato->id}";
+        $confirma = (bool) preg_match('/creada exitosamente|registrada exitosamente/iu', $m['asunto'].' '.$m['texto']);
+        CorreoRecibido::create(array_merge($base, ['aliado_id' => $contrato->aliado_id]) + [
+            'clasificacion' => 'radicado_entidad',
+            'contrato_id'   => $contrato->id,
+            'radicado_id'   => $radicado->id,
+            'estado'        => $confirma ? 'informativo' : 'por_revisar',
+            'accion'        => $confirma
+                ? "Sanitas confirmó que creó la solicitud {$radicado->numero_radicado} de {$nombre}."
+                : "Sanitas escribió sobre la solicitud {$radicado->numero_radicado} de {$nombre}: revisar qué dice.",
+        ]);
+        $this->anotar($confirma ? 'informativo' : 'por_revisar', "Sanitas, solicitud {$radicado->numero_radicado} de {$nombre}");
+
+        return true;
     }
 
     /** Correos enviados que vencieron sin respuesta: un aviso por correo. */
