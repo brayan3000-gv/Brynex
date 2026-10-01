@@ -98,6 +98,10 @@ let sannContratoId = null, sannPrep = {}, sannReloj = null, sannEnvio = null, sa
 // espera la hace la extensión desde la 1.45.42; con una más vieja el robot llena y el
 // Enviar lo pulsa la persona, que es lo que sí funciona.
 let sannEspera = 20;
+// Copias de BryNex Portales que contestan en este Chrome. Con más de una, cada pedido se
+// hace varias veces a la vez (1-oct-2026: el formulario quedó adjunto cuatro veces y las
+// copias viejas enviaban sin esperar), así que no se deja radicar hasta dejar una.
+let sannCopias = 1;
 const SANN_EXT_ESPERA = '1.45.42';
 const SANN_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const sannEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -123,9 +127,16 @@ function sannExt(accion, datos = {}, limiteSeg = 180) {
             return;
         }
         const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+        // Cada copia instalada de la extensión contesta el mismo pedido: se cuentan las
+        // respuestas un momento después de la primera (ver sannCopias).
+        let respuestas = 0;
         const oyente = (ev) => {
             if (ev.source !== window || ev.data?.canal !== 'brynex-portales' || ev.data.tipo !== 'respuesta' || ev.data.id !== id) return;
-            window.removeEventListener('message', oyente); clearTimeout(alarma);
+            respuestas++;
+            sannCopias = Math.max(sannCopias, respuestas);
+            if (respuestas > 1) return;
+            clearTimeout(alarma);
+            setTimeout(() => window.removeEventListener('message', oyente), 1500);
             resolve(ev.data.respuesta || { ok: false, error: 'Respuesta vacía de la extensión.' });
         };
         window.addEventListener('message', oyente);
@@ -251,6 +262,12 @@ async function revisarFormularioSanitas() {
         sannEl('sannBtnLlenar').style.display = 'none';
         return;
     }
+    if (sannCopias > 1) {
+        caja.innerHTML = `⚠️ Hay <strong>${sannCopias} copias de BryNex Portales</strong> instaladas en este Chrome y cada una hace el trámite: Sanitas recibiría el formulario repetido. ` +
+            'Abre <code>chrome://extensions</code>, quita todas las «BryNex Portales» menos la de versión más alta y recarga esta página.';
+        sannEl('sannBtnLlenar').style.display = 'none';
+        return;
+    }
     if (!e.abierta) {
         // Se abre sola y de fondo: BryNex sigue al frente.
         if (!sannAbrio) {
@@ -285,6 +302,7 @@ function sannExtAlMenos(minima) {
 
 async function llenarNovedadSanitas() {
     const btn = sannEl('sannBtnLlenar');
+    if (sannCopias > 1) { revisarFormularioSanitas(); return; }
     const espera = sannExtAlMenos(SANN_EXT_ESPERA) ? sannEspera : null;
     btn.disabled = true; btn.textContent = '⏳ El robot está llenando el formulario en Sanitas...';
     // Mientras la extensión espera para pulsar Enviar, el botón lleva la cuenta.

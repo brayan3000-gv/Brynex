@@ -783,8 +783,15 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
 
   // 3. Adjunto: se entrega al cargador de Liferay, que lo sube de una vez.
   const subido = await ejecutar(pestana.id, (ns, b64, nombre) => {
-    const ya = [...document.querySelectorAll(`input[name="${ns}selectUploadedFileCheckbox"]`)].some(c => c.value === nombre);
-    if (ya) return 'ya';
+    // Liferay renombra lo subido («1_<nombre>-<código>.pdf»): un reintento sobre la misma
+    // página lo encuentra por el nombre sin extensión y no lo vuelve a adjuntar. Si ya hay
+    // varias copias (de antes de este arreglo) queda marcada solo la primera.
+    const base = nombre.replace(/\.pdf$/i, '');
+    const previos = [...document.querySelectorAll(`input[name="${ns}selectUploadedFileCheckbox"]`)].filter(c => c.value === nombre || c.value.includes(base));
+    if (previos.length) {
+      previos.forEach((c, i) => { if (c.checked !== (i === 0)) c.click(); });
+      return 'ya';
+    }
     const input = document.querySelector(`#${ns}uploaderContent input[type=file]`) || document.querySelector(`#${ns}fileUpload input[type=file]`);
     if (!input) return { __error: 'No se encontró el cargador de archivos del formulario de Sanitas.' };
     const bin = atob(b64);
