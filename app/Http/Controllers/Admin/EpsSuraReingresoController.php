@@ -68,6 +68,27 @@ class EpsSuraReingresoController extends Controller
         }
     }
 
+    /** Lo que la extensión trajo del portal: número, transacción y comprobante. */
+    public function aplicar(Request $request, int $contratoId)
+    {
+        $datos = $request->validate([
+            'ok' => 'nullable|boolean',
+            'radicado' => 'nullable|string|max:60',
+            'transaccion' => 'nullable|string|max:60',
+            'periodoPago' => 'nullable|string|max:20',
+            'resultado' => 'nullable|string|max:2000',
+            'error' => 'nullable|string|max:2000',
+            // Un comprobante de una página pesa unos 400 KB en base64.
+            'pdf' => 'nullable|string|max:8000000',
+        ]);
+
+        try {
+            return response()->json($this->servicio->aplicar($this->contrato($contratoId), $datos, Auth::id()));
+        } catch (Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+    }
+
     private function contrato(int $id): Contrato
     {
         return Contrato::paraTramite($id);

@@ -139,6 +139,63 @@ class EpsSuraReingresoService
     }
 
     /**
+     * Registra en BryNex lo que la extensión trajo del portal.
+     *
+     * El reingreso por extensión lo opera el navegador de la persona, que es el
+     * único sitio donde el visor del comprobante dibuja: de ahí llegan el
+     * número, el código de transacción y el PDF del comprobante —el que muestra
+     * solo la empresa del trámite, a diferencia del certificado—.
+     *
+     * @param  array{radicado?:?string, transaccion?:?string, periodoPago?:?string, resultado?:?string, pdf?:?string, error?:?string, ok?:bool}  $entrada
+     */
+    public function aplicar(Contrato $contrato, array $entrada, ?int $usuarioId): array
+    {
+        $radicado = $this->radicadoEps($contrato);
+        $numero = trim((string) ($entrada['radicado'] ?? '')) ?: (string) $radicado->numero_radicado;
+        $aplicada = (bool) ($entrada['ok'] ?? false);
+
+        $ruta = null;
+        if ($pdf = $entrada['pdf'] ?? null) {
+            $ruta = EpsRadicado::guardarPdf($contrato, base64_decode($pdf, true) ?: null, 'eps_sura_comprobante');
+        }
+
+        $detalle = collect([
+            ($entrada['transaccion'] ?? null) ? 'transacción '.$entrada['transaccion'] : null,
+            ($entrada['periodoPago'] ?? null) ? 'inicio de pago '.$entrada['periodoPago'] : null,
+        ])->filter()->implode('; ');
+
+        // Que el portal diga que ya está vigente no es un fallo: ya estaba hecho.
+        $yaEstaba = (bool) preg_match('/vigente(,)? (con|para) (el|este) (mismo )?empleador|ya se encuentra|ya existe/i', (string) ($entrada['error'] ?? ''));
+
+        EpsRadicado::marcar(
+            $radicado, $numero,
+            match (true) {
+                $aplicada => Radicado::ESTADO_TRAMITE,
+                $yaEstaba => Radicado::ESTADO_PENDIENTE,
+                default => Radicado::ESTADO_ERROR,
+            },
+            $ruta,
+            match (true) {
+                $aplicada => 'EPS SURA: novedad de reingreso aplicada con éxito desde el portal'.($detalle ? ' ('.$detalle.')' : '').'.'
+                    .($ruta ? ' Comprobante guardado.' : '').' Queda en trámite hasta que la conciliación lo vea vigente.',
+                $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. '.($entrada['error'] ?? ''),
+                default => 'EPS SURA (reingreso por extensión): '.($entrada['error'] ?? 'el portal no confirmó la novedad.'),
+            },
+            $usuarioId
+        );
+
+        $radicado = $radicado->fresh();
+
+        return [
+            'ok' => $aplicada,
+            'estado' => $radicado->estado,
+            'numero' => $radicado->numero_radicado,
+            'comprobante' => (bool) $ruta,
+            'radicado' => $radicado->paraLaLista(),
+        ];
+    }
+
+    /**
      * Baja el certificado de afiliación al PBS y lo guarda con los soportes del
      * contrato. Solo lee del portal, así que se puede pedir cuantas veces haga
      * falta —y también para quien ya estaba afiliado—.

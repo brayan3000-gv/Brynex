@@ -49,6 +49,14 @@
 
         <button class="esu-btn sec" id="esuBtnConsultar" onclick="consultarEpsSura()">🔎 Consultar en SURA</button>
         <button class="esu-btn" id="esuBtnRegistrar" style="display:none" onclick="registrarEpsSura()">🏥 Radicar reingreso</button>
+
+        {{-- Por extensión: el comprobante del portal —el que muestra solo esta
+             empresa— solo se puede capturar desde el navegador de una persona.
+             Por el servidor se radica igual, pero ese documento no se obtiene. --}}
+        <div style="border-top:1px dashed #e2e8f0;margin:.7rem 0 .4rem"></div>
+        <div style="font-size:.7rem;color:#64748b;margin-bottom:.35rem">🧩 Con la extensión se guarda además el comprobante del portal</div>
+        <button class="esu-btn sec" id="esuBtnExtAbrir" onclick="abrirPortalEpsSura()">🌐 Abrir EPS SURA</button>
+        <button class="esu-btn" id="esuBtnExtRadicar" onclick="radicarConExtensionEpsSura()">🧩 Radicar con la extensión</button>
         {{-- Los ids de la pantalla del portal cambian entre versiones: esto los
              lista tal como están hoy, sin escribir nada. --}}
         <button class="esu-link" id="esuBtnExplorar" onclick="explorarEpsSura()">🔧 Ver los campos del portal (no radica nada)</button>
@@ -60,7 +68,7 @@
 </div>
 
 <script>
-let esuContratoId = null;
+let esuContratoId = null, esuPrep = null;
 const ESU_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const esuEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const esuEl = id => document.getElementById(id);
@@ -83,13 +91,15 @@ function esuEsperar(btn, texto) {
     return () => clearInterval(reloj);
 }
 
-async function esuPedir(ruta, metodo, limiteSeg) {
+async function esuPedir(ruta, metodo, limiteSeg, cuerpo = null) {
     const corte = new AbortController();
     const alarma = setTimeout(() => corte.abort(), limiteSeg * 1000);
     try {
         const r = await fetch(`/admin/afiliaciones/${esuContratoId}/eps-sura/${ruta}`, {
             method: metodo, signal: corte.signal,
-            headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': ESU_CSRF },
+            headers: Object.assign({ 'Accept': 'application/json', 'X-CSRF-TOKEN': ESU_CSRF },
+                cuerpo ? { 'Content-Type': 'application/json' } : {}),
+            body: cuerpo ? JSON.stringify(cuerpo) : undefined,
         });
         return await r.json();
     } finally {
@@ -123,6 +133,7 @@ async function abrirReingresoEpsSura(contratoId) {
 
     esuEl('esuCargando').style.display = 'none';
     esuEl('esuContenido').style.display = 'block';
+    esuPrep = d;                      // el resumen y los datos para la extensión
     esuPintarResumen(d.resumen || {});
 
     const problemas = d.problemas || [];
@@ -184,6 +195,86 @@ async function explorarEpsSura() {
     portal.innerHTML = `<div><strong>${visibles.length}</strong> campos en ${esuEsc(d.url || '')}</div>` +
         `<pre style="max-height:220px;overflow:auto;font-size:.66rem;margin:.4rem 0 0;white-space:pre-wrap">${esuEsc(visibles.map(c => `${c.id} (${c.etiqueta}${c.tipo ? '/' + c.tipo : ''})`).join('\n'))}</pre>`;
     portal.style.display = 'block';
+}
+
+/** Habla con la extensión BryNex Portales, igual que los demás modales. */
+function esuExt(accion, datos = {}, limiteSeg = 300) {
+    return new Promise((resolve) => {
+        if (!document.documentElement.dataset.brynexPortales) {
+            resolve({ ok: false, sinExtension: true, error: 'La extensión BryNex Portales no está instalada en este navegador. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → 🧩 Extensión.' });
+            return;
+        }
+        const id = Date.now() + '-' + Math.random().toString(36).slice(2);
+        const oyente = (ev) => {
+            if (ev.source !== window || ev.data?.canal !== 'brynex-portales' || ev.data.tipo !== 'respuesta' || ev.data.id !== id) return;
+            window.removeEventListener('message', oyente); clearTimeout(alarma);
+            resolve(ev.data.respuesta || { ok: false, error: 'Respuesta vacía de la extensión.' });
+        };
+        window.addEventListener('message', oyente);
+        const alarma = setTimeout(() => { window.removeEventListener('message', oyente); resolve({ ok: false, error: 'La extensión no respondió a tiempo.' }); }, limiteSeg * 1000);
+        window.postMessage({ canal: 'brynex-portales', tipo: 'pedido', id, portal: 'sura', accion, datos }, window.location.origin);
+    });
+}
+
+async function abrirPortalEpsSura() {
+    const d = await esuExt('suraAbrir', {}, 60);
+    if (!d.ok) { alert(d.error || 'No se pudo abrir el portal.'); return; }
+    esuEl('esuPortal').innerHTML = 'Se abrió el portal de EPS SURA en otra pestaña. Inicia sesión ahí y vuelve a este modal.';
+    esuEl('esuPortal').style.display = 'block';
+}
+
+async function radicarConExtensionEpsSura() {
+    const r = esuPrep?.resumen || {};
+    if (!confirm('¿Radicar el reingreso en EPS SURA desde la pestaña del portal?\n\nQueda aplicado y no se puede anular desde aquí.')) return;
+
+    const btn = esuEl('esuBtnExtRadicar');
+    const parar = esuEsperar(btn, 'Radicando con la extensión...');
+
+    // La empresa de la pestaña debe ser la del contrato: el portal no avisa si
+    // se radica en otra, y el error sería de los que cuesta deshacer.
+    const estado = await esuExt('suraEstado', {}, 60);
+    if (!estado.ok) { parar(); btn.disabled = false; btn.textContent = '🧩 Radicar con la extensión'; alert(estado.error || 'No hay pestaña de EPS SURA.'); return; }
+
+    const nitContrato = String(r.nit || '').replace(/\D/g, '');
+    if (estado.empresa && nitContrato && estado.empresa !== nitContrato) {
+        parar(); btn.disabled = false; btn.textContent = '🧩 Radicar con la extensión';
+        alert(`La pestaña está en la empresa ${estado.empresa} y el contrato es de la ${nitContrato}. Entra con la empresa correcta.`);
+        return;
+    }
+
+    // El servicio arma los datos para el robot del servidor; la extensión los
+    // pide en plano.
+    const p = esuPrep?.datos || {};
+    const d = await esuExt('suraRadicar', {
+        tipo: p.persona?.tipo, documento: p.persona?.numero,
+        ibc: p.ibc, fechaIngreso: p.fechaIngreso, asesor: p.asesor,
+    }, 300);
+    parar();
+    btn.disabled = false; btn.textContent = '🧩 Radicar con la extensión';
+
+    if (d.sinExtension) { alert(d.error); return; }
+
+    // Lo que trajo se registra igual si falló: el motivo del portal vale.
+    let g;
+    try {
+        g = await esuPedir('aplicar', 'POST', 120, {
+            ok: !!d.ok, radicado: d.radicado || null, transaccion: d.transaccion || null,
+            periodoPago: d.periodoPago || null, resultado: d.resultado || null,
+            error: d.error || null, pdf: d.pdf || null,
+        });
+    } catch (e) { alert('Se radicó, pero no se pudo guardar en BryNex: ' + (d.radicado || 'sin número')); return; }
+
+    if (g.radicado) pintarRadicadoEnLista(g.radicado, esuContratoId);
+
+    if (!d.ok) { alert(d.error || 'El portal no aplicó la novedad.'); return; }
+
+    esuEl('esuContenido').style.display = 'none';
+    const caja = esuEl('esuResultado');
+    caja.innerHTML = `✅ Reingreso aplicado en EPS SURA${d.radicado ? `: <strong>${esuEsc(d.radicado)}</strong>` : ''}.` +
+        (g.comprobante ? '<br><span style="color:#475569">Comprobante del portal guardado con los soportes.</span>'
+                       : '<br><span style="color:#92400e">El portal no entregó el comprobante.</span>') +
+        '<br><span style="color:#475569">El radicado quedó en trámite; pasa a OK cuando la conciliación lo vea vigente.</span>';
+    caja.style.display = 'block';
 }
 
 async function registrarEpsSura() {
