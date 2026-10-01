@@ -264,7 +264,109 @@ class EpsSuraReingresoService
             throw new RuntimeException(implode(' ', $prep['problemas']));
         }
 
-        $salida = $this->correr($contrato, 'registrar', $prep['datos']);
+        return $this->asentar($contrato, $this->correr($contrato, 'registrar', $prep['datos']), $usuarioId);
+    }
+
+    /**
+     * Varios reingresos de la misma empresa sin volver a entrar al portal.
+     *
+     * El login son veintitantos segundos y se repetía en cada trámite: en una
+     * tanda de sesenta eran veinte minutos de entrar y salir. Se agrupa por
+     * empresa —que es lo que decide con qué usuario se entra— y cada grupo se
+     * hace de una sentada. Cada persona se guarda en cuanto el robot la
+     * termina, así que un corte a mitad no se lleva lo ya hecho.
+     *
+     * @param  array<int>  $contratoIds
+     * @return array{total: int, hechos: int, fallidos: int, grupos: int, resultados: array}
+     */
+    public function registrarLote(array $contratoIds, ?int $usuarioId): array
+    {
+        $contratos = Contrato::whereIn('id', $contratoIds)->get()->keyBy('id');
+        $resultados = [];
+
+        $porEmpresa = $contratos->groupBy(fn (Contrato $c) => preg_replace('/\D/', '', (string) $c->razonSocial?->nit));
+
+        foreach ($porEmpresa as $nit => $delGrupo) {
+            $personas = [];
+            foreach ($delGrupo as $contrato) {
+                $prep = $this->preparar($contrato);
+                if ($prep['problemas']) {
+                    $resultados[$contrato->id] = ['ok' => false, 'error' => implode(' ', $prep['problemas'])];
+
+                    continue;
+                }
+                $personas[] = ['contratoId' => $contrato->id] + $prep['datos'];
+            }
+
+            if (! $personas) {
+                continue;
+            }
+
+            // El primero del grupo presta sus datos para armar la entrada (la
+            // empresa y la credencial son las mismas para todos).
+            $primero = $contratos[$personas[0]['contratoId']];
+
+            $salidaGrupo = $this->correr($primero, 'lote', ['personas' => $personas], function (array $uno) use ($contratos, $usuarioId, &$resultados) {
+                $id = (int) ($uno['contratoId'] ?? 0);
+                if (! $id || ! isset($contratos[$id])) {
+                    return;
+                }
+
+                try {
+                    $resultados[$id] = $this->asentar($contratos[$id], $uno, $usuarioId);
+                } catch (Throwable $e) {
+                    $resultados[$id] = ['ok' => false, 'error' => $e->getMessage()];
+                }
+            });
+
+            // El robot repite al final todo lo que hizo. Sirve de red: si un
+            // aviso suelto se perdió, el trámite igual queda registrado en vez
+            // de darse por no hecho —que invitaría a repetirlo—.
+            foreach ($salidaGrupo['resultados'] ?? [] as $uno) {
+                $id = (int) ($uno['contratoId'] ?? 0);
+                if ($id && isset($contratos[$id]) && ! isset($resultados[$id])) {
+                    try {
+                        $resultados[$id] = $this->asentar($contratos[$id], $uno, $usuarioId);
+                    } catch (Throwable $e) {
+                        $resultados[$id] = ['ok' => false, 'error' => $e->getMessage()];
+                    }
+                }
+            }
+
+            // Si el grupo se cayó antes de atender a nadie —el login, la
+            // empresa—, el motivo es el mismo para todos: sin esto se quedaban
+            // sin resultado y sin explicación.
+            foreach ($personas as $quien) {
+                if (! isset($resultados[$quien['contratoId']])) {
+                    $resultados[$quien['contratoId']] = [
+                        'ok' => false,
+                        'error' => $salidaGrupo['error'] ?? 'El robot no llegó a tramitar a esta persona.',
+                    ];
+                }
+            }
+        }
+
+        // Cuenta por cómo quedó el radicado, no por si el portal aplicó la
+        // novedad: a quien ya estaba vigente no se le aplica nada y aun así
+        // queda resuelto, en OK. Contar solo lo aplicado los daba por fallidos.
+        $hechos = collect($resultados)
+            ->filter(fn ($r) => in_array($r['radicado_brynex'] ?? null, [Radicado::ESTADO_TRAMITE, Radicado::ESTADO_OK], true))
+            ->count();
+
+        return [
+            'total' => count($contratoIds),
+            'hechos' => $hechos,
+            'fallidos' => count($resultados) - $hechos,
+            'grupos' => $porEmpresa->count(),
+            'resultados' => $resultados,
+        ];
+    }
+
+    /**
+     * Guarda en BryNex cómo fue un trámite: estado, número, soporte y aviso.
+     */
+    private function asentar(Contrato $contrato, array $salida, ?int $usuarioId): array
+    {
         $radicado = $this->radicadoEps($contrato);
         $nota = trim((string) ($salida['alerta'] ?? $salida['error'] ?? ''));
         $ruta = $this->guardarSoporte($contrato, $salida['soporte'] ?? null);
@@ -290,7 +392,7 @@ class EpsSuraReingresoService
         // cuando menos falta hacía—. Sin número de solicitud que guardar, el
         // certificado es el único soporte que queda del trámite.
         if (! $ruta && (($salida['ok'] ?? false) || ($salida['enComprobante'] ?? false) || $yaEstaba)) {
-            $cert = $this->correr($contrato, 'certificado', $prep['datos']);
+            $cert = $this->correr($contrato, 'certificado', $this->preparar($contrato)['datos'] ?? []);
             $ruta = $this->guardarSoporte($contrato, $cert['soporte'] ?? null);
             $salida['certificado_error'] = $ruta ? null : ($cert['error'] ?? null);
         }
@@ -601,7 +703,7 @@ class EpsSuraReingresoService
     /**
      * Corre el Chrome headless que opera la pantalla de reingresos.
      */
-    private function correr(Contrato $contrato, string $modo, array $datos): array
+    private function correr(Contrato $contrato, string $modo, array $datos, ?callable $alTerminarUna = null): array
     {
         $credencial = $this->credencial($contrato->razonSocial);
         if (! $credencial) {
@@ -657,13 +759,26 @@ class EpsSuraReingresoService
                 ->env(['SURA_CON_VENTANA' => $this->hayXvfb() ? '1' : '0'])
                 // El login ronda los 40 s y el trámite otro tanto; con 240 s una
                 // corrida con tropiezos se cortaba a la mitad, dejando la novedad
-                // aplicada en SURA sin registrar en BryNex.
-                ->timeout(420)
+                // aplicada en SURA sin registrar en BryNex. Un lote necesita su
+                // propio margen: entra una vez y luego va de persona en persona.
+                ->timeout(420 + 120 * count($datos['personas'] ?? []))
                 ->input($entrada)
-                ->run($this->comando(), function (string $tipo, string $linea) use ($clave, &$tiempos, &$ultimo) {
+                ->run($this->comando(), function (string $tipo, string $linea) use ($clave, $alTerminarUna, &$tiempos, &$ultimo) {
                     // El script anuncia cada paso por stderr con «@paso …»; stdout
                     // lleva el JSON del resultado y no se toca.
                     foreach (preg_split('/\R/', $linea) as $renglon) {
+                        // En un lote el robot va anunciando cada persona apenas
+                        // la termina, para que se guarde al vuelo: si la corrida
+                        // se corta, lo ya hecho no se pierde.
+                        if (str_starts_with($renglon, '@resultado ') && $alTerminarUna) {
+                            $uno = json_decode(trim(substr($renglon, 11)), true);
+                            if (is_array($uno)) {
+                                $alTerminarUna($uno);
+                            }
+
+                            continue;
+                        }
+
                         if (! str_starts_with($renglon, '@paso ')) {
                             continue;
                         }

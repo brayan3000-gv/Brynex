@@ -120,12 +120,19 @@ try { entrada = JSON.parse(await leerStdin() || '{}'); }
 catch { salir({ ok: false, error: 'Entrada JSON inválida.' }); }
 
 const { usuario, contrasena, nitEmpresa, persona = {}, ibc, fechaIngreso } = entrada;
-const modo = ['explorar', 'consultar', 'registrar', 'certificado'].includes(entrada.modo) ? entrada.modo : 'explorar';
+const modo = ['explorar', 'consultar', 'registrar', 'certificado', 'lote'].includes(entrada.modo) ? entrada.modo : 'explorar';
 const asesor = String(entrada.asesor ?? '0');
 const tipoCotizante = String(entrada.tipoCotizante ?? COTIZANTE_DEPENDIENTE);
 
 if (!usuario || !contrasena || !nitEmpresa) salir({ ok: false, error: 'Faltan credenciales o NIT de la empresa.' });
-if (modo !== 'explorar') {
+
+if (modo === 'lote') {
+  // En un lote los datos de cada quien van en la lista, no sueltos.
+  const gente = Array.isArray(entrada.personas) ? entrada.personas : [];
+  if (!gente.length) salir({ ok: false, error: 'El lote llegó sin personas.' });
+  const incompleta = gente.find((q) => !q?.persona?.numero || !q.ibc || !q.fechaIngreso);
+  if (incompleta) salir({ ok: false, error: 'Alguien del lote viene sin documento, IBC o fecha de ingreso.' });
+} else if (modo !== 'explorar') {
   if (!persona.numero) salir({ ok: false, error: 'Falta el documento de la persona.' });
   if (modo === 'registrar' && (!ibc || !fechaIngreso)) salir({ ok: false, error: 'Faltan IBC o fecha de ingreso.' });
 }
@@ -366,276 +373,322 @@ try {
     throw new Error(`El portal está en la empresa ${nitPantalla} y el contrato es de la ${nitEsperado}: no se toca nada.`);
   }
 
-  // ── Persona ──
-  vaPor('documento');
-  const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || '1';
-  await marco.evaluate((t) => {
-    const s = document.querySelector('[id$="Repeater1_ctl00_DdlTypeIdentification"]')
-      || document.querySelector('[id$="DdlTypeIdentification"]');
-    if (!s) return;
-    s.value = t;
-    s.dispatchEvent(new Event('change', { bubbles: true }));
-  }, tipo).catch(() => {});
-  await esperar(1200);
+  /**
+   * Hace el trámite de UNA persona con la sesión ya abierta y la empresa
+   * elegida, y devuelve cómo fue. Separarlo así es lo que permite atender a
+   * varias seguidas sin volver a entrar al portal: el login son veintitantos
+   * segundos y se repetía en cada una.
+   */
+  const tramitarPersona = async ({ persona = {}, ibc, fechaIngreso, tipoCotizante = COTIZANTE_DEPENDIENTE, asesor = '0' }) => {
+    // Tras cada trámite la pantalla es otra, así que el marco se vuelve a buscar.
+    marco = (await campoDe()) ?? marco;
 
-  const puesto = await escribir(marco, 'WucSearchPerson_txtId', String(persona.numero).replace(/\D/g, ''));
-  if (!puesto) throw new Error('No apareció el campo del documento en la pantalla de reingresos.');
+    // ── Persona ──
+    vaPor('documento');
+    const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || '1';
+    await marco.evaluate((t) => {
+      const s = document.querySelector('[id$="Repeater1_ctl00_DdlTypeIdentification"]')
+        || document.querySelector('[id$="DdlTypeIdentification"]');
+      if (!s) return;
+      s.value = t;
+      s.dispatchEvent(new Event('change', { bubbles: true }));
+    }, tipo).catch(() => {});
+    await esperar(1200);
 
-  // El blur no siempre dispara la búsqueda: la lupa del buscador sí.
-  const nombreDe = () => marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_txtName"]')?.value?.trim() || '').catch(() => '');
-  let nombre = await nombreDe();
-  if (!nombre) {
-    vaPor('buscar persona');
-    await marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_LinkButton1"]')?.click()).catch(() => {});
-    for (let i = 0; i < 20 && !nombre; i++) { await esperar(900); nombre = await nombreDe(); }
-  }
+    const puesto = await escribir(marco, 'WucSearchPerson_txtId', String(persona.numero).replace(/\D/g, ''));
+    if (!puesto) throw new Error('No apareció el campo del documento en la pantalla de reingresos.');
 
-  const enPantalla = (await texto(pagina)).replace(/\s+/g, ' ').trim();
-
-  if (modo === 'consultar') {
-    // El formulario de la novedad se despliega recién cuando el portal
-    // encuentra a la persona: se inventaría aquí, con la pantalla ya abierta.
-    const despues = [];
-    for (const f of pagina.frames()) {
-      for (const c of await inventario(f)) if (c.visible || /salary|date|intermediary|save|settlement|option/i.test(c.id || '')) despues.push(c);
+    // El blur no siempre dispara la búsqueda: la lupa del buscador sí.
+    const nombreDe = () => marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_txtName"]')?.value?.trim() || '').catch(() => '');
+    let nombre = await nombreDe();
+    if (!nombre) {
+      vaPor('buscar persona');
+      await marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_LinkButton1"]')?.click()).catch(() => {});
+      for (let i = 0; i < 20 && !nombre; i++) { await esperar(900); nombre = await nombreDe(); }
     }
 
-    salir({
-      ok: true, modo, paso, url: pagina.url(), nombre: nombre || null,
-      // Para saber si de verdad corrió con ventana (xvfb) o sin ella.
-      conVentana: process.env.SURA_CON_VENTANA === '1',
-      display: process.env.DISPLAY || null,
-      // Sin nombre no es un reingreso: la persona no está en SURA y lo que
-      // corresponde es un traslado, que no se hace por esta pantalla.
-      esReingreso: !!nombre,
-      campos: despues, alertas, texto: enPantalla.slice(0, 900),
-    });
-  }
+    const enPantalla = (await texto(pagina)).replace(/\s+/g, ' ').trim();
 
-  // ── Novedad ──
-  vaPor('datos de la novedad');
+    if (modo === 'consultar') {
+      // El formulario de la novedad se despliega recién cuando el portal
+      // encuentra a la persona: se inventaría aquí, con la pantalla ya abierta.
+      const despues = [];
+      for (const f of pagina.frames()) {
+        for (const c of await inventario(f)) if (c.visible || /salary|date|intermediary|save|settlement|option/i.test(c.id || '')) despues.push(c);
+      }
 
-  // El tipo de cotizante es AutoPostBack y recarga la página ENTERA, así que
-  // hay que esperar esa recarga antes de escribir lo demás. Con una espera
-  // fija era una carrera: el salario, la fecha y el asesor se escribían
-  // mientras la página se reemplazaba y el formulario quedaba vacío, con lo
-  // que el portal no aplicaba nada —y sin decir por qué— (Dora Oime,
-  // 30-sep-2026; antes había salido bien once veces por pura suerte de
-  // tiempos).
-  await Promise.all([
-    pagina.waitForNavigation({ waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {}),
-    marco.evaluate((v) => {
-      const s = document.querySelector('[id$="DdlSettlementParam"]') || document.querySelector('[id$="DdlContributorType"]');
-      if (s) { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
-    }, tipoCotizante).catch(() => {}),
-  ]);
-  await esperar(1500);
-
-  // Tras la recarga el marco anterior ya no sirve: hay que volver a buscarlo.
-  marco = (await marcoConCampo(pagina, 'TxtSalary')) ?? (await campoDe()) ?? marco;
-
-  await escribir(marco, 'TxtSalary', String(Math.round(Number(ibc))), { conBlur: false });
-
-  const [a, m, d] = String(fechaIngreso).split('-');
-  await escribir(marco, 'TxtInitialdate', `${d}/${m}/${a}`, { conBlur: false });
-
-  // El asesor es obligatorio aunque el procedimiento de Sura no lo diga: con 0
-  // queda «SIN ASESOR- SIN DIRECCIÓN COMERCIAL».
-  await escribir(marco, 'tbxIntermediaryCode', asesor);
-
-  // El número de solicitud está en el formulario antes de aplicar y es el que
-  // sale en el comprobante (8692154 → «6I_8692154» en Génesis, 30-sep-2026).
-  // Sirve de respaldo cuando el visor del comprobante no se deja leer.
-  const solicitudPrevia = (await marco.evaluate(() => document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').catch(() => '')).trim();
-
-  // Con el formulario a medio llenar el portal no aplica nada y tampoco dice
-  // qué faltó: se mira antes y se corta aquí, que es donde se ve.
-  const llenado = await marco.evaluate(() => {
-    const v = (sufijo) => document.querySelector(`[id$="${sufijo}"]`)?.value?.trim() || '';
-
-    return { salario: v('TxtSalary'), fecha: v('TxtInitialdate'), asesor: v('hddIntermediary') };
-  }).catch(() => ({}));
-
-  const falta = [
-    !llenado.salario && 'el salario',
-    !llenado.fecha && 'la fecha de ingreso',
-    !llenado.asesor && 'el asesor',
-  ].filter(Boolean);
-
-  if (falta.length) {
-    salir({
-      ok: false, modo, paso: 'datos de la novedad', nombre,
-      formulario: llenado, solicitudPrevia,
-      error: `El formulario no se llenó: falta ${falta.join(', ')}. No se aplicó nada.`,
-    });
-  }
-
-  vaPor('aplicar novedad');
-  // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
-  // la novedad en cuanto la aplica, y si no hay dónde dejarlo se pierde.
-  const descarga = await conDescargas();
-
-  const antes = alertas.length;
-  await marco.evaluate(() => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
-
-  // Se espera a lo que llegue primero: la alerta —que es como avisa el rechazo—
-  // o la pantalla del comprobante, que es como termina cuando sale bien. Antes
-  // solo miraba la alerta y, como un reingreso aplicado no muestra ninguna, se
-  // comía los 32 s enteros en TODOS los que salían bien (medido el 1-oct-2026:
-  // 32,0 s clavados en las cinco corridas).
-  for (let i = 0; i < 40 && alertas.length === antes; i++) {
-    await esperar(800);
-    if (/AffiliationReadmissionsRepLoad/i.test(pagina.url())) break;
-  }
-
-  // El resultado sale en otra pantalla (AffiliationReadmissionsRepLoad.aspx) y
-  // dentro de un iframe de Crystal Reports: leer solo el marco principal
-  // devolvía «Informe principal L01» y nada más. Se espera al comprobante y se
-  // lee de todos los marcos.
-  vaPor('comprobante');
-  let comprobante = '';
-  let enComprobante = false;
-
-  // Diez vueltas, no cuarenta: el resultado se saca del PDF que se exporta más
-  // abajo, que no depende de que el visor llegue a dibujarse. Esperar a que
-  // pintara costaba 40 s en cada trámite —otros 40 s clavados en las cinco
-  // corridas— para acabar leyéndolo del PDF igualmente.
-  for (let i = 0; i < 10 && !comprobante; i++) {
-    await esperar(1000);
-
-    // La pantalla del comprobante se reconoce por su propio texto, aunque el
-    // reporte todavía no se pueda leer: que se haya llegado hasta aquí ya
-    // significa que la novedad se envió.
-    for (const f of pagina.frames()) {
-      const t = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
-      if (/documento soporte|Informe principal/i.test(t)) enComprobante = true;
-      if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(t)) { comprobante = t.replace(/\s+/g, ' ').trim(); break; }
+      return {
+        ok: true, modo, paso, url: pagina.url(), nombre: nombre || null,
+        // Para saber si de verdad corrió con ventana (xvfb) o sin ella.
+        conVentana: process.env.SURA_CON_VENTANA === '1',
+        display: process.env.DISPLAY || null,
+        // Sin nombre no es un reingreso: la persona no está en SURA y lo que
+        // corresponde es un traslado, que no se hace por esta pantalla.
+        esReingreso: !!nombre,
+        campos: despues, alertas, texto: enPantalla.slice(0, 900),
+      };
     }
-    if (comprobante) break;
 
-    // El reporte va en un iframe que el visor escribe por dentro (sin src), y
-    // ese marco no siempre sale en pagina.frames(): se lee su contentDocument
-    // desde la página, que es del mismo dominio.
-    for (const f of pagina.frames()) {
-      const dentro = await f.evaluate(() => Array.from(document.querySelectorAll('iframe'))
-        .map((x) => { try { return x.contentDocument?.body?.innerText || ''; } catch { return ''; } })
-        .join(' \n ')).catch(() => '');
-      if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(dentro)) {
-        comprobante = dentro.replace(/\s+/g, ' ').trim();
+    // ── Novedad ──
+    vaPor('datos de la novedad');
+
+    // El tipo de cotizante es AutoPostBack y recarga la página ENTERA, así que
+    // hay que esperar esa recarga antes de escribir lo demás. Con una espera
+    // fija era una carrera: el salario, la fecha y el asesor se escribían
+    // mientras la página se reemplazaba y el formulario quedaba vacío, con lo
+    // que el portal no aplicaba nada —y sin decir por qué— (Dora Oime,
+    // 30-sep-2026; antes había salido bien once veces por pura suerte de
+    // tiempos).
+    await Promise.all([
+      pagina.waitForNavigation({ waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {}),
+      marco.evaluate((v) => {
+        const s = document.querySelector('[id$="DdlSettlementParam"]') || document.querySelector('[id$="DdlContributorType"]');
+        if (s) { s.value = v; s.dispatchEvent(new Event('change', { bubbles: true })); }
+      }, tipoCotizante).catch(() => {}),
+    ]);
+    await esperar(1500);
+
+    // Tras la recarga el marco anterior ya no sirve: hay que volver a buscarlo.
+    marco = (await marcoConCampo(pagina, 'TxtSalary')) ?? (await campoDe()) ?? marco;
+
+    await escribir(marco, 'TxtSalary', String(Math.round(Number(ibc))), { conBlur: false });
+
+    const [a, m, d] = String(fechaIngreso).split('-');
+    await escribir(marco, 'TxtInitialdate', `${d}/${m}/${a}`, { conBlur: false });
+
+    // El asesor es obligatorio aunque el procedimiento de Sura no lo diga: con 0
+    // queda «SIN ASESOR- SIN DIRECCIÓN COMERCIAL».
+    await escribir(marco, 'tbxIntermediaryCode', asesor);
+
+    // El número de solicitud está en el formulario antes de aplicar y es el que
+    // sale en el comprobante (8692154 → «6I_8692154» en Génesis, 30-sep-2026).
+    // Sirve de respaldo cuando el visor del comprobante no se deja leer.
+    const solicitudPrevia = (await marco.evaluate(() => document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').catch(() => '')).trim();
+
+    // Con el formulario a medio llenar el portal no aplica nada y tampoco dice
+    // qué faltó: se mira antes y se corta aquí, que es donde se ve.
+    const llenado = await marco.evaluate(() => {
+      const v = (sufijo) => document.querySelector(`[id$="${sufijo}"]`)?.value?.trim() || '';
+
+      return { salario: v('TxtSalary'), fecha: v('TxtInitialdate'), asesor: v('hddIntermediary') };
+    }).catch(() => ({}));
+
+    const falta = [
+      !llenado.salario && 'el salario',
+      !llenado.fecha && 'la fecha de ingreso',
+      !llenado.asesor && 'el asesor',
+    ].filter(Boolean);
+
+    if (falta.length) {
+      // Se devuelve, no se sale: en un lote cortar aquí dejaría sin atender a
+      // las demás personas de la empresa.
+      return {
+        ok: false, modo, paso: 'datos de la novedad', nombre,
+        formulario: llenado, solicitudPrevia,
+        error: `El formulario no se llenó: falta ${falta.join(', ')}. No se aplicó nada.`,
+      };
+    }
+
+    vaPor('aplicar novedad');
+    // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
+    // la novedad en cuanto la aplica, y si no hay dónde dejarlo se pierde.
+    const descarga = await conDescargas();
+
+    const antes = alertas.length;
+    await marco.evaluate(() => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
+
+    // Se espera a lo que llegue primero: la alerta —que es como avisa el rechazo—
+    // o la pantalla del comprobante, que es como termina cuando sale bien. Antes
+    // solo miraba la alerta y, como un reingreso aplicado no muestra ninguna, se
+    // comía los 32 s enteros en TODOS los que salían bien (medido el 1-oct-2026:
+    // 32,0 s clavados en las cinco corridas).
+    for (let i = 0; i < 40 && alertas.length === antes; i++) {
+      await esperar(800);
+      if (/AffiliationReadmissionsRepLoad/i.test(pagina.url())) break;
+    }
+
+    // El resultado sale en otra pantalla (AffiliationReadmissionsRepLoad.aspx) y
+    // dentro de un iframe de Crystal Reports: leer solo el marco principal
+    // devolvía «Informe principal L01» y nada más. Se espera al comprobante y se
+    // lee de todos los marcos.
+    vaPor('comprobante');
+    let comprobante = '';
+    let enComprobante = false;
+
+    // Diez vueltas, no cuarenta: el resultado se saca del PDF que se exporta más
+    // abajo, que no depende de que el visor llegue a dibujarse. Esperar a que
+    // pintara costaba 40 s en cada trámite —otros 40 s clavados en las cinco
+    // corridas— para acabar leyéndolo del PDF igualmente.
+    for (let i = 0; i < 10 && !comprobante; i++) {
+      await esperar(1000);
+
+      // La pantalla del comprobante se reconoce por su propio texto, aunque el
+      // reporte todavía no se pueda leer: que se haya llegado hasta aquí ya
+      // significa que la novedad se envió.
+      for (const f of pagina.frames()) {
+        const t = await f.evaluate(() => document.body?.innerText || '').catch(() => '');
+        if (/documento soporte|Informe principal/i.test(t)) enComprobante = true;
+        if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(t)) { comprobante = t.replace(/\s+/g, ' ').trim(); break; }
+      }
+      if (comprobante) break;
+
+      // El reporte va en un iframe que el visor escribe por dentro (sin src), y
+      // ese marco no siempre sale en pagina.frames(): se lee su contentDocument
+      // desde la página, que es del mismo dominio.
+      for (const f of pagina.frames()) {
+        const dentro = await f.evaluate(() => Array.from(document.querySelectorAll('iframe'))
+          .map((x) => { try { return x.contentDocument?.body?.innerText || ''; } catch { return ''; } })
+          .join(' \n ')).catch(() => '');
+        if (/Resultado del|Novedad aplicada|Número de Solicitud/i.test(dentro)) {
+          comprobante = dentro.replace(/\s+/g, ' ').trim();
+          break;
+        }
+      }
+    }
+
+    const despues = (comprobante || (await texto(pagina))).replace(/\s+/g, ' ').trim();
+    const alerta = alertas.slice(antes).join(' | ');
+    const aplicada = /Novedad aplicada con [eé]xito/i.test(comprobante);
+    const conError = !aplicada || /error|no se pudo|no fue posible|inconsist/i.test(alerta);
+
+    // Lo que hay que guardar: el número de solicitud es el radicado del trámite y
+    // el código de transacción es su respaldo; el portal muestra los dos.
+    const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
+    // El número lleva dígitos: sin eso, en la pantalla de rechazo se capturaba
+    // «Autogenerar», que es la etiqueta de la casilla de al lado.
+    const solicitud = dato(/N[uú]mero de Solicitud\s+([A-Z0-9]*\d[A-Z0-9_]*)/i);
+    const transaccion = dato(/C[oó]digo de Transacci[oó]n\s+(\d+)/i);
+    const periodo = dato(/per[ií]odo de inicio de pago es\s*([\d/]+)/i);
+
+    // El soporte: el portal lo baja solo, y si no, deja el enlace «Informe
+    // principal» para pedirlo a mano. Se intenta, pero su ausencia no invalida
+    // la novedad: eso lo dice el portal, no el archivo.
+    // El comprobante se baja con «Descargar Documento», que abre una ventana
+    // aparte: la descarga nace en otro target del navegador y por eso el permiso
+    // va a nivel de navegador (ver conDescargas). Si en vez de descargar abre el
+    // PDF en una pestaña, se recoge de ahí.
+    navegador.on('targetcreated', async (t) => {
+      try {
+        const u = t.url() || '';
+        if (/\.pdf|informe|reporte|crystal/i.test(u)) nuevasVentanas.push(u);
+      } catch {}
+    });
+
+    vaPor('soporte');
+
+    // Primero la exportación del visor, que entrega el PDF de una. Lo de abajo
+    // —el clic con el ratón, la ventana emergente, la impresión de la pantalla—
+    // queda de respaldo por si el visor no estuviera.
+    let soporte = await exportarComprobante(pagina, descarga.carpeta);
+
+    if (!soporte) soporte = await descarga.esperar(4);
+    if (!soporte) {
+      // El botón se pulsa con el ratón, no con element.click() por JavaScript:
+      // la ventana emergente donde ocurre la descarga solo se abre si Chrome ve
+      // un gesto de verdad, y un clic sintético no cuenta ni con el bloqueo
+      // desactivado. Por eso no bajaba nada (Paola Montoya, 30-sep-2026).
+      for (const f of pagina.frames()) {
+        let boton = null;
+        for (const h of await f.$$('button, a, input[type=button], input[type=submit]').catch(() => [])) {
+          const t = await h.evaluate((e) => (e.innerText || e.value || '').trim()).catch(() => '');
+          if (/descargar documento|informe principal/i.test(t)) { boton = h; break; }
+        }
+        if (!boton) continue;
+
+        const antesVentanas = navegador.targets().length;
+        await boton.click({ delay: 60 }).catch(async () => {
+          // Si no se deja pulsar (tapado, fuera de pantalla), al menos se intenta.
+          await boton.evaluate((e) => e.click()).catch(() => {});
+        });
+
+        // La ventana emergente tarda en abrirse y en soltar el archivo.
+        soporte = await descarga.esperar(8);
+
+        // Si el botón abrió una ventana, se anota su dirección: sirve para saber
+        // por dónde sale el documento sin alargar la corrida.
+        if (!soporte && navegador.targets().length > antesVentanas) {
+          const nueva = navegador.targets().slice(antesVentanas).map((t) => t.url()).find((u) => u && u !== 'about:blank');
+          if (nueva) nuevasVentanas.push(nueva);
+        }
         break;
       }
     }
-  }
 
-  const despues = (comprobante || (await texto(pagina))).replace(/\s+/g, ' ').trim();
-  const alerta = alertas.slice(antes).join(' | ');
-  const aplicada = /Novedad aplicada con [eé]xito/i.test(comprobante);
-  const conError = !aplicada || /error|no se pudo|no fue posible|inconsist/i.test(alerta);
-
-  // Lo que hay que guardar: el número de solicitud es el radicado del trámite y
-  // el código de transacción es su respaldo; el portal muestra los dos.
-  const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
-  // El número lleva dígitos: sin eso, en la pantalla de rechazo se capturaba
-  // «Autogenerar», que es la etiqueta de la casilla de al lado.
-  const solicitud = dato(/N[uú]mero de Solicitud\s+([A-Z0-9]*\d[A-Z0-9_]*)/i);
-  const transaccion = dato(/C[oó]digo de Transacci[oó]n\s+(\d+)/i);
-  const periodo = dato(/per[ií]odo de inicio de pago es\s*([\d/]+)/i);
-
-  // El soporte: el portal lo baja solo, y si no, deja el enlace «Informe
-  // principal» para pedirlo a mano. Se intenta, pero su ausencia no invalida
-  // la novedad: eso lo dice el portal, no el archivo.
-  // El comprobante se baja con «Descargar Documento», que abre una ventana
-  // aparte: la descarga nace en otro target del navegador y por eso el permiso
-  // va a nivel de navegador (ver conDescargas). Si en vez de descargar abre el
-  // PDF en una pestaña, se recoge de ahí.
-  navegador.on('targetcreated', async (t) => {
-    try {
-      const u = t.url() || '';
-      if (/\.pdf|informe|reporte|crystal/i.test(u)) nuevasVentanas.push(u);
-    } catch {}
-  });
-
-  vaPor('soporte');
-
-  // Primero la exportación del visor, que entrega el PDF de una. Lo de abajo
-  // —el clic con el ratón, la ventana emergente, la impresión de la pantalla—
-  // queda de respaldo por si el visor no estuviera.
-  let soporte = await exportarComprobante(pagina, descarga.carpeta);
-
-  if (!soporte) soporte = await descarga.esperar(4);
-  if (!soporte) {
-    // El botón se pulsa con el ratón, no con element.click() por JavaScript:
-    // la ventana emergente donde ocurre la descarga solo se abre si Chrome ve
-    // un gesto de verdad, y un clic sintético no cuenta ni con el bloqueo
-    // desactivado. Por eso no bajaba nada (Paola Montoya, 30-sep-2026).
-    for (const f of pagina.frames()) {
-      let boton = null;
-      for (const h of await f.$$('button, a, input[type=button], input[type=submit]').catch(() => [])) {
-        const t = await h.evaluate((e) => (e.innerText || e.value || '').trim()).catch(() => '');
-        if (/descargar documento|informe principal/i.test(t)) { boton = h; break; }
-      }
-      if (!boton) continue;
-
-      const antesVentanas = navegador.targets().length;
-      await boton.click({ delay: 60 }).catch(async () => {
-        // Si no se deja pulsar (tapado, fuera de pantalla), al menos se intenta.
-        await boton.evaluate((e) => e.click()).catch(() => {});
-      });
-
-      // La ventana emergente tarda en abrirse y en soltar el archivo.
-      soporte = await descarga.esperar(8);
-
-      // Si el botón abrió una ventana, se anota su dirección: sirve para saber
-      // por dónde sale el documento sin alargar la corrida.
-      if (!soporte && navegador.targets().length > antesVentanas) {
-        const nueva = navegador.targets().slice(antesVentanas).map((t) => t.url()).find((u) => u && u !== 'about:blank');
-        if (nueva) nuevasVentanas.push(nueva);
-      }
-      break;
+    // Si el botón no suelta el archivo, se imprime la pantalla del comprobante.
+    // Es el documento que hace falta: el certificado de afiliación lista TODOS
+    // los empleadores de la persona —SURA lo emite así— y el comprobante del
+    // reingreso muestra solo la empresa del trámite.
+    //
+    // La impresión es rápida y va con su propio límite: esperar de más tumbó la
+    // corrida de Diana Ruiz por tiempo (30-sep-2026) y dejó la novedad aplicada
+    // sin registrar, que es el peor final.
+    if (!soporte) {
+      try {
+        const ruta = join(descarga.carpeta, `comprobante_${Date.now()}.pdf`);
+        await Promise.race([
+          pagina.pdf({ path: ruta, format: 'A4', printBackground: true }),
+          new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('pdf lento')), 25000)),
+        ]);
+        const { size } = await stat(ruta);
+        // Una hoja en blanco pesa poco: si el visor no alcanzó a dibujarse, no sirve.
+        if (size > 12000) soporte = { archivo: 'comprobante_reingreso.pdf', ruta, bytes: size, impreso: true };
+      } catch {}
     }
+
+    return {
+        ok: !conError,
+      modo, paso: 'aplicar novedad', nombre, alerta: alerta || null,
+      radicado: solicitud || (enComprobante && !comprobante ? solicitudPrevia || null : null),
+      // Dice de dónde salió el número: del comprobante o del formulario.
+      numeroSinConfirmar: !solicitud && enComprobante && !comprobante && !!solicitudPrevia,
+      transaccion, periodoPago: periodo,
+      soporte, ventanas: nuevasVentanas.slice(0, 3),
+      texto: despues.slice(0, 900),
+      // Se distingue «no se aplicó» de «se aplicó pero no pude leerlo»: en el
+      // segundo caso repetir el trámite lo duplicaría.
+      enComprobante,
+      error: conError
+        ? (alerta || (comprobante
+          ? 'El portal no confirmó la novedad: '.concat(despues.slice(0, 300))
+          : (enComprobante
+            ? 'La novedad se envió y el portal mostró el comprobante, pero no se pudo leer el resultado: revísalo en el portal ANTES de repetirlo.'
+            : 'No apareció el comprobante del reingreso.')))
+        : undefined,
+    };
+  };
+
+  if (modo === 'lote') {
+    // Todas las personas del lote son de la MISMA empresa: por eso basta con
+    // haber entrado una vez. Cada una se anuncia en cuanto termina, para que
+    // BryNex la guarde al vuelo y un corte a mitad no se lleve lo ya hecho.
+    const personas = Array.isArray(entrada.personas) ? entrada.personas : [];
+    const resultados = [];
+
+    for (const [i, quien] of personas.entries()) {
+      if (i > 0) {
+        // La pantalla anterior quedó en el comprobante: se vuelve al formulario.
+        vaPor('abrir reingresos');
+        await pagina.goto(URL_MENU, { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
+        await esperar(2000);
+      }
+
+      let resultado;
+      try {
+        resultado = await tramitarPersona(quien);
+      } catch (fallo) {
+        resultado = { ok: false, error: String(fallo.message || fallo).slice(0, 200) };
+      }
+      resultado.contratoId = quien.contratoId ?? null;
+      resultados.push(resultado);
+
+      try { process.stderr.write('@resultado '.concat(JSON.stringify(resultado), '\n')); } catch { /* da igual */ }
+    }
+
+    salir({ ok: true, modo, total: resultados.length, resultados });
   }
 
-  // Si el botón no suelta el archivo, se imprime la pantalla del comprobante.
-  // Es el documento que hace falta: el certificado de afiliación lista TODOS
-  // los empleadores de la persona —SURA lo emite así— y el comprobante del
-  // reingreso muestra solo la empresa del trámite.
-  //
-  // La impresión es rápida y va con su propio límite: esperar de más tumbó la
-  // corrida de Diana Ruiz por tiempo (30-sep-2026) y dejó la novedad aplicada
-  // sin registrar, que es el peor final.
-  if (!soporte) {
-    try {
-      const ruta = join(descarga.carpeta, `comprobante_${Date.now()}.pdf`);
-      await Promise.race([
-        pagina.pdf({ path: ruta, format: 'A4', printBackground: true }),
-        new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('pdf lento')), 25000)),
-      ]);
-      const { size } = await stat(ruta);
-      // Una hoja en blanco pesa poco: si el visor no alcanzó a dibujarse, no sirve.
-      if (size > 12000) soporte = { archivo: 'comprobante_reingreso.pdf', ruta, bytes: size, impreso: true };
-    } catch {}
-  }
+  salir(await tramitarPersona({ persona, ibc, fechaIngreso, tipoCotizante, asesor }));
 
-  salir({
-    ok: !conError,
-    modo, paso: 'aplicar novedad', nombre, alerta: alerta || null,
-    radicado: solicitud || (enComprobante && !comprobante ? solicitudPrevia || null : null),
-    // Dice de dónde salió el número: del comprobante o del formulario.
-    numeroSinConfirmar: !solicitud && enComprobante && !comprobante && !!solicitudPrevia,
-    transaccion, periodoPago: periodo,
-    soporte, ventanas: nuevasVentanas.slice(0, 3),
-    texto: despues.slice(0, 900),
-    // Se distingue «no se aplicó» de «se aplicó pero no pude leerlo»: en el
-    // segundo caso repetir el trámite lo duplicaría.
-    enComprobante,
-    error: conError
-      ? (alerta || (comprobante
-        ? 'El portal no confirmó la novedad: '.concat(despues.slice(0, 300))
-        : (enComprobante
-          ? 'La novedad se envió y el portal mostró el comprobante, pero no se pudo leer el resultado: revísalo en el portal ANTES de repetirlo.'
-          : 'No apareció el comprobante del reingreso.')))
-      : undefined,
-  });
 } catch (e) {
   let captura = null;
   try {
