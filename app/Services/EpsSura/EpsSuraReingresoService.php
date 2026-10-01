@@ -188,12 +188,15 @@ class EpsSuraReingresoService
 
         $radicado = $radicado->fresh();
 
-        // Sin comprobante y sin número que guardar, el radicado se quedaría sin
-        // nada que lo respalde: se intenta el certificado de afiliación, que es
-        // el otro documento del portal y además vuelve a confirmar la vigencia.
-        // Tarda cerca de un minuto porque abre un navegador en el servidor.
+        // El comprobante del reingreso lo pinta un visor que no entrega el PDF
+        // por ninguna vía: el botón «Descargar Documento» solo vuelve a abrir la
+        // misma página para imprimirla. Así que cuando no llega, el radicado se
+        // queda sin nada que lo respalde —tenga número o no— y se baja en su
+        // lugar el certificado de afiliación, que es el otro documento del
+        // portal y además vuelve a confirmar la vigencia. Tarda cerca de un
+        // minuto porque abre un navegador en el servidor.
         $certificado = null;
-        if (! $ruta && ! trim((string) $radicado->numero_radicado) && ($aplicada || $yaEstaba)) {
+        if (! $ruta && ($aplicada || $yaEstaba)) {
             try {
                 $cert = $this->certificado($contrato, $usuarioId);
                 $certificado = (bool) ($cert['ok'] ?? false);

@@ -274,8 +274,9 @@ async function realizarReingresoEpsSura() {
     esuEl('esuContenido').style.display = 'none';
     const caja = esuEl('esuResultado');
     caja.innerHTML = `✅ Reingreso aplicado en EPS SURA${d.radicado ? `: <strong>${esuEsc(d.radicado)}</strong>` : ''}.` +
-        (g.comprobante ? '<br><span style="color:#475569">Comprobante del portal guardado con los soportes.</span>'
-                       : '<br><span style="color:#92400e">El portal no entregó el comprobante.</span>') +
+        (g.certificado === true ? '<br><span style="color:#475569">El portal no entregó el comprobante; se guardó el certificado de afiliación como soporte.</span>'
+         : g.comprobante ? '<br><span style="color:#475569">Comprobante del portal guardado con los soportes.</span>'
+         : '<br><span style="color:#92400e">No se pudo guardar ningún soporte: ni el comprobante ni el certificado.</span>') +
         '<br><span style="color:#475569">El radicado quedó en trámite; pasa a OK cuando la conciliación lo vea vigente.</span>';
     caja.style.display = 'block';
 }

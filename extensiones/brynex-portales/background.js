@@ -158,6 +158,46 @@ function esperarCarga(tabId, timeout = 45000) {
   });
 }
 
+/**
+ * Guarda una página como PDF y lo devuelve en base64.
+ *
+ * Es lo único que sirve con los comprobantes que pinta un visor de informes:
+ * no hay archivo que descargar, solo una página pensada para imprimirse. Hace
+ * por dentro lo mismo que Ctrl+P → «Guardar como PDF». Se abre en una pestaña
+ * aparte, en segundo plano, para no tocar la del trámite.
+ */
+async function imprimirAPdf(url) {
+  let pestana = null;
+  try {
+    pestana = await chrome.tabs.create({ url, active: false });
+    const destino = { tabId: pestana.id };
+    await esperarCarga(pestana.id);
+    await esperar(2000);                       // el visor tarda en dibujarse
+
+    try {
+      await chrome.debugger.attach(destino, '1.3');
+      const r = await chrome.debugger.sendCommand(destino, 'Page.printToPDF', {
+        printBackground: true,
+        paperWidth: 8.5,
+        paperHeight: 11,
+        marginTop: 0.4,
+        marginBottom: 0.4,
+        marginLeft: 0.4,
+        marginRight: 0.4,
+      });
+
+      return r?.data || null;
+    } finally {
+      // Sin soltarlo, Chrome deja la barra de depuración puesta.
+      try { await chrome.debugger.detach(destino); } catch (e) { /* ya estaba suelto */ }
+    }
+  } catch (e) {
+    return null;
+  } finally {
+    if (pestana?.id) { try { await chrome.tabs.remove(pestana.id); } catch (e) { /* ya cerrada */ } }
+  }
+}
+
 /** Clic que puede enviar el formulario (navegación) o hacer AJAX (A4J). */
 async function clicYEsperar(tabId, func, args = []) {
   let navego = false;
@@ -4325,13 +4365,14 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
 
   // Antes de aplicar se le pone una trampa a window.open: el botón que entrega
   // el comprobante abre una ventana, y de ahí sale la dirección del documento.
+  // No se deja abrir de verdad —esa ventana no aporta nada y estorba—, pero se
+  // devuelve algo con focus() porque el portal lo llama justo después.
   await ejecutar(tabId, () => {
     window.__brynexDocs = [];
-    const abrir = window.open;
-    window.open = function (url, ...resto) {
+    window.open = function (url) {
       if (url) window.__brynexDocs.push(String(url));
 
-      return abrir.call(window, url, ...resto);
+      return { focus() {}, close() {}, closed: false };
     };
   });
 
@@ -4357,29 +4398,22 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
   const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
   const aplicada = /Novedad aplicada con [eé]xito/i.test(comprobante);
 
-  // El PDF: se pulsa «Descargar Documento» para que suelte la dirección y se
-  // pide con fetch (las cookies de la sesión van incluidas). No se depende de
-  // que la ventana emergente sobreviva ni de dónde aterrice el archivo.
-  const pdf = await ejecutar(tabId, async () => {
+  // El PDF: se pulsa «Descargar Documento» para que suelte la dirección de la
+  // versión imprimible y esa página se imprime. Pedirla con fetch no servía
+  // —devuelve HTML, no un PDF—: el visor de SURA no entrega el archivo por
+  // ninguna vía, su botón solo reabre la página para que la imprima el
+  // navegador. Es lo mismo que hace una persona con Ctrl+P.
+  const urlDoc = await ejecutar(tabId, async () => {
     const boton = [...document.querySelectorAll('button, a, input[type=button], input[type=submit]')]
       .find((e) => /descargar documento|informe principal/i.test(e.innerText || e.value || ''));
     if (boton) boton.click();
 
     for (let i = 0; i < 20 && !(window.__brynexDocs || []).length; i++) await new Promise(r => setTimeout(r, 400));
 
-    const url = (window.__brynexDocs || []).pop();
-    if (!url) return null;
+    return (window.__brynexDocs || []).pop() || location.href;
+  }).catch(() => null);
 
-    const res = await fetch(url, { credentials: 'include' });
-    if (!res.ok) return null;
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf[0] !== 0x25 || buf[1] !== 0x50) return null;   // %P de %PDF
-
-    let s = '';
-    for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-
-    return btoa(s);
-  });
+  const pdf = urlDoc ? await imprimirAPdf(urlDoc) : null;
 
   return {
     ok: aplicada,

@@ -209,12 +209,19 @@ try {
     const soporte = await descarga.esperar(25);
     const pantalla = (await texto(pagina)).replace(/\s+/g, ' ').trim();
 
+    // Sin certificado el portal suele decir por qué (no está afiliado, no es de
+    // esta empresa): ese texto vale más que un «no se pudo». Pero la pantalla
+    // empieza SIEMPRE con el mismo párrafo de ayuda, así que recortarla por el
+    // principio devolvía ese párrafo y escondía justo el motivo. Se busca la
+    // frase que lo dice y, si no aparece, se manda el final, que es donde el
+    // portal lo escribe.
+    const motivo = (pantalla.match(/((?:no |sin )(?:se |hay )?(?:encontr|est[aá]|existe|pertenece|tiene|aparece|registra|afiliad|result|informaci)[^.]{0,200}\.?)/i) || [])[1]?.trim()
+      || (pantalla.length > 300 ? '…'.concat(pantalla.slice(-300)) : pantalla);
+
     salir({
       ok: !!soporte, modo, paso, soporte,
       texto: pantalla.slice(0, 600),
-      // Sin certificado el portal suele decir por qué (no está afiliado, no es
-      // de esta empresa): ese texto vale más que un «no se pudo».
-      error: soporte ? undefined : 'El portal no entregó el certificado: '.concat(pantalla.slice(0, 300)),
+      error: soporte ? undefined : 'El portal no entregó el certificado: '.concat(motivo),
     });
   }
 
