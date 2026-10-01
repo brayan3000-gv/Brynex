@@ -91,12 +91,16 @@ class SanitasNovedadService
             ->flatMap(fn ($t) => preg_split('/[,;\/|]| - /', (string) $t))
             ->map(fn ($t) => $this->digitos($t))->first(fn ($t) => strlen($t) >= 7 && strlen($t) <= 10) ?? '';
 
-        // Sanitas responde al correo del formulario: el buzón del aliado, que revisa el agente.
-        $correo = config("afiliaciones_correo.buzones.{$contrato->aliado_id}") ?: $cliente?->correo;
+        // Sanitas responde al correo del formulario: el correo de formularios de la razón
+        // social si lo tiene (el que la empresa usa con las entidades), si no el buzón del
+        // aliado, que revisa el agente, y por último el del cliente.
+        $correoRs = filter_var(trim((string) $rs?->correo_formulario), FILTER_VALIDATE_EMAIL) ?: null;
+        $buzon    = config("afiliaciones_correo.buzones.{$contrato->aliado_id}");
+        $correo   = $correoRs ?: $buzon ?: $cliente?->correo;
         if (! $correo) {
-            $problemas[] = 'No hay correo para la respuesta de Sanitas (ni buzón del aliado ni correo del cliente).';
-        } elseif ($correo === $cliente?->correo) {
-            $avisos[] = 'El aliado no tiene buzón configurado: la respuesta de Sanitas llegará al correo del cliente.';
+            $problemas[] = 'No hay correo para la respuesta de Sanitas (ni correo de formularios de la razón social, ni buzón del aliado, ni correo del cliente).';
+        } elseif (! $correoRs && ! $buzon) {
+            $avisos[] = 'Ni la razón social tiene correo de formularios ni el aliado buzón configurado: la respuesta de Sanitas llegará al correo del cliente.';
         }
         // La plantilla de Sanitas lleva la firma del trabajador; sin la dibujada a mano
         // el espacio sale en blanco y Sanitas devuelve la novedad. El robot no sube un

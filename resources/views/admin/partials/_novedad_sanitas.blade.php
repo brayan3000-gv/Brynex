@@ -94,9 +94,10 @@
 <script>
 let sannContratoId = null, sannPrep = {}, sannReloj = null, sannEnvio = null, sannAbrio = false;
 // Segundos entre llenar y pulsar Enviar: con el clic inmediato Sanitas contesta «demoras
-// temporales». La espera la hace la extensión desde la 1.45.42; con una más vieja el robot
-// llena y el Enviar lo pulsa la persona, que es lo que sí funciona.
-let sannEspera = 60;
+// temporales» (1-oct-2026: 5 de 5 rechazados a los ~3 s; pasaron con 20, 30 y 60 s). Se
+// usan 30 para dejar margen. La espera la hace la extensión desde la 1.45.42; con una más
+// vieja el robot llena y el Enviar lo pulsa la persona, que es lo que sí funciona.
+let sannEspera = 30;
 const SANN_EXT_ESPERA = '1.45.42';
 const SANN_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const sannEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
