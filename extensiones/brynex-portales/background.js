@@ -3869,7 +3869,7 @@ async function atenderSura(accion, d = {}) {
  * JavaScript, así que Enter no sirve. Es el mismo baile que hace el robot del
  * servidor en `arl-sura-sesion-comun.mjs`.
  */
-async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit }) {
+async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit }, reintento = false) {
   if (!usuario || !contrasena) {
     return { ok: false, error: 'BryNex no entregó la clave del portal (hace falta el permiso para ver contraseñas).' };
   }
@@ -3982,10 +3982,28 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
   await esperar(2500);
 
   // Tras el SSO, el portal pregunta por la empresa (si el usuario tiene varias).
-  const empresa = await suraElegirEmpresa(tabId, nit);
+  let empresa = await suraElegirEmpresa(tabId, nit);
+
+  // «No tiene acceso» con una sesión que ya estaba abierta suele ser de otro
+  // usuario: cada empresa tiene el suyo y el portal no avisa de quién es la
+  // sesión. Se cierra y se entra con el que corresponde, una sola vez.
+  if (empresa?.sinAcceso && entro?.ya && !reintento) {
+    await suraCerrarSesion(tabId);
+
+    return suraLogin(tabId, { usuario, contrasena, tipoDocumento, nit }, true);
+  }
+
   if (empresa?.error) return { ok: false, error: empresa.error };
 
   return { ok: true, ...(await suraEstado(tabId)) };
+}
+
+/** Cierra la sesión del portal para poder entrar con otro usuario. */
+async function suraCerrarSesion(tabId) {
+  const carga = esperarCarga(tabId);
+  await chrome.tabs.update(tabId, { url: 'https://epsapps.suramericana.com/Semp/faces/administracion/salidaSegura/salidaSegura.jspx' });
+  await carga;
+  await esperar(2500);
 }
 
 /** Escribe el NIT en la pantalla de selección de empresa, si el portal la pide. */
@@ -4032,7 +4050,7 @@ async function suraElegirEmpresa(tabId, nit) {
   }).catch(() => null);
 
   if (aviso) {
-    return { error: `${aviso} El usuario del portal guardado en BryNex no está habilitado para esta empresa en EPS SURA.` };
+    return { sinAcceso: true, error: `${aviso} El usuario del portal guardado en BryNex no está habilitado para esta empresa en EPS SURA.` };
   }
 
   // Sin la pantalla de reingresos no se puede seguir: mejor decirlo que radicar
