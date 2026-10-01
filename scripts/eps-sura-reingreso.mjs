@@ -444,33 +444,22 @@ try {
       });
 
       // La ventana emergente tarda en abrirse y en soltar el archivo.
-      soporte = await descarga.esperar(15);
+      soporte = await descarga.esperar(8);
 
-      // Si no bajó, se busca la ventana que abrió el botón y se va a su
-      // dirección desde la propia pestaña: ahí la descarga ya no depende de
-      // que el emergente sobreviva.
+      // Si el botón abrió una ventana, se anota su dirección: sirve para saber
+      // por dónde sale el documento sin alargar la corrida.
       if (!soporte && navegador.targets().length > antesVentanas) {
         const nueva = navegador.targets().slice(antesVentanas).map((t) => t.url()).find((u) => u && u !== 'about:blank');
-        if (nueva) {
-          nuevasVentanas.push(nueva);
-          await pagina.goto(nueva, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
-          soporte = await descarga.esperar(20);
-        }
+        if (nueva) nuevasVentanas.push(nueva);
       }
       break;
     }
   }
 
-  // Último recurso: se imprime la pantalla del comprobante a PDF. No es el
-  // documento del portal, pero deja constancia de lo que el portal mostró.
-  if (!soporte) {
-    try {
-      const ruta = join(descarga.carpeta, `comprobante_${Date.now()}.pdf`);
-      await pagina.pdf({ path: ruta, format: 'A4', printBackground: true });
-      const { size } = await stat(ruta);
-      if (size > 2000) soporte = { archivo: 'comprobante.pdf', ruta, bytes: size, impreso: true };
-    } catch {}
-  }
+  // Aquí no se insiste más: el comprobante es un extra y lo que de verdad
+  // guarda BryNex es el certificado de afiliación, que se pide aparte. Esperar
+  // de más tumbó la corrida de Diana Ruiz por tiempo (30-sep-2026) y dejó la
+  // novedad aplicada sin registrar.
 
   salir({
     ok: !conError,

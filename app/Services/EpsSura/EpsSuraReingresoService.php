@@ -318,7 +318,10 @@ class EpsSuraReingresoService
         ] + $datos, JSON_UNESCAPED_UNICODE);
 
         $resultado = Process::path(base_path())
-            ->timeout(240)
+            // El login ronda los 40 s y el trámite otro tanto; con 240 s una
+            // corrida con tropiezos se cortaba a la mitad, dejando la novedad
+            // aplicada en SURA sin registrar en BryNex.
+            ->timeout(420)
             ->input($entrada)
             ->run(ArlSuraSesionService::binarioNode().' scripts/eps-sura-reingreso.mjs');
 
