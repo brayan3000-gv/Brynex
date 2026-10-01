@@ -813,10 +813,21 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
     return c?.checked ? true : null;
   }, [SANITAS_NS, d.nombreArchivo], 60000);
 
+  // La casilla puede salir antes de que el archivo termine de subir: además se espera
+  // el aviso de Liferay «Todos los documentos están listos para ser guardados». Sin
+  // él el robot no envía y le deja el Enviar a la persona.
+  const subidaLista = !!adjunto && !!await esperarQue(pestana.id, () => {
+    const vis = e => !!(e && (e.offsetWidth || e.offsetHeight || e.getClientRects().length));
+    const avisos = [...document.querySelectorAll('div, p, span, h1, h2, h3, h4, strong, label')]
+      .filter(e => e.children.length === 0 && /listos?\s+para\s+ser\s+guardad/i.test(e.textContent || ''));
+    const subiendo = [...document.querySelectorAll('.progress, .progress-bar, [class*="upload-progress"], [class*="uploading"]')].some(vis);
+    return avisos.some(vis) && !subiendo ? true : null;
+  }, [], 45000);
+
   // 4. Marca el trámite en la pestaña y, si se pidió y el adjunto quedó subido,
   // el robot pulsa Enviar. BryNex se queda al frente; solo si algo falta (adjunto,
   // botón) se trae la pestaña de Sanitas para que la persona lo resuelva.
-  const quiereEnviar = !!(d.enviar && adjunto);
+  const quiereEnviar = !!(d.enviar && adjunto && subidaLista);
   // Sanitas contesta «Estamos presentando demoras temporales» cuando el Enviar llega
   // apenas se llenó el formulario (1-oct-2026: cuatro rechazos seguidos con el clic
   // inmediato, y pasó a la primera pulsándolo 69 s después). Se espera antes del clic.
@@ -850,7 +861,10 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
     adjunto: !!adjunto,
     enviado: !!envio?.enviado,
     esperado: quiereEnviar ? espera : 0,
-    aviso: adjunto ? (envio?.motivo || null) : 'El formulario quedó lleno pero Sanitas no confirmó el adjunto: adjúntalo a mano antes de Enviar.',
+    subidaLista,
+    aviso: !adjunto ? 'El formulario quedó lleno pero Sanitas no confirmó el adjunto: adjúntalo a mano antes de Enviar.'
+      : !subidaLista ? 'Sanitas no confirmó que el formulario adjunto terminó de subir («listos para ser guardados»): revisa la pestaña de Sanitas y pulsa Enviar tú.'
+      : (envio?.motivo || null),
   };
 }
 

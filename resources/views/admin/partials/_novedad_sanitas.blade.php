@@ -322,9 +322,9 @@ async function llenarNovedadSanitas() {
 
     const caja = sannEl('sannLleno');
     caja.style.display = 'block';
-    caja.innerHTML = `<div class="${r.adjunto ? 'sann-info' : 'sann-aviso'}">` +
+    caja.innerHTML = `<div class="${r.adjunto && r.subidaLista !== false ? 'sann-info' : 'sann-aviso'}">` +
         `📝 Formulario lleno: municipio <strong>${sannEsc(r.municipio)}</strong>, tipo de novedad <strong>Cambio de empleador</strong>, ` +
-        (r.adjunto ? 'formulario PDF <strong>adjunto</strong>.' : `<strong>${sannEsc(r.aviso)}</strong>`) +
+        (r.adjunto && r.subidaLista !== false ? 'formulario PDF <strong>adjunto</strong>.' : `<strong>${sannEsc(r.aviso)}</strong>`) +
         (r.requisitos ? `<div class="sann-texto">${sannEsc(r.requisitos)}</div>` : '') +
         (r.enviado
             ? `🤖 El robot pulsó <strong>Enviar</strong> en Sanitas${r.esperado ? ` ${r.esperado} s después de llenarlo` : ''}. No cierres este modal.</div>`
