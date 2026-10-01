@@ -34,7 +34,12 @@ body {
 @section('contenido')
 <style>
 /* ── Layout ── */
-.afil-header { background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);padding:0.8rem 1.2rem;border-radius:12px;color:#fff;margin-bottom:0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;flex-shrink:0; }
+.afil-header { background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);padding:0.8rem 1.2rem;border-radius:12px;color:#fff;margin-bottom:0;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;flex-shrink:0;transition:background .25s; }
+/* Mirando los aliados que gestiona BryNex, el card entero se pone morado: se
+   ve de un vistazo que no son solo los del aliado activo, sin gastar una
+   etiqueta en decirlo. */
+.afil-header.brynex { background:linear-gradient(135deg,#2e1065 0%,#6d28d9 55%,#8b5cf6 100%);box-shadow:0 2px 14px rgba(124,58,237,0.35); }
+.afil-header.brynex select, .afil-header.brynex input[type=text] { background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.3); }
 .afil-title  { font-size:1.3rem;font-weight:800;letter-spacing:0.02em; }
 .afil-sub    { font-size:0.78rem;color:#94a3b8;margin-top:0.15rem; }
 
@@ -44,7 +49,7 @@ body {
 .filtros select:focus, .filtros input:focus { border-color:#3b82f6;box-shadow:0 0 0 2px rgba(59,130,246,0.12); }
 .btn-filtrar { padding:0.42rem 1rem;background:#1e40af;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;transition:background .15s; }
 .btn-filtrar:hover { background:#1d4ed8; }
-.btn-export  { padding:0.42rem 1rem;background:#15803d;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem; }
+.btn-export  { padding:0.38rem 0.6rem;background:#15803d;color:#fff;border:none;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:0.35rem; }
 .filtros-sep { width:100%;height:0;border-bottom:1px dashed #e2e8f0;margin:0.2rem 0; }
 
 /* ── Tabla ── */
@@ -316,7 +321,7 @@ body {
 {{-- El modo «todos los aliados que gestiona BryNex» no es un filtro visible:
      se conserva al cambiar cualquier otro. --}}
 @if($gestionados)<input type="hidden" name="gestionados" value="1">@endif
-<div class="afil-header" style="flex-wrap:wrap;gap:0.5rem;padding:0.6rem 1.2rem;">
+<div class="afil-header {{ $gestionados ? 'brynex' : '' }}" style="flex-wrap:wrap;gap:0.5rem;padding:0.6rem 1.2rem;">
     <div style="display:flex;align-items:center;gap:0.5rem;">
         <div class="afil-title" style="white-space:nowrap;margin:0;">📋 Afiliaciones</div>
         <span style="background:rgba(255,255,255,0.15);color:#fff;font-size:0.75rem;font-weight:800;padding:0.2rem 0.55rem;border-radius:20px;white-space:nowrap;letter-spacing:0.02em;">
@@ -350,8 +355,6 @@ body {
         {{-- Aliado (SOLO BryNex). Viendo los gestionados no se escoge uno: la
              lista los trae todos y el selector solo confundiría. --}}
         @if($gestionados)
-        <span style="background:#7c3aed;color:#fff;font-size:0.72rem;font-weight:800;padding:0.25rem 0.55rem;border-radius:6px;white-space:nowrap;">BRYNEX</span>
-        <span style="color:#4b6a8b;font-size:0.9rem;">|</span>
         @elseif($user->es_brynex && count($alidosDisponibles) > 1)
         <select name="aliado_id" onchange="this.form.submit()" style="font-size:0.78rem;padding:0.3rem 0.5rem;border:1px solid #334155;background:#1e3a5f;color:#e2e8f0;border-radius:6px;font-weight:700;">
             @foreach($alidosDisponibles as $al)
@@ -362,7 +365,7 @@ body {
         @endif
 
         {{-- Encargado --}}
-        <select name="encargado_id" onchange="this.form.submit()" style="font-size:0.78rem;padding:0.3rem 0.5rem;border:1px solid #334155;background:#1e3a5f;color:#e2e8f0;border-radius:6px;">
+        <select name="encargado_id" onchange="this.form.submit()" title="Encargado de la afiliación" style="font-size:0.78rem;padding:0.3rem 0.35rem;border:1px solid #334155;background:#1e3a5f;color:#e2e8f0;border-radius:6px;max-width:135px;">
             <option value="">— Todos —</option>
             @foreach($encargados as $enc)
             <option value="{{ $enc->id }}" {{ $encId == $enc->id ? 'selected' : '' }}>{{ $enc->nombre }}</option>
