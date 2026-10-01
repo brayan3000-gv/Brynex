@@ -112,7 +112,7 @@ const ccfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'
 const ccfEl = id => document.getElementById(id);
 const ccfFmt = iso => iso ? iso.split('-').reverse().join('/') : '—';
 
-function cerrarCajaComfenalco() { ccfEl('ccfModal').classList.remove('open'); clearInterval(ccfReloj); }
+function cerrarCajaComfenalco() { ccfEl('ccfModal').classList.remove('open'); clearInterval(ccfReloj); try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {} }
 
 async function ccfPedir(ruta, metodo = 'GET', cuerpo = null) {
     const r = await fetch(`/admin/afiliaciones/${ccfContratoId}/caja-comfenalco/${ruta}`, {
@@ -133,7 +133,9 @@ function ccfExt(accion, datos = {}, limiteSeg = 90) {
         const oyente = (ev) => {
             if (ev.source !== window || ev.data?.canal !== 'brynex-portales' || ev.data.tipo !== 'respuesta' || ev.data.id !== id) return;
             window.removeEventListener('message', oyente); clearTimeout(alarma);
-            resolve(ev.data.respuesta || { ok: false, error: 'Respuesta vacía de la extensión.' });
+            const resp = ev.data.respuesta || { ok: false, error: 'Respuesta vacía de la extensión.' };
+            if (!resp.ok && /se actualiz/i.test(resp.error || '')) ccfReconectar();
+            resolve(resp);
         };
         window.addEventListener('message', oyente);
         const alarma = setTimeout(() => { window.removeEventListener('message', oyente); resolve({ ok: false, error: 'La extensión no respondió a tiempo.' }); }, limiteSeg * 1000);
@@ -313,6 +315,12 @@ async function iniciarCajaComfenalco() {
         'BryNex va llenando cada paso; revisa siempre antes de continuar. Al final pulsas <strong>Finalizar y radicar</strong>.</div>');
     ccfNota('⏳ Esperando que abras el formulario en el portal (botón «Nueva»)…');
 
+    ccfArrancarSondeo();
+}
+
+// Sondeo de pasos del portal (cada 4 s). Aparte para poder arrancarlo también al retomar un formulario.
+function ccfArrancarSondeo() {
+    try { sessionStorage.setItem('ccfEnCurso', String(ccfContratoId)); } catch (e) {}
     clearInterval(ccfReloj);
     const desde = Date.now();
     ccfReloj = setInterval(async () => {
@@ -496,7 +504,7 @@ async function ccfFinalizar() {
 }
 
 function mostrarRadicadoCaja(fin) {
-    ccfFinal = fin;
+    ccfFinal = fin; try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {}
     ccfEl('ccfRadicado').style.display = 'block';
     ccfEl('ccfNumero').value = fin.numero || '';
     ccfEl('ccfRadicadoInfo').innerHTML = fin.numero
@@ -525,10 +533,53 @@ async function rechazoCajaComfenalco() {
 }
 
 function ccfTerminar(html) {
-    clearInterval(ccfReloj); ccfDetenerBitacora();
+    clearInterval(ccfReloj); ccfDetenerBitacora(); try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {}
     ccfEl('ccfContenido').style.display = 'none';
     ccfEl('ccfResultado').style.display = 'block';
     ccfEl('ccfResultado').innerHTML = html + '<br><span style="color:#475569">Comfenalco verifica en máximo 2 días y manda el correo «Afiliación exitosa».</span>';
     if (typeof mostrarToast === 'function') mostrarToast('Radicado de caja actualizado. Recarga para verlo.', 'success');
 }
+
+// ── Extensión actualizada a mitad de un trámite ─────────────────────────────────────────────
+// Cuando Chrome recarga la extensión, esta página pierde el puente con ella (hay que recargarla).
+// Si había un formulario en curso, se recarga sola y retoma el sondeo del mismo formulario, sin
+// volver a buscar al trabajador: el borrador sigue abierto en el portal.
+function ccfReconectar() {
+    let id = null, n = 0;
+    try { id = sessionStorage.getItem('ccfEnCurso'); n = parseInt(sessionStorage.getItem('ccfReintentos') || '0', 10); } catch (e) {}
+    if (!id || ccfRecargando) return;
+    if (n >= 4) { ccfNota('⚠️ La extensión se actualizó varias veces seguidas. Recarga la página a mano y abre el trámite otra vez.'); return; }
+    if (ccfFirmantes.some(f => f.trazo)) return;           // no se pierde una firma a medio dibujar
+    ccfRecargando = true;
+    try { sessionStorage.setItem('ccfRetomar', id); sessionStorage.setItem('ccfReintentos', String(n + 1)); } catch (e) {}
+    ccfNota('🔁 La extensión se actualizó: recargo la página y retomo el formulario…');
+    setTimeout(() => location.reload(), 1200);
+}
+let ccfRecargando = false;
+
+async function ccfRetomarFormulario(id) {
+    await abrirCajaComfenalco(id);
+    clearInterval(ccfReloj);
+    const caja = ccfEl('ccfPasos'); caja.style.display = 'block';
+    caja.innerHTML = '<div id="ccfPasoActual" class="ccf-texto" style="max-height:240px"></div>';
+    ccfIniciarBitacora();
+    ccfEl('ccfBtnIniciar').style.display = 'none'; ccfEl('ccfSesion').style.display = 'none';
+    ccfNota('🔁 Retomando el formulario que ya estaba abierto en el portal (la extensión se actualizó).');
+    ccfArrancarSondeo();
+}
+
+(function () {
+    let id = null;
+    try { id = sessionStorage.getItem('ccfRetomar'); sessionStorage.removeItem('ccfRetomar'); } catch (e) {}
+    if (!id) { try { sessionStorage.removeItem('ccfReintentos'); } catch (e) {} return; }
+    // El puente de la extensión se anuncia unos instantes después de cargar la página.
+    let intentos = 0;
+    const esperar = setInterval(() => {
+        intentos++;
+        if (document.documentElement.dataset.brynexPortales && typeof abrirCajaComfenalco === 'function') {
+            clearInterval(esperar);
+            ccfRetomarFormulario(parseInt(id, 10));
+        } else if (intentos > 40) { clearInterval(esperar); }
+    }, 500);
+})();
 </script>
