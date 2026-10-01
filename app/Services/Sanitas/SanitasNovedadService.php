@@ -7,8 +7,12 @@ use App\Models\Radicado;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
+use setasign\Fpdi\Fpdi;
+use setasign\Fpdi\PdfParser\StreamReader;
 
 /**
  * Novedad de inicio laboral en Sanitas por el formulario público "Novedades a la
@@ -18,7 +22,8 @@ use RuntimeException;
  * BryNex Portales en el Chrome de la persona; el clic en Enviar lo da ella. BryNex
  * prepara los datos, genera el formulario con "Reporte de novedades" y la
  * novedad 9 marcados, y al final guarda la constancia con el número de radicado
- * que muestra Sanitas y deja el radicado de BryNex en trámite (Sanitas responde
+ * que muestra Sanitas —con el formulario enviado detrás, en un solo PDF— y deja
+ * el radicado de BryNex en trámite (Sanitas responde
  * por correo en unos 3 días hábiles; la conciliación lo pasa a OK).
  */
 class SanitasNovedadService
@@ -183,14 +188,55 @@ class SanitasNovedadService
             throw new RuntimeException('Falta el número de radicado que dio Sanitas.');
         }
 
-        $ruta = EpsRadicado::guardarPdf($contrato, $this->constancia($contrato, $numero, $texto, $entrada['captura'] ?? null), 'eps_radicado_sanitas');
+        $constancia = $this->constancia($contrato, $numero, $texto, $entrada['captura'] ?? null);
+        $soporte    = $this->conFormulario($contrato, $constancia);
+        $ruta = EpsRadicado::guardarPdf($contrato, $soporte ?? $constancia, 'eps_radicado_sanitas');
         $observacion = sprintf('Sanitas: novedad de cambio de empleador radicada por el formulario web con el número %s el %s. Responde por correo en unos 3 días hábiles.',
             $numero, now()->format('d/m/Y H:i'));
 
         EpsRadicado::marcar($radicado, $numero, Radicado::ESTADO_TRAMITE, $ruta, $observacion, $usuarioId);
         EpsRadicado::bitacora($contrato, $radicado, self::ENTIDAD, 'inicio_laboral', 'exitosa', $numero, $payload, ['texto' => mb_substr($texto, 0, 2000)], null, $usuarioId, $ruta);
 
-        return ['ok' => true, 'estado' => $radicado->estado, 'radicado' => $numero, 'mensaje' => $observacion, 'pdf' => (bool) $ruta, 'badge' => $this->badge($radicado)];
+        return ['ok' => true, 'estado' => $radicado->estado, 'radicado' => $numero, 'mensaje' => $observacion, 'pdf' => (bool) $ruta, 'con_formulario' => (bool) $soporte, 'badge' => $this->badge($radicado)];
+    }
+
+    /**
+     * Constancia y formulario enviado en un solo PDF: la primera hoja dice que
+     * Sanitas lo recibió y las siguientes muestran qué se le mandó, con la firma.
+     * El formulario es el último que se generó para adjuntar, que es el que tomó
+     * el robot. Si no está o no se puede leer queda la constancia sola.
+     */
+    private function conFormulario(Contrato $contrato, ?string $constancia): ?string
+    {
+        if (! $constancia) {
+            return null;
+        }
+        $disco = Storage::disk('local');
+        $formulario = collect($disco->files(EpsRadicado::carpeta($contrato)))
+            ->filter(fn ($f) => str_starts_with(basename($f), 'eps_formulario_sanitas_'))
+            ->sort()->last();
+        if (! $formulario) {
+            return null;
+        }
+
+        try {
+            $pdf = new Fpdi;
+            foreach ([$constancia, $disco->get($formulario)] as $binario) {
+                $paginas = $pdf->setSourceFile(StreamReader::createByString($binario));
+                for ($n = 1; $n <= $paginas; $n++) {
+                    $pagina = $pdf->importPage($n);
+                    $tam = $pdf->getTemplateSize($pagina);
+                    $pdf->AddPage($tam['orientation'], [$tam['width'], $tam['height']]);
+                    $pdf->useTemplate($pagina);
+                }
+            }
+
+            return $pdf->Output('S');
+        } catch (\Throwable $e) {
+            Log::warning("Sanitas: no se pudo unir el formulario a la constancia del contrato {$contrato->id}: {$e->getMessage()}");
+
+            return null;
+        }
     }
 
     /**
@@ -236,7 +282,8 @@ class SanitasNovedadService
             .($imagen ? '<div style="margin-top:10px"><img src="'.$imagen.'" style="width:100%"></div>' : '')
             .'</body></html>';
 
-        return Pdf::loadHTML($html)->setPaper('letter')->output();
+        // Con la fuente completa la constancia pesaba ~880 KB; con solo los caracteres usados, ~20 KB.
+        return Pdf::loadHTML($html)->setPaper('letter')->setOption('isFontSubsettingEnabled', true)->output();
     }
 
     private function observaciones(Contrato $contrato): string
