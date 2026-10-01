@@ -112,7 +112,7 @@ const ccfEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'
 const ccfEl = id => document.getElementById(id);
 const ccfFmt = iso => iso ? iso.split('-').reverse().join('/') : '—';
 
-function cerrarCajaComfenalco() { ccfEl('ccfModal').classList.remove('open'); clearInterval(ccfReloj); try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {} }
+function cerrarCajaComfenalco() { ccfEl('ccfModal').classList.remove('open'); clearInterval(ccfReloj); ccfRetomando = false; try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {} }
 
 async function ccfPedir(ruta, metodo = 'GET', cuerpo = null) {
     const r = await fetch(`/admin/afiliaciones/${ccfContratoId}/caja-comfenalco/${ruta}`, {
@@ -194,6 +194,7 @@ async function abrirCajaComfenalco(contratoId) {
 }
 
 async function revisarSesionCaja() {
+    if (ccfRetomando) return;      // al retomar un formulario no se toca la sesión: abrirla de nuevo sacaba al portal del formulario
     const e = await ccfExt('ccfEstado', {}, 20);
     const caja = ccfEl('ccfSesion');
     ccfEl('ccfBtnAbrir').style.display = 'none';
@@ -504,7 +505,7 @@ async function ccfFinalizar() {
 }
 
 function mostrarRadicadoCaja(fin) {
-    ccfFinal = fin; try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {}
+    ccfFinal = fin; ccfRetomando = false; try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {}
     ccfEl('ccfRadicado').style.display = 'block';
     ccfEl('ccfNumero').value = fin.numero || '';
     ccfEl('ccfRadicadoInfo').innerHTML = fin.numero
@@ -533,7 +534,7 @@ async function rechazoCajaComfenalco() {
 }
 
 function ccfTerminar(html) {
-    clearInterval(ccfReloj); ccfDetenerBitacora(); try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {}
+    clearInterval(ccfReloj); ccfDetenerBitacora(); ccfRetomando = false; try { sessionStorage.removeItem('ccfEnCurso'); } catch (e) {}
     ccfEl('ccfContenido').style.display = 'none';
     ccfEl('ccfResultado').style.display = 'block';
     ccfEl('ccfResultado').innerHTML = html + '<br><span style="color:#475569">Comfenalco verifica en máximo 2 días y manda el correo «Afiliación exitosa».</span>';
@@ -557,7 +558,9 @@ function ccfReconectar() {
 }
 let ccfRecargando = false;
 
+let ccfRetomando = false;
 async function ccfRetomarFormulario(id) {
+    ccfRetomando = true;
     await abrirCajaComfenalco(id);
     clearInterval(ccfReloj);
     const caja = ccfEl('ccfPasos'); caja.style.display = 'block';
