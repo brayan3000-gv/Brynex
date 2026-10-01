@@ -437,15 +437,39 @@ try {
       }
       if (!boton) continue;
 
+      const antesVentanas = navegador.targets().length;
       await boton.click({ delay: 60 }).catch(async () => {
         // Si no se deja pulsar (tapado, fuera de pantalla), al menos se intenta.
         await boton.evaluate((e) => e.click()).catch(() => {});
       });
 
       // La ventana emergente tarda en abrirse y en soltar el archivo.
-      soporte = await descarga.esperar(30);
+      soporte = await descarga.esperar(15);
+
+      // Si no bajó, se busca la ventana que abrió el botón y se va a su
+      // dirección desde la propia pestaña: ahí la descarga ya no depende de
+      // que el emergente sobreviva.
+      if (!soporte && navegador.targets().length > antesVentanas) {
+        const nueva = navegador.targets().slice(antesVentanas).map((t) => t.url()).find((u) => u && u !== 'about:blank');
+        if (nueva) {
+          nuevasVentanas.push(nueva);
+          await pagina.goto(nueva, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
+          soporte = await descarga.esperar(20);
+        }
+      }
       break;
     }
+  }
+
+  // Último recurso: se imprime la pantalla del comprobante a PDF. No es el
+  // documento del portal, pero deja constancia de lo que el portal mostró.
+  if (!soporte) {
+    try {
+      const ruta = join(descarga.carpeta, `comprobante_${Date.now()}.pdf`);
+      await pagina.pdf({ path: ruta, format: 'A4', printBackground: true });
+      const { size } = await stat(ruta);
+      if (size > 2000) soporte = { archivo: 'comprobante.pdf', ruta, bytes: size, impreso: true };
+    } catch {}
   }
 
   salir({

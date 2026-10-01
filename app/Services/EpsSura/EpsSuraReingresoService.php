@@ -188,8 +188,10 @@ class EpsSuraReingresoService
         $ruta = $this->guardarSoporte($contrato, $salida['soporte'] ?? null);
 
         // El portal no siempre entrega el soporte de la novedad; el certificado
-        // de afiliación sí se puede pedir, y es el documento que hace falta.
-        if (! $ruta && ($salida['ok'] ?? false)) {
+        // de afiliación sirve de reemplazo. Se pide también cuando el
+        // comprobante no se pudo leer —antes solo se intentaba si todo había
+        // salido redondo, que es justo cuando menos falta hacía—.
+        if (! $ruta && (($salida['ok'] ?? false) || ($salida['enComprobante'] ?? false))) {
             $cert = $this->correr($contrato, 'certificado', $prep['datos']);
             $ruta = $this->guardarSoporte($contrato, $cert['soporte'] ?? null);
             $salida['certificado_error'] = $ruta ? null : ($cert['error'] ?? null);
