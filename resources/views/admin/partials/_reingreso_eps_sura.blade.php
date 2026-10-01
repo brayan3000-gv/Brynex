@@ -238,7 +238,23 @@ async function realizarReingresoEpsSura() {
     }
 
     if (g.radicado) pintarRadicadoEnLista(g.radicado, esuContratoId);
-    if (!d.ok) { alert(d.error || 'El portal no aplicó la novedad.'); return; }
+
+    if (!d.ok) {
+        // Cómo quedó el formulario en el portal: con esto se ve qué campo faltó
+        // en vez de deducirlo del rechazo.
+        const f = d.formulario;
+        if (f) {
+            const linea = (k, v) => `<div><span style="color:#64748b">${k}:</span> ${v ? esuEsc(v) : '<strong style="color:#b91c1c">vacío</strong>'}</div>`;
+            esuEl('esuPortal').innerHTML = '<strong>Así quedó el formulario en el portal:</strong>' +
+                linea('Trabajador', f.nombre) + linea('Tipo', f.tipoTrabajador) + linea('Salario', f.salario) +
+                linea('Fecha de ingreso', f.fecha) + linea('Asesor', f.asesor) + linea('Nombre del asesor', f.asesorNombre) +
+                ((f.avisos || []).length ? `<div style="color:#b91c1c;margin-top:.3rem">${f.avisos.map(esuEsc).join(' · ')}</div>` : '');
+            esuEl('esuPortal').style.display = 'block';
+        }
+        alert(d.error || 'El portal no aplicó la novedad.');
+
+        return;
+    }
 
     esuEl('esuContenido').style.display = 'none';
     const caja = esuEl('esuResultado');

@@ -4190,7 +4190,6 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
       // y los eventos que el portal escucha. Teclearla carácter por carácter
       // resultó peor: la máscara la descartaba.
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      e.focus();
       setter.call(e, valor);
       e.dispatchEvent(new Event('input', { bubbles: true }));
       e.dispatchEvent(new Event('change', { bubbles: true }));
@@ -4216,13 +4215,27 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
     campoAse?.dispatchEvent(new Event('change', { bubbles: true }));
     campoNombre?.focus();                       // el foco se va al de al lado
     campoAse?.dispatchEvent(new Event('blur', { bubbles: true }));
-    await esperar(1500);
 
-    // La fecha va de última: validar el asesor repinta parte del formulario
-    // (ASP.NET) y se llevaba por delante lo que ya estuviera escrito aquí.
+    // Y se espera a que ESE postback termine antes de seguir. Si no, llegaba
+    // tarde —justo cuando la fecha ya estaba escrita— y repintaba el formulario
+    // borrándola. Se da por terminado cuando el portal rellena el nombre del
+    // asesor o cuando deja de haber peticiones en vuelo.
+    for (let i = 0; i < 15; i++) {
+      await esperar(600);
+      const quieto = !window.Sys?.WebForms?.PageRequestManager?.getInstance?.()?.get_isInAsyncPostBack?.();
+      if (quieto && (campoNombre?.value?.trim() || i > 4)) break;
+    }
+    campoNombre?.blur();
+    await esperar(1200);
+
+    // La fecha, de última y sin tocar el foco: cada cambio de foco en esta
+    // pantalla puede disparar otra recarga parcial.
     await ponerFecha(fecha);
-    await esperar(400);
-    if (!document.querySelector('[id$="TxtInitialdate"]')?.value) await ponerFecha(fecha);
+    await esperar(600);
+    if (!document.querySelector('[id$="TxtInitialdate"]')?.value) {
+      await esperar(1500);
+      await ponerFecha(fecha);
+    }
 
     return {
       solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim(),
@@ -4233,10 +4246,34 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
 
   await esperar(2500);
 
-  // Si la fecha no se quedó puesta, aplicar solo gastaría un intento: el portal
-  // la exige y devolvería «Valor Requerido».
-  if (!previo?.fecha) {
-    return { ok: false, nombre: consulta.nombre, error: 'La fecha de ingreso no se quedó escrita en el portal (el campo tiene máscara). No se aplicó nada.' };
+  // Cómo quedó el formulario justo antes de aplicar: si algo falta, se ve aquí
+  // y no hay que deducirlo del rechazo del portal.
+  const antesDeAplicar = await ejecutar(tabId, () => {
+    const v = (sufijo) => document.querySelector(`[id$="${sufijo}"]`)?.value ?? null;
+
+    return {
+      documento: v('WucSearchPerson_txtId'),
+      nombre: v('WucSearchPerson_txtName'),
+      tipoTrabajador: v('Repeater1_ctl00_DdlSettlementParam'),
+      salario: v('TxtSalary'),
+      fecha: v('TxtInitialdate'),
+      asesor: v('tbxIntermediaryCode'),
+      asesorNombre: v('tbxIntermediary'),
+      solicitud: v('TxbApplicationNumber'),
+      avisos: [...document.querySelectorAll('span, div')]
+        .map((e) => (e.innerText || '').trim())
+        .filter((t) => t && t.length < 60 && /requerido|obligatorio|inv[aá]lid/i.test(t))
+        .slice(0, 5),
+    };
+  }).catch(() => null);
+
+  // Sin fecha el portal devuelve «Valor Requerido»: aplicar solo gastaría un
+  // intento y dejaría la pantalla sucia para el siguiente.
+  if (!antesDeAplicar?.fecha) {
+    return {
+      ok: false, nombre: consulta.nombre, formulario: antesDeAplicar,
+      error: 'La fecha de ingreso no se quedó escrita en el portal (el campo tiene máscara). No se aplicó nada.',
+    };
   }
 
   // Antes de aplicar se le pone una trampa a window.open: el botón que entrega
@@ -4300,6 +4337,7 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
   return {
     ok: aplicada,
     nombre: consulta.nombre,
+    formulario: antesDeAplicar,
     radicado: dato(/N[uú]mero de Solicitud\s+([A-Z0-9]*\d[A-Z0-9_]*)/i) || previo?.solicitud || null,
     transaccion: dato(/C[oó]digo de Transacci[oó]n\s+(\d+)/i),
     periodoPago: dato(/per[ií]odo de inicio de pago es\s*([\d/]+)/i),
