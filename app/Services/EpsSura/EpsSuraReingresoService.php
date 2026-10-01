@@ -583,6 +583,16 @@ class EpsSuraReingresoService
     /** Usuario del portal de Sura de la empresa (el mismo de la ARL). */
     private function credencial($rs)
     {
+        // La clave del portal de EPS que esté guardada para ESTA empresa manda.
+        // Lo de abajo resuelve la de ARL —otro portal, aunque se entre por el
+        // mismo login— y, si la empresa no tiene una propia, termina usando la
+        // del aliado, que no siempre la administra: con LALA GROUP el portal
+        // respondía «no tiene acceso» aunque su clave ya estuviera cargada
+        // (1-oct-2026).
+        if ($propia = ArlSuraSesionService::desdeModuloDeClaves((string) $rs->nit, 'EPS')) {
+            return $propia;
+        }
+
         $credencial = ArlSuraSesionService::credencialPara((int) $rs->aliado_id, (string) $rs->arl_poliza, (string) $rs->nit);
 
         return $credencial?->exists ? $credencial : null;

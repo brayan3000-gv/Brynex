@@ -228,7 +228,7 @@ class ArlSuraSesionService
      * copias que se queden viejas. Por eso el resto del servicio solo escribe
      * estado cuando la credencial existe en base.
      */
-    private static function desdeModuloDeClaves(?string $nit): ?ArlCredencial
+    public static function desdeModuloDeClaves(?string $nit, string $tipo = 'ARL'): ?ArlCredencial
     {
         $nit = preg_replace('/\D/', '', (string) $nit);
 
@@ -239,7 +239,7 @@ class ArlSuraSesionService
         $clave = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
             ->where('rs.nit', $nit)
-            ->where('c.tipo', 'ARL')
+            ->where('c.tipo', $tipo)
             ->where('c.entidad', 'like', '%SURA%')
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')
