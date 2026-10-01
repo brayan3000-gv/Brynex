@@ -24,8 +24,9 @@
  *  novedadAbrir                        → abre el formulario web de novedades DE FONDO (BryNex sigue al frente)
  *  novedadMostrar                      → trae la pestaña de Sanitas al frente (captcha, errores)
  *  novedadLlenar {tipoDoc, documento, departamento, municipio, municipioDane, telefonoFijo,
- *                 celular, correo, tipoNovedad, observaciones, archivo, nombreArchivo, enviar}
- *                                      → llena y adjunta; con enviar:true el robot pulsa Enviar (si el adjunto subió)
+ *                 celular, correo, tipoNovedad, observaciones, archivo, nombreArchivo, enviar, esperar}
+ *                                      → llena y adjunta; con enviar:true el robot pulsa Enviar (si el adjunto subió),
+ *                                        esperar segundos después de llenar (Sanitas rechaza el Enviar inmediato)
  *  novedadResultado {documento}        → {enviado, radicado, texto, errores, captura}
  *
  * Pedidos Boxalud (portal: 'boxalud', Emssanar; datos.host dice cuál):
@@ -809,6 +810,11 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
   // el robot pulsa Enviar. BryNex se queda al frente; solo si algo falta (adjunto,
   // botón) se trae la pestaña de Sanitas para que la persona lo resuelva.
   const quiereEnviar = !!(d.enviar && adjunto);
+  // Sanitas contesta «Estamos presentando demoras temporales» cuando el Enviar llega
+  // apenas se llenó el formulario (1-oct-2026: cuatro rechazos seguidos con el clic
+  // inmediato, y pasó a la primera pulsándolo 69 s después). Se espera antes del clic.
+  const espera = Math.min(Math.max(Number(d.esperar) || 0, 0), 180);
+  if (quiereEnviar && espera) await new Promise(r => setTimeout(r, espera * 1000));
   const envio = await ejecutar(pestana.id, (ns, doc, enviar) => {
     sessionStorage.setItem('brynexNovedad', JSON.stringify({ documento: doc, desde: Date.now() }));
     const b = document.getElementById(ns + 'btnSend');
@@ -836,6 +842,7 @@ async function sanitasNovedadLlenar(pestana, d, origen) {
     requisitos,
     adjunto: !!adjunto,
     enviado: !!envio?.enviado,
+    esperado: quiereEnviar ? espera : 0,
     aviso: adjunto ? (envio?.motivo || null) : 'El formulario quedó lleno pero Sanitas no confirmó el adjunto: adjúntalo a mano antes de Enviar.',
   };
 }

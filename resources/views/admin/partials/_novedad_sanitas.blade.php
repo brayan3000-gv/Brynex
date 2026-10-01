@@ -93,6 +93,11 @@
 
 <script>
 let sannContratoId = null, sannPrep = {}, sannReloj = null, sannEnvio = null, sannAbrio = false;
+// Segundos entre llenar y pulsar Enviar: con el clic inmediato Sanitas contesta «demoras
+// temporales». La espera la hace la extensión desde la 1.45.42; con una más vieja el robot
+// llena y el Enviar lo pulsa la persona, que es lo que sí funciona.
+let sannEspera = 60;
+const SANN_EXT_ESPERA = '1.45.42';
 const SANN_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
 const sannEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sannEl = id => document.getElementById(id);
@@ -269,10 +274,27 @@ async function revisarFormularioSanitas() {
     sannEl('sannBtnLlenar').style.display = 'block';
 }
 
+/** ¿La extensión instalada es al menos la versión dada? */
+function sannExtAlMenos(minima) {
+    const v = (document.documentElement.dataset.brynexPortales || '0').split('.').map(Number);
+    const m = minima.split('.').map(Number);
+    for (let i = 0; i < m.length; i++) { if ((v[i] || 0) !== m[i]) return (v[i] || 0) > m[i]; }
+    return true;
+}
+
 async function llenarNovedadSanitas() {
     const btn = sannEl('sannBtnLlenar');
+    const espera = sannExtAlMenos(SANN_EXT_ESPERA) ? sannEspera : null;
     btn.disabled = true; btn.textContent = '⏳ El robot está llenando el formulario en Sanitas...';
-    const r = await sannExt('novedadLlenar', { ...sannPrep.portal, enviar: true }, 150);
+    // Mientras la extensión espera para pulsar Enviar, el botón lleva la cuenta.
+    const inicio = Date.now();
+    const cuenta = espera ? setInterval(() => {
+        const s = Math.round((Date.now() - inicio) / 1000);
+        btn.textContent = s < 8 ? '⏳ El robot está llenando el formulario en Sanitas...'
+            : `⏳ Formulario lleno: el robot pulsa Enviar en unos ${Math.max(espera + 8 - s, 1)} s (Sanitas rechaza el envío inmediato)`;
+    }, 1000) : null;
+    const r = await sannExt('novedadLlenar', { ...sannPrep.portal, enviar: espera !== null, esperar: espera || 0 }, 150 + (espera || 0));
+    clearInterval(cuenta);
     btn.disabled = false; btn.textContent = '🤖 Radicar en Sanitas (el robot llena y envía)';
 
     if (!r.ok) { alert(r.error || 'No se pudo llenar el formulario de Sanitas.'); return; }
@@ -284,8 +306,10 @@ async function llenarNovedadSanitas() {
         (r.adjunto ? 'formulario PDF <strong>adjunto</strong>.' : `<strong>${sannEsc(r.aviso)}</strong>`) +
         (r.requisitos ? `<div class="sann-texto">${sannEsc(r.requisitos)}</div>` : '') +
         (r.enviado
-            ? '🤖 El robot pulsó <strong>Enviar</strong> en Sanitas. No cierres este modal.</div>'
-            : '👉 El robot no pudo enviar solo: ve a la pestaña de Sanitas (se trajo al frente), revisa y pulsa <strong>Enviar</strong>. No cierres este modal.</div>');
+            ? `🤖 El robot pulsó <strong>Enviar</strong> en Sanitas${r.esperado ? ` ${r.esperado} s después de llenarlo` : ''}. No cierres este modal.</div>`
+            : espera === null && r.adjunto
+                ? '👉 Tu extensión BryNex Portales es anterior a la ' + SANN_EXT_ESPERA + ' y no sabe esperar antes de enviar (Sanitas rechaza el envío inmediato). Ve a la pestaña de Sanitas (se trajo al frente) y pulsa <strong>Enviar</strong> tú en un minuto. Actualízala desde Conciliar EPS. No cierres este modal.</div>'
+                : '👉 El robot no pudo enviar solo: ve a la pestaña de Sanitas (se trajo al frente), revisa y pulsa <strong>Enviar</strong>. No cierres este modal.</div>');
     btn.style.display = 'none';
     sannEl('sannBtnMostrar').style.display = 'none';
     sannEl('sannSesion').innerHTML = r.enviado
