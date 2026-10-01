@@ -186,6 +186,7 @@ class Cliente extends BaseModel
     public static function listaEps(): array
     {
         return DB::table('eps')
+            ->whereNull('reemplazada_por_id')
             ->orderBy('nombre')
             ->pluck('nombre', 'id')
             ->toArray();

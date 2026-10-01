@@ -754,6 +754,8 @@ class MigrateLegacyAliado extends Command
     private function lookupByNit(string $tabla, mixed $nit): ?int
     {
         if (!is_numeric($nit) || (float)$nit <= 1) return null;
+        // La EPS de movilidad (NIT de la cooperativa vieja de Coosalud) va a la de contributivo.
+        if ($tabla === 'eps') return \App\Models\Eps::idPorNit((int)(float)$nit);
         return DB::table($tabla)->where('nit', (int)(float)$nit)->value('id');
     }
 

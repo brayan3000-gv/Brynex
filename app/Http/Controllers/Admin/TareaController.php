@@ -138,7 +138,7 @@ class TareaController extends Controller
         // Datos para selects
         $trabajadores = User::where('aliado_id', $alidoId)->where('activo', true)->orderBy('nombre')->get();
         $razonesSociales = DB::table('razones_sociales')->where('aliado_id', $alidoId)->where('estado', 'Activa')->orderBy('razon_social')->get(['id', 'razon_social']);
-        $epsList = DB::table('eps')->orderBy('nombre')->get(['id', 'nombre']);
+        $epsList = DB::table('eps')->whereNull('reemplazada_por_id')->orderBy('nombre')->get(['id', 'nombre']);
 
         // Empresas para el filtro: solo las que tienen algún cliente con tarea
         // visible en la tabla. Corren los mismos filtros de la consulta

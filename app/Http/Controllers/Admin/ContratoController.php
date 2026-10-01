@@ -1464,7 +1464,7 @@ class ContratoController extends Controller
                 ->orderBy('razon_social')
                 ->get(),
             'asesores' => Asesor::where('aliado_id', $alidoId)->where('activo', true)->orderBy('nombre')->get(),
-            'epsList' => Eps::orderBy('nombre')->get(),
+            'epsList' => Eps::seleccionables()->orderBy('nombre')->get(),
             'pensiones' => Pension::orderBy('razon_social')->get(),
             'arlList' => Arl::orderBy('nombre_arl')->get(),
             'cajas' => $this->cajasOrdenadas($cliente),

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Eps;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -225,10 +226,9 @@ class RegistroOficialService
         $d = $resultado['afiliacion'];
 
         // Los códigos que devuelve el registro son los mismos que usan
-        // las tablas de referencia de Brynex.
-        $epsId = ! empty($d['administradoraBDUA'])
-            ? DB::table('eps')->where('codigo', $d['administradoraBDUA'])->value('id')
-            : null;
+        // las tablas de referencia de Brynex. Los de movilidad (ESSC24,
+        // EPS041) se traducen a la EPS de contributivo.
+        $epsId = Eps::idPorCodigo($d['administradoraBDUA'] ?? null);
 
         $pensionId = ! empty($d['administradoraRUAF'])
             ? DB::table('pensiones')->where('codigo', $d['administradoraRUAF'])->value('id')

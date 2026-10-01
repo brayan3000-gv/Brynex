@@ -88,7 +88,10 @@ class CompletarRuafClientes extends Command
         $pausa = max(0, (int) $this->option('pausa')) * 1000;
 
         // Los códigos que devuelve el registro son los mismos de los catálogos.
-        $this->epsPorCodigo = DB::table('eps')->pluck('id', 'codigo')->toArray();
+        // Los de movilidad (ESSC24, EPS041) apuntan a la EPS de contributivo.
+        $this->epsPorCodigo = DB::table('eps')
+            ->selectRaw('codigo, COALESCE(reemplazada_por_id, id) AS id')
+            ->pluck('id', 'codigo')->toArray();
         $this->pensionPorCodigo = DB::table('pensiones')->pluck('id', 'codigo')->toArray();
 
         $clientes = $this->clientesAProcesar($limite);
