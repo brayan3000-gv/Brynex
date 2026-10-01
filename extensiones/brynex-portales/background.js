@@ -4182,25 +4182,24 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
     // «Valor Requerido». Se teclea carácter por carácter y se actualiza también
     // el estado que la máscara guarda aparte.
     const ponerFecha = async (valor) => {
-      const e = document.querySelector('[id$="Repeater1_ctl00_TxtInitialdate"]');
+      const e = document.querySelector('[id$="TxtInitialdate"]');
       if (!e) return false;
 
+      // Así es como la escribe el robot del servidor, que sí lo consigue: con
+      // el setter nativo (React y los MaskedEdit ignoran una asignación suelta)
+      // y los eventos que el portal escucha. Teclearla carácter por carácter
+      // resultó peor: la máscara la descartaba.
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
       e.focus();
-      e.value = '';
-      for (const c of valor) {
-        e.value += c;
-        for (const tipo of ['keydown', 'keypress', 'input', 'keyup']) {
-          e.dispatchEvent(new KeyboardEvent(tipo, { key: c, bubbles: true }));
-        }
-        await esperar(40);
-      }
+      setter.call(e, valor);
+      e.dispatchEvent(new Event('input', { bubbles: true }));
       e.dispatchEvent(new Event('change', { bubbles: true }));
 
       const estado = document.querySelector('[id$="MEE_InitialDate_ClientState"]');
-      if (estado) estado.value = valor;
-      e.blur();
+      if (estado) setter.call(estado, valor);
+      await esperar(300);
 
-      return true;
+      return !!e.value;
     };
 
     const sel = document.querySelector('[id$="Repeater1_ctl00_DdlSettlementParam"]');
@@ -4224,7 +4223,7 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
 
     return {
       solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim(),
-      fecha: document.querySelector('[id$="Repeater1_ctl00_TxtInitialdate"]')?.value || '',
+      fecha: document.querySelector('[id$="TxtInitialdate"]')?.value || '',
       asesor: document.querySelector('[id$="tbxIntermediary"]')?.value || '',
     };
   }, [String(tipoCotizante), Math.round(Number(ibc)), `${dia}/${m}/${a}`, asesor]);
