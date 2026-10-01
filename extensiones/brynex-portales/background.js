@@ -1989,7 +1989,12 @@ function pCcfPaso(d) {
       return { doc, nombre: [cels[1], cels[2]].filter(Boolean).join(' '), excluir: tr.querySelector('select')?.value };
     }).filter(f => f.doc);
     const deBrynex = (d.listaBeneficiarios || []).map(b => ({ ...b, doc: limpio(b.documento) }));
-    enCaja.forEach(f => hecho.push(`${f.nombre} (${f.doc}): ${f.excluir === 'N' ? 'incluido' : 'EXCLUIDO'} — ya estaba en la caja`));
+    // Mientras el portal carga la fila, «Excluir» marca «Sí» (la primera opción) y recién después
+    // queda en «No»: solo se da por incluido cuando ya dice «No»; si no, se espera y se vuelve a mirar.
+    enCaja.forEach(f => {
+      if (f.excluir === 'N') hecho.push(`${f.nombre} (${f.doc}): incluido — ya estaba en la caja`);
+      else falta.push(`${f.nombre} (${f.doc}): el portal aún lo marca para excluir; esperando a que termine de cargar…`);
+    });
     deBrynex.filter(b => !enCaja.some(f => f.doc === b.doc))
       .forEach(b => falta.push(`agrega a mano: ${b.nombre} (${b.tipo_doc} ${b.documento}, ${b.parentesco || '—'}) — no está en el grupo familiar de la caja`));
     enCaja.filter(f => !deBrynex.some(b => b.doc === f.doc))
