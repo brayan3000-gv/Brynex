@@ -26,8 +26,29 @@ const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 /**
  * Pasa el SSO de login.sura.com. Deja la página donde el SSO redirija
  * (`continueTo`), o lanza con el motivo que muestre el portal.
+ *
+ * Reintenta porque el login se cae de vez en cuando sin que el portal diga
+ * nada: se queda en el formulario y a la segunda entra —le pasó a Carmen Rosa
+ * Silva y a Maricel Calderón, y en ambas el reintento bastó—. Cada vuelta
+ * recarga la página de login desde cero.
+ *
+ * Cuando el portal SÍ dice el motivo (clave equivocada, usuario bloqueado) no
+ * se insiste: repetir no lo arregla y arriesga bloquear la cuenta.
  */
-export async function loginSso(pagina, { tipoDocumento = 'C', usuario, contrasena }, urlLogin) {
+export async function loginSso(pagina, credenciales, urlLogin, intentos = 3) {
+  for (let vuelta = 1; ; vuelta++) {
+    try {
+      return await unIntentoDeLogin(pagina, credenciales, urlLogin);
+    } catch (fallo) {
+      if (fallo?.definitivo || vuelta >= intentos) throw fallo;
+
+      try { process.stderr.write('@paso reintentando el login\n'); } catch { /* da igual */ }
+      await esperar(2000 * vuelta);
+    }
+  }
+}
+
+async function unIntentoDeLogin(pagina, { tipoDocumento = 'C', usuario, contrasena }, urlLogin) {
   await pagina.setUserAgent(
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
   );
@@ -47,7 +68,11 @@ export async function loginSso(pagina, { tipoDocumento = 'C', usuario, contrasen
   for (const caracter of contrasena.split('')) {
     const tecla = `.ui-keyboard button.ui-keyboard-button[data-value="${caracter}"]`;
     if (!await pagina.$(tecla)) {
-      throw new Error(`El teclado virtual no ofrece la tecla "${caracter}".`);
+      // Repetirlo no cambia nada: la clave tiene un carácter que ese teclado
+      // no ofrece.
+      const fallo = new Error(`El teclado virtual no ofrece la tecla "${caracter}".`);
+      fallo.definitivo = true;
+      throw fallo;
     }
     await pagina.click(tecla);
     await esperar(120);
@@ -86,7 +111,10 @@ export async function loginSso(pagina, { tipoDocumento = 'C', usuario, contrasen
       });
     } catch {}
 
-    throw new Error(motivo || 'El login no pasó. Revisa usuario y contraseña.');
+    // Con motivo del portal es definitivo; sin él, fue un tropiezo y se reintenta.
+    const fallo = new Error(motivo || 'El login no pasó. Revisa usuario y contraseña.');
+    fallo.definitivo = !!motivo;
+    throw fallo;
   }
 }
 

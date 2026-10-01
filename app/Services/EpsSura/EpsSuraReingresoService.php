@@ -504,6 +504,7 @@ class EpsSuraReingresoService
         return [
             'inicio' => 'Empezando',
             'login' => 'Entrando al portal de SURA',
+            'reintentando el login' => 'El portal no dejó entrar; probando otra vez',
             'empresa' => 'Eligiendo la empresa',
             'abrir reingresos' => 'Abriendo la pantalla de reingresos',
             'esperar formulario' => 'Esperando el formulario',
