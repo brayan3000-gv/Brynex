@@ -6,6 +6,7 @@ use App\Models\Contrato;
 use App\Models\Radicado;
 use App\Services\ArlSura\ArlSuraSesionService;
 use App\Services\EpsPortal\EpsRadicado;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
@@ -608,31 +609,59 @@ class EpsSuraReingresoService
         // dónde anda: cada paso se guarda para que la pantalla lo muestre
         // mientras ocurre, en vez de dejar al usuario mirando un reloj.
         $clave = self::claveDelPaso($contrato->id);
+
+        // Dos trámites con el mismo usuario del portal se tumban la sesión: SURA
+        // solo admite una abierta por usuario, así que el segundo login echa al
+        // primero y lo deja a medias. Esperan turno en vez de pisarse. Y no es
+        // raro que la compartan: cuando una empresa no tiene credencial propia
+        // se usa la del aliado, y en SURA el usuario es el representante legal,
+        // que suele tener varias empresas. Las de usuarios distintos siguen en
+        // paralelo, que no se estorban.
+        $candado = Cache::lock('eps-sura:portal:'.$credencial->usuario, 600);
+
+        Cache::put($clave, ['paso' => 'Esperando turno en el portal', 'en' => now()->toDateTimeString()], 600);
+
+        try {
+            $candado->block(180);
+        } catch (LockTimeoutException $e) {
+            Cache::forget($clave);
+
+            return [
+                'ok' => false,
+                'error' => 'Hay otro trámite en curso en el portal con este mismo usuario. Espera a que termine e inténtalo de nuevo.',
+            ];
+        }
+
         Cache::put($clave, ['paso' => 'Empezando', 'en' => now()->toDateTimeString()], 600);
 
-        $resultado = Process::path(base_path())
-            // Con ventana el visor del comprobante se dibuja y el portal
-            // entrega el documento; sin ella no pinta nada (ver el script).
-            ->env(['SURA_CON_VENTANA' => $this->hayXvfb() ? '1' : '0'])
-            // El login ronda los 40 s y el trámite otro tanto; con 240 s una
-            // corrida con tropiezos se cortaba a la mitad, dejando la novedad
-            // aplicada en SURA sin registrar en BryNex.
-            ->timeout(420)
-            ->input($entrada)
-            ->run($this->comando(), function (string $tipo, string $linea) use ($clave) {
-                // El script anuncia cada paso por stderr con «@paso …»; stdout
-                // lleva el JSON del resultado y no se toca.
-                foreach (preg_split('/\R/', $linea) as $renglon) {
-                    if (str_starts_with($renglon, '@paso ')) {
-                        Cache::put($clave, [
-                            'paso' => self::enCristiano(trim(substr($renglon, 6))),
-                            'en' => now()->toDateTimeString(),
-                        ], 600);
+        try {
+            $resultado = Process::path(base_path())
+                // Con ventana el visor del comprobante se dibuja y el portal
+                // entrega el documento; sin ella no pinta nada (ver el script).
+                ->env(['SURA_CON_VENTANA' => $this->hayXvfb() ? '1' : '0'])
+                // El login ronda los 40 s y el trámite otro tanto; con 240 s una
+                // corrida con tropiezos se cortaba a la mitad, dejando la novedad
+                // aplicada en SURA sin registrar en BryNex.
+                ->timeout(420)
+                ->input($entrada)
+                ->run($this->comando(), function (string $tipo, string $linea) use ($clave) {
+                    // El script anuncia cada paso por stderr con «@paso …»; stdout
+                    // lleva el JSON del resultado y no se toca.
+                    foreach (preg_split('/\R/', $linea) as $renglon) {
+                        if (str_starts_with($renglon, '@paso ')) {
+                            Cache::put($clave, [
+                                'paso' => self::enCristiano(trim(substr($renglon, 6))),
+                                'en' => now()->toDateTimeString(),
+                            ], 600);
+                        }
                     }
-                }
-            });
-
-        Cache::forget($clave);
+                });
+        } finally {
+            // Se suelta pase lo que pase: si no, el siguiente se queda esperando
+            // un turno que no llega.
+            $candado->release();
+            Cache::forget($clave);
+        }
 
         // El resultado se busca línea a línea en vez de decodificar la salida
         // entera: el robot va anunciando sus pasos y «xvfb-run» —que es como

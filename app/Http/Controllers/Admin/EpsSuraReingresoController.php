@@ -38,7 +38,7 @@ class EpsSuraReingresoController extends Controller
 
     public function explorar(Request $request, int $contratoId)
     {
-        @set_time_limit(300);
+        @set_time_limit(600);
 
         try {
             return response()->json($this->servicio->explorar($this->contrato($contratoId)));
@@ -49,7 +49,7 @@ class EpsSuraReingresoController extends Controller
 
     public function consultar(Request $request, int $contratoId)
     {
-        @set_time_limit(300);
+        @set_time_limit(600);
 
         try {
             return response()->json($this->servicio->consultar($this->contrato($contratoId)));
@@ -60,7 +60,7 @@ class EpsSuraReingresoController extends Controller
 
     public function registrar(Request $request, int $contratoId)
     {
-        @set_time_limit(300);
+        @set_time_limit(600);
 
         try {
             return response()->json($this->servicio->registrar($this->contrato($contratoId), Auth::id()));
@@ -90,7 +90,7 @@ class EpsSuraReingresoController extends Controller
         // Sin comprobante que guardar se baja el certificado, y eso abre un
         // navegador en el servidor: pasa de ser una respuesta inmediata a tardar
         // cerca de un minuto.
-        @set_time_limit(300);
+        @set_time_limit(600);
 
         $datos = $request->validate([
             'ok' => 'nullable|boolean',
