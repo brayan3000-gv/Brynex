@@ -71,10 +71,18 @@
         <div id="sannEnviado" style="display:none">
           <div class="sann-info" id="sannEnviadoInfo"></div>
           <div class="sann-texto" id="sannEnviadoTexto" style="display:none"></div>
-          <label style="font-size:.74rem;font-weight:600;color:#475569">Número de radicado que dio Sanitas</label>
-          <input id="sannNumero" class="sann-input" placeholder="Ej: 12345678">
-          <button class="sann-btn" id="sannBtnGuardar" onclick="guardarNovedadSanitas()">💾 Guardar radicado en BryNex</button>
-          <button class="sann-btn rojo" onclick="rechazoNovedadSanitas()">⛔ Sanitas no lo recibió</button>
+          {{-- Sanitas contestó con una falla suya («demoras temporales»): no hay número que
+               guardar, el radicado sigue pendiente y se reintenta. --}}
+          <div id="sannCaida" style="display:none">
+            <button class="sann-btn" onclick="abrirNovedadSanitas(sannContratoId)">🔁 Reintentar ahora</button>
+            <button class="sann-btn sec" onclick="sannEl('sannCaida').style.display='none'; sannEl('sannManual').style.display='block'">Sanitas sí dio un número: escribirlo</button>
+          </div>
+          <div id="sannManual">
+            <label style="font-size:.74rem;font-weight:600;color:#475569">Número de radicado que dio Sanitas</label>
+            <input id="sannNumero" class="sann-input" placeholder="Ej: 12345678">
+            <button class="sann-btn" id="sannBtnGuardar" onclick="guardarNovedadSanitas()">💾 Guardar radicado en BryNex</button>
+            <button class="sann-btn rojo" onclick="rechazoNovedadSanitas()">⛔ Sanitas no lo recibió</button>
+          </div>
         </div>
       </div>
 
@@ -176,7 +184,8 @@ async function sannGuardarFirma() {
 
 async function abrirNovedadSanitas(contratoId) {
     sannContratoId = contratoId; sannEnvio = null; sannAbrio = false; clearInterval(sannReloj);
-    ['sannContenido', 'sannResultado', 'sannLleno', 'sannEnviado', 'sannBtnAbrir', 'sannBtnMostrar', 'sannBtnLlenar', 'sannAvisos', 'sannFirma'].forEach(id => sannEl(id).style.display = 'none');
+    ['sannContenido', 'sannResultado', 'sannLleno', 'sannEnviado', 'sannCaida', 'sannBtnAbrir', 'sannBtnMostrar', 'sannBtnLlenar', 'sannAvisos', 'sannFirma'].forEach(id => sannEl(id).style.display = 'none');
+    sannEl('sannManual').style.display = 'block';
     sannEl('sannCargando').style.display = 'block';
     sannEl('sannCargando').textContent = '⏳ Revisando los datos del contrato...';
     sannEl('sannModal').classList.add('open');
@@ -314,11 +323,34 @@ function mostrarEnvioSanitas(res) {
     sannEl('sannEnviadoTexto').textContent = texto.slice(0, 1500);
     sannEl('sannSesion').innerHTML = '✅ Enviado a Sanitas.';
 
+    // Sanitas a veces contesta el Enviar con una falla suya («Estamos presentando demoras
+    // temporales, por favor inténtalo más tarde») y vuelve a mostrar el formulario vacío.
+    // No lo recibió: no hay número que pedir y no es un error del trámite, así que el
+    // radicado se deja pendiente y se ofrece reintentar.
+    const caida = !res.radicado && sannFallaSanitas(texto);
+    if (caida) {
+        sannEl('sannEnviadoInfo').className = 'sann-aviso';
+        sannEl('sannEnviadoInfo').innerHTML = `⛔ <strong>Sanitas no recibió la novedad</strong> y no dio número: «${sannEsc(caida)}».` +
+            '<br>En BryNex el radicado sigue <strong>pendiente</strong>. Reintenta en un rato.';
+        sannEl('sannEnviadoTexto').style.display = 'none';
+        sannEl('sannSesion').innerHTML = '⚠️ Sanitas no lo recibió.';
+    } else {
+        sannEl('sannEnviadoInfo').className = 'sann-info';
+    }
+    sannEl('sannCaida').style.display = caida ? 'block' : 'none';
+    sannEl('sannManual').style.display = caida ? 'none' : 'block';
+
     // Con el número y la confirmación de Sanitas ("registrada exitosamente") se guarda solo.
     if (res.radicado && /exitosa/i.test(res.texto || '') && !(res.errores || []).length) {
         sannEl('sannEnviadoInfo').innerHTML = `📨 Sanitas registró el radicado <strong>${sannEsc(res.radicado)}</strong>. Guardando en BryNex...`;
         guardarNovedadSanitas();
     }
+}
+
+/** La frase con que Sanitas dice que falló de su lado, o null si el texto no trae ninguna. */
+function sannFallaSanitas(texto) {
+    const m = String(texto || '').match(/[^.—]*(demoras temporales|int[eé]ntalo (?:nuevamente|m[aá]s tarde)|intente (?:nuevamente|m[aá]s tarde)|ha ocurrido un error|servicio no (?:est[aá] )?disponible)[^.—]*/i);
+    return m ? m[0].trim() : null;
 }
 
 async function guardarNovedadSanitas() {
