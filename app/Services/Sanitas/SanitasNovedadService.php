@@ -27,7 +27,7 @@ use setasign\Fpdi\PdfParser\StreamReader;
  * BryNex Portales en el Chrome de la persona; el clic en Enviar lo da ella. BryNex
  * prepara los datos, genera el formulario con "Reporte de novedades" y la
  * novedad 9 marcados, y al final guarda la constancia con el número de radicado
- * que muestra Sanitas —con el formulario enviado detrás, en un solo PDF— y deja
+ * que muestra Sanitas —detrás del formulario enviado, en un solo PDF— y deja
  * el radicado de BryNex en trámite (Sanitas responde
  * por correo en unos 3 días hábiles; la conciliación lo pasa a OK).
  */
@@ -256,9 +256,9 @@ class SanitasNovedadService
     }
 
     /**
-     * Constancia y formulario enviado en un solo PDF: la primera hoja dice que
-     * Sanitas lo recibió y las siguientes muestran qué se le mandó, con la firma y,
-     * en el encabezado, la fecha de radicado y el número que dio Sanitas. El
+     * Formulario enviado y constancia en un solo PDF: primero lo que se le mandó a
+     * Sanitas, con la firma y, en el encabezado, la fecha de radicado y el sello con
+     * el número que dio Sanitas; al final la hoja que dice que lo recibió. El
      * formulario es el último que se generó para adjuntar, que es el que tomó el
      * robot. Si no está o no se puede leer queda la constancia sola.
      */
@@ -284,7 +284,8 @@ class SanitasNovedadService
 
         try {
             $pdf = new Fpdi;
-            foreach ([$constancia, $enviado] as $binario) {
+            // Primero el formulario sellado, que es el documento; la constancia, al final.
+            foreach ([$enviado, $constancia] as $binario) {
                 $paginas = $pdf->setSourceFile(StreamReader::createByString($binario));
                 for ($n = 1; $n <= $paginas; $n++) {
                     $pagina = $pdf->importPage($n);

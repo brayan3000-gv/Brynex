@@ -408,7 +408,7 @@ async function guardarNovedadSanitas() {
     if (!r.ok) { alert(r.error || r.mensaje || 'No se pudo guardar.'); return; }
     sannActualizarFila(r.badge);
     sannTerminar(`✅ Radicado <strong>${sannEsc(r.radicado)}</strong> guardado: el radicado de EPS queda <strong>en trámite</strong>` +
-        (r.pdf ? (r.con_formulario ? ' y la constancia, con el formulario firmado, quedó en los soportes.' : ' y la constancia quedó en los soportes.') : '.') + '<br><span style="color:#475569">Sanitas responde por correo; la conciliación lo pasará a OK.</span>');
+        (r.pdf ? (r.con_formulario ? ' y el formulario firmado y sellado, con la constancia al final, quedó en los soportes.' : ' y la constancia quedó en los soportes.') : '.') + '<br><span style="color:#475569">Sanitas responde por correo; la conciliación lo pasará a OK.</span>');
 }
 
 async function rechazoNovedadSanitas() {
