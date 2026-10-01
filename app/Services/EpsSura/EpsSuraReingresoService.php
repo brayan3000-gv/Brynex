@@ -645,6 +645,11 @@ class EpsSuraReingresoService
 
         Cache::put($clave, ['paso' => 'Empezando', 'en' => now()->toDateTimeString()], 600);
 
+        // Cuánto tarda cada paso. Sirve para saber dónde se va el minuto y
+        // medio sin tener que mirar la pantalla del robot.
+        $tiempos = [];
+        $ultimo = ['paso' => 'arranque', 'en' => microtime(true)];
+
         try {
             $resultado = Process::path(base_path())
                 // Con ventana el visor del comprobante se dibuja y el portal
@@ -655,18 +660,26 @@ class EpsSuraReingresoService
                 // aplicada en SURA sin registrar en BryNex.
                 ->timeout(420)
                 ->input($entrada)
-                ->run($this->comando(), function (string $tipo, string $linea) use ($clave) {
+                ->run($this->comando(), function (string $tipo, string $linea) use ($clave, &$tiempos, &$ultimo) {
                     // El script anuncia cada paso por stderr con «@paso …»; stdout
                     // lleva el JSON del resultado y no se toca.
                     foreach (preg_split('/\R/', $linea) as $renglon) {
-                        if (str_starts_with($renglon, '@paso ')) {
-                            Cache::put($clave, [
-                                'paso' => self::enCristiano(trim(substr($renglon, 6))),
-                                'en' => now()->toDateTimeString(),
-                            ], 600);
+                        if (! str_starts_with($renglon, '@paso ')) {
+                            continue;
                         }
+
+                        $paso = trim(substr($renglon, 6));
+                        $ahora = microtime(true);
+                        $tiempos[$ultimo['paso']] = round($ahora - $ultimo['en'], 1);
+                        $ultimo = ['paso' => $paso, 'en' => $ahora];
+
+                        Cache::put($clave, [
+                            'paso' => self::enCristiano($paso),
+                            'en' => now()->toDateTimeString(),
+                        ], 600);
                     }
                 });
+            $tiempos[$ultimo['paso']] = round(microtime(true) - $ultimo['en'], 1);
         } finally {
             // Se suelta pase lo que pase: si no, el siguiente se queda esperando
             // un turno que no llega.
@@ -681,6 +694,9 @@ class EpsSuraReingresoService
         // golpe fallaba. En el Mac, sin xvfb, iban separados y no se notaba.
         $salida = $this->respuestaDe($resultado->output())
             ?: $this->respuestaDe($resultado->errorOutput());
+
+        $salida['tiempos'] = $tiempos;
+        $salida['segundos'] = round(array_sum($tiempos), 1);
 
         if (! ($salida['ok'] ?? false)) {
             // El mensaje nunca trae la clave: el script no la imprime.
