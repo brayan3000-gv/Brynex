@@ -386,17 +386,9 @@ body {
             <option value="ok"         {{ $estadoRad === 'ok'         ? 'selected' : '' }}>✅ OK</option>
         </select>
 
-        {{-- Estado del contrato (por defecto se muestran todas las afiliaciones del mes) --}}
-        <select name="estado_contrato" onchange="this.form.submit()" title="Estado actual del contrato"
-            style="font-size:0.78rem;padding:0.3rem 0.5rem;border:1px solid #334155;border-radius:6px;cursor:pointer;
-            @if($estadoCont === 'vigente') background:#15803d;color:#fff;
-            @elseif($estadoCont === 'retirado') background:#b91c1c;color:#fff;
-            @else background:#1e3a5f;color:#e2e8f0;
-            @endif">
-            <option value="">👤 Todos</option>
-            <option value="vigente"  {{ $estadoCont === 'vigente'  ? 'selected' : '' }}>🟢 Vigentes</option>
-            <option value="retirado" {{ $estadoCont === 'retirado' ? 'selected' : '' }}>🔴 Retirados</option>
-        </select>
+        {{-- El filtro de vigentes/retirados se quitó de aquí por pedido: la vista
+             muestra todas las afiliaciones del mes. El parámetro sigue
+             funcionando si llega por la dirección. --}}
 
         @if($user->es_brynex)
         {{-- Todas las afiliaciones que gestiona BryNex, de todos los aliados que
@@ -409,7 +401,7 @@ body {
         <button type="button" onclick="abrirModalClavesGlobal()" class="btn-export" style="background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#1c1917;border:none;font-weight:800;cursor:pointer;">🔑 Claves</button>
         <a href="{{ route('admin.gestion-arl.index') }}" class="btn-export" style="background:#f97316;">🛡️ ARL</a>
         @can('automatizar-portales')
-        <button type="button" onclick="abrirConciliacionEpsSura()" class="btn-export" style="background:#0033a0;cursor:pointer;" title="Pone al día los radicados de EPS (SURA y Nueva EPS) con lo que dicen los portales">🩺 Conciliar EPS</button>
+        <button type="button" onclick="abrirConciliacionEpsSura()" class="btn-export" style="background:#0033a0;cursor:pointer;" title="Pone al día los radicados de EPS (SURA y Nueva EPS) con lo que dicen los portales">🩺 Conciliar</button>
         <a href="{{ route('admin.afiliaciones.buzon', $gestionados ? ['gestionados' => 1] : []) }}" class="btn-export" style="background:#4338ca;text-decoration:none;" title="Respuestas de los asesores y correos de las entidades que revisa el agente del buzón">📬 Buzón</a>
         @endcan
     </div>
