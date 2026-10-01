@@ -6,6 +6,7 @@ use App\Models\Contrato;
 use App\Models\CorreoAfiliacion;
 use App\Models\DocumentoCliente;
 use App\Models\Radicado;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\Correo\BuzonGmail;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
@@ -150,7 +151,7 @@ class SosCorreoService
             'avisos'        => $avisos,
             'falta_firma'   => $faltaFirma,
             'independiente' => $independiente,
-            'buzon'         => config("afiliaciones_correo.buzones.{$contrato->aliado_id}"),
+            'buzon'         => DatosAfiliacion::buzon($contrato->aliado_id),
             'para'          => $principal,
             'reemplazo'     => $reemplazo,
             'asunto'        => $asunto,
@@ -339,11 +340,20 @@ class SosCorreoService
     private function asesores(Contrato $contrato): array
     {
         $conf = config('afiliaciones_correo.asesores.sos');
-        $clave = DB::table('clave_accesos')
-            ->where('aliado_id', $contrato->aliado_id)
-            ->where('razon_social_id', $contrato->razon_social_id)
-            ->where('tipo', 'EPS')->where('entidad', 'like', '%SOS%')->where('activo', true)
-            ->first(['correo_entidad', 'link_acceso']);
+        // La clave es de la empresa y no del aliado (ver ClaveAcceso::visiblesPara): se
+        // busca por NIT, así un contrato de Fecop usa el asesor que se guardó en Brygar.
+        $contrato->loadMissing('razonSocial');
+        $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
+        $clave = DB::table('clave_accesos as c')
+            ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
+            ->when(strlen($nit) >= 8,
+                fn ($q) => $q->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(rs.nit,''),'-',''),'.',''),' ','') = ?", [$nit]),
+                fn ($q) => $q->where('c.razon_social_id', $contrato->razon_social_id))
+            ->where('c.tipo', 'EPS')->where('c.entidad', 'like', '%SOS%')->where('c.activo', true)
+            ->where('rs.aliado_id', '<>', 1)
+            ->orderByRaw('CASE WHEN rs.aliado_id = ? THEN 0 ELSE 1 END', [DatosAfiliacion::ALIADO_PRINCIPAL])
+            ->orderByDesc('c.updated_at')
+            ->first(['c.correo_entidad', 'c.link_acceso']);
 
         $correo = collect([$clave?->correo_entidad, $clave?->link_acceso])
             ->map(fn ($v) => trim((string) $v))

@@ -7,6 +7,7 @@ use App\Models\CorreoAfiliacion;
 use App\Models\CorreoRecibido;
 use App\Models\Radicado;
 use App\Models\User;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\AlertaOperativaService;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\Sos\SosNovedadService;
@@ -18,6 +19,11 @@ use Throwable;
 /**
  * Agente del buzón de afiliaciones: lee lo que llega a la cuenta de Gmail del
  * aliado y lo cruza con lo que BryNex envió.
+ *
+ * El buzón de Brygar también es el de los aliados con el servicio de afiliaciones
+ * de BryNex (DatosAfiliacion): los envíos se cruzan por la cuenta y no por el
+ * aliado, las cédulas se buscan en todos esos aliados, y cada correo recibido
+ * queda en la bandeja del aliado de su contrato.
  *
  * - Respuesta a un correo enviado desde BryNex (por In-Reply-To/References, así
  *   el asesor responda desde Gmail): con el formulario radicado (`CC{cédula}_N.pdf`)
@@ -42,11 +48,15 @@ class AgenteBuzonAfiliaciones
 
     private int $aliadoId = 2;
 
+    /** Aliados cuyos correos maneja el buzón que se está leyendo. */
+    private array $aliados = [2];
+
     public function revisar(int $aliadoId, int $dias = 2, bool $simular = false): array
     {
         $this->aliadoId = $aliadoId;
         $buzon    = BuzonGmail::delAliado($aliadoId);
-        $enviados = CorreoAfiliacion::where('aliado_id', $aliadoId)
+        $this->aliados = DatosAfiliacion::aliadosDelBuzon(DatosAfiliacion::aliadoBuzon($aliadoId));
+        $enviados = CorreoAfiliacion::where('buzon', $buzon->cuenta())
             ->whereIn('estado', ['enviado', 'observaciones', 'respondido'])
             ->where('enviado_at', '>=', now()->subDays(90))
             ->get()->keyBy('message_id');
@@ -70,7 +80,7 @@ class AgenteBuzonAfiliaciones
             }
         }
 
-        $this->vencidos($aliadoId, $simular);
+        $this->vencidos($buzon->cuenta(), $simular);
 
         return $this->resultado;
     }
@@ -122,6 +132,7 @@ class AgenteBuzonAfiliaciones
     /** Respuesta al correo que BryNex envió al asesor. */
     private function respuestaAsesor(CorreoAfiliacion $enviado, array $base, array $m): void
     {
+        $base['aliado_id'] = $enviado->aliado_id;
         $contrato = Contrato::with('cliente')->find($enviado->contrato_id);
         $nombre   = $contrato?->cliente ? trim($contrato->cliente->primer_nombre.' '.$contrato->cliente->primer_apellido) : "contrato {$enviado->contrato_id}";
         $radicado = $enviado->radicado_id ? Radicado::find($enviado->radicado_id) : ($contrato ? EpsRadicado::deContrato($contrato) : null);
@@ -179,7 +190,7 @@ class AgenteBuzonAfiliaciones
         $cedula = preg_match(self::PDF_RADICADO, $pdf['nombre'], $x) ? $x[1] : null;
 
         $contratos = $cedula ? Contrato::with('cliente')
-            ->where('aliado_id', $aliadoId)->where('cedula', $cedula)->where('estado', 'vigente')
+            ->whereIn('aliado_id', $this->aliados)->where('cedula', $cedula)->where('estado', 'vigente')
             ->whereHas('eps', fn ($q) => $q->where('codigo', SosNovedadService::CODIGO_EPS))
             ->get() : collect();
 
@@ -192,6 +203,7 @@ class AgenteBuzonAfiliaciones
         }
 
         $contrato = $contratos->first();
+        $base['aliado_id'] = $contrato->aliado_id;
         $radicado = EpsRadicado::deContrato($contrato);
         $ruta = $this->copiarAlRadicado($contrato, $pdf['ruta'], 'eps_radicado_sos');
         $quien = $m['de_nombre'] ?: $m['de'];
@@ -207,11 +219,15 @@ class AgenteBuzonAfiliaciones
     {
         preg_match_all('/(?<!\d)(\d{6,10})(?!\d)/', $m['asunto'].' '.implode(' ', array_column($base['adjuntos'], 'nombre')).' '.Str::limit($m['texto'], 800, ''), $x);
         $cedulas = array_values(array_unique($x[1]));
-        $contratos = $cedulas ? Contrato::where('aliado_id', $aliadoId)->whereIn('cedula', $cedulas)->where('estado', 'vigente')->pluck('id') : collect();
+        $contratos = $cedulas ? Contrato::whereIn('aliado_id', $this->aliados)->whereIn('cedula', $cedulas)->where('estado', 'vigente')->pluck('aliado_id', 'id') : collect();
+        // Con un solo contrato el correo va a la bandeja de su aliado; si no, a la del buzón.
+        if ($contratos->count() === 1) {
+            $base['aliado_id'] = (int) $contratos->first();
+        }
 
         CorreoRecibido::create($base + [
             'clasificacion' => 'otra_entidad',
-            'contrato_id'   => $contratos->count() === 1 ? $contratos->first() : null,
+            'contrato_id'   => $contratos->count() === 1 ? $contratos->keys()->first() : null,
             'estado'        => 'por_revisar',
             'accion'        => ($entidad['nombre'] ?? 'Entidad').($contratos->count() === 1 ? ': correo de un contrato vigente.' : ($contratos->count() > 1 ? ': menciona varios contratos.' : ': sin contrato reconocido.')),
         ]);
@@ -219,10 +235,10 @@ class AgenteBuzonAfiliaciones
     }
 
     /** Correos enviados que vencieron sin respuesta: un aviso por correo. */
-    private function vencidos(int $aliadoId, bool $simular): void
+    private function vencidos(string $cuenta, bool $simular): void
     {
         $vencidos = CorreoAfiliacion::with('contrato.cliente')
-            ->where('aliado_id', $aliadoId)->where('estado', 'enviado')
+            ->where('buzon', $cuenta)->where('estado', 'enviado')
             ->where('vence_at', '<', now())->whereNull('avisado_vencido_at')->get();
 
         foreach ($vencidos as $c) {

@@ -2,6 +2,7 @@
 
 namespace App\Services\Correo;
 
+use App\Services\Afiliaciones\DatosAfiliacion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -20,15 +21,20 @@ class BuzonGmail
 {
     public function __construct(private string $cuenta, private string $clave) {}
 
+    /**
+     * El buzón con el que trabaja el aliado: el suyo, o el de Brygar si tiene el
+     * servicio de afiliaciones de BryNex (DatosAfiliacion).
+     */
     public static function delAliado(int $aliadoId): self
     {
-        $cuenta = config("afiliaciones_correo.buzones.{$aliadoId}");
+        $dueno  = DatosAfiliacion::aliadoBuzon($aliadoId);
+        $cuenta = config("afiliaciones_correo.buzones.{$dueno}");
         if (! $cuenta) {
-            throw new RuntimeException('El aliado no tiene buzón de Gmail configurado para enviar afiliaciones.');
+            throw new RuntimeException('El aliado no tiene buzón de Gmail configurado para enviar afiliaciones, ni tiene el servicio de afiliaciones de BryNex para usar el de Brygar.');
         }
 
         $fila = DB::table('clave_accesos')
-            ->where('aliado_id', $aliadoId)
+            ->where('aliado_id', $dueno)
             ->where('usuario', $cuenta)
             ->where('entidad', 'like', '%GMAIL%')
             ->where('activo', true)

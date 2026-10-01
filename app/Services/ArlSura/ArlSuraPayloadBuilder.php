@@ -5,6 +5,7 @@ namespace App\Services\ArlSura;
 use App\Models\ArlCentroTrabajo;
 use App\Models\Contrato;
 use App\Models\TipoModalidad;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 
@@ -52,7 +53,7 @@ class ArlSuraPayloadBuilder
     public function paraAfiliacion(Contrato $contrato, Carbon $inicioCobertura): array
     {
         $cliente = $contrato->cliente;
-        $rs      = $contrato->razonSocial;
+        $rs      = DatosAfiliacion::deContrato($contrato);
 
         if (! $cliente) {
             throw new RuntimeException("El contrato {$contrato->id} no tiene cliente asociado.");
@@ -113,7 +114,7 @@ class ArlSuraPayloadBuilder
     {
         $problemas = [];
         $cliente   = $contrato->cliente;
-        $rs        = $contrato->razonSocial;
+        $rs        = DatosAfiliacion::deContrato($contrato);
 
         if (! $cliente) {
             return ['El contrato no tiene un cliente asociado.'];

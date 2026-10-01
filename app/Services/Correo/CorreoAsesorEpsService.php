@@ -6,6 +6,7 @@ use App\Models\Contrato;
 use App\Models\CorreoAfiliacion;
 use App\Models\DocumentoCliente;
 use App\Models\Radicado;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
 use App\Services\Sos\SosCorreoService;
@@ -163,7 +164,7 @@ class CorreoAsesorEpsService
             'avisos'        => $avisos,
             'falta_firma'   => $faltaFirma,
             'independiente' => $independiente,
-            'buzon'         => config("afiliaciones_correo.buzones.{$contrato->aliado_id}"),
+            'buzon'         => DatosAfiliacion::buzon($contrato->aliado_id),
             'para'          => $principal,
             'reemplazo'     => $conf['reemplazo'] ?? null,
             'asunto'        => $asunto,

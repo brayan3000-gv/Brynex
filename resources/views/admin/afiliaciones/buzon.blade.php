@@ -28,8 +28,14 @@
 @section('contenido')
 <div class="buz-wrap">
     <div class="buz-head">
-        <h1>📬 Buzón de afiliaciones</h1>
-        <a href="{{ route('admin.afiliaciones.index') }}">← Volver a Afiliaciones</a>
+        <h1>📬 Buzón de afiliaciones{{ $gestionados ? ' · todos los aliados gestionados' : '' }}</h1>
+        <div style="display:flex;gap:.9rem;align-items:center">
+            @if (auth()->user()?->es_brynex)
+                <a href="{{ route('admin.afiliaciones.buzon', ['estado' => $estado] + ($gestionados ? [] : ['gestionados' => 1])) }}"
+                   title="{{ $gestionados ? 'Ver solo el aliado activo' : 'Ver los correos de todos los aliados que gestiona BryNex' }}">🏢 {{ $gestionados ? 'Solo el aliado activo' : 'Todos los aliados' }}</a>
+            @endif
+            <a href="{{ route('admin.afiliaciones.index', $gestionados ? ['gestionados' => 1] : []) }}">← Volver a Afiliaciones</a>
+        </div>
     </div>
 
     @if (session('success'))
@@ -47,7 +53,7 @@
                 @foreach ($esperando as $c)
                     @php $vencido = $c->estado === 'enviado' && $c->vence_at && $c->vence_at->isPast(); @endphp
                     <tr>
-                        <td>{{ nombre_oracion(trim(($c->contrato?->cliente?->primer_nombre ?? '').' '.($c->contrato?->cliente?->primer_apellido ?? '')) ?: 'Contrato '.$c->contrato_id) }}<br><span style="color:#94a3b8">CC {{ $c->contrato?->cedula }}</span></td>
+                        <td>{{ nombre_oracion(trim(($c->contrato?->cliente?->primer_nombre ?? '').' '.($c->contrato?->cliente?->primer_apellido ?? '')) ?: 'Contrato '.$c->contrato_id) }}<br><span style="color:#94a3b8">CC {{ $c->contrato?->cedula }}</span>@if ($gestionados) <span class="buz-pill">{{ $nombresAliado[$c->aliado_id] ?? 'Aliado '.$c->aliado_id }}</span>@endif</td>
                         <td>{{ $c->para }}</td>
                         <td style="white-space:nowrap">{{ $c->enviado_at?->format('d/m/Y H:i') }}</td>
                         <td style="white-space:nowrap">{{ $c->vence_at?->format('d/m H:i') }}</td>
@@ -67,7 +73,7 @@
 
     <div class="buz-tabs">
         @foreach (['por_revisar' => 'Por revisar', 'aplicado' => 'Aplicados', 'informativo' => 'Informativos', 'revisado' => 'Revisados', 'ignorado' => 'Ignorados', 'todos' => 'Todos'] as $clave => $texto)
-            <a href="{{ route('admin.afiliaciones.buzon', ['estado' => $clave]) }}" class="{{ $estado === $clave ? 'activo' : '' }}">
+            <a href="{{ route('admin.afiliaciones.buzon', ['estado' => $clave] + ($gestionados ? ['gestionados' => 1] : [])) }}" class="{{ $estado === $clave ? 'activo' : '' }}">
                 {{ $texto }}{{ $clave !== 'todos' && ($conteos[$clave] ?? 0) ? ' ('.$conteos[$clave].')' : '' }}
             </a>
         @endforeach
@@ -88,7 +94,7 @@
                         <td class="buz-texto"><strong>{{ $r->asunto }}</strong><br>{{ \Illuminate\Support\Str::limit($r->texto, 220) }}</td>
                         <td>
                             @if ($r->contrato)
-                                {{ nombre_oracion(trim(($r->contrato->cliente?->primer_nombre ?? '').' '.($r->contrato->cliente?->primer_apellido ?? ''))) }}<br><span style="color:#94a3b8">CC {{ $r->contrato->cedula }}</span>
+                                {{ nombre_oracion(trim(($r->contrato->cliente?->primer_nombre ?? '').' '.($r->contrato->cliente?->primer_apellido ?? ''))) }}<br><span style="color:#94a3b8">CC {{ $r->contrato->cedula }}</span>@if ($gestionados) <span class="buz-pill">{{ $nombresAliado[$r->aliado_id] ?? 'Aliado '.$r->aliado_id }}</span>@endif
                             @else
                                 <span style="color:#94a3b8">—</span>
                             @endif

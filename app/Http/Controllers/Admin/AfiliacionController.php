@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\TrazaArchivoService;
 use App\Models\Aliado;
 use App\Models\Beneficiario;
@@ -703,22 +704,7 @@ class AfiliacionController extends Controller
      */
     private function aliadosDeLaVista(Request $request, User $user, int $alidoId): array
     {
-        if (! $user->es_brynex || ! $request->boolean('gestionados')) {
-            return [$alidoId];
-        }
-
-        $ids = DB::table('brynex_modulos_aliado as ma')
-            ->join('brynex_modulos as m', 'm.id', '=', 'ma.modulo_id')
-            ->where('ma.activo', true)
-            ->where('m.codigo', 'afiliaciones')
-            ->where('ma.aliado_id', '<>', 1)
-            ->distinct()
-            ->pluck('ma.aliado_id')
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $user->puedeAccederAliado($id))
-            ->values()->all();
-
-        return $ids ?: [$alidoId];
+        return DatosAfiliacion::aliadosVisibles($user, $alidoId, $request->boolean('gestionados'));
     }
 
     /** Con qué se reconoce a una empresa: su NIT y, si no lo tiene, su nombre. */

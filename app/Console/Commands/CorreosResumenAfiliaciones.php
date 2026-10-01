@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\CorreoAfiliacion;
 use App\Models\CorreoRecibido;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\AlertaOperativaService;
 use Illuminate\Console\Command;
 
@@ -25,12 +26,17 @@ class CorreosResumenAfiliaciones extends Command
         $aliadoId = (int) $this->option('aliado');
         $hoy = today();
 
-        $enviados   = CorreoAfiliacion::where('aliado_id', $aliadoId)->where('estado', '<>', 'fallido')->whereDate('enviado_at', $hoy)->count();
-        $radicados  = CorreoRecibido::where('aliado_id', $aliadoId)->where('estado', 'aplicado')->whereDate('created_at', $hoy)->count();
-        $respuestas = CorreoRecibido::where('aliado_id', $aliadoId)->where('clasificacion', 'respuesta_asesor')->where('estado', 'por_revisar')->whereDate('created_at', $hoy)->count();
-        $esperando  = CorreoAfiliacion::where('aliado_id', $aliadoId)->where('estado', 'enviado')->count();
-        $vencidos   = CorreoAfiliacion::where('aliado_id', $aliadoId)->where('estado', 'enviado')->where('vence_at', '<', now())->count();
-        $porRevisar = CorreoRecibido::where('aliado_id', $aliadoId)->where('estado', 'por_revisar')->count();
+        // Lo del buzón entero: también lo de los aliados que usan el de Brygar (DatosAfiliacion).
+        $cuenta = DatosAfiliacion::buzon($aliadoId);
+        $enviado  = fn () => $cuenta ? CorreoAfiliacion::where('buzon', $cuenta) : CorreoAfiliacion::where('aliado_id', $aliadoId);
+        $recibido = fn () => $cuenta ? CorreoRecibido::where('buzon', $cuenta) : CorreoRecibido::where('aliado_id', $aliadoId);
+
+        $enviados   = $enviado()->where('estado', '<>', 'fallido')->whereDate('enviado_at', $hoy)->count();
+        $radicados  = $recibido()->where('estado', 'aplicado')->whereDate('created_at', $hoy)->count();
+        $respuestas = $recibido()->where('clasificacion', 'respuesta_asesor')->where('estado', 'por_revisar')->whereDate('created_at', $hoy)->count();
+        $esperando  = $enviado()->where('estado', 'enviado')->count();
+        $vencidos   = $enviado()->where('estado', 'enviado')->where('vence_at', '<', now())->count();
+        $porRevisar = $recibido()->where('estado', 'por_revisar')->count();
 
         if (! ($enviados + $radicados + $respuestas + $esperando + $porRevisar)) {
             $this->info('Sin movimiento: no se envía resumen.');

@@ -405,7 +405,7 @@ th:focus-within > .th-sub-host, .th-sub-host.activo { display:block; }
         <a href="{{ route('admin.gestion-arl.index') }}" class="btn-export" style="background:#f97316;">🛡️ ARL</a>
         @can('automatizar-portales')
         <button type="button" onclick="abrirConciliacionEpsSura()" class="btn-export" style="background:#0033a0;cursor:pointer;" title="Pone al día los radicados de EPS (SURA y Nueva EPS) con lo que dicen los portales">🩺 Conciliar EPS</button>
-        <a href="{{ route('admin.afiliaciones.buzon') }}" class="btn-export" style="background:#4338ca;text-decoration:none;" title="Respuestas de los asesores y correos de las entidades que revisa el agente del buzón">📬 Buzón</a>
+        <a href="{{ route('admin.afiliaciones.buzon', $gestionados ? ['gestionados' => 1] : []) }}" class="btn-export" style="background:#4338ca;text-decoration:none;" title="Respuestas de los asesores y correos de las entidades que revisa el agente del buzón">📬 Buzón</a>
         @endcan
     </div>
 </div>

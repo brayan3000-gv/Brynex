@@ -3,6 +3,7 @@
 namespace App\Services\ArlColmena;
 
 use App\Models\Contrato;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 
@@ -61,7 +62,7 @@ class ColmenaPayloadBuilder
     public function paraAfiliacion(Contrato $contrato, Carbon $inicio, ?string $arlAnteriorId = null): array
     {
         $cliente = $contrato->cliente ?? throw new RuntimeException("El contrato {$contrato->id} no tiene cliente.");
-        $rs = $contrato->razonSocial;
+        $rs = DatosAfiliacion::deContrato($contrato);
 
         $centro = $this->centro($contrato);
         $eps = $this->deCatalogo($this->api->eps(), $this->nombreEntidad($contrato->eps ?: $cliente->eps), 'EPS');
@@ -162,7 +163,7 @@ class ColmenaPayloadBuilder
             fn () => $this->centro($contrato),
             fn () => $this->deCatalogo($this->api->eps(), $this->nombreEntidad($contrato->eps ?: $cliente->eps), 'EPS'),
             fn () => $this->afpDe($contrato, $cliente),
-            fn () => $this->direccion($cliente, $contrato->razonSocial, $contrato),
+            fn () => $this->direccion($cliente, DatosAfiliacion::deContrato($contrato), $contrato),
         ] as $comprobar) {
             try {
                 $comprobar();
@@ -175,11 +176,11 @@ class ColmenaPayloadBuilder
             $problemas[] = 'El contrato no tiene salario ni IBC.';
         }
 
-        if (! $this->correo($contrato, $cliente, $contrato->razonSocial)) {
+        if (! $this->correo($contrato, $cliente, DatosAfiliacion::deContrato($contrato))) {
             $problemas[] = 'No hay correo del cliente, ni de la razón social, ni del aliado.';
         }
 
-        if (! $this->telefono($contrato, $cliente, $contrato->razonSocial)) {
+        if (! $this->telefono($contrato, $cliente, DatosAfiliacion::deContrato($contrato))) {
             $problemas[] = 'No hay teléfono del cliente, ni de la razón social, ni del aliado.';
         }
 

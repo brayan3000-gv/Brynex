@@ -4,6 +4,7 @@ namespace App\Services\Boxalud;
 
 use App\Models\Contrato;
 use App\Models\Radicado;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -45,7 +46,7 @@ class BoxaludService
         $conf = $this->conf($eps);
         $contrato->loadMissing(['cliente.eps', 'cliente.municipio', 'cliente.departamento', 'eps', 'plan', 'razonSocial', 'arl', 'pension']);
         $cliente = $contrato->cliente;
-        $rs      = $contrato->razonSocial;
+        $rs      = DatosAfiliacion::deContrato($contrato);
         $epsContrato = $contrato->eps ?: $cliente?->eps;
         $tipo    = strtoupper((string) $cliente?->tipo_doc);
         $radicado = Radicado::where('contrato_id', $contrato->id)->where('tipo', Radicado::TIPO_EPS)->first();
@@ -130,7 +131,7 @@ class BoxaludService
             'celular'       => $celulares->get(0),
             'celular2'      => $celulares->get(1),
             'fijo'          => $fijo,
-            'correo'        => $cliente->correo ?: config("afiliaciones_correo.buzones.{$contrato->aliado_id}"),
+            'correo'        => $cliente->correo ?: DatosAfiliacion::buzon($contrato->aliado_id),
             'afp'           => (string) $contrato->pension?->razon_social,
             'arl'           => (string) ($contrato->arl?->nombre_arl ?? $contrato->arl?->razon_social),
             'salario'       => $salario,

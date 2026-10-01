@@ -6,6 +6,7 @@ use App\Models\Contrato;
 use App\Models\EpsAfiliacion;
 use App\Models\Radicado;
 use App\Models\RadicadoMovimiento;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
@@ -75,7 +76,7 @@ class ComfandiCajaService
     {
         $contrato->loadMissing(['cliente.municipio', 'cliente.departamento', 'plan', 'razonSocial']);
         $cliente = $contrato->cliente;
-        $rs = $contrato->razonSocial;
+        $rs = DatosAfiliacion::deContrato($contrato);
         $tipo = strtoupper((string) $cliente?->tipo_doc);
         $caja = DB::table('cajas')->where('id', $contrato->caja_id)->value('nombre');
         $radicado = Radicado::where('contrato_id', $contrato->id)->where('tipo', 'caja')->first();
@@ -184,7 +185,7 @@ class ComfandiCajaService
             $de = $rs?->razon_social ?: 'la empresa';
 
             if (! $correo) {
-                $correo = $this->correo($aliado?->correo, config("afiliaciones_correo.buzones.{$contrato->aliado_id}"));
+                $correo = $this->correo($aliado?->correo, DatosAfiliacion::buzon($contrato->aliado_id));
                 $de = $aliado?->nombre ?: 'el aliado';
             }
 

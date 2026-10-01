@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Contrato;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use setasign\Fpdi\Fpdi;
 
 class FormularioEpsService
@@ -75,7 +76,7 @@ class FormularioEpsService
     protected function ensamblarDatos(Contrato $contrato, bool $incluirBeneficiarios, array $customDatos = [], bool $novedadInicioLaboral = false): array
     {
         $c  = $contrato->cliente;
-        $rs = $contrato->razonSocial;
+        $rs = DatosAfiliacion::deContrato($contrato);
 
         // Género separado para los cuadros M / F
         $genero  = strtoupper(trim($c?->genero ?? ''));

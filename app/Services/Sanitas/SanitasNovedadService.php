@@ -4,6 +4,7 @@ namespace App\Services\Sanitas;
 
 use App\Models\Contrato;
 use App\Models\Radicado;
+use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -47,7 +48,7 @@ class SanitasNovedadService
     {
         $contrato->loadMissing(['cliente.eps', 'cliente.departamento', 'cliente.municipio', 'eps', 'plan', 'razonSocial']);
         $cliente = $contrato->cliente;
-        $rs      = $contrato->razonSocial;
+        $rs      = DatosAfiliacion::deContrato($contrato);
         $eps     = $contrato->eps ?: $cliente?->eps;
         $tipo    = strtoupper((string) $cliente?->tipo_doc);
         $radicado = Radicado::where('contrato_id', $contrato->id)->where('tipo', Radicado::TIPO_EPS)->first();
@@ -95,7 +96,7 @@ class SanitasNovedadService
         // social si lo tiene (el que la empresa usa con las entidades), si no el buzón del
         // aliado, que revisa el agente, y por último el del cliente.
         $correoRs = filter_var(trim((string) $rs?->correo_formulario), FILTER_VALIDATE_EMAIL) ?: null;
-        $buzon    = config("afiliaciones_correo.buzones.{$contrato->aliado_id}");
+        $buzon    = DatosAfiliacion::buzon($contrato->aliado_id);
         $correo   = $correoRs ?: $buzon ?: $cliente?->correo;
         if (! $correo) {
             $problemas[] = 'No hay correo para la respuesta de Sanitas (ni correo de formularios de la razón social, ni buzón del aliado, ni correo del cliente).';
