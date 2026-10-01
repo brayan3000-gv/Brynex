@@ -316,7 +316,9 @@ async function llenarNovedadSanitas() {
     clearInterval(cuenta);
     btn.disabled = false; btn.textContent = '🤖 Radicar en Sanitas (el robot llena y envía)';
 
-    if (!r.ok) { alert(r.error || 'No se pudo llenar el formulario de Sanitas.'); return; }
+    // Si otra persona la está radicando (o se acaba de radicar) BryNex no entrega el
+    // formulario: tras el aviso se revisa de nuevo para que el modal diga quién.
+    if (!r.ok) { alert(r.error || 'No se pudo llenar el formulario de Sanitas.'); abrirNovedadSanitas(sannContratoId); return; }
 
     const caja = sannEl('sannLleno');
     caja.style.display = 'block';

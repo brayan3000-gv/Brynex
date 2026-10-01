@@ -3,11 +3,15 @@
 namespace App\Services\Sanitas;
 
 use App\Models\Contrato;
+use App\Models\EpsAfiliacion;
 use App\Models\Radicado;
+use App\Models\User;
 use App\Services\Afiliaciones\DatosAfiliacion;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
 use Barryvdh\DomPDF\Facade\Pdf;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -33,6 +37,17 @@ class SanitasNovedadService
 
     public const TIPO_NOVEDAD = '10513';
 
+    /**
+     * Mientras alguien radica a un trabajador nadie más puede: el 1-oct-2026 Jenny
+     * Quintero (desde la oficina) y Brayan (desde su Mac) radicaron a la misma persona
+     * con un minuto de diferencia. El robot toma el turno al pedir el formulario y lo
+     * suelta al guardar el resultado; si se cierra el modal, vence solo.
+     */
+    private const TURNO_SEGUNDOS = 180;
+
+    /** Recién radicado en Sanitas: no se deja volver a radicar sin esperar (doble clic, dos personas). */
+    private const RECIEN_MINUTOS = 15;
+
     /** Tipo de documento de BryNex → valor del formulario de Sanitas. */
     private const TIPOS = [
         'CC' => '1', 'CE' => '2', 'NI' => '4', 'NIT' => '4', 'PA' => '6', 'PP' => '6', 'RC' => '7', 'TI' => '8',
@@ -44,7 +59,7 @@ class SanitasNovedadService
     /**
      * @return array{problemas: string[], avisos: string[], resumen: array, falta_firma: bool, url_firma: string|null, portal: array|null}
      */
-    public function preparar(Contrato $contrato): array
+    public function preparar(Contrato $contrato, bool $revisarOcupado = true): array
     {
         $contrato->loadMissing(['cliente.eps', 'cliente.departamento', 'cliente.municipio', 'eps', 'plan', 'razonSocial']);
         $cliente = $contrato->cliente;
@@ -80,6 +95,9 @@ class SanitasNovedadService
         }
         if ($radicado?->estado === Radicado::ESTADO_OK) {
             $problemas[] = 'El radicado de EPS ya está en OK.';
+        }
+        if ($revisarOcupado && ($ocupado = $this->ocupado($contrato, Auth::id()))) {
+            $problemas[] = $ocupado;
         }
 
         $celular = $this->digitos($cliente?->celular);
@@ -149,6 +167,12 @@ class SanitasNovedadService
     /** Formulario de Sanitas como novedad de inicio laboral, guardado en los soportes del radicado. */
     public function formulario(Contrato $contrato): string
     {
+        // El robot pide el formulario justo antes de llenar Sanitas: aquí se toma el turno.
+        if ($ocupado = $this->ocupado($contrato, Auth::id())) {
+            throw new RuntimeException($ocupado);
+        }
+        $this->tomarTurno($contrato, Auth::user());
+
         $contrato->loadMissing('cliente');
         if (! FormularioEpsService::tieneFirma($contrato->cliente)) {
             throw new RuntimeException('El formulario no tiene la firma del trabajador: ábrelo en «✍️ Firmar» y que la dibuje antes de radicar. Sanitas devuelve las novedades sin firma.');
@@ -196,7 +220,9 @@ class SanitasNovedadService
      */
     public function aplicar(Contrato $contrato, array $entrada, ?int $usuarioId): array
     {
-        $prep = $this->preparar($contrato);
+        // Lo que ya pasó en Sanitas se guarda aunque el turno haya vencido.
+        Cache::forget($this->claveTurno($contrato));
+        $prep = $this->preparar($contrato, false);
         if ($prep['problemas']) {
             throw new RuntimeException(implode(' ', $prep['problemas']));
         }
@@ -266,6 +292,48 @@ class SanitasNovedadService
 
             return null;
         }
+    }
+
+    /**
+     * Por qué no se puede radicar ahora: otra persona lo está radicando, o se acaba
+     * de radicar. Null si se puede.
+     */
+    public function ocupado(Contrato $contrato, ?int $usuarioId): ?string
+    {
+        $turno = Cache::get($this->claveTurno($contrato));
+        if ($turno && (int) $turno['usuario_id'] !== (int) $usuarioId && now()->timestamp - $turno['desde'] < self::TURNO_SEGUNDOS) {
+            return "{$turno['nombre']} está radicando a esta persona en Sanitas desde hace ".$this->hace($turno['desde']).': espera a que termine.';
+        }
+
+        $reciente = EpsAfiliacion::where('contrato_id', $contrato->id)->where('entidad', self::ENTIDAD)
+            ->where('estado', 'exitosa')->where('created_at', '>=', now()->subMinutes(self::RECIEN_MINUTOS))
+            ->latest('id')->first();
+        if ($reciente) {
+            $quien = User::whereKey($reciente->usuario_id)->value('nombre') ?: 'Alguien';
+
+            return "{$quien} ya la radicó en Sanitas hace ".$this->hace($reciente->created_at->timestamp)." con el número {$reciente->numero_radicado}. Si de verdad hay que repetirla, espera ".self::RECIEN_MINUTOS.' minutos.';
+        }
+
+        return null;
+    }
+
+    private function tomarTurno(Contrato $contrato, ?User $usuario): void
+    {
+        Cache::put($this->claveTurno($contrato), [
+            'usuario_id' => $usuario?->id, 'nombre' => $usuario?->nombre ?: 'Alguien', 'desde' => now()->timestamp,
+        ], self::TURNO_SEGUNDOS);
+    }
+
+    private function claveTurno(Contrato $contrato): string
+    {
+        return "sanitas:radicando:{$contrato->id}";
+    }
+
+    private function hace(int $desde): string
+    {
+        $min = intdiv(max(now()->timestamp - $desde, 0), 60);
+
+        return $min < 1 ? 'menos de un minuto' : ($min === 1 ? '1 minuto' : "{$min} minutos");
     }
 
     /**
