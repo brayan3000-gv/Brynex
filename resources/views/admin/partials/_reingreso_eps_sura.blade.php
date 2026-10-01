@@ -227,7 +227,7 @@ async function realizarReingresoEpsSura() {
     // Lo que trajo se registra aunque el portal haya rechazado: el motivo vale.
     let g = {};
     try {
-        g = await esuPedir('aplicar', 'POST', 120, {
+        g = await esuPedir('aplicar', 'POST', 200, {
             ok: !!d.ok, radicado: d.radicado || null, transaccion: d.transaccion || null,
             periodoPago: d.periodoPago || null, resultado: d.resultado || null,
             error: d.error || null, pdf: d.pdf || null,
@@ -238,6 +238,21 @@ async function realizarReingresoEpsSura() {
     }
 
     if (g.radicado) pintarRadicadoEnLista(g.radicado, esuContratoId);
+
+    // El portal rechaza porque la persona YA está afiliada con esta empresa: no
+    // es un fallo, es que el trámite sobraba. El radicado queda en OK y aquí se
+    // termina, sin la alarma roja que invitaría a repetirlo.
+    if (!d.ok && g.estado === 'ok') {
+        esuEl('esuContenido').style.display = 'none';
+        const caja = esuEl('esuResultado');
+        caja.innerHTML = '✅ Ya estaba afiliado en EPS SURA con esta empresa: el reingreso no hacía falta.' +
+            (g.certificado === true ? '<br><span style="color:#475569">Certificado de afiliación guardado con los soportes.</span>' : '') +
+            (g.certificado === false ? '<br><span style="color:#92400e">No se pudo bajar el certificado; el radicado queda sin soporte.</span>' : '') +
+            '<br><span style="color:#475569">El radicado quedó en <strong>OK</strong>.</span>';
+        caja.style.display = 'block';
+
+        return;
+    }
 
     if (!d.ok) {
         // Cómo quedó el formulario en el portal: con esto se ve qué campo faltó

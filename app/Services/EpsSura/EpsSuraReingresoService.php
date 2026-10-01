@@ -9,6 +9,7 @@ use App\Services\EpsPortal\EpsRadicado;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
+use Throwable;
 
 /**
  * Reingreso de un trabajador en EPS SURA desde BryNex.
@@ -171,14 +172,15 @@ class EpsSuraReingresoService
             $radicado, $numero,
             match (true) {
                 $aplicada => Radicado::ESTADO_TRAMITE,
-                $yaEstaba => Radicado::ESTADO_PENDIENTE,
+                // Lo dice la propia EPS: está afiliado. Se cierra aquí mismo.
+                $yaEstaba => Radicado::ESTADO_OK,
                 default => Radicado::ESTADO_ERROR,
             },
             $ruta,
             match (true) {
                 $aplicada => 'EPS SURA: novedad de reingreso aplicada con éxito desde el portal'.($detalle ? ' ('.$detalle.')' : '').'.'
                     .($ruta ? ' Comprobante guardado.' : '').' Queda en trámite hasta que la conciliación lo vea vigente.',
-                $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. '.($entrada['error'] ?? ''),
+                $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. Confirmado por el portal: '.($entrada['error'] ?? ''),
                 default => 'EPS SURA (reingreso por extensión): '.($entrada['error'] ?? 'el portal no confirmó la novedad.'),
             },
             $usuarioId
@@ -186,11 +188,27 @@ class EpsSuraReingresoService
 
         $radicado = $radicado->fresh();
 
+        // Sin comprobante y sin número que guardar, el radicado se quedaría sin
+        // nada que lo respalde: se intenta el certificado de afiliación, que es
+        // el otro documento del portal y además vuelve a confirmar la vigencia.
+        // Tarda cerca de un minuto porque abre un navegador en el servidor.
+        $certificado = null;
+        if (! $ruta && ! trim((string) $radicado->numero_radicado) && ($aplicada || $yaEstaba)) {
+            try {
+                $cert = $this->certificado($contrato, $usuarioId);
+                $certificado = (bool) ($cert['ok'] ?? false);
+                $radicado = $radicado->fresh();
+            } catch (Throwable $e) {
+                $certificado = false;
+            }
+        }
+
         return [
             'ok' => $aplicada,
             'estado' => $radicado->estado,
             'numero' => $radicado->numero_radicado,
-            'comprobante' => (bool) $ruta,
+            'comprobante' => (bool) $radicado->ruta_pdf,
+            'certificado' => $certificado,
             'radicado' => $radicado->paraLaLista(),
         ];
     }
@@ -244,11 +262,17 @@ class EpsSuraReingresoService
         $nota = trim((string) ($salida['alerta'] ?? $salida['error'] ?? ''));
         $ruta = $this->guardarSoporte($contrato, $salida['soporte'] ?? null);
 
+        // Que el portal rechace por «ya está vigente con este empleador» no es un
+        // fallo: la persona ya está afiliada y el trámite sobra.
+        $yaEstaba = (bool) preg_match('/vigente(,)? (con|para) (el|este) (mismo )?empleador|ya se encuentra|ya existe/i', $nota);
+
         // El portal no siempre entrega el soporte de la novedad; el certificado
         // de afiliación sirve de reemplazo. Se pide también cuando el
-        // comprobante no se pudo leer —antes solo se intentaba si todo había
-        // salido redondo, que es justo cuando menos falta hacía—.
-        if (! $ruta && (($salida['ok'] ?? false) || ($salida['enComprobante'] ?? false))) {
+        // comprobante no se pudo leer y cuando el afiliado ya estaba vigente
+        // —antes solo se intentaba si todo había salido redondo, que es justo
+        // cuando menos falta hacía—. Sin número de solicitud que guardar, el
+        // certificado es el único soporte que queda del trámite.
+        if (! $ruta && (($salida['ok'] ?? false) || ($salida['enComprobante'] ?? false) || $yaEstaba)) {
             $cert = $this->correr($contrato, 'certificado', $prep['datos']);
             $ruta = $this->guardarSoporte($contrato, $cert['soporte'] ?? null);
             $salida['certificado_error'] = $ruta ? null : ($cert['error'] ?? null);
@@ -261,18 +285,15 @@ class EpsSuraReingresoService
             // como error invita a repetirlo y a duplicar el trámite en SURA.
             $llegoAlComprobante = (bool) ($salida['enComprobante'] ?? false);
 
-            // Que el portal rechace por «ya está vigente con este empleador» no
-            // es un fallo del trámite: es que ya estaba hecho. Queda pendiente
-            // —no en error— y la conciliación lo cerrará cuando lo confirme.
-            $yaEstaba = (bool) preg_match('/vigente(,)? (con|para) (el|este) (mismo )?empleador|ya se encuentra|ya existe/i', $nota);
-
             EpsRadicado::marcar(
                 $radicado,
                 // El número del formulario se guarda solo si se llegó al
                 // comprobante: si el portal rechazó, ese número no es de nadie.
                 $llegoAlComprobante ? (trim((string) ($salida['radicado'] ?? '')) ?: (string) $radicado->numero_radicado) : (string) $radicado->numero_radicado,
                 match (true) {
-                    $yaEstaba => Radicado::ESTADO_PENDIENTE,
+                    // Lo dice la propia EPS: está afiliado. No hay nada que
+                    // esperar, así que el radicado se cierra aquí mismo.
+                    $yaEstaba => Radicado::ESTADO_OK,
                     $llegoAlComprobante => Radicado::ESTADO_TRAMITE,
                     default => Radicado::ESTADO_ERROR,
                 },
@@ -280,7 +301,9 @@ class EpsSuraReingresoService
                 // esto el PDF quedaba en disco y el radicado sin él.
                 $ruta,
                 match (true) {
-                    $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. '.$nota,
+                    $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta.'
+                        .($ruta ? ' Certificado de afiliación guardado como soporte.' : '')
+                        .' Confirmado por el portal: '.$nota,
                     $llegoAlComprobante => 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado'
                         .(($salida['radicado'] ?? null) ? ' (la solicitud del formulario era la '.$salida['radicado'].', sin confirmar)' : '')
                         .'.'.($ruta ? ' Soporte guardado.' : '').' NO repetir sin revisarlo antes en el portal.',

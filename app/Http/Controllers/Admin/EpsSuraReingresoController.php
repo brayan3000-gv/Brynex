@@ -71,6 +71,11 @@ class EpsSuraReingresoController extends Controller
     /** Lo que la extensión trajo del portal: número, transacción y comprobante. */
     public function aplicar(Request $request, int $contratoId)
     {
+        // Sin comprobante que guardar se baja el certificado, y eso abre un
+        // navegador en el servidor: pasa de ser una respuesta inmediata a tardar
+        // cerca de un minuto.
+        @set_time_limit(300);
+
         $datos = $request->validate([
             'ok' => 'nullable|boolean',
             'radicado' => 'nullable|string|max:60',
