@@ -3807,6 +3807,12 @@ async function ccfGrupoFamiliar(pestana, d = {}) {
 const SURA_REINGRESOS = 'https://solucionesenlineaeps.suramericana.com/reingresos/Reingresos.aspx';
 const SURA_MENU = 'https://epsapps.suramericana.com/Semp/faces/pos/transNovedades/srvReingresos.jspx';
 
+// El menú de arriba solo responde con la sesión ya abierta: sin ella devuelve
+// una página en blanco, no el login. Para entrar hay que ir al SSO, que
+// redirige solo a Semp cuando la sesión está viva.
+const SURA_SSO = 'https://login.sura.com/sso/servicelogin.aspx'
+  + '?continueTo=https%3A%2F%2Fepsapps.suramericana.com%2FSemp%2F&service=epssura';
+
 /** Tipos de BryNex → los códigos del desplegable del portal (son numéricos). */
 const SURA_TIPOS = { CC: '1', CE: '2', NI: '4', NUIP: '5', PA: '6', PP: '6', RC: '7', TI: '8', CN: '10', SC: '11', PT: '14', PPT: '14', PE: '14', PEP: '14' };
 
@@ -3822,12 +3828,12 @@ async function atenderSura(accion, d = {}) {
       await chrome.tabs.update(p.id, { active: true });
       if (!/reingresos/i.test(p.url || '')) {
         const carga = esperarCarga(p.id);
-        await chrome.tabs.update(p.id, { url: SURA_MENU });
+        await chrome.tabs.update(p.id, { url: SURA_SSO });
         await carga;
       }
       return { ok: true, abierta: true };
     }
-    await chrome.tabs.create({ url: SURA_MENU, active: true });
+    await chrome.tabs.create({ url: SURA_SSO, active: true });
 
     return { ok: true, abierta: false };
   }
@@ -3856,9 +3862,9 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
   }
 
   const carga = esperarCarga(tabId);
-  await chrome.tabs.update(tabId, { url: SURA_MENU, active: true });
+  await chrome.tabs.update(tabId, { url: SURA_SSO, active: true });
   await carga;
-  await esperar(1500);
+  await esperar(2000);
 
   const entro = await ejecutar(tabId, async (tipo, user, clave) => {
     const esperar = (ms) => new Promise(r => setTimeout(r, ms));
@@ -3898,6 +3904,13 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
     await esperarCarga(tabId);
     await esperar(3000);
   }
+
+  // Ya con la sesión, el menú lleva a la pantalla de reingresos (que vive en
+  // otra aplicación: el JSF redirige solo).
+  const alMenu = esperarCarga(tabId);
+  await chrome.tabs.update(tabId, { url: SURA_MENU });
+  await alMenu;
+  await esperar(2500);
 
   // Tras el SSO, el portal pregunta por la empresa (si el usuario tiene varias).
   const empresa = await suraElegirEmpresa(tabId, nit);
