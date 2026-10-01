@@ -449,45 +449,36 @@ class FormularioEpsService
                 }
 
                 // ── Campo texto ────────────────────────────────────────
+                // Las fuentes base de FPDF son Windows-1252: sin convertir, la Ñ y las
+                // tildes salen como «Ã‘» o «Ãº» (BOLAÑOS, «Número»).
+                $valor = $this->paraFpdf($valor);
+                if (isset($campo['titulo'])) {
+                    $campo['titulo'] = $this->paraFpdf((string) $campo['titulo']);
+                }
+
                 // El usuario dibuja el rect con el borde INFERIOR pegado a la línea del formulario.
                 // SetXY pone el cursor en la esquina SUPERIOR del cell, y la fuente ocupa
                 // ~fontSize pt desde esa Y. Para que el texto quede en la línea visible
                 // ajustamos Y al borde inferior menos la altura de la fuente + margen mínimo.
                 $cellH  = $fontSize + 1;               // celda justa alrededor del texto
                 $textY  = $y + $h - $cellH;            // anclar al fondo del rect
-                // Como sello, el rect mapeado es el recuadro: el texto va centrado en él.
                 if (! empty($campo['recuadro'])) {
-                    $textY = $y + ($h - $cellH) / 2;
+                    $this->sello($pdf, $campo, $valor, $x, $y, $w, $h, $fontSize, $style, $align);
+
+                    continue;
                 }
 
                 $pdf->SetXY($x, $textY);
 
                 if ($w > 0) {
                     // Truncar el texto si excede el ancho disponible para evitar solapamientos
-                    while ($pdf->GetStringWidth($valor) > ($w - 2) && mb_strlen($valor) > 0) {
-                        $valor = mb_substr($valor, 0, -1);
+                    // Ya en Windows-1252: un byte por letra.
+                    while ($pdf->GetStringWidth($valor) > ($w - 2) && strlen($valor) > 0) {
+                        $valor = substr($valor, 0, -1);
                     }
                     $pdf->Cell($w, $cellH, $valor, 0, 0, $align);
                 } else {
                     $pdf->Write($cellH, $valor);
-                }
-
-                // Texto como sello: un recuadro del mismo color ceñido al texto.
-                if (! empty($campo['recuadro'])) {
-                    // Cell deja un margen interno de 1 mm (2,835 pt) a la izquierda y a la derecha.
-                    $anchoTexto = $pdf->GetStringWidth($valor);
-                    $inicio = match (true) {
-                        $w > 0 && $align === 'C' => $x + ($w - $anchoTexto) / 2,
-                        $w > 0 && $align === 'R' => $x + $w - $anchoTexto - 2.835,
-                        $w > 0                   => $x + 2.835,
-                        default                  => $x,
-                    };
-                    $pdf->SetDrawColor((int) ($campo['color_r'] ?? 0), (int) ($campo['color_g'] ?? 0), (int) ($campo['color_b'] ?? 0));
-                    $pdf->SetLineWidth(1.2);
-                    // Alto: el del rect mapeado (en Sanitas, el del cuadro «Fecha de Radicado»).
-                    $pdf->Rect($inicio - 5, $y, $anchoTexto + 10, $h);
-                    $pdf->SetLineWidth(0.2);
-                    $pdf->SetDrawColor(0, 0, 0);
                 }
             }
         }
@@ -497,6 +488,61 @@ class FormularioEpsService
         $this->limpiarNormalizado($normalizado);
 
         return $resultado;
+    }
+
+    /**
+     * Texto como sello (`recuadro`): un recuadro del color del campo, del alto del rect
+     * mapeado y ceñido al texto. Con `titulo` lleva arriba una franja con ese título en
+     * letra pequeña y el texto debajo, como el cuadro «Fecha de Radicado» de Sanitas.
+     */
+    private function sello(Fpdi $pdf, array $campo, string $valor, float $x, float $y, float $w, float $h, float $fontSize, string $style, string $align): void
+    {
+        [$r, $g, $b] = [(int) ($campo['color_r'] ?? 0), (int) ($campo['color_g'] ?? 0), (int) ($campo['color_b'] ?? 0)];
+        $titulo = trim((string) ($campo['titulo'] ?? ''));
+        $tamTitulo = (float) ($campo['titulo_size'] ?? 7.5);
+
+        $pdf->SetFont('Helvetica', $style, $fontSize);
+        $anchoTexto = $pdf->GetStringWidth($valor);
+        $pdf->SetFont('Helvetica', '', $tamTitulo);
+        $anchoTitulo = $titulo !== '' ? $pdf->GetStringWidth($titulo) : 0;
+
+        $ancho = max($anchoTexto, $anchoTitulo) + 12;
+        $cajaX = match (true) {
+            $w > 0 && $align === 'C' => $x + ($w - $ancho) / 2,
+            $w > 0 && $align === 'R' => $x + $w - $ancho,
+            default                  => $x,
+        };
+        $banda = $titulo !== '' ? $tamTitulo + 4 : 0;
+
+        $pdf->SetDrawColor($r, $g, $b);
+        $pdf->SetLineWidth(1.2);
+        if ($banda) {
+            // La franja del título, con el color del sello muy claro.
+            $pdf->SetFillColor(255 - (int) ((255 - $r) * 0.12), 255 - (int) ((255 - $g) * 0.12), 255 - (int) ((255 - $b) * 0.12));
+            $pdf->Rect($cajaX, $y, $ancho, $banda, 'F');
+            $pdf->SetLineWidth(0.6);
+            $pdf->Line($cajaX, $y + $banda, $cajaX + $ancho, $y + $banda);
+            $pdf->SetLineWidth(1.2);
+            $pdf->SetTextColor($r, $g, $b);
+            $pdf->SetXY($cajaX, $y + 0.5);
+            $pdf->Cell($ancho, $banda - 0.5, $titulo, 0, 0, 'C');
+        }
+        $pdf->Rect($cajaX, $y, $ancho, $h);
+
+        $pdf->SetFont('Helvetica', $style, $fontSize);
+        $pdf->SetTextColor($r, $g, $b);
+        $alto = $fontSize + 1;
+        $pdf->SetXY($cajaX, $y + $banda + ($h - $banda - $alto) / 2);
+        $pdf->Cell($ancho, $alto, $valor, 0, 0, 'C');
+
+        $pdf->SetLineWidth(0.2);
+        $pdf->SetDrawColor(0, 0, 0);
+        $pdf->SetTextColor(0, 0, 0);
+    }
+
+    private function paraFpdf(string $texto): string
+    {
+        return mb_check_encoding($texto, 'UTF-8') ? mb_convert_encoding($texto, 'Windows-1252', 'UTF-8') : $texto;
     }
 
     /** Borra el PDF normalizado solo si fue temporal; el de caché se conserva. */
