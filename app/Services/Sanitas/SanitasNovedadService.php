@@ -153,9 +153,33 @@ class SanitasNovedadService
         if (strlen($pdf) > 3_000_000) {
             throw new RuntimeException('El formulario pesa más de 3 MB, el límite del portal de Sanitas.');
         }
+        $this->borrarBorradores($contrato);
         EpsRadicado::guardarPdf($contrato, $pdf, 'eps_formulario_sanitas');
 
         return $pdf;
+    }
+
+    /**
+     * El robot pide el formulario en cada intento y cada pedido guardaba una copia.
+     * Las que son posteriores a la última constancia no llegaron a radicarse: se
+     * reemplazan por la nueva. Las anteriores quedan, porque son de una radicación
+     * que sí se hizo. Nada en la BD apunta a estos archivos.
+     */
+    private function borrarBorradores(Contrato $contrato): void
+    {
+        $disco = Storage::disk('local');
+        $archivos = collect($disco->files(EpsRadicado::carpeta($contrato)));
+        $sello = fn (string $f, string $prefijo) => str_starts_with(basename($f), $prefijo) ? substr(basename($f), strlen($prefijo), 15) : null;
+
+        $ultimaConstancia = $archivos->map(fn ($f) => $sello($f, 'eps_radicado_sanitas_'))->filter()->max();
+        $borradores = $archivos->filter(function ($f) use ($sello, $ultimaConstancia) {
+            $s = $sello($f, 'eps_formulario_sanitas_');
+
+            return $s && (! $ultimaConstancia || $s > $ultimaConstancia);
+        });
+        if ($borradores->isNotEmpty()) {
+            $disco->delete($borradores->values()->all());
+        }
     }
 
     /**
