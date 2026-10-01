@@ -203,7 +203,7 @@ async function revisarSesionCaja() {
     const caja = ccfEl('ccfSesion');
     ccfEl('ccfBtnAbrir').style.display = 'none';
     ccfEl('ccfBtnIniciar').style.display = 'none';
-    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
+    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar → botón 🧩 Extensión; después recarga esta página.'; return; }
     if (ccfAbriendo) return;
     if (ccfOtraEmpresa(e)) {
         caja.innerHTML = `⚠️ El portal está abierto con <strong>${ccfEsc(e.empresa || 'otra empresa')}</strong> (NIT ${ccfEsc(e.nit)}) y este contrato es de <strong>${ccfEsc(ccfPrep.portal.empresa)}</strong>. Al pulsar «Buscar al trabajador y empezar» se cierra esa sesión y se entra con la clave de ${ccfEsc(ccfPrep.portal.empresa)}.`;

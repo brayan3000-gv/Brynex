@@ -203,7 +203,7 @@ class Kernel extends ConsoleKernel
         // S.O.S. no se puede revisar de noche: su login pide reCAPTCHA y hace
         // falta una persona. En vez de dejar los radicados sin confirmar, el
         // lunes por la mañana se pide por WhatsApp que alguien entre, y la
-        // revisión (Afiliaciones → Conciliar EPS → S.O.S.) cierra el pedido.
+        // revisión (Afiliaciones → Conciliar → S.O.S.) cierra el pedido.
         // Avisa una sola vez por pedido: insistir es como se deja de leer.
         $schedule->command('portales:pedir-revision --entidad=sos')
             ->weeklyOn(1, '08:00')

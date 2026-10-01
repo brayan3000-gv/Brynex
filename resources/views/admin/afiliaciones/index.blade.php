@@ -142,7 +142,7 @@ body {
 .modal-close { background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;padding:0;line-height:1; }
 .modal-close:hover { color:#ef4444; }
 
-/* ── Conciliar EPS: el modal tiene ocho entidades y cada una su explicación,
+/* ── Conciliar: el modal tiene ocho entidades y cada una su explicación,
       así que se arma como una página chica y no como un cuadro de diálogo. ── */
 .ceps-box { padding:0; max-width:900px; overflow:hidden; display:flex; flex-direction:column; background:#f8fafc; }
 .ceps-head {
@@ -350,7 +350,7 @@ body {
         {{-- Aliado (SOLO BryNex). Viendo los gestionados no se escoge uno: la
              lista los trae todos y el selector solo confundiría. --}}
         @if($gestionados)
-        <span style="background:#7c3aed;color:#fff;font-size:0.72rem;font-weight:800;padding:0.25rem 0.55rem;border-radius:6px;white-space:nowrap;">🏢 Gestionadas por BryNex</span>
+        <span style="background:#7c3aed;color:#fff;font-size:0.72rem;font-weight:800;padding:0.25rem 0.55rem;border-radius:6px;white-space:nowrap;">BRYNEX</span>
         <span style="color:#4b6a8b;font-size:0.9rem;">|</span>
         @elseif($user->es_brynex && count($alidosDisponibles) > 1)
         <select name="aliado_id" onchange="this.form.submit()" style="font-size:0.78rem;padding:0.3rem 0.5rem;border:1px solid #334155;background:#1e3a5f;color:#e2e8f0;border-radius:6px;font-weight:700;">
@@ -3695,7 +3695,7 @@ async function revisarSesionSanitas() {
     const e = await brynexExt('sanitas', 'estado', {}, 30);
     const botonAbrir = `<button type="button" onclick="brynexExt('sanitas','abrir')" class="btn-export" style="background:#0e7490;cursor:pointer;margin-left:0.4rem;">🌐 Abrir Sanitas</button>`;
     if (e.sinExtension) {
-        caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.';
+        caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar → botón 🧩 Extensión; después recarga esta página.';
     } else if (!e.ok) {
         caja.innerHTML = '⚠️ ' + e.error;
     } else if (!e.sesion) {

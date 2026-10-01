@@ -329,7 +329,7 @@ async function llenarNovedadSanitas() {
         (r.enviado
             ? `🤖 El robot pulsó <strong>Enviar</strong> en Sanitas${r.esperado ? ` ${r.esperado} s después de llenarlo` : ''}. No cierres este modal.</div>`
             : espera === null && r.adjunto
-                ? '👉 Tu extensión BryNex Portales es anterior a la ' + SANN_EXT_ESPERA + ' y no sabe esperar antes de enviar (Sanitas rechaza el envío inmediato). Ve a la pestaña de Sanitas (se trajo al frente) y pulsa <strong>Enviar</strong> tú en un minuto. Actualízala desde Conciliar EPS. No cierres este modal.</div>'
+                ? '👉 Tu extensión BryNex Portales es anterior a la ' + SANN_EXT_ESPERA + ' y no sabe esperar antes de enviar (Sanitas rechaza el envío inmediato). Ve a la pestaña de Sanitas (se trajo al frente) y pulsa <strong>Enviar</strong> tú en un minuto. Actualízala desde Afiliaciones → 🩺 Conciliar. No cierres este modal.</div>'
                 : '👉 El robot no pudo enviar solo: ve a la pestaña de Sanitas (se trajo al frente), revisa y pulsa <strong>Enviar</strong>. No cierres este modal.</div>');
     btn.style.display = 'none';
     sannEl('sannBtnMostrar').style.display = 'none';

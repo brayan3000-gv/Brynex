@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\DB;
  * alguien que abra la sesión los radicados se quedan sin confirmar y las
  * devoluciones del portal no las ve nadie. Esto convierte esa espera en algo
  * visible: se abre una petición, se avisa una vez, y la revisión —que se hace
- * en Afiliaciones → Conciliar EPS → S.O.S.— la cierra.
+ * en Afiliaciones → Conciliar → S.O.S.— la cierra.
  *
  * Avisa una sola vez por petición: insistir cada día a quien ya sabe es la forma
  * de que deje de leer los avisos. Si nadie entra, la petición vence y la semana
@@ -65,7 +65,7 @@ class PortalesPedirRevision extends Command
 
         // Sin saltos de línea: Meta rechaza la variable de la plantilla si los trae.
         $mensaje = "S.O.S. necesita que alguien entre: {$motivo}. {$lista}."
-            .' Abre Chrome, entra a S.O.S. y luego en BryNex: Afiliaciones → Conciliar EPS → pestaña S.O.S.'
+            .' Abre Chrome, entra a S.O.S. y luego en BryNex: Afiliaciones → Conciliar → pestaña S.O.S.'
             .' Tú resuelves el captcha; el resto lo hace BryNex.';
 
         $this->line('');

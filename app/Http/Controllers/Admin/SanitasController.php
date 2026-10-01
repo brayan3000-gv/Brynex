@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
- * Conciliación de Sanitas desde el modal 🩺 Conciliar EPS. El Estado de
+ * Conciliación de Sanitas desde el modal 🩺 Conciliar. El Estado de
  * Afiliación lo baja la extensión BryNex Portales con la sesión de la persona
  * (Radware + captcha + código al correo) y lo manda aquí.
  */

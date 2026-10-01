@@ -99,7 +99,7 @@ class AuthServiceProvider extends ServiceProvider
         });
 
         /**
-         * Automatización de portales (ARL por API, portales de EPS, Conciliar EPS
+         * Automatización de portales (ARL por API, portales de EPS, Conciliar
          * y Buzón). BryNex la usa en cualquier aliado; los usuarios del aliado,
          * solo si BryNex le activó el módulo `automatizacion_portales` al aliado
          * activo. No es un permiso del catálogo, así que el Gate::before no la toca.
@@ -115,7 +115,7 @@ class AuthServiceProvider extends ServiceProvider
         /**
          * Solo la parte de ARL: afiliar, anular, renovar y certificado en ARL
          * Sura, y afiliar/anular/retirar en Colmena, por sus APIs. Un aliado
-         * puede tener esto sin los portales de EPS, Conciliar EPS ni el Buzón
+         * puede tener esto sin los portales de EPS, Conciliar ni el Buzón
          * (módulo `arl_api`); quien tiene la automatización completa lo trae.
          */
         Gate::define('automatizar-arl', function (User $user) {

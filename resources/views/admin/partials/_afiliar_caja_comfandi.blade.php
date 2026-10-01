@@ -196,7 +196,7 @@ async function revisarSesionComfandi() {
     const caja = cfdEl('cfdSesion');
     cfdEl('cfdBtnAbrir').style.display = 'none';
     cfdEl('cfdBtnIniciar').style.display = 'none';
-    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar EPS → botón 🧩 Extensión; después recarga esta página.'; return; }
+    if (e.sinExtension) { caja.innerHTML = '🧩 Falta la extensión <strong>BryNex Portales</strong>. Se descarga desde Afiliaciones → 🩺 Conciliar → botón 🧩 Extensión; después recarga esta página.'; return; }
     if (!e.abierta || !e.sesion) {
         caja.innerHTML = `1️⃣ Abre la <strong>Sucursal Virtual Empresas</strong> e inicia sesión con el NIT de <strong>${cfdEsc(cfdPrep.portal.empresa)}</strong>` +
             (cfdPrep.resumen?.usuario_portal ? ` (<strong>${cfdEsc(cfdPrep.resumen.usuario_portal)}</strong>)` : '') +
