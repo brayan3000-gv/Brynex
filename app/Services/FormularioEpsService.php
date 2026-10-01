@@ -470,15 +470,19 @@ class FormularioEpsService
 
                 // Texto como sello: un recuadro del mismo color ceñido al texto.
                 if (! empty($campo['recuadro'])) {
+                    // Cell deja un margen interno de 1 mm (2,835 pt) a la izquierda y a la derecha.
                     $anchoTexto = $pdf->GetStringWidth($valor);
                     $inicio = match (true) {
                         $w > 0 && $align === 'C' => $x + ($w - $anchoTexto) / 2,
-                        $w > 0 && $align === 'R' => $x + $w - $anchoTexto - 1,
-                        default                  => $x + 1,
+                        $w > 0 && $align === 'R' => $x + $w - $anchoTexto - 2.835,
+                        $w > 0                   => $x + 2.835,
+                        default                  => $x,
                     };
                     $pdf->SetDrawColor((int) ($campo['color_r'] ?? 0), (int) ($campo['color_g'] ?? 0), (int) ($campo['color_b'] ?? 0));
                     $pdf->SetLineWidth(1.2);
-                    $pdf->Rect($inicio - 4, $textY - 2.5, $anchoTexto + 8, $cellH + 5);
+                    // Del alto de la celda más 1 pt arriba y abajo: así el recuadro calza con
+                    // una fila de casillas del mismo alto (Fecha de Radicado de Sanitas).
+                    $pdf->Rect($inicio - 4, $textY - 1, $anchoTexto + 8, $cellH + 2);
                     $pdf->SetLineWidth(0.2);
                     $pdf->SetDrawColor(0, 0, 0);
                 }
