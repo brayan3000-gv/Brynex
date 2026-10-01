@@ -4208,18 +4208,16 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
     poner('Repeater1_ctl00_TxtSalary', String(salario));
     await ponerFecha(fecha);
 
-    // El asesor no vale con escribirlo: el portal lo da por vacío hasta que su
-    // propia búsqueda lo valida y rellena el nombre al lado.
+    // El asesor no vale con escribirlo: el 0 queda como «sin asesor» solo
+    // cuando el foco pasa al campo de al lado —el del nombre—, que es lo que
+    // dispara su validación. Un blur suelto no basta.
     poner('tbxIntermediaryCode', String(ase), true);
     const campoAse = document.querySelector('[id$="tbxIntermediaryCode"]');
+    const campoNombre = document.querySelector('[id$="tbxIntermediary"]');
+    campoAse?.dispatchEvent(new Event('change', { bubbles: true }));
+    campoNombre?.focus();                       // el foco se va al de al lado
     campoAse?.dispatchEvent(new Event('blur', { bubbles: true }));
-    campoAse?.blur();
-    await esperar(1200);
-
-    if (!document.querySelector('[id$="tbxIntermediary"]')?.value?.trim()) {
-      document.querySelector('[id$="lnkSerchIntermediary"]')?.click();
-      await esperar(2000);
-    }
+    await esperar(1500);
 
     return {
       solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim(),
