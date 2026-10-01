@@ -425,20 +425,26 @@ try {
   paso = 'soporte';
   let soporte = await descarga.esperar(4);
   if (!soporte) {
+    // El botón se pulsa con el ratón, no con element.click() por JavaScript:
+    // la ventana emergente donde ocurre la descarga solo se abre si Chrome ve
+    // un gesto de verdad, y un clic sintético no cuenta ni con el bloqueo
+    // desactivado. Por eso no bajaba nada (Paola Montoya, 30-sep-2026).
     for (const f of pagina.frames()) {
-      const pulsado = await f.evaluate(() => {
-        const b = [...document.querySelectorAll('button, a, input[type=button], input[type=submit]')]
-          .find((e) => /descargar documento|informe principal/i.test(e.innerText || e.value || ''));
-        if (!b) return false;
-        b.click();
-
-        return true;
-      }).catch(() => false);
-      if (pulsado) {
-        // La ventana emergente tarda en abrirse y en soltar el archivo.
-        soporte = await descarga.esperar(30);
-        break;
+      let boton = null;
+      for (const h of await f.$$('button, a, input[type=button], input[type=submit]').catch(() => [])) {
+        const t = await h.evaluate((e) => (e.innerText || e.value || '').trim()).catch(() => '');
+        if (/descargar documento|informe principal/i.test(t)) { boton = h; break; }
       }
+      if (!boton) continue;
+
+      await boton.click({ delay: 60 }).catch(async () => {
+        // Si no se deja pulsar (tapado, fuera de pantalla), al menos se intenta.
+        await boton.evaluate((e) => e.click()).catch(() => {});
+      });
+
+      // La ventana emergente tarda en abrirse y en soltar el archivo.
+      soporte = await descarga.esperar(30);
+      break;
     }
   }
 
