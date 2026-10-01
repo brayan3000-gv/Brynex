@@ -4022,6 +4022,19 @@ async function suraElegirEmpresa(tabId, nit) {
     if (paso?.enviado) await esperar(4000);
   }
 
+  // El portal puede haber entrado bien y aun así negar la empresa: ese aviso
+  // suyo vale más que un «no cargó» (le pasó a YEVI EXPRESS el 30-sep-2026).
+  const aviso = await ejecutar(tabId, () => {
+    const t = (document.body?.innerText || '').replace(/\s+/g, ' ');
+    const m = t.match(/[^.]*no tiene acceso[^.]*\.?/i);
+
+    return m ? m[0].trim() : null;
+  }).catch(() => null);
+
+  if (aviso) {
+    return { error: `${aviso} El usuario del portal guardado en BryNex no está habilitado para esta empresa en EPS SURA.` };
+  }
+
   // Sin la pantalla de reingresos no se puede seguir: mejor decirlo que radicar
   // a ciegas en la empresa que el portal tuviera puesta.
   return { error: 'El portal no llegó a la pantalla de reingresos: revisa la pestaña.' };
