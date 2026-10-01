@@ -30,6 +30,7 @@ Los 6 críticos eran explotables sin autenticación o con una cuenta de aliado c
 | C-1/C-3 bis | El mismo patrón **reapareció en cuentafacil.co** (`/var/www/cf`, mismo servidor): `diagnostico_storage.php` —que ejecutaba `unlink()`+`symlink()` sin autenticación—, `debug_schema.php` —que publicaba host y usuario del SQL Server— y `opcache_reset.php` | ✅ los tres eliminados (ago-2026) — ver [endurecimiento-servidor-2026-08.md](endurecimiento-servidor-2026-08.md) |
 | C-4 | Documentos médicos públicos | ✅ disco privado + ruta autenticada — **falta correr la migración de archivos en el servidor** |
 | C-5 | IDOR en Incapacidades | ✅ 12 accesos filtrados por aliado |
+| C-5 bis | El mismo IDOR **reapareció en el formulario de EPS/pensión** (`FormularioEpsController`): ver el formulario con datos personales o sobrescribir la firma de un contrato de otro aliado cambiando el id | ✅ corregido (1-oct-2026) con `Contrato::paraTramite()` |
 | C-6 | Login sin throttle / session fixation | ✅ `throttle:5,1` + `regenerate()` |
 | A-1 | Rutas sin permisos | ✅ corregido (ago-2026) — catálogo de módulos + 96 puntos de control |
 | A-2 | Sin aislamiento multi-tenant en modelos | ⬜ pendiente (estructural) |
@@ -139,6 +140,18 @@ Los módulos de Contratos, Facturación, Planos y Cobros **sí** filtran correct
 ```php
 $inc = Incapacidad::where('aliado_id', session('aliado_id_activo'))->findOrFail($id);
 ```
+
+### C-5 bis — El mismo IDOR en el formulario de EPS y pensión (oct-2026)
+
+**Archivo:** [FormularioEpsController.php](app/Http/Controllers/Admin/FormularioEpsController.php), rutas en [web.php:1125-1131](routes/web.php:1125).
+
+Los cinco métodos recibían `Contrato $contrato` por *route model binding* implícito, que busca el registro solo por id y no mira el aliado. Un usuario autenticado de cualquier aliado, cambiando el id en `/admin/afiliaciones/{contrato}/formulario/...`, podía en un contrato de **otro aliado**:
+- ver el formulario de afiliación de la EPS o del fondo de pensión, que lleva nombre, cédula, dirección, salario y beneficiarios (`formulario/eps`, `formulario/pension` y sus `/raw`);
+- **sobrescribir la firma** del cliente (`POST formulario/eps/firma`). Esa firma se guarda por cédula en `storage/app/firmas/{cedula}.png` y se dibuja en los formularios que se mandan a las EPS por correo y por los portales.
+
+**Fix** (commit `6c9dac59`, 1-oct-2026). Cada método recibe el id y resuelve el contrato con `Contrato::paraTramite($id)`: da 404 si el contrato no es del aliado activo, salvo para un usuario `es_brynex` que tenga permitido el aliado del contrato. Es la misma regla de los controladores que enlazan a estas rutas: los modales de S.O.S., Sanitas y correo a la EPS, y el detalle de afiliaciones. Por eso quien abre el modal también puede abrir el formulario. Las rutas además exigen id numérico (`whereNumber('contrato')`).
+
+**Lección.** El *binding* implícito `Modelo $modelo` en un controlador del panel es un IDOR por defecto en este proyecto: no hay scope global por aliado (A-2). Para cualquier registro de un aliado hay que recibir el id y resolverlo con un método que filtre, como `Contrato::paraTramite()` o `Radicado::paraTramite()`.
 
 ---
 
