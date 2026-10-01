@@ -324,6 +324,9 @@ try {
 
     salir({
       ok: true, modo, paso, url: pagina.url(), nombre: nombre || null,
+      // Para saber si de verdad corrió con ventana (xvfb) o sin ella.
+      conVentana: process.env.SURA_CON_VENTANA === '1',
+      display: process.env.DISPLAY || null,
       // Sin nombre no es un reingreso: la persona no está en SURA y lo que
       // corresponde es un traslado, que no se hace por esta pantalla.
       esReingreso: !!nombre,
