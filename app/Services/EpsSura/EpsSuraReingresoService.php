@@ -272,6 +272,16 @@ class EpsSuraReingresoService
         // fallo: la persona ya está afiliada y el trámite sobra.
         $yaEstaba = (bool) preg_match('/vigente(,)? (con|para) (el|este) (mismo )?empleador|ya se encuentra|ya existe/i', $nota);
 
+        // Cuando el portal no suelta el comprobante, el robot imprime la pantalla
+        // como respaldo, y a veces lo que captura es el formulario —no el
+        // comprobante—. Eso no sirve de soporte y encima tapaba el certificado,
+        // porque «había algo guardado». Se descarta (Carmen Rosa Silva,
+        // 1-oct-2026: quedó con una foto del formulario por todo respaldo).
+        if ($ruta && ! $this->esComprobante($ruta)) {
+            Storage::disk('local')->delete($ruta);
+            $ruta = null;
+        }
+
         // El portal no siempre entrega el soporte de la novedad; el certificado
         // de afiliación sirve de reemplazo. Se pide también cuando el
         // comprobante no se pudo leer y cuando el afiliado ya estaba vigente
@@ -424,6 +434,27 @@ class EpsSuraReingresoService
             'transaccion' => $dato('/C[oó]digo de Transacci[oó]n\s+(\d+)/iu'),
             'periodoPago' => $dato('/inicio de pago es\s+([\d\/]+)/iu'),
         ];
+    }
+
+    /**
+     * Si el PDF guardado es de verdad el comprobante del reingreso.
+     */
+    private function esComprobante(string $rutaRelativa): bool
+    {
+        try {
+            $archivo = Storage::disk('local')->path($rutaRelativa);
+            if (! is_file($archivo)) {
+                return false;
+            }
+
+            $texto = (new Parser())->parseFile($archivo)->getText();
+        } catch (Throwable $e) {
+            // Si no se deja leer, se conserva: vale más un soporte dudoso que
+            // ninguno.
+            return true;
+        }
+
+        return (bool) preg_match('/novedades de reingreso|N[uú]mero de Solicitud/iu', $texto);
     }
 
     /**
