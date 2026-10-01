@@ -89,6 +89,24 @@ class EpsSuraReingresoController extends Controller
         }
     }
 
+    /**
+     * Credencial del portal para que la extensión entre sola.
+     *
+     * La contraseña solo viaja a quien puede verla en el módulo de claves.
+     */
+    public function credencial(int $contratoId)
+    {
+        $cred = $this->servicio->credencialPortal($this->contrato($contratoId));
+        if (isset($cred['error'])) {
+            return response()->json(['ok' => false, 'error' => $cred['error']], 422);
+        }
+        if (! Auth::user()->can('claves_acceso.ver_contrasena')) {
+            unset($cred['contrasena']);
+        }
+
+        return response()->json(['ok' => true] + $cred)->header('Cache-Control', 'no-store');
+    }
+
     private function contrato(int $id): Contrato
     {
         return Contrato::paraTramite($id);

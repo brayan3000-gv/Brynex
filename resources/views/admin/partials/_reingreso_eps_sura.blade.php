@@ -176,14 +176,35 @@ async function realizarReingresoEpsSura() {
 
     if (!hayExtension) { await reingresoPorServidor(soltar); return; }
 
-    // La pestaña del portal: si no está abierta, se abre y se espera a la persona.
-    const estado = await esuExt('suraEstado', {}, 60);
-    if (!estado.ok) {
+    // La pestaña del portal: si no está lista, BryNex entra sola con la clave
+    // del llavero. Solo si no la tiene se le pide a la persona.
+    let estado = await esuExt('suraEstado', {}, 60);
+    if (!estado.ok || !estado.sesion) {
         await esuExt('suraAbrir', {}, 60);
-        soltar('🏥 Reintentar cuando entres');
-        esuEl('esuPortal').innerHTML = 'Se abrió el portal de EPS SURA en otra pestaña: <strong>inicia sesión ahí</strong> con la empresa y vuelve a pulsar el botón.';
+        esuEl('esuPortal').innerHTML = '🔐 Entrando al portal de EPS SURA…';
         esuEl('esuPortal').style.display = 'block';
-        return;
+
+        let cred = {};
+        try { cred = await esuPedir('credencial', 'GET', 30); } catch (e) { cred = {}; }
+
+        if (cred.ok && cred.contrasena) {
+            const entrada = await esuExt('suraLogin', {
+                usuario: cred.usuario, contrasena: cred.contrasena,
+                tipoDocumento: cred.tipo_documento, nit: cred.nit,
+            }, 180);
+            if (!entrada.ok) {
+                soltar('🏥 Reintentar');
+                esuEl('esuPortal').innerHTML = `No se pudo entrar solo: ${esuEsc(entrada.error || '')}<br><strong>Inicia sesión en la pestaña del portal</strong> y vuelve a pulsar.`;
+                return;
+            }
+            estado = entrada;
+        } else {
+            soltar('🏥 Reintentar cuando entres');
+            esuEl('esuPortal').innerHTML = (cred.error ? esuEsc(cred.error) + '<br>' : '') +
+                'Se abrió el portal de EPS SURA en otra pestaña: <strong>inicia sesión ahí</strong> con la empresa y vuelve a pulsar el botón.';
+            return;
+        }
+        esuEl('esuPortal').innerHTML = '🔓 Sesión abierta en el portal.';
     }
 
     // La empresa de la pestaña tiene que ser la del contrato: el portal no avisa

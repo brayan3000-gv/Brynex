@@ -1063,6 +1063,7 @@ Route::middleware('auth')->group(function () {
             // Lo que la extensión trae del portal (el comprobante solo se puede
             // capturar desde el navegador de una persona).
             Route::post('/{contrato}/eps-sura/aplicar', [$esr, 'aplicar'])->name('eps-sura.aplicar');
+            Route::get('/{contrato}/eps-sura/credencial', [$esr, 'credencial'])->name('eps-sura.credencial');
             // Novedad de inicio laboral en Salud Total desde el radicado de EPS.
             $stc = \App\Http\Controllers\Admin\SaludTotalController::class;
             Route::get('/{contrato}/salud-total/precheck', [$stc, 'precheck'])->name('salud-total.precheck');

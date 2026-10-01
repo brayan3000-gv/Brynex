@@ -375,6 +375,29 @@ class EpsSuraReingresoService
         );
     }
 
+    /**
+     * Credencial del portal para que la extensión inicie sesión sola.
+     *
+     * @return array{usuario?:string, tipo_documento?:string, contrasena?:string, nit?:string, error?:string}
+     */
+    public function credencialPortal(Contrato $contrato): array
+    {
+        $contrato->loadMissing('razonSocial');
+        $rs = $contrato->razonSocial;
+        $credencial = $rs ? $this->credencial($rs) : null;
+
+        if (! $credencial) {
+            return ['error' => 'Esta empresa no tiene usuario del portal de Sura registrado en BryNex.'];
+        }
+
+        return [
+            'usuario' => $credencial->usuario,
+            'tipo_documento' => $credencial->tipo_documento ?: 'C',
+            'contrasena' => (string) $credencial->contrasena,
+            'nit' => preg_replace('/\D/', '', (string) $rs->nit),
+        ];
+    }
+
     /** Usuario del portal de Sura de la empresa (el mismo de la ARL). */
     private function credencial($rs)
     {

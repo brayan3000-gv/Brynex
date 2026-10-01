@@ -3836,9 +3836,105 @@ async function atenderSura(accion, d = {}) {
   if (!pestana) throw new Error('No hay una pestaña de EPS SURA abierta. Pulsa «Abrir EPS SURA» e inicia sesión.');
 
   if (accion === 'suraEstado') return { ok: true, ...(await suraEstado(pestana.id)) };
+  if (accion === 'suraLogin') return suraLogin(pestana.id, d);
   if (accion === 'suraConsultar') return suraConsultar(pestana.id, d);
   if (accion === 'suraRadicar') return suraRadicar(pestana.id, d);
   throw new Error(`Acción desconocida: ${accion}`);
+}
+
+/**
+ * Entra al portal con la clave que guarda BryNex y deja elegida la empresa.
+ *
+ * El SSO de Sura pide la contraseña en un teclado virtual —el campo real está
+ * bloqueado y las teclas cambian de sitio— y el botón de entrar es un input con
+ * JavaScript, así que Enter no sirve. Es el mismo baile que hace el robot del
+ * servidor en `arl-sura-sesion-comun.mjs`.
+ */
+async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit }) {
+  if (!usuario || !contrasena) {
+    return { ok: false, error: 'BryNex no entregó la clave del portal (hace falta el permiso para ver contraseñas).' };
+  }
+
+  const carga = esperarCarga(tabId);
+  await chrome.tabs.update(tabId, { url: SURA_MENU, active: true });
+  await carga;
+  await esperar(1500);
+
+  const entro = await ejecutar(tabId, async (tipo, user, clave) => {
+    const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+    const campoClave = document.querySelector('#suraPassword');
+    if (!campoClave) return { ya: true };     // la sesión seguía viva
+
+    const tipoSel = document.querySelector('#ctl00_ContentMain_suraType');
+    if (tipoSel) { tipoSel.value = tipo; tipoSel.dispatchEvent(new Event('change', { bubbles: true })); }
+
+    const campoUser = document.querySelector('#suraName');
+    campoUser.focus();
+    campoUser.value = user;
+    campoUser.dispatchEvent(new Event('input', { bubbles: true }));
+
+    // El teclado virtual se abre al enfocar el campo de la clave.
+    campoClave.click();
+    campoClave.focus();
+    for (let i = 0; i < 20 && !document.querySelector('.ui-keyboard'); i++) await esperar(300);
+    if (!document.querySelector('.ui-keyboard')) return { error: 'No apareció el teclado virtual del portal.' };
+
+    for (const caracter of String(clave).split('')) {
+      const tecla = document.querySelector(`.ui-keyboard button.ui-keyboard-button[data-value="${caracter}"]`);
+      if (!tecla) return { error: `El teclado virtual no ofrece la tecla "${caracter}".` };
+      tecla.click();
+      await esperar(120);
+    }
+    document.querySelector('.ui-keyboard button.ui-keyboard-accept')?.click();
+    await esperar(400);
+    document.querySelector('#session-internet')?.click();
+
+    return { enviado: true };
+  }, [tipoDocumento, String(usuario), String(contrasena)]);
+
+  if (entro?.error) return { ok: false, error: entro.error };
+
+  if (!entro?.ya) {
+    await esperarCarga(tabId);
+    await esperar(3000);
+  }
+
+  // Tras el SSO, el portal pregunta por la empresa (si el usuario tiene varias).
+  const empresa = await suraElegirEmpresa(tabId, nit);
+  if (empresa?.error) return { ok: false, error: empresa.error };
+
+  return { ok: true, ...(await suraEstado(tabId)) };
+}
+
+/** Escribe el NIT en la pantalla de selección de empresa, si el portal la pide. */
+async function suraElegirEmpresa(tabId, nit) {
+  for (let i = 0; i < 20; i++) {
+    await esperar(1000);
+    const paso = await ejecutar(tabId, (n) => {
+      if (document.querySelector('[id$="WucSearchPerson_txtId"]')) return { listo: true };
+
+      const campo = document.querySelector('[id="loginEmpresas:dniEmpresa"]');
+      if (!campo) return { esperando: true };
+      if (!n) return { error: 'El portal pide la empresa y BryNex no sabe el NIT.' };
+
+      const tipo = document.querySelector('[id="loginEmpresas:tipoDniEmpresa"]');
+      if (tipo) { tipo.value = 'NI'; tipo.dispatchEvent(new Event('change', { bubbles: true })); }
+      campo.focus();
+      campo.value = String(n);
+      campo.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('loginEmpresas:generar')?.click();
+
+      return { enviado: true };
+    }, [nit || null]);
+
+    if (paso?.listo) return { ok: true };
+    if (paso?.error) return paso;
+    if (paso?.enviado) await esperar(4000);
+  }
+
+  // Sin la pantalla de reingresos no se puede seguir: mejor decirlo que radicar
+  // a ciegas en la empresa que el portal tuviera puesta.
+  return { error: 'El portal no llegó a la pantalla de reingresos: revisa la pestaña.' };
 }
 
 /** Si la pantalla de reingresos está lista y con qué empresa entró. */
