@@ -1848,6 +1848,11 @@ function pCcfPaso(d) {
 
   const paso = [...document.querySelectorAll('fieldset, .sf-step')].filter(vis)
     .map(f => f.querySelector('legend, h4, .titulo')?.innerText?.trim()).filter(Boolean)[0] || '';
+  // Declaradas aquí arriba: el barrio las usa antes de que se calcule la dirección (antes eran
+  // `let` más abajo y daban ReferenceError, que dejaba al robot mudo sin barrio en BryNex).
+  let empresaPortal = null;
+  try { empresaPortal = JSON.parse(localStorage.getItem('empresa') || 'null'); } catch { /* sin datos */ }
+  let usoEmpresa = false;
   const hecho = [];
   const falta = [];
   let anexosListos = true;       // solo el paso Anexos lo pone en falso mientras carga la lista
@@ -1933,9 +1938,6 @@ function pCcfPaso(d) {
     if (!dirBrynex && dirValidaDelPortal) { dirBrynex = dirValidaDelPortal; origenDir = ' (se conserva la que ya traía el portal: la de BryNex no tiene un formato válido)'; }
     // La empresa de la sesión del portal trae su dirección y barrio exactos (localStorage.empresa):
     // son mejores que los de BryNex para el respaldo.
-    let empresaPortal = null;
-    try { empresaPortal = JSON.parse(localStorage.getItem('empresa') || 'null'); } catch { /* sin datos */ }
-    let usoEmpresa = false;
     if (!dirBrynex) {
       dirBrynex = normalizarDireccion(empresaPortal?.direccionEmpresa) || normalizarDireccion(d.direccionEmpresa);
       if (dirBrynex) { usoEmpresa = true; origenDir = ' (respaldo: dirección de la empresa, porque ni la del trabajador ni la del portal tienen un formato que el portal acepte)'; }
