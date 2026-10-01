@@ -4053,7 +4053,16 @@ async function suraElegirEmpresa(tabId, nit) {
 
     if (paso?.listo) return { ok: true };
     if (paso?.error) return paso;
-    if (paso?.enviado) await esperar(4000);
+
+    // Enviada la empresa, el portal se va a su página principal: la pantalla de
+    // empresa desaparece y eso es la señal de que quedó escogida. Seguir
+    // esperando aquí la de reingresos era esperar algo que llega después, por
+    // el menú.
+    if (paso?.enviado) {
+      await esperar(4000);
+      const sigueEligiendo = await ejecutar(tabId, () => !!document.querySelector('[id$=":dniEmpresa"]')).catch(() => false);
+      if (!sigueEligiendo) return { ok: true };
+    }
   }
 
   // El portal puede haber entrado bien y aun así negar la empresa: ese aviso
