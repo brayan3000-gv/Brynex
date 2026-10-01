@@ -4163,7 +4163,9 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
 
   const [a, m, dia] = String(fechaIngreso).split('-');
 
-  const previo = await ejecutar(tabId, (cot, salario, fecha, ase) => {
+  const previo = await ejecutar(tabId, async (cot, salario, fecha, ase) => {
+    const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
     const poner = (sufijo, valor, conCambio = false) => {
       const e = document.querySelector(`[id$="${sufijo}"]`);
       if (!e) return false;
@@ -4175,18 +4177,65 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
       return true;
     };
 
+    // La fecha va en un campo con máscara (MaskedEdit de ASP.NET): asignarle el
+    // valor de un golpe no basta, la máscara lo descarta y el portal responde
+    // «Valor Requerido». Se teclea carácter por carácter y se actualiza también
+    // el estado que la máscara guarda aparte.
+    const ponerFecha = async (valor) => {
+      const e = document.querySelector('[id$="Repeater1_ctl00_TxtInitialdate"]');
+      if (!e) return false;
+
+      e.focus();
+      e.value = '';
+      for (const c of valor) {
+        e.value += c;
+        for (const tipo of ['keydown', 'keypress', 'input', 'keyup']) {
+          e.dispatchEvent(new KeyboardEvent(tipo, { key: c, bubbles: true }));
+        }
+        await esperar(40);
+      }
+      e.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const estado = document.querySelector('[id$="MEE_InitialDate_ClientState"]');
+      if (estado) estado.value = valor;
+      e.blur();
+
+      return true;
+    };
+
     const sel = document.querySelector('[id$="Repeater1_ctl00_DdlSettlementParam"]');
     if (sel) { sel.value = cot; sel.dispatchEvent(new Event('change', { bubbles: true })); }
 
     poner('Repeater1_ctl00_TxtSalary', String(salario));
-    poner('Repeater1_ctl00_TxtInitialdate', fecha);
-    poner('tbxIntermediaryCode', String(ase), true);
-    document.querySelector('[id$="tbxIntermediaryCode"]')?.blur();
+    await ponerFecha(fecha);
 
-    return { solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim() };
+    // El asesor no vale con escribirlo: el portal lo da por vacío hasta que su
+    // propia búsqueda lo valida y rellena el nombre al lado.
+    poner('tbxIntermediaryCode', String(ase), true);
+    const campoAse = document.querySelector('[id$="tbxIntermediaryCode"]');
+    campoAse?.dispatchEvent(new Event('blur', { bubbles: true }));
+    campoAse?.blur();
+    await esperar(1200);
+
+    if (!document.querySelector('[id$="tbxIntermediary"]')?.value?.trim()) {
+      document.querySelector('[id$="lnkSerchIntermediary"]')?.click();
+      await esperar(2000);
+    }
+
+    return {
+      solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim(),
+      fecha: document.querySelector('[id$="Repeater1_ctl00_TxtInitialdate"]')?.value || '',
+      asesor: document.querySelector('[id$="tbxIntermediary"]')?.value || '',
+    };
   }, [String(tipoCotizante), Math.round(Number(ibc)), `${dia}/${m}/${a}`, asesor]);
 
   await esperar(2500);
+
+  // Si la fecha no se quedó puesta, aplicar solo gastaría un intento: el portal
+  // la exige y devolvería «Valor Requerido».
+  if (!previo?.fecha) {
+    return { ok: false, nombre: consulta.nombre, error: 'La fecha de ingreso no se quedó escrita en el portal (el campo tiene máscara). No se aplicó nada.' };
+  }
 
   // Antes de aplicar se le pone una trampa a window.open: el botón que entrega
   // el comprobante abre una ventana, y de ahí sale la dirección del documento.
