@@ -426,6 +426,39 @@ class EpsSuraReingresoService
         ];
     }
 
+    /**
+     * Lo que el robot se quejó, sin los avisos de paso ni el JSON del resultado.
+     */
+    private function quejaDe(string $texto): string
+    {
+        $lineas = array_filter(
+            array_map('trim', preg_split('/\R/', trim($texto)) ?: []),
+            fn (string $l) => $l !== '' && ! str_starts_with($l, '@paso ') && ! str_starts_with($l, '{')
+        );
+
+        return trim(implode(' ', $lineas));
+    }
+
+    /**
+     * El JSON del robot, buscado de atrás para adelante entre lo que imprimió.
+     */
+    private function respuestaDe(string $texto): array
+    {
+        foreach (array_reverse(preg_split('/\R/', trim($texto)) ?: []) as $linea) {
+            $linea = trim($linea);
+            if ($linea === '' || ! str_starts_with($linea, '{')) {
+                continue;
+            }
+
+            $dato = json_decode($linea, true);
+            if (is_array($dato)) {
+                return $dato;
+            }
+        }
+
+        return [];
+    }
+
     public static function claveDelPaso(int $contratoId): string
     {
         return "eps-sura:paso:{$contratoId}";
@@ -570,7 +603,13 @@ class EpsSuraReingresoService
 
         Cache::forget($clave);
 
-        $salida = json_decode(trim($resultado->output()), true) ?: [];
+        // El resultado se busca línea a línea en vez de decodificar la salida
+        // entera: el robot va anunciando sus pasos y «xvfb-run» —que es como
+        // corre en el servidor— junta la salida de error con la normal, así que
+        // el JSON llega acompañado de esos avisos y descifrarlo todo de un
+        // golpe fallaba. En el Mac, sin xvfb, iban separados y no se notaba.
+        $salida = $this->respuestaDe($resultado->output())
+            ?: $this->respuestaDe($resultado->errorOutput());
 
         if (! ($salida['ok'] ?? false)) {
             // El mensaje nunca trae la clave: el script no la imprime.
@@ -578,10 +617,10 @@ class EpsSuraReingresoService
                 'contrato' => $contrato->id,
                 'modo' => $modo,
                 'paso' => $salida['paso'] ?? null,
-                'error' => $salida['error'] ?? trim($resultado->errorOutput()),
+                'error' => $salida['error'] ?? $this->quejaDe($resultado->errorOutput()),
             ]);
 
-            $salida['error'] ??= trim($resultado->errorOutput()) ?: 'El proceso del portal no devolvió respuesta.';
+            $salida['error'] ??= $this->quejaDe($resultado->errorOutput()) ?: 'El proceso del portal no devolvió respuesta.';
         }
 
         return $salida;
