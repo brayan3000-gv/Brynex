@@ -492,8 +492,9 @@ class FormularioEpsService
 
     /**
      * Texto como sello (`recuadro`): un recuadro del color del campo, del alto del rect
-     * mapeado y ceñido al texto. Con `titulo` lleva arriba una franja con ese título en
-     * letra pequeña y el texto debajo, como el cuadro «Fecha de Radicado» de Sanitas.
+     * mapeado y ceñido al texto (o de `ancho`). Con `titulo` lleva arriba una franja
+     * (`titulo_alto`) con ese título en letra pequeña y el texto debajo, como el cuadro
+     * «Fecha de Radicado» de Sanitas.
      */
     private function sello(Fpdi $pdf, array $campo, string $valor, float $x, float $y, float $w, float $h, float $fontSize, string $style, string $align): void
     {
@@ -506,13 +507,15 @@ class FormularioEpsService
         $pdf->SetFont('Helvetica', '', $tamTitulo);
         $anchoTitulo = $titulo !== '' ? $pdf->GetStringWidth($titulo) : 0;
 
-        $ancho = max($anchoTexto, $anchoTitulo) + 12;
+        // `ancho` fija el ancho del recuadro (p. ej. el mismo del cuadro de la fecha).
+        $ancho = max((float) ($campo['ancho'] ?? 0), max($anchoTexto, $anchoTitulo) + 12);
         $cajaX = match (true) {
             $w > 0 && $align === 'C' => $x + ($w - $ancho) / 2,
             $w > 0 && $align === 'R' => $x + $w - $ancho,
             default                  => $x,
         };
-        $banda = $titulo !== '' ? $tamTitulo + 4 : 0;
+        // `titulo_alto` iguala la franja a la de otro cuadro (la de «Fecha de Radicado»).
+        $banda = $titulo !== '' ? (float) ($campo['titulo_alto'] ?? $tamTitulo + 4) : 0;
 
         $pdf->SetDrawColor($r, $g, $b);
         $pdf->SetLineWidth(1.2);
