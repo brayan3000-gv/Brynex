@@ -147,6 +147,9 @@ function ccfOpciones(sel, lista, porDefecto) {
 
 async function abrirCajaComfenalco(contratoId) {
     ccfContratoId = contratoId; ccfAutoIntentado = false; ccfAbriendo = false; ccfCambioIntentado = false; ccfFinal = null; ccfDocsGuardados = false; ccfDeclPdf = null; clearInterval(ccfRelojBit); ccfEl('ccfFirmaBox').style.display = 'none'; ccfEl('ccfFinalizarBox').style.display = 'none'; clearInterval(ccfReloj);
+    // El botón y la bitácora de «Finalizar y radicar» quedaban como los dejó el trabajador anterior (botón oculto, bitácora vieja).
+    ccfEl('ccfFinalizarLog').style.display = 'none'; ccfEl('ccfFinalizarLog').innerHTML = '';
+    ccfEl('ccfFinalizarBtn').style.display = 'block'; ccfEl('ccfFinalizarBtn').disabled = false; ccfEl('ccfFinalizarBtn').textContent = '🚀 Finalizar y radicar la afiliación';
     ['ccfContenido', 'ccfResultado', 'ccfPasos', 'ccfRadicado', 'ccfBtnAbrir', 'ccfBtnIniciar', 'ccfAvisos'].forEach(id => ccfEl(id).style.display = 'none');
     ccfEl('ccfCargando').style.display = 'block';
     ccfEl('ccfModal').classList.add('open');
