@@ -86,7 +86,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg?.canal !== 'brynex-portales' || !ORIGENES_BRYNEX.includes(origen) || sender.id !== chrome.runtime.id) return;
 
   // Ver el estado o abrir la pestaña no espera a que termine un trámite en curso.
-  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'ccfCerrarSesion', 'ccfFormulario', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado'].includes(msg.accion);
+  const directo = ['recargar', 'estado', 'abrir', 'novedadEstado', 'novedadAbrir', 'novedadMostrar', 'novedadResultado', 'boxEstado', 'boxAbrir', 'boxResultado', 'ccfEstado', 'ccfAbrir', 'ccfPaso', 'ccfResultado', 'ccfDocumentos', 'ccfDeclaracion', 'ccfSubirDeclaracion', 'ccfFinalizar', 'ccfProgreso', 'ccfCerrarSesion', 'ccfFormulario', 'cfdEstado', 'cfdAbrir', 'cfdLlenar', 'cfdResultado', 'fspAbrir', 'fspCertificado', 'suraAbrir', 'suraEstado'].includes(msg.accion);
   (directo ? atender(msg, origen) : enCola(() => atender(msg, origen)))
     .then(sendResponse)
     .catch(e => sendResponse({ ok: false, error: String(e?.message || e).slice(0, 400) }));
@@ -112,6 +112,7 @@ async function atender({ portal, accion, datos = {} }, origen) {
   if (portal === 'ccfcv') return atenderCcfcv(accion, datos);
   if (portal === 'cfd') return atenderCfd(accion, datos);
   if (portal === 'fsp') return atenderFsp(accion, datos);
+  if (portal === 'sura') return atenderSura(accion, datos);
   if (portal !== 'sos') throw new Error(`Portal desconocido: ${portal}`);
 
   if (accion === 'estado') return sosEstado();
@@ -3771,4 +3772,212 @@ async function ccfGrupoFamiliar(pestana, d = {}) {
   }
 
   return { ok: true, familias, consultados: documentos.length, fallos };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EPS SURA — reingreso por el portal de empleadores
+//
+// El reingreso lo hace el robot del servidor sin ayuda de nadie; lo que ese
+// robot NO puede traer es el comprobante: lo pinta un visor de Crystal Reports
+// que en un Chrome sin ventana no dibuja nada, ni siquiera con un display
+// virtual (probado el 30-sep-2026). En el navegador de una persona sí carga, y
+// de ahí sale este camino.
+//
+// El PDF no se baja «descargando»: el botón del portal abre una ventana aparte,
+// así que se le intercepta la dirección y se pide con fetch, que lleva las
+// cookies de la sesión. Así no dependemos de ventanas emergentes ni de dónde
+// aterriza un archivo.
+//
+//  suraAbrir                      → abre (o enfoca) la pantalla de reingresos
+//  suraEstado                     → {sesion, empresa} NIT con el que entró
+//  suraConsultar {tipo, documento} → {nombre} si la persona existe para reingreso
+//  suraRadicar {...}              → aplica la novedad y devuelve {radicado,
+//                                   transaccion, resultado, pdf (base64)}
+// ════════════════════════════════════════════════════════════════════════════
+
+const SURA_REINGRESOS = 'https://solucionesenlineaeps.suramericana.com/reingresos/Reingresos.aspx';
+const SURA_MENU = 'https://epsapps.suramericana.com/Semp/faces/pos/transNovedades/srvReingresos.jspx';
+
+/** Tipos de BryNex → los códigos del desplegable del portal (son numéricos). */
+const SURA_TIPOS = { CC: '1', CE: '2', NI: '4', NUIP: '5', PA: '6', PP: '6', RC: '7', TI: '8', CN: '10', SC: '11', PT: '14', PPT: '14', PE: '14', PEP: '14' };
+
+async function pestanaSura() {
+  const ps = await chrome.tabs.query({ url: 'https://solucionesenlineaeps.suramericana.com/*' });
+  return ps[0] || (await chrome.tabs.query({ url: 'https://epsapps.suramericana.com/*' }))[0] || null;
+}
+
+async function atenderSura(accion, d = {}) {
+  if (accion === 'suraAbrir') {
+    const p = await pestanaSura();
+    if (p) {
+      await chrome.tabs.update(p.id, { active: true });
+      if (!/reingresos/i.test(p.url || '')) {
+        const carga = esperarCarga(p.id);
+        await chrome.tabs.update(p.id, { url: SURA_MENU });
+        await carga;
+      }
+      return { ok: true, abierta: true };
+    }
+    await chrome.tabs.create({ url: SURA_MENU, active: true });
+
+    return { ok: true, abierta: false };
+  }
+
+  const pestana = await pestanaSura();
+  if (!pestana) throw new Error('No hay una pestaña de EPS SURA abierta. Pulsa «Abrir EPS SURA» e inicia sesión.');
+
+  if (accion === 'suraEstado') return { ok: true, ...(await suraEstado(pestana.id)) };
+  if (accion === 'suraConsultar') return suraConsultar(pestana.id, d);
+  if (accion === 'suraRadicar') return suraRadicar(pestana.id, d);
+  throw new Error(`Acción desconocida: ${accion}`);
+}
+
+/** Si la pantalla de reingresos está lista y con qué empresa entró. */
+async function suraEstado(tabId) {
+  return ejecutar(tabId, () => {
+    const campo = (sufijo) => document.querySelector(`[id$="${sufijo}"]`);
+
+    return {
+      sesion: !!campo('WucSearchPerson_txtId'),
+      empresa: (campo('TbxEmployerId')?.value || '').replace(/\D/g, '') || null,
+      url: location.href,
+    };
+  });
+}
+
+/** Escribe el documento y espera a que el portal traiga el nombre. */
+async function suraConsultar(tabId, { tipo = 'CC', documento }) {
+  const codigo = SURA_TIPOS[String(tipo).toUpperCase()] || '1';
+
+  await ejecutar(tabId, (cod, doc) => {
+    const sel = document.querySelector('[id$="Repeater1_ctl00_DdlTypeIdentification"]');
+    if (sel) { sel.value = cod; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+
+    const campo = document.querySelector('[id$="WucSearchPerson_txtId"]');
+    if (!campo) return;
+    campo.focus();
+    campo.value = String(doc).replace(/\D/g, '');
+    campo.dispatchEvent(new Event('input', { bubbles: true }));
+    campo.dispatchEvent(new Event('change', { bubbles: true }));
+    campo.blur();
+  }, [codigo, documento]);
+
+  // El postback que trae el nombre tarda; si no llega, se pulsa la lupa.
+  for (let i = 0; i < 20; i++) {
+    await esperar(900);
+    const nombre = await ejecutar(tabId, () => document.querySelector('[id$="WucSearchPerson_txtName"]')?.value?.trim() || '');
+    if (nombre) return { ok: true, nombre };
+    if (i === 6) await ejecutar(tabId, () => document.querySelector('[id$="WucSearchPerson_LinkButton1"]')?.click());
+  }
+
+  return { ok: false, nombre: null, error: 'EPS SURA no devolvió el nombre: si la persona no está en esa EPS, el reingreso no aplica (sería un traslado).' };
+}
+
+/**
+ * Llena la novedad, la aplica y trae el comprobante.
+ *
+ * El número de solicitud se guarda ANTES de aplicar porque es el que sale en el
+ * comprobante, y sirve de respaldo si el visor tarda en dibujarse.
+ */
+async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2', ibc, fechaIngreso, asesor = '0' }) {
+  const consulta = await suraConsultar(tabId, { tipo, documento });
+  if (!consulta.nombre) return consulta;
+
+  const [a, m, dia] = String(fechaIngreso).split('-');
+
+  const previo = await ejecutar(tabId, (cot, salario, fecha, ase) => {
+    const poner = (sufijo, valor, conCambio = false) => {
+      const e = document.querySelector(`[id$="${sufijo}"]`);
+      if (!e) return false;
+      e.focus();
+      e.value = valor;
+      e.dispatchEvent(new Event('input', { bubbles: true }));
+      if (conCambio) e.dispatchEvent(new Event('change', { bubbles: true }));
+
+      return true;
+    };
+
+    const sel = document.querySelector('[id$="Repeater1_ctl00_DdlSettlementParam"]');
+    if (sel) { sel.value = cot; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+
+    poner('Repeater1_ctl00_TxtSalary', String(salario));
+    poner('Repeater1_ctl00_TxtInitialdate', fecha);
+    poner('tbxIntermediaryCode', String(ase), true);
+    document.querySelector('[id$="tbxIntermediaryCode"]')?.blur();
+
+    return { solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim() };
+  }, [String(tipoCotizante), Math.round(Number(ibc)), `${dia}/${m}/${a}`, asesor]);
+
+  await esperar(2500);
+
+  // Antes de aplicar se le pone una trampa a window.open: el botón que entrega
+  // el comprobante abre una ventana, y de ahí sale la dirección del documento.
+  await ejecutar(tabId, () => {
+    window.__brynexDocs = [];
+    const abrir = window.open;
+    window.open = function (url, ...resto) {
+      if (url) window.__brynexDocs.push(String(url));
+
+      return abrir.call(window, url, ...resto);
+    };
+  });
+
+  const carga = esperarCarga(tabId);
+  await ejecutar(tabId, () => document.querySelector('[id$="BtnSaveNovelty"]')?.click());
+  await carga;
+
+  // El comprobante va dentro de un iframe del visor: se lee de ahí.
+  let comprobante = '';
+  for (let i = 0; i < 25 && !comprobante; i++) {
+    await esperar(1000);
+    comprobante = await ejecutar(tabId, () => {
+      const textos = [document.body?.innerText || ''];
+      for (const f of document.querySelectorAll('iframe')) {
+        try { textos.push(f.contentDocument?.body?.innerText || ''); } catch { /* otro origen */ }
+      }
+
+      return textos.join(' \n ').replace(/\s+/g, ' ').trim();
+    });
+    if (!/Resultado del|Novedad aplicada|Número de Solicitud/i.test(comprobante)) comprobante = '';
+  }
+
+  const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
+  const aplicada = /Novedad aplicada con [eé]xito/i.test(comprobante);
+
+  // El PDF: se pulsa «Descargar Documento» para que suelte la dirección y se
+  // pide con fetch (las cookies de la sesión van incluidas). No se depende de
+  // que la ventana emergente sobreviva ni de dónde aterrice el archivo.
+  const pdf = await ejecutar(tabId, async () => {
+    const boton = [...document.querySelectorAll('button, a, input[type=button], input[type=submit]')]
+      .find((e) => /descargar documento|informe principal/i.test(e.innerText || e.value || ''));
+    if (boton) boton.click();
+
+    for (let i = 0; i < 20 && !(window.__brynexDocs || []).length; i++) await new Promise(r => setTimeout(r, 400));
+
+    const url = (window.__brynexDocs || []).pop();
+    if (!url) return null;
+
+    const res = await fetch(url, { credentials: 'include' });
+    if (!res.ok) return null;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf[0] !== 0x25 || buf[1] !== 0x50) return null;   // %P de %PDF
+
+    let s = '';
+    for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+
+    return btoa(s);
+  });
+
+  return {
+    ok: aplicada,
+    nombre: consulta.nombre,
+    radicado: dato(/N[uú]mero de Solicitud\s+([A-Z0-9]*\d[A-Z0-9_]*)/i) || previo?.solicitud || null,
+    transaccion: dato(/C[oó]digo de Transacci[oó]n\s+(\d+)/i),
+    periodoPago: dato(/per[ií]odo de inicio de pago es\s*([\d/]+)/i),
+    resultado: comprobante.slice(0, 600),
+    pdf,
+    error: aplicada ? undefined : (comprobante
+      ? `El portal no aplicó la novedad: ${comprobante.slice(0, 300)}`
+      : 'No apareció el comprobante del reingreso: revísalo en el portal antes de repetirlo.'),
+  };
 }
