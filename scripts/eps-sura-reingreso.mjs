@@ -22,12 +22,71 @@
  *                     tipoCotizante?, asesor?}
  * Salida por stdout: {ok, paso, modo, campos?, nombre?, mensajes, alerta?, error?}
  */
-import { mkdtemp, readdir, stat } from 'node:fs/promises';
+import { mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
 import { entrarEmpresaEps, esperar, texto } from './eps-sura-sesion-comun.mjs';
+
+/**
+ * Baja el comprobante en PDF exportándolo desde el visor de informes.
+ *
+ * No es el botón «Descargar Documento» —ese solo reabre la página para
+ * imprimirla y devuelve HTML—, sino lo que hace el icono «Exportar este
+ * informe» de la barra del visor: un POST a la propia página, con el visor
+ * como destino del evento y el formato en el argumento, que responde con
+ * «application/pdf». Como va por fetch con la sesión puesta, funciona igual
+ * desde el servidor, sin descargas ni ventanas emergentes de por medio.
+ */
+async function exportarComprobante(pagina, carpeta) {
+  for (const marco of pagina.frames()) {
+    const base64 = await marco.evaluate(async () => {
+      const form = document.forms[0];
+      if (!form) return null;
+
+      // El visor se reconoce por el campo donde guarda su estado: lo que sigue
+      // a ese prefijo es su identificador para el postback.
+      const estado = [...form.elements].find((e) => (e.name || '').startsWith('__CRYSTALSTATE'));
+      if (!estado) return null;
+
+      const cuerpo = new URLSearchParams();
+      for (const el of form.elements) {
+        if (!el.name) continue;
+        if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) continue;
+        cuerpo.append(el.name, el.value || '');
+      }
+      cuerpo.set('__EVENTTARGET', estado.name.slice('__CRYSTALSTATE'.length));
+      cuerpo.set('__EVENTARGUMENT', '{"text":"PDF", "range":"false", "tb":"crexport"}');
+
+      const res = await fetch(location.href, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: cuerpo.toString(),
+      });
+      if (!res.ok) return null;
+
+      const buf = new Uint8Array(await res.arrayBuffer());
+      if (buf[0] !== 0x25 || buf[1] !== 0x50) return null;       // %P de %PDF
+
+      let s = '';
+      for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+
+      return btoa(s);
+    }).catch(() => null);
+
+    if (!base64) continue;
+
+    const destino = join(carpeta, `comprobante_${Date.now()}.pdf`);
+    await writeFile(destino, Buffer.from(base64, 'base64'));
+    const { size } = await stat(destino);
+
+    if (size > 5000) return { archivo: 'comprobante_reingreso.pdf', ruta: destino, bytes: size };
+  }
+
+  return null;
+}
 
 const URL_MENU = 'https://epsapps.suramericana.com/Semp/faces/pos/transNovedades/srvReingresos.jspx';
 const URL_CERTIFICADO = 'https://epsapps.suramericana.com/Semp/faces/pos/certificados/afiliacionPos/parametros.jspx';
@@ -436,7 +495,13 @@ try {
   });
 
   paso = 'soporte';
-  let soporte = await descarga.esperar(4);
+
+  // Primero la exportación del visor, que entrega el PDF de una. Lo de abajo
+  // —el clic con el ratón, la ventana emergente, la impresión de la pantalla—
+  // queda de respaldo por si el visor no estuviera.
+  let soporte = await exportarComprobante(pagina, descarga.carpeta);
+
+  if (!soporte) soporte = await descarga.esperar(4);
   if (!soporte) {
     // El botón se pulsa con el ratón, no con element.click() por JavaScript:
     // la ventana emergente donde ocurre la descarga solo se abre si Chrome ve

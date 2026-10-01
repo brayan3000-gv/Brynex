@@ -158,46 +158,6 @@ function esperarCarga(tabId, timeout = 45000) {
   });
 }
 
-/**
- * Guarda una página como PDF y lo devuelve en base64.
- *
- * Es lo único que sirve con los comprobantes que pinta un visor de informes:
- * no hay archivo que descargar, solo una página pensada para imprimirse. Hace
- * por dentro lo mismo que Ctrl+P → «Guardar como PDF». Se abre en una pestaña
- * aparte, en segundo plano, para no tocar la del trámite.
- */
-async function imprimirAPdf(url) {
-  let pestana = null;
-  try {
-    pestana = await chrome.tabs.create({ url, active: false });
-    const destino = { tabId: pestana.id };
-    await esperarCarga(pestana.id);
-    await esperar(2000);                       // el visor tarda en dibujarse
-
-    try {
-      await chrome.debugger.attach(destino, '1.3');
-      const r = await chrome.debugger.sendCommand(destino, 'Page.printToPDF', {
-        printBackground: true,
-        paperWidth: 8.5,
-        paperHeight: 11,
-        marginTop: 0.4,
-        marginBottom: 0.4,
-        marginLeft: 0.4,
-        marginRight: 0.4,
-      });
-
-      return r?.data || null;
-    } finally {
-      // Sin soltarlo, Chrome deja la barra de depuración puesta.
-      try { await chrome.debugger.detach(destino); } catch (e) { /* ya estaba suelto */ }
-    }
-  } catch (e) {
-    return null;
-  } finally {
-    if (pestana?.id) { try { await chrome.tabs.remove(pestana.id); } catch (e) { /* ya cerrada */ } }
-  }
-}
-
 /** Clic que puede enviar el formulario (navegación) o hacer AJAX (A4J). */
 async function clicYEsperar(tabId, func, args = []) {
   let navego = false;
@@ -4398,22 +4358,46 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
   const dato = (re) => (comprobante.match(re) || [])[1]?.trim() || null;
   const aplicada = /Novedad aplicada con [eé]xito/i.test(comprobante);
 
-  // El PDF: se pulsa «Descargar Documento» para que suelte la dirección de la
-  // versión imprimible y esa página se imprime. Pedirla con fetch no servía
-  // —devuelve HTML, no un PDF—: el visor de SURA no entrega el archivo por
-  // ninguna vía, su botón solo reabre la página para que la imprima el
-  // navegador. Es lo mismo que hace una persona con Ctrl+P.
-  const urlDoc = await ejecutar(tabId, async () => {
-    const boton = [...document.querySelectorAll('button, a, input[type=button], input[type=submit]')]
-      .find((e) => /descargar documento|informe principal/i.test(e.innerText || e.value || ''));
-    if (boton) boton.click();
+  // El PDF del comprobante: no es el botón «Descargar Documento» —ese solo
+  // reabre la página para imprimirla y devuelve HTML—, sino la exportación del
+  // visor de informes, el icono «Exportar este informe» de su barra. Por
+  // dentro es un POST a la propia página, con el visor como destino del evento
+  // y el formato en el argumento, que responde con «application/pdf». Aquí se
+  // hace ese POST directamente, sin abrir el diálogo de exportación.
+  const pdf = await ejecutar(tabId, async () => {
+    const form = document.forms[0];
+    if (!form) return null;
 
-    for (let i = 0; i < 20 && !(window.__brynexDocs || []).length; i++) await new Promise(r => setTimeout(r, 400));
+    // El visor se reconoce por el campo donde guarda su estado: lo que sigue a
+    // ese prefijo es su identificador para el postback.
+    const estado = [...form.elements].find((e) => (e.name || '').startsWith('__CRYSTALSTATE'));
+    if (!estado) return null;
 
-    return (window.__brynexDocs || []).pop() || location.href;
+    const cuerpo = new URLSearchParams();
+    for (const el of form.elements) {
+      if (!el.name) continue;
+      if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) continue;
+      cuerpo.append(el.name, el.value || '');
+    }
+    cuerpo.set('__EVENTTARGET', estado.name.slice('__CRYSTALSTATE'.length));
+    cuerpo.set('__EVENTARGUMENT', '{"text":"PDF", "range":"false", "tb":"crexport"}');
+
+    const res = await fetch(location.href, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: cuerpo.toString(),
+    });
+    if (!res.ok) return null;
+
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf[0] !== 0x25 || buf[1] !== 0x50) return null;       // %P de %PDF
+
+    let s = '';
+    for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+
+    return btoa(s);
   }).catch(() => null);
-
-  const pdf = urlDoc ? await imprimirAPdf(urlDoc) : null;
 
   return {
     ok: aplicada,
