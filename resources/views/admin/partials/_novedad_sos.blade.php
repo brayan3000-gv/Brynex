@@ -207,6 +207,20 @@ async function abrirNovedadSos(contratoId) {
     }
     sosnEl('sosnSesion').style.display = 'block';
 
+    // Sin clave en el módulo de claves no hay con qué entrar al portal: se
+    // avisa, el botón queda inhabilitado y solo queda el correo al asesor.
+    const abrir = sosnEl('sosnBtnAbrir');
+    abrir.disabled = false;
+    abrir.textContent = '🌐 Abrir S.O.S. para iniciar sesión';
+    if (!(sosnPrep.resumen || {}).clave_portal) {
+        sosnEl('sosnSesion').innerHTML = `🔒 <strong>Esta empresa no tiene clave de S.O.S.</strong> ${sosnEsc(sosnPrep.resumen?.clave_error || '')}` +
+            '<br>No se puede iniciar sesión en el portal: envía la afiliación por correo al asesor, o registra la clave en el módulo de claves y vuelve a abrir este trámite.';
+        abrir.disabled = true;
+        abrir.textContent = '🚫 Sin clave de S.O.S. para iniciar sesión';
+        abrir.style.display = 'block';
+        return;
+    }
+
     await revisarSesionSos();
 }
 

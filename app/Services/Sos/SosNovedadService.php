@@ -83,6 +83,9 @@ class SosNovedadService
         [$minimo, $maximo] = $this->ventana();
         $enPlazo = $contrato->fecha_ingreso && $contrato->fecha_ingreso->between($minimo, $maximo);
         $aReportar = $contrato->fecha_ingreso ? $this->fechaAReportar($contrato->fecha_ingreso) : null;
+        // Sin clave no tiene sentido mandar a la persona a iniciar sesión: el
+        // modal lo avisa y deja solo el correo al asesor.
+        $cred = $rs ? $this->credencial((string) $rs->nit) : ['error' => 'El contrato no tiene razón social.'];
 
         $resumen = [
             'trabajador'    => trim(implode(' ', array_filter([$cliente?->primer_nombre, $cliente?->segundo_nombre, $cliente?->primer_apellido, $cliente?->segundo_apellido]))),
@@ -99,7 +102,9 @@ class SosNovedadService
             'fecha_maxima'  => $maximo->toDateString(),
             'en_plazo'      => $enPlazo,
             'fecha_reportar' => $aReportar?->toDateString(),
-            'usuario_portal' => $rs ? $this->usuarioPortal((string) $rs->nit) : null,
+            'usuario_portal' => $cred['usuario'] ?? null,
+            'clave_portal'  => ! isset($cred['error']),
+            'clave_error'   => $cred['error'] ?? null,
             'independiente' => (bool) $rs?->es_independiente,
         ];
 
@@ -276,12 +281,6 @@ class SosNovedadService
         if (! $igual) {
             EpsRadicado::marcar($radicado, $numero, $estado, $ruta, $observacion, $usuarioId);
         }
-    }
-
-    /** Correo del usuario del portal en el módulo de claves, para recordarle a la persona con cuál entrar. */
-    private function usuarioPortal(string $nit): ?string
-    {
-        return $this->credencial($nit)['usuario'] ?? null;
     }
 
     /**
