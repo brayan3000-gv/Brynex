@@ -1943,8 +1943,11 @@ function pCcfPaso(d) {
       if (dirBrynex) { usoEmpresa = true; origenDir = ' (respaldo: dirección de la empresa, porque ni la del trabajador ni la del portal tienen un formato que el portal acepte)'; }
     }
     const dirPortal = String(campoDir?.value || '').replace(/\s+/g, ' ').trim();
+    // El portal rechaza en silencio una dirección con dos espacios seguidos («CL 56  13 24»): el
+    // «Continuar» no avanza y no sale ningún aviso. Por eso se mira también el valor crudo.
+    const dirPortalCruda = String(campoDir?.value || '').trim();
     if (campoDir && dirBrynex) {
-      if (dirPortal !== dirBrynex) { $(campoDir).val(dirBrynex).trigger('input').trigger('change'); }
+      if (dirPortal !== dirBrynex || dirPortalCruda !== dirBrynex) { $(campoDir).val(dirBrynex).trigger('input').trigger('change'); }
       hecho.push('dirección: ' + dirBrynex + origenDir + (dirPortal !== dirBrynex ? (origenDir ? '' : ' (de BryNex)') + '; el portal traía «' + dirPortal + '»' : ''));
     } else if (campoDir) {
       dirPortal ? hecho.push('dirección (la del portal, porque la de BryNex no empieza con CR, CL, AV, DG, TV ni CORR): ' + dirPortal)
