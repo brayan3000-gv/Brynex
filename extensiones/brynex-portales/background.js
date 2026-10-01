@@ -3901,23 +3901,44 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
     campoUser.value = user;
     campoUser.dispatchEvent(new Event('input', { bubbles: true }));
 
-    // El teclado virtual se abre al enfocar el campo de la clave.
-    campoClave.click();
-    campoClave.focus();
+    // El teclado virtual se abre con un clic de verdad: un .click() a secas no
+    // basta, hay que mandarle la secuencia completa del ratón.
+    const comoElRaton = (e) => {
+      const r = e.getBoundingClientRect();
+      const comun = { bubbles: true, cancelable: true, view: window, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
+      e.dispatchEvent(new PointerEvent('pointerdown', comun));
+      e.dispatchEvent(new MouseEvent('mousedown', comun));
+      e.focus();
+      e.dispatchEvent(new PointerEvent('pointerup', comun));
+      e.dispatchEvent(new MouseEvent('mouseup', comun));
+      e.dispatchEvent(new MouseEvent('click', comun));
+    };
+
+    comoElRaton(campoClave);
     for (let i = 0; i < 20 && !document.querySelector('.ui-keyboard'); i++) await esperar(300);
-    if (!document.querySelector('.ui-keyboard')) return { error: 'No apareció el teclado virtual del portal.' };
 
-    for (const caracter of String(clave).split('')) {
-      const tecla = document.querySelector(`.ui-keyboard button.ui-keyboard-button[data-value="${caracter}"]`);
-      if (!tecla) return { error: `El teclado virtual no ofrece la tecla "${caracter}".` };
-      tecla.click();
-      await esperar(120);
+    if (document.querySelector('.ui-keyboard')) {
+      for (const caracter of String(clave).split('')) {
+        const tecla = document.querySelector(`.ui-keyboard button.ui-keyboard-button[data-value="${caracter}"]`);
+        if (!tecla) return { error: `El teclado virtual no ofrece la tecla "${caracter}".` };
+        comoElRaton(tecla);
+        await esperar(120);
+      }
+      document.querySelector('.ui-keyboard button.ui-keyboard-accept')?.click();
+      await esperar(400);
+    } else {
+      // Sin teclado: se escribe en el campo. Si el portal de verdad lo bloquea,
+      // el intento fallará y se dirá; adivinar aquí no aporta nada.
+      campoClave.value = String(clave);
+      campoClave.dispatchEvent(new Event('input', { bubbles: true }));
+      campoClave.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    document.querySelector('.ui-keyboard button.ui-keyboard-accept')?.click();
-    await esperar(400);
-    document.querySelector('#session-internet')?.click();
 
-    return { enviado: true };
+    const entrar = document.querySelector('#session-internet');
+    if (!entrar) return { error: 'No apareció el botón de iniciar sesión del portal.' };
+    comoElRaton(entrar);
+
+    return { enviado: true, conTeclado: !!document.querySelector('.ui-keyboard') };
   }, [tipoDocumento, String(usuario), String(contrasena)]);
 
   if (entro?.error) return { ok: false, error: entro.error };
