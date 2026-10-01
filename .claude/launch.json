@@ -3,8 +3,10 @@
     "configurations": [
         {
             "name": "laravel",
-            "runtimeExecutable": "php",
+            "runtimeExecutable": "env",
             "runtimeArgs": [
+                "PHP_CLI_SERVER_WORKERS=4",
+                "php",
                 "artisan",
                 "serve"
             ],
@@ -12,8 +14,10 @@
         },
         {
             "name": "laravel-8001",
-            "runtimeExecutable": "php",
+            "runtimeExecutable": "env",
             "runtimeArgs": [
+                "PHP_CLI_SERVER_WORKERS=4",
+                "php",
                 "artisan",
                 "serve",
                 "--port=8001"

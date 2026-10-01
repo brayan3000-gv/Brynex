@@ -48,7 +48,7 @@
         <div class="esu-aviso" id="esuAviso" style="display:none"></div>
 
         <label style="display:flex;align-items:center;gap:.4rem;margin:.5rem 0;font-size:.85rem;color:#475569;cursor:pointer">
-          <input type="checkbox" id="esuEnServidor"> Hacerlo en el servidor, sin tocar este navegador
+          <input type="checkbox" id="esuEnServidor" checked> Hacerlo en el servidor, sin tocar este navegador
         </label>
 
         <button class="esu-btn" id="esuBtnRadicar" onclick="realizarReingresoEpsSura()">🏥 Realizar reingreso</button>
