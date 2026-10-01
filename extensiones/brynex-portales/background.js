@@ -1772,21 +1772,29 @@ async function ccfConsultar(pestana, d) {
   }
 
   await ejecutar(tab, (tipo, doc) => {
+    // El portal deja a la vista la familia y el nombre de la consulta anterior si esta no los trae
+    // (un trabajador que la caja no conoce): se limpian antes para no dar como suyo lo de otro.
+    $('#txtNombres, #txtApellidos').val('');
+    [...document.querySelectorAll('table')].filter(t => /Parentesco/i.test(t.innerText)).forEach(t => {
+      try { if ($.fn.DataTable && $.fn.DataTable.isDataTable(t)) $(t).DataTable().clear().draw(); else $(t).find('tbody').empty(); } catch (e) { $(t).find('tbody').empty(); }
+    });
     $('#cmbTipoDocumento').val(String(tipo)).trigger('change').trigger('chosen:updated');
     $('#txtNumDocumento').val(doc).trigger('change');
     $('#btnConsultar').click();
     return true;
   }, [d.tipoDoc, String(d.documento)]);
 
+  await esperar(1500);   // que arranque la petición antes de mirar si el portal terminó
   const r = await esperarQue(tab, () => {
     const vis = e => !!(e.offsetWidth || e.offsetHeight);
+    if (window.$ && $.active > 0) return null;
     const modal = [...document.querySelectorAll('.jconfirm-content')].filter(vis).map(e => e.innerText.replace(/\s+/g, ' ').trim());
     if (modal.length) return { modal };
     const ops = [...document.querySelectorAll("#panelAcciones div[id*='opcion']")].filter(vis)
       .map(o => ({ id: o.id, texto: o.innerText.replace(/\s+/g, ' ').trim().slice(0, 160), boton: o.querySelector('a[id], button[id]')?.id }));
     if (!ops.length) return null;
     const familia = [...document.querySelectorAll('table')].filter(vis).find(t => /Parentesco/i.test(t.innerText));
-    return { opciones: ops, nombre: ($('#txtNombres').val() || '') + ' ' + ($('#txtApellidos').val() || ''), familia: familia ? familia.innerText.replace(/\s+/g, ' ').trim().slice(0, 500) : null };
+    return { opciones: ops, nombre: ($('#txtNombres').val() || '') + ' ' + ($('#txtApellidos').val() || ''), familia: familia && familia.querySelector('tbody td:not(.dataTables_empty)') ? familia.innerText.replace(/\s+/g, ' ').trim().slice(0, 500) : null };
   }, [], 40000);
 
   if (!r) return { ok: false, error: 'El portal no respondió la consulta del trabajador.' };
