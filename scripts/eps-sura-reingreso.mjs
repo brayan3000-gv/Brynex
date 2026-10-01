@@ -81,12 +81,18 @@ if (!ejecutable) salir({ ok: false, error: 'No se encontró Chrome. Define CHROM
 const navegador = await puppeteer.launch({
   executablePath: ejecutable,
   headless: 'new',
-  args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled'],
+  args: [
+    '--no-sandbox', '--disable-dev-shm-usage', '--disable-blink-features=AutomationControlled',
+    // El comprobante se baja desde una ventana emergente: con el bloqueo puesto
+    // esa ventana nunca se abre y la descarga no llega a ninguna parte.
+    '--disable-popup-blocking',
+  ],
 });
 
 let pagina;
 let paso = 'inicio';
 const alertas = [];
+const nuevasVentanas = [];
 
 /** El marco donde vive el formulario: la app de reingresos puede ir en iframe. */
 const marcoConCampo = async (pag, sufijo) => {
@@ -407,7 +413,15 @@ try {
   // la novedad: eso lo dice el portal, no el archivo.
   // El comprobante se baja con «Descargar Documento», que abre una ventana
   // aparte: la descarga nace en otro target del navegador y por eso el permiso
-  // va a nivel de navegador (ver conDescargas).
+  // va a nivel de navegador (ver conDescargas). Si en vez de descargar abre el
+  // PDF en una pestaña, se recoge de ahí.
+  navegador.on('targetcreated', async (t) => {
+    try {
+      const u = t.url() || '';
+      if (/\.pdf|informe|reporte|crystal/i.test(u)) nuevasVentanas.push(u);
+    } catch {}
+  });
+
   paso = 'soporte';
   let soporte = await descarga.esperar(4);
   if (!soporte) {
@@ -420,7 +434,11 @@ try {
 
         return true;
       }).catch(() => false);
-      if (pulsado) { soporte = await descarga.esperar(20); break; }
+      if (pulsado) {
+        // La ventana emergente tarda en abrirse y en soltar el archivo.
+        soporte = await descarga.esperar(30);
+        break;
+      }
     }
   }
 
@@ -431,7 +449,7 @@ try {
     // Dice de dónde salió el número: del comprobante o del formulario.
     numeroSinConfirmar: !solicitud && enComprobante && !comprobante && !!solicitudPrevia,
     transaccion, periodoPago: periodo,
-    soporte,
+    soporte, ventanas: nuevasVentanas.slice(0, 3),
     texto: despues.slice(0, 900),
     // Se distingue «no se aplicó» de «se aplicó pero no pude leerlo»: en el
     // segundo caso repetir el trámite lo duplicaría.
