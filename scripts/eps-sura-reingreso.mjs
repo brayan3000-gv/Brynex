@@ -380,8 +380,16 @@ try {
    * segundos y se repetía en cada una.
    */
   const tramitarPersona = async ({ persona = {}, ibc, fechaIngreso, tipoCotizante = COTIZANTE_DEPENDIENTE, asesor = '0' }) => {
-    // Tras cada trámite la pantalla es otra, así que el marco se vuelve a buscar.
-    marco = (await campoDe()) ?? marco;
+    // Tras cada trámite la pantalla es otra, así que el marco se vuelve a
+    // buscar. Y se ESPERA a que esté: la pausa fija entre personas se quedaba
+    // corta de vez en cuando y el trámite moría con «no apareció el campo del
+    // documento» sin haber tocado nada (Natalia Cohen, 1-oct-2026).
+    marco = await campoDe();
+    for (let i = 0; i < 25 && !marco; i++) {
+      await esperar(600);
+      marco = await campoDe();
+    }
+    if (!marco) throw new Error('No se abrió la pantalla de reingresos para esta persona.');
 
     // ── Persona ──
     vaPor('documento');
