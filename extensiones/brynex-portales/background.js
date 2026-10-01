@@ -3926,16 +3926,24 @@ async function suraElegirEmpresa(tabId, nit) {
     const paso = await ejecutar(tabId, (n) => {
       if (document.querySelector('[id$="WucSearchPerson_txtId"]')) return { listo: true };
 
-      const campo = document.querySelector('[id="loginEmpresas:dniEmpresa"]');
-      if (!campo) return { esperando: true };
+      // El portal pregunta por la empresa en dos pantallas distintas
+      // (loginEmpleadores y loginEmpresas) con los mismos campos y distinto
+      // prefijo: se buscan por el final del id, no por el id entero.
+      const campo = document.querySelector('[id$=":dniEmpresa"]');
+      if (!campo) return { esperando: true, url: location.href };
       if (!n) return { error: 'El portal pide la empresa y BryNex no sabe el NIT.' };
 
-      const tipo = document.querySelector('[id="loginEmpresas:tipoDniEmpresa"]');
+      const tipo = document.querySelector('[id$=":tipoDniEmpresa"]');
       if (tipo) { tipo.value = 'NI'; tipo.dispatchEvent(new Event('change', { bubbles: true })); }
       campo.focus();
       campo.value = String(n);
       campo.dispatchEvent(new Event('input', { bubbles: true }));
-      document.getElementById('loginEmpresas:generar')?.click();
+
+      // El botón es un enlace con JavaScript; si no está, vale el que diga «Aceptar».
+      const boton = document.querySelector('[id$=":generar"]')
+        || [...document.querySelectorAll('a, input[type=submit], button')].find((e) => /aceptar|continuar|ingresar/i.test(e.innerText || e.value || ''));
+      if (!boton) return { error: 'No se encontró el botón para entrar con la empresa.' };
+      boton.click();
 
       return { enviado: true };
     }, [nit || null]);
