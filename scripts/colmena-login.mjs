@@ -22,6 +22,7 @@
  * Imprime en stdout {ok, token, contrato, empresa, contratos[], error}. Las
  * credenciales entran por stdin y nunca se escriben en el log.
  */
+import { rmSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 
 const HOST = 'https://portalcliente.colmenaseguros.com';
@@ -73,6 +74,21 @@ const navegador = await puppeteer.launch({
     '--disable-blink-features=AutomationControlled',
     '--window-size=1400,900',
   ],
+});
+
+
+// Al salir se borra el perfil temporal del navegador. Hace falta a mano porque
+// el script termina con process.exit(), que se salta el cierre de puppeteer —y
+// es ese cierre el que normalmente lo borra—: cada corrida dejaba su carpeta en
+// /tmp, y entre todos los robots se juntaron 11 GB (1-oct-2026).
+process.on('exit', () => {
+  try {
+    const perfil = (navegador.process()?.spawnargs || [])
+      .find((a) => a.startsWith('--user-data-dir='))
+      ?.slice('--user-data-dir='.length);
+
+    if (perfil && /puppeteer_dev/.test(perfil)) rmSync(perfil, { recursive: true, force: true });
+  } catch { /* si no se deja borrar, no es motivo para tumbar nada */ }
 });
 
 /** La cookie tal como la ve el navegador, ya decodificada. */

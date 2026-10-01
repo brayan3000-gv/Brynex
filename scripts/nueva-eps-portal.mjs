@@ -19,6 +19,7 @@
  * Salida por stdout: {ok, paso, error, ...}. `paso: 'login'` significa que la
  * clave fue rechazada: quien llama no debe reintentar con la misma.
  */
+import { rmSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
 
@@ -86,6 +87,21 @@ const navegador = await puppeteer.launch({
     ...(proxy ? [`--proxy-server=${proxy.servidor}`] : []),
     ...(tunel ? [`--host-rules=MAP portal.nuevaeps.com.co ${tunel}`, '--disable-quic'] : []),
   ],
+});
+
+
+// Al salir se borra el perfil temporal del navegador. Hace falta a mano porque
+// el script termina con process.exit(), que se salta el cierre de puppeteer —y
+// es ese cierre el que normalmente lo borra—: cada corrida dejaba su carpeta en
+// /tmp, y entre todos los robots se juntaron 11 GB (1-oct-2026).
+process.on('exit', () => {
+  try {
+    const perfil = (navegador.process()?.spawnargs || [])
+      .find((a) => a.startsWith('--user-data-dir='))
+      ?.slice('--user-data-dir='.length);
+
+    if (perfil && /puppeteer_dev/.test(perfil)) rmSync(perfil, { recursive: true, force: true });
+  } catch { /* si no se deja borrar, no es motivo para tumbar nada */ }
 });
 
 const contextoPerdido = (e) => /Execution context was destroyed|Cannot find context|Target closed/i.test(String(e?.message || e));
