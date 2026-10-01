@@ -219,12 +219,14 @@ class EpsSuraReingresoService
                     $llegoAlComprobante => Radicado::ESTADO_TRAMITE,
                     default => Radicado::ESTADO_ERROR,
                 },
-                null,
+                // El soporte se baja igual aunque el comprobante no se lea: sin
+                // esto el PDF quedaba en disco y el radicado sin él.
+                $ruta,
                 match (true) {
                     $yaEstaba => 'EPS SURA: el afiliado ya está vigente con este empleador, así que la novedad no hacía falta. '.$nota,
                     $llegoAlComprobante => 'EPS SURA: la novedad se envió y el portal mostró el comprobante, pero BryNex no pudo leer el resultado'
                         .(($salida['radicado'] ?? null) ? ' (la solicitud del formulario era la '.$salida['radicado'].', sin confirmar)' : '')
-                        .'. NO repetir sin revisarlo antes en el portal.',
+                        .'.'.($ruta ? ' Soporte guardado.' : '').' NO repetir sin revisarlo antes en el portal.',
                     default => 'EPS SURA (reingreso): no se pudo radicar. '.($nota ?: 'Sin detalle del portal.'),
                 },
                 $usuarioId
