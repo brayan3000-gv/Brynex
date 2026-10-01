@@ -74,14 +74,10 @@ body {
 /* El estado flota bajo su columna: no suma altura al encabezado ni empuja la tabla.
    Sale al hacer clic en el encabezado (foco dentro de la columna) y se queda
    a la vista mientras haya un estado elegido. */
-/* El filtro de estado vive en el encabezado, no flotando encima: antes era
-   absoluto y tapaba la primera fila de la tabla, y solo asomaba mientras el
-   encabezado tenía el foco —así que había que atinarle sin perder el ratón—. */
-.th-sub-host { display:block;margin-top:0.15rem; }
-.th-sub-flota { margin:0; }
-.th-sub { width:100%;max-width:100%;border:1px solid rgba(251,191,36,0.35);border-radius:5px;padding:0.1rem 0.25rem;background:rgba(251,191,36,0.07); }
-.th-sub:hover { border-color:rgba(251,191,36,0.75);background:rgba(251,191,36,0.14); }
-.th-sub.activo { border-color:#fbbf24;background:rgba(251,191,36,0.2);color:#fde68a; }
+/* Entidad y estado van en el MISMO desplegable, separados por grupos: antes el
+   de estado era un segundo control que, flotando, tapaba la primera fila, y
+   puesto debajo le robaba una línea al encabezado. */
+.th-select optgroup { background:#0f172a;color:#94a3b8;font-style:normal;font-size:0.7rem;font-weight:700; }
 .th-select:hover { border-bottom-color:rgba(255,255,255,0.5); }
 .th-select:focus { border-bottom-color:#3b82f6;outline:none; }
 .th-select option { background:#0f172a;color:#fff;font-weight:600;text-transform:none; }
@@ -498,73 +494,61 @@ function sortClass($col, $currSort, $currDir) {
             {{-- EPS --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['eps_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="eps_id" onchange="this.form.submit()" class="th-select {{ $epsF ? 'activo' : '' }}">
+                    @foreach(request()->except(['eps_id','eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <input type="hidden" name="eps_id" value="{{ $epsF }}">
+                    <input type="hidden" name="eps_estado" value="{{ $radColF['eps'] ?? '' }}">
+                    <select onchange="filtrarColumna(this, 'eps')" class="th-select {{ ($epsF || ! empty($radColF['eps'])) ? 'activo' : '' }}" title="Filtra esta columna por entidad o por estado del radicado">
                         <option value="">↓ EPS</option>
-                        @foreach($epsDisponibles as $e)<option value="{{ $e->id }}" {{ $epsF == $e->id ? 'selected' : '' }}>{{ $e->nombre }} ({{ $conteoEps[(string) $e->id] ?? 0 }})</option>@endforeach
+                        <optgroup label="Entidad">@foreach($epsDisponibles as $e)<option value="ent:{{ $e->id }}" {{ $epsF == $e->id ? 'selected' : '' }}>{{ $e->nombre }} ({{ $conteoEps[(string) $e->id] ?? 0 }})</option>@endforeach</optgroup>
+                        <optgroup label="Estado del radicado">@foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="est:{{ $val }}" {{ (! $epsF && ($radColF['eps'] ?? '') === $val) ? 'selected' : '' }}>{{ ($radColF['eps'] ?? '') === $val ? '✓ ' : '' }}{{ $lbl }}</option>@endforeach</optgroup>
+                        @if($epsF || ! empty($radColF['eps']))<optgroup label=" "><option value="nada">✖ Quitar filtro</option></optgroup>@endif
                     </select>
                 </form>
-                <div class="th-sub-host {{ !empty($radColF['eps']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
-                    @foreach(request()->except(['eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="eps_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['eps']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">⚐ Estado</option>
-                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['eps'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
-                    </select>
-                </form></div>
             </th>
 
             {{-- ARL --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['arl_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="arl_id" onchange="this.form.submit()" class="th-select {{ $arlF ? 'activo' : '' }}">
+                    @foreach(request()->except(['arl_id','arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <input type="hidden" name="arl_id" value="{{ $arlF }}">
+                    <input type="hidden" name="arl_estado" value="{{ $radColF['arl'] ?? '' }}">
+                    <select onchange="filtrarColumna(this, 'arl')" class="th-select {{ ($arlF || ! empty($radColF['arl'])) ? 'activo' : '' }}" title="Filtra esta columna por entidad o por estado del radicado">
                         <option value="">↓ ARL</option>
-                        @foreach($arlDisponibles as $a)<option value="{{ $a->id }}" {{ $arlF == $a->id ? 'selected' : '' }}>{{ $a->nombre_arl }} ({{ $conteoArl[(string) $a->id] ?? 0 }})</option>@endforeach
+                        <optgroup label="Entidad">@foreach($arlDisponibles as $a)<option value="ent:{{ $a->id }}" {{ $arlF == $a->id ? 'selected' : '' }}>{{ $a->nombre_arl }} ({{ $conteoArl[(string) $a->id] ?? 0 }})</option>@endforeach</optgroup>
+                        <optgroup label="Estado del radicado">@foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="est:{{ $val }}" {{ (! $arlF && ($radColF['arl'] ?? '') === $val) ? 'selected' : '' }}>{{ ($radColF['arl'] ?? '') === $val ? '✓ ' : '' }}{{ $lbl }}</option>@endforeach</optgroup>
+                        @if($arlF || ! empty($radColF['arl']))<optgroup label=" "><option value="nada">✖ Quitar filtro</option></optgroup>@endif
                     </select>
                 </form>
-                <div class="th-sub-host {{ !empty($radColF['arl']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
-                    @foreach(request()->except(['arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="arl_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['arl']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">⚐ Estado</option>
-                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['arl'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
-                    </select>
-                </form></div>
             </th>
 
             {{-- Caja --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['caja_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="caja_id" onchange="this.form.submit()" class="th-select {{ $cajaF ? 'activo' : '' }}">
+                    @foreach(request()->except(['caja_id','caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <input type="hidden" name="caja_id" value="{{ $cajaF }}">
+                    <input type="hidden" name="caja_estado" value="{{ $radColF['caja'] ?? '' }}">
+                    <select onchange="filtrarColumna(this, 'caja')" class="th-select {{ ($cajaF || ! empty($radColF['caja'])) ? 'activo' : '' }}" title="Filtra esta columna por entidad o por estado del radicado">
                         <option value="">↓ Caja</option>
-                        @foreach($cajaDisponibles as $ca)<option value="{{ $ca->id }}" {{ $cajaF == $ca->id ? 'selected' : '' }}>{{ $ca->nombre }} ({{ $conteoCaja[(string) $ca->id] ?? 0 }})</option>@endforeach
+                        <optgroup label="Entidad">@foreach($cajaDisponibles as $ca)<option value="ent:{{ $ca->id }}" {{ $cajaF == $ca->id ? 'selected' : '' }}>{{ $ca->nombre }} ({{ $conteoCaja[(string) $ca->id] ?? 0 }})</option>@endforeach</optgroup>
+                        <optgroup label="Estado del radicado">@foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="est:{{ $val }}" {{ (! $cajaF && ($radColF['caja'] ?? '') === $val) ? 'selected' : '' }}>{{ ($radColF['caja'] ?? '') === $val ? '✓ ' : '' }}{{ $lbl }}</option>@endforeach</optgroup>
+                        @if($cajaF || ! empty($radColF['caja']))<optgroup label=" "><option value="nada">✖ Quitar filtro</option></optgroup>@endif
                     </select>
                 </form>
-                <div class="th-sub-host {{ !empty($radColF['caja']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
-                    @foreach(request()->except(['caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="caja_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['caja']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">⚐ Estado</option>
-                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['caja'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
-                    </select>
-                </form></div>
             </th>
 
             {{-- Pensión --}}
             <th colspan="2">
                 <form method="GET" action="{{ route('admin.afiliaciones.index') }}" style="margin:0;">
-                    @foreach(request()->except(['pension_id','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="pension_id" onchange="this.form.submit()" class="th-select {{ $pensionF ? 'activo' : '' }}">
+                    @foreach(request()->except(['pension_id','pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                    <input type="hidden" name="pension_id" value="{{ $pensionF }}">
+                    <input type="hidden" name="pension_estado" value="{{ $radColF['pension'] ?? '' }}">
+                    <select onchange="filtrarColumna(this, 'pension')" class="th-select {{ ($pensionF || ! empty($radColF['pension'])) ? 'activo' : '' }}" title="Filtra esta columna por entidad o por estado del radicado">
                         <option value="">↓ Pensión</option>
-                        @foreach($pensionDisponibles as $p)<option value="{{ $p->id }}" {{ $pensionF == $p->id ? 'selected' : '' }}>{{ $p->razon_social }} ({{ $conteoPension[(string) $p->id] ?? 0 }})</option>@endforeach
+                        <optgroup label="Entidad">@foreach($pensionDisponibles as $p)<option value="ent:{{ $p->id }}" {{ $pensionF == $p->id ? 'selected' : '' }}>{{ $p->razon_social }} ({{ $conteoPension[(string) $p->id] ?? 0 }})</option>@endforeach</optgroup>
+                        <optgroup label="Estado del radicado">@foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="est:{{ $val }}" {{ (! $pensionF && ($radColF['pension'] ?? '') === $val) ? 'selected' : '' }}>{{ ($radColF['pension'] ?? '') === $val ? '✓ ' : '' }}{{ $lbl }}</option>@endforeach</optgroup>
+                        @if($pensionF || ! empty($radColF['pension']))<optgroup label=" "><option value="nada">✖ Quitar filtro</option></optgroup>@endif
                     </select>
                 </form>
-                <div class="th-sub-host {{ !empty($radColF['pension']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
-                    @foreach(request()->except(['pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
-                    <select name="pension_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['pension']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">⚐ Estado</option>
-                        @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['pension'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
-                    </select>
-                </form></div>
             </th>
 
             {{-- Empresa --}}
@@ -1677,6 +1661,24 @@ function sortClass($col, $currSort, $currDir) {
 
 @push('scripts')
 <script>
+/**
+ * Cada columna tiene un solo desplegable con dos grupos —las entidades y los
+ * estados del radicado—, así que lo elegido se reparte al filtro que toca
+ * antes de enviar: `ent:` a la entidad, `est:` al estado.
+ */
+function filtrarColumna(selector, columna) {
+    const formulario = selector.form;
+    const entidad = formulario.querySelector('[name="' + columna + '_id"]');
+    const estado = formulario.querySelector('[name="' + columna + '_estado"]');
+    const elegido = selector.value;
+
+    if (elegido === '' || elegido === 'nada') { entidad.value = ''; estado.value = ''; }
+    else if (elegido.startsWith('ent:')) entidad.value = elegido.slice(4);
+    else if (elegido.startsWith('est:')) estado.value = elegido.slice(4);
+
+    formulario.submit();
+}
+
 // ── Variables globales ──
 let radicadoActivo = null;
 const CSRF = document.querySelector('meta[name="csrf-token"]')?.content;
