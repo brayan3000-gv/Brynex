@@ -7,6 +7,7 @@ use App\Models\Contrato;
 use App\Services\EpsSura\EpsSuraReingresoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
@@ -66,6 +67,21 @@ class EpsSuraReingresoController extends Controller
         } catch (Throwable $e) {
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
         }
+    }
+
+    /**
+     * Por dónde va el robot ahora mismo.
+     *
+     * El trámite tarda cerca de minuto y medio: la pantalla pregunta por aquí
+     * cada pocos segundos para ir contándolo en vez de dejar un reloj girando.
+     */
+    public function progreso(int $contratoId)
+    {
+        $this->contrato($contratoId);
+
+        return response()->json(
+            Cache::get(EpsSuraReingresoService::claveDelPaso($contratoId)) ?: ['paso' => null]
+        )->header('Cache-Control', 'no-store');
     }
 
     /** Lo que la extensión trajo del portal: número, transacción y comprobante. */

@@ -6,6 +6,7 @@ use App\Models\Contrato;
 use App\Models\Radicado;
 use App\Services\ArlSura\ArlSuraSesionService;
 use App\Services\EpsPortal\EpsRadicado;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 use RuntimeException;
@@ -315,10 +316,14 @@ class EpsSuraReingresoService
                 $usuarioId
             );
 
-            return $salida + [
+            // array_merge y no «+»: el script ya trae una clave «radicado» con el
+            // número del portal, y con «+» se quedaba esa en vez del radicado
+            // de BryNex, así que la pastilla de la lista no se repintaba.
+            return array_merge($salida, [
+                'radicado_portal' => $salida['radicado'] ?? null,
                 'radicado_brynex' => $radicado->fresh()->estado,
                 'radicado' => $radicado->fresh()->paraLaLista(),
-            ];
+            ]);
         }
 
         // El comprobante trae el número de solicitud —que es el radicado del
@@ -338,11 +343,12 @@ class EpsSuraReingresoService
             $usuarioId
         );
 
-        return $salida + [
+        return array_merge($salida, [
+            'radicado_portal' => $salida['radicado'] ?? null,
             'radicado_brynex' => $radicado->fresh()->estado,
             // Con esto el listado repinta la pastilla de EPS sin recargar.
             'radicado' => $radicado->fresh()->paraLaLista(),
-        ];
+        ]);
     }
 
     /**
@@ -361,6 +367,33 @@ class EpsSuraReingresoService
         return $this->hayXvfb()
             ? 'xvfb-run -a --server-args="-screen 0 1400x900x24" '.$node
             : $node;
+    }
+
+    public static function claveDelPaso(int $contratoId): string
+    {
+        return "eps-sura:paso:{$contratoId}";
+    }
+
+    /**
+     * El nombre interno del paso, dicho para quien mira la pantalla.
+     */
+    private static function enCristiano(string $paso): string
+    {
+        return [
+            'inicio' => 'Empezando',
+            'login' => 'Entrando al portal de SURA',
+            'empresa' => 'Eligiendo la empresa',
+            'abrir reingresos' => 'Abriendo la pantalla de reingresos',
+            'esperar formulario' => 'Esperando el formulario',
+            'inventario' => 'Revisando la pantalla',
+            'documento' => 'Escribiendo el documento',
+            'buscar persona' => 'Buscando a la persona en SURA',
+            'datos de la novedad' => 'Llenando la novedad',
+            'aplicar novedad' => 'Aplicando la novedad',
+            'comprobante' => 'Leyendo el comprobante',
+            'soporte' => 'Bajando el comprobante en PDF',
+            'certificado' => 'Bajando el certificado de afiliación',
+        ][$paso] ?? ucfirst($paso);
     }
 
     private function hayXvfb(): bool
@@ -450,6 +483,12 @@ class EpsSuraReingresoService
             'modo' => $modo,
         ] + $datos, JSON_UNESCAPED_UNICODE);
 
+        // El robot tarda cerca de un minuto y medio, así que va contando por
+        // dónde anda: cada paso se guarda para que la pantalla lo muestre
+        // mientras ocurre, en vez de dejar al usuario mirando un reloj.
+        $clave = self::claveDelPaso($contrato->id);
+        Cache::put($clave, ['paso' => 'Empezando', 'en' => now()->toDateTimeString()], 600);
+
         $resultado = Process::path(base_path())
             // Con ventana el visor del comprobante se dibuja y el portal
             // entrega el documento; sin ella no pinta nada (ver el script).
@@ -459,7 +498,20 @@ class EpsSuraReingresoService
             // aplicada en SURA sin registrar en BryNex.
             ->timeout(420)
             ->input($entrada)
-            ->run($this->comando());
+            ->run($this->comando(), function (string $tipo, string $linea) use ($clave) {
+                // El script anuncia cada paso por stderr con «@paso …»; stdout
+                // lleva el JSON del resultado y no se toca.
+                foreach (preg_split('/\R/', $linea) as $renglon) {
+                    if (str_starts_with($renglon, '@paso ')) {
+                        Cache::put($clave, [
+                            'paso' => self::enCristiano(trim(substr($renglon, 6))),
+                            'en' => now()->toDateTimeString(),
+                        ], 600);
+                    }
+                }
+            });
+
+        Cache::forget($clave);
 
         $salida = json_decode(trim($resultado->output()), true) ?: [];
 

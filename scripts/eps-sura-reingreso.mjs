@@ -153,6 +153,18 @@ const navegador = await puppeteer.launch({
 
 let pagina;
 let paso = 'inicio';
+
+/**
+ * Deja el paso en curso y lo cuenta por stderr, donde BryNex lo lee en vivo
+ * para enseñarlo en pantalla. Va por stderr a propósito: stdout lleva el JSON
+ * del resultado y mezclar las dos cosas lo rompería.
+ */
+const vaPor = (texto) => {
+  paso = texto;
+  try { process.stderr.write(`@paso ${texto}\n`); } catch { /* da igual si no se puede */ }
+
+  return texto;
+};
 const alertas = [];
 const nuevasVentanas = [];
 
@@ -198,7 +210,7 @@ try {
     await d.accept().catch(() => {});
   });
 
-  paso = 'login';
+  vaPor('login');
   await entrarEmpresaEps(pagina, entrada);
 
   /**
@@ -242,7 +254,7 @@ try {
   // Solo lee: se puede pedir las veces que haga falta, y sirve igual para quien
   // ya estaba afiliado. Es el documento que se guarda con el radicado.
   if (modo === 'certificado') {
-    paso = 'certificado';
+    vaPor('certificado');
     const descarga = await conDescargas();
 
     await pagina.goto(URL_CERTIFICADO, { waitUntil: 'networkidle2', timeout: 60000 });
@@ -284,7 +296,7 @@ try {
     });
   }
 
-  paso = 'abrir reingresos';
+  vaPor('abrir reingresos');
   await pagina.goto(URL_MENU, { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
   // El menú JSF redirige solo a la aplicación de reingresos; darle tiempo.
   for (let i = 0; i < 20 && !/reingresos/i.test(pagina.url()); i++) await esperar(1000);
@@ -292,7 +304,7 @@ try {
   // La pantalla se dibuja en varios tiempos (ScriptManager + UpdatePanel): leer
   // el DOM al llegar devolvía solo los hidden de ASP.NET. Se espera a que haya
   // algo con lo que trabajar antes de mirar.
-  paso = 'esperar formulario';
+  vaPor('esperar formulario');
   const campoDe = async () => (await marcoConCampo(pagina, 'WucSearchPerson_txtId'))
     ?? (await marcoConCampo(pagina, 'txtId'))
     ?? null;
@@ -314,7 +326,7 @@ try {
 
   // Inventario de lo que hay en pantalla —de TODOS los marcos, con el suyo
   // anotado—: con esto se ajustan los selectores sin radicar nada para verlos.
-  paso = 'inventario';
+  vaPor('inventario');
   const inventario = async (f) => f.evaluate(() => Array.from(document.querySelectorAll('input,select,textarea,a[id],button'))
     .filter((e) => e.id || e.name)
     .map((e) => ({
@@ -347,7 +359,7 @@ try {
   // del contrato: si el usuario administra una sola empresa el portal no
   // pregunta cuál, y sin esta comprobación se podría radicar a la persona en la
   // empresa equivocada sin que nada avisara.
-  paso = 'empresa';
+  vaPor('empresa');
   const nitPantalla = (await marco.evaluate(() => document.querySelector('[id$="TbxEmployerId"]')?.value || '').catch(() => '')).replace(/\D/g, '');
   const nitEsperado = String(nitEmpresa).replace(/\D/g, '');
   if (nitPantalla && nitEsperado && nitPantalla !== nitEsperado) {
@@ -355,7 +367,7 @@ try {
   }
 
   // ── Persona ──
-  paso = 'documento';
+  vaPor('documento');
   const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || '1';
   await marco.evaluate((t) => {
     const s = document.querySelector('[id$="Repeater1_ctl00_DdlTypeIdentification"]')
@@ -373,7 +385,7 @@ try {
   const nombreDe = () => marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_txtName"]')?.value?.trim() || '').catch(() => '');
   let nombre = await nombreDe();
   if (!nombre) {
-    paso = 'buscar persona';
+    vaPor('buscar persona');
     await marco.evaluate(() => document.querySelector('[id$="WucSearchPerson_LinkButton1"]')?.click()).catch(() => {});
     for (let i = 0; i < 20 && !nombre; i++) { await esperar(900); nombre = await nombreDe(); }
   }
@@ -401,7 +413,7 @@ try {
   }
 
   // ── Novedad ──
-  paso = 'datos de la novedad';
+  vaPor('datos de la novedad');
 
   // El tipo de cotizante es AutoPostBack y recarga la página ENTERA, así que
   // hay que esperar esa recarga antes de escribir lo demás. Con una espera
@@ -458,7 +470,7 @@ try {
     });
   }
 
-  paso = 'aplicar novedad';
+  vaPor('aplicar novedad');
   // Las descargas se habilitan ANTES de guardar: el portal ofrece el soporte de
   // la novedad en cuanto la aplica, y si no hay dónde dejarlo se pierde.
   const descarga = await conDescargas();
@@ -471,7 +483,7 @@ try {
   // dentro de un iframe de Crystal Reports: leer solo el marco principal
   // devolvía «Informe principal L01» y nada más. Se espera al comprobante y se
   // lee de todos los marcos.
-  paso = 'comprobante';
+  vaPor('comprobante');
   let comprobante = '';
   let enComprobante = false;
 
@@ -530,7 +542,7 @@ try {
     } catch {}
   });
 
-  paso = 'soporte';
+  vaPor('soporte');
 
   // Primero la exportación del visor, que entrega el PDF de una. Lo de abajo
   // —el clic con el ratón, la ventana emergente, la impresión de la pantalla—

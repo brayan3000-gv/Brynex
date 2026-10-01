@@ -47,6 +47,10 @@
         <div class="esu-info" id="esuPortal" style="display:none"></div>
         <div class="esu-aviso" id="esuAviso" style="display:none"></div>
 
+        <label style="display:flex;align-items:center;gap:.4rem;margin:.5rem 0;font-size:.85rem;color:#475569;cursor:pointer">
+          <input type="checkbox" id="esuEnServidor"> Hacerlo en el servidor, sin tocar este navegador
+        </label>
+
         <button class="esu-btn" id="esuBtnRadicar" onclick="realizarReingresoEpsSura()">🏥 Realizar reingreso</button>
       </div>
 
@@ -166,15 +170,18 @@ async function realizarReingresoEpsSura() {
     const btn = esuEl('esuBtnRadicar');
     const r = esuPrep?.resumen || {};
     const hayExtension = !!document.documentElement.dataset.brynexPortales;
+    // Marcar la casilla manda: sirve para probar el robot aunque la extensión
+    // esté puesta.
+    const enServidor = !!esuEl('esuEnServidor')?.checked || !hayExtension;
 
     if (!confirm(`¿Realizar el reingreso de ${r.trabajador || 'este trabajador'} en EPS SURA?\n\n` +
-        (hayExtension ? '' : 'La extensión no está instalada: lo hará el servidor y no se podrá guardar el comprobante.\n\n') +
+        (enServidor ? 'Lo hará el servidor, en su propio navegador; tarda cerca de minuto y medio.\n\n' : '') +
         'Queda aplicado en el portal y no se puede anular desde aquí.')) return;
 
     const parar = esuEsperar(btn, 'Haciendo el reingreso...');
     const soltar = (texto = '🏥 Realizar reingreso') => { parar(); btn.disabled = false; btn.textContent = texto; };
 
-    if (!hayExtension) { await reingresoPorServidor(soltar); return; }
+    if (enServidor) { await reingresoPorServidor(soltar); return; }
 
     // La pestaña del portal: si no está lista, BryNex entra sola con la clave
     // del llavero. Solo si no la tiene se le pide a la persona.
@@ -283,17 +290,40 @@ async function realizarReingresoEpsSura() {
 
 /** Camino de respaldo: lo hace el servidor, sin comprobante. */
 async function reingresoPorServidor(soltar) {
+    // El robot tarda cerca de minuto y medio. Mientras trabaja se le pregunta
+    // por dónde va y se va contando: así se ve que avanza, y si se atasca se
+    // sabe en qué paso fue.
+    const aviso = esuEl('esuPortal');
+    aviso.innerHTML = '🤖 El servidor está empezando…';
+    aviso.style.display = 'block';
+
+    let siguiendo = true;
+    (async () => {
+        while (siguiendo) {
+            await new Promise((r) => setTimeout(r, 2000));
+            if (!siguiendo) return;
+            try {
+                const p = await esuPedir('progreso', 'GET', 15);
+                if (siguiendo && p?.paso) aviso.innerHTML = `🤖 ${esuEsc(p.paso)}…`;
+            } catch (e) { /* si el contador falla, el trámite sigue igual */ }
+        }
+    })();
+
     let d;
     try { d = await esuPedir('registrar', 'POST', 420); }
     catch (e) { d = { ok: false, error: 'Se perdió la conexión. Antes de reintentar revisa en el portal: pudo quedar radicado.' }; }
+    siguiendo = false;
     soltar('🏥 Reintentar');
 
     if (d.radicado) pintarRadicadoEnLista(d.radicado, esuContratoId);
-    if (!d.ok) { alert(d.error || 'No se pudo radicar.'); return; }
+    if (!d.ok) { aviso.innerHTML = `⚠️ ${esuEsc(d.error || 'No se pudo radicar.')}`; return; }
 
+    aviso.style.display = 'none';
     esuEl('esuContenido').style.display = 'none';
     const caja = esuEl('esuResultado');
-    caja.innerHTML = '✅ Reingreso aplicado en EPS SURA.' +
+    caja.innerHTML = `✅ Reingreso aplicado en EPS SURA${d.radicado_portal ? `: <strong>${esuEsc(d.radicado_portal)}</strong>` : ''}.` +
+        (d.soporte_guardado ? '<br><span style="color:#475569">Comprobante del portal guardado con los soportes.</span>'
+                            : '<br><span style="color:#92400e">No se pudo guardar el comprobante.</span>') +
         '<br><span style="color:#475569">El radicado quedó en trámite; pasa a OK cuando la conciliación lo vea vigente.</span>';
     caja.style.display = 'block';
 }

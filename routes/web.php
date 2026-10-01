@@ -1060,10 +1060,11 @@ Route::middleware('auth')->group(function () {
             Route::post('/{contrato}/eps-sura/explorar', [$esr, 'explorar'])->name('eps-sura.explorar');
             Route::post('/{contrato}/eps-sura/consultar', [$esr, 'consultar'])->name('eps-sura.consultar');
             Route::post('/{contrato}/eps-sura/registrar', [$esr, 'registrar'])->name('eps-sura.registrar');
-            // Lo que la extensión trae del portal (el comprobante solo se puede
-            // capturar desde el navegador de una persona).
+            // Lo que la extensión trae del portal cuando el trámite lo hace
+            // ella, en el navegador de la persona, en vez del servidor.
             Route::post('/{contrato}/eps-sura/aplicar', [$esr, 'aplicar'])->name('eps-sura.aplicar');
             Route::get('/{contrato}/eps-sura/credencial', [$esr, 'credencial'])->name('eps-sura.credencial');
+            Route::get('/{contrato}/eps-sura/progreso', [$esr, 'progreso'])->name('eps-sura.progreso');
             // Novedad de inicio laboral en Salud Total desde el radicado de EPS.
             $stc = \App\Http\Controllers\Admin\SaludTotalController::class;
             Route::get('/{contrato}/salud-total/precheck', [$stc, 'precheck'])->name('salud-total.precheck');
