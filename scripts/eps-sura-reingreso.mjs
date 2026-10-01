@@ -456,10 +456,26 @@ try {
     }
   }
 
-  // Aquí no se insiste más: el comprobante es un extra y lo que de verdad
-  // guarda BryNex es el certificado de afiliación, que se pide aparte. Esperar
-  // de más tumbó la corrida de Diana Ruiz por tiempo (30-sep-2026) y dejó la
-  // novedad aplicada sin registrar.
+  // Si el botón no suelta el archivo, se imprime la pantalla del comprobante.
+  // Es el documento que hace falta: el certificado de afiliación lista TODOS
+  // los empleadores de la persona —SURA lo emite así— y el comprobante del
+  // reingreso muestra solo la empresa del trámite.
+  //
+  // La impresión es rápida y va con su propio límite: esperar de más tumbó la
+  // corrida de Diana Ruiz por tiempo (30-sep-2026) y dejó la novedad aplicada
+  // sin registrar, que es el peor final.
+  if (!soporte) {
+    try {
+      const ruta = join(descarga.carpeta, `comprobante_${Date.now()}.pdf`);
+      await Promise.race([
+        pagina.pdf({ path: ruta, format: 'A4', printBackground: true }),
+        new Promise((_, rechazar) => setTimeout(() => rechazar(new Error('pdf lento')), 25000)),
+      ]);
+      const { size } = await stat(ruta);
+      // Una hoja en blanco pesa poco: si el visor no alcanzó a dibujarse, no sirve.
+      if (size > 12000) soporte = { archivo: 'comprobante_reingreso.pdf', ruta, bytes: size, impreso: true };
+    } catch {}
+  }
 
   salir({
     ok: !conError,
