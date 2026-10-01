@@ -22,6 +22,7 @@
  *                     tipoCotizante?, asesor?}
  * Salida por stdout: {ok, paso, modo, campos?, nombre?, mensajes, alerta?, error?}
  */
+import { rmSync } from 'node:fs';
 import { mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -156,6 +157,21 @@ const navegador = await puppeteer.launch({
     // esa ventana nunca se abre y la descarga no llega a ninguna parte.
     '--disable-popup-blocking',
   ],
+});
+
+// Al salir se borra el perfil temporal del navegador. Hace falta hacerlo a mano
+// porque el script termina con process.exit(), que se salta el cierre de
+// puppeteer —y es ese cierre el que normalmente lo borra—: cada corrida dejaba
+// su carpeta en /tmp y se habían juntado 379 con 11 GB (1-oct-2026). Va en
+// 'exit' y con borrado síncrono, que es lo único que corre a esas alturas.
+process.on('exit', () => {
+  try {
+    const perfil = (navegador.process()?.spawnargs || [])
+      .find((a) => a.startsWith('--user-data-dir='))
+      ?.slice('--user-data-dir='.length);
+
+    if (perfil && perfil.startsWith(tmpdir())) rmSync(perfil, { recursive: true, force: true });
+  } catch { /* si no se deja borrar, no es motivo para tumbar el trámite */ }
 });
 
 let pagina;
