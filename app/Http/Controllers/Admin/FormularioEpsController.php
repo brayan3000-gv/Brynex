@@ -7,6 +7,11 @@ use App\Models\Contrato;
 use App\Services\FormularioEpsService;
 use Illuminate\Http\Request;
 
+/**
+ * El contrato llega como id y se resuelve con {@see Contrato::paraTramite()}:
+ * con el binding implícito cualquier usuario veía el formulario (datos
+ * personales) o pisaba la firma de un contrato de otro aliado cambiando el id.
+ */
 class FormularioEpsController extends Controller
 {
     public function __construct(protected FormularioEpsService $service) {}
@@ -15,18 +20,18 @@ class FormularioEpsController extends Controller
      * Vista de impresión del formulario de EPS.
      * GET /admin/afiliaciones/{contrato}/formulario/eps
      */
-    public function vista(Contrato $contrato)
+    public function vista(int $contrato)
     {
-        return $this->vistaFormulario($contrato, 'eps');
+        return $this->vistaFormulario(Contrato::paraTramite($contrato), 'eps');
     }
 
     /**
      * Vista de impresión del formulario del fondo de pensión (COLPENSIONES y demás).
      * GET /admin/afiliaciones/{contrato}/formulario/pension
      */
-    public function vistaPension(Contrato $contrato)
+    public function vistaPension(int $contrato)
     {
-        return $this->vistaFormulario($contrato, 'pension');
+        return $this->vistaFormulario(Contrato::paraTramite($contrato), 'pension');
     }
 
     /**
@@ -98,8 +103,9 @@ class FormularioEpsController extends Controller
      * Guarda la firma del cliente (base64 PNG) en disco.
      * POST /admin/afiliaciones/{contrato}/formulario/eps/firma
      */
-    public function guardarFirma(Request $request, Contrato $contrato)
+    public function guardarFirma(Request $request, int $contrato)
     {
+        $contrato = Contrato::paraTramite($contrato);
         $request->validate(['firma' => 'required|string']);
 
         $data = $request->input('firma');
@@ -124,18 +130,18 @@ class FormularioEpsController extends Controller
      * PDF relleno de la EPS (binario) para el iframe.
      * GET /admin/afiliaciones/{contrato}/formulario/eps/raw
      */
-    public function generar(Contrato $contrato)
+    public function generar(int $contrato)
     {
-        return $this->generarPdf($contrato, 'eps');
+        return $this->generarPdf(Contrato::paraTramite($contrato), 'eps');
     }
 
     /**
      * PDF relleno del fondo de pensión (binario) para el iframe.
      * GET /admin/afiliaciones/{contrato}/formulario/pension/raw
      */
-    public function generarPension(Contrato $contrato)
+    public function generarPension(int $contrato)
     {
-        return $this->generarPdf($contrato, 'pension');
+        return $this->generarPdf(Contrato::paraTramite($contrato), 'pension');
     }
 
     protected function generarPdf(Contrato $contrato, string $tipo)

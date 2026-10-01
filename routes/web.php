@@ -1122,13 +1122,13 @@ Route::middleware('auth')->group(function () {
             Route::post('/{contrato}/correo-eps/{entidad}/enviar', [$cae, 'enviar'])->name('correo-eps.enviar')->where('entidad', '[a-z_]+');
         });
         Route::get('/{contrato}/historial', [$ac, 'historial'])->name('historial');
-        Route::get('/{contrato}/formulario/eps', [$fc, 'vista'])->name('formulario.eps');
-        Route::get('/{contrato}/formulario/eps/raw', [$fc, 'generar'])->name('formulario.eps.raw');
-        Route::post('/{contrato}/formulario/eps/firma', [$fc, 'guardarFirma'])->name('formulario.eps.firma');
+        Route::get('/{contrato}/formulario/eps', [$fc, 'vista'])->name('formulario.eps')->whereNumber('contrato');
+        Route::get('/{contrato}/formulario/eps/raw', [$fc, 'generar'])->name('formulario.eps.raw')->whereNumber('contrato');
+        Route::post('/{contrato}/formulario/eps/firma', [$fc, 'guardarFirma'])->name('formulario.eps.firma')->whereNumber('contrato');
         // Formulario del fondo de pensión (COLPENSIONES y demás). La firma es la
         // misma del cliente, por eso no se duplica la ruta.
-        Route::get('/{contrato}/formulario/pension', [$fc, 'vistaPension'])->name('formulario.pension');
-        Route::get('/{contrato}/formulario/pension/raw', [$fc, 'generarPension'])->name('formulario.pension.raw');
+        Route::get('/{contrato}/formulario/pension', [$fc, 'vistaPension'])->name('formulario.pension')->whereNumber('contrato');
+        Route::get('/{contrato}/formulario/pension/raw', [$fc, 'generarPension'])->name('formulario.pension.raw')->whereNumber('contrato');
     });
 
     // ── Tareas ───────────────────────────────────────────────────────────────
