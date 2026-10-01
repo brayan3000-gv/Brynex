@@ -4200,86 +4200,87 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
 
   const [a, m, dia] = String(fechaIngreso).split('-');
 
-  const previo = await ejecutar(tabId, async (cot, salario, fecha, ase) => {
-    const esperar = (ms) => new Promise(r => setTimeout(r, ms));
-
-    const poner = (sufijo, valor, conCambio = false) => {
-      const e = document.querySelector(`[id$="${sufijo}"]`);
-      if (!e) return false;
-      e.focus();
-      e.value = valor;
-      e.dispatchEvent(new Event('input', { bubbles: true }));
-      if (conCambio) e.dispatchEvent(new Event('change', { bubbles: true }));
-
-      return true;
-    };
-
-    // La fecha va en un campo con máscara (MaskedEdit de ASP.NET): asignarle el
-    // valor de un golpe no basta, la máscara lo descarta y el portal responde
-    // «Valor Requerido». Se teclea carácter por carácter y se actualiza también
-    // el estado que la máscara guarda aparte.
-    const ponerFecha = async (valor) => {
-      const e = document.querySelector('[id$="TxtInitialdate"]');
-      if (!e) return false;
-
-      // Así es como la escribe el robot del servidor, que sí lo consigue: con
-      // el setter nativo (React y los MaskedEdit ignoran una asignación suelta)
-      // y los eventos que el portal escucha. Teclearla carácter por carácter
-      // resultó peor: la máscara la descartaba.
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      setter.call(e, valor);
-      e.dispatchEvent(new Event('input', { bubbles: true }));
-      e.dispatchEvent(new Event('change', { bubbles: true }));
-
-      const estado = document.querySelector('[id$="MEE_InitialDate_ClientState"]');
-      if (estado) setter.call(estado, valor);
-      await esperar(300);
-
-      return !!e.value;
-    };
-
+  // El tipo de cotizante recarga la página entera (AutoPostBack de ASP.NET).
+  // Va solo y se espera la recarga: dentro del mismo script que el resto, esa
+  // recarga lo cortaba a la mitad y el formulario se quedaba sin llenar.
+  await clicYEsperar(tabId, (cot) => {
     const sel = document.querySelector('[id$="Repeater1_ctl00_DdlSettlementParam"]');
-    if (sel) { sel.value = cot; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (!sel) return false;
+    sel.value = cot;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
 
-    poner('Repeater1_ctl00_TxtSalary', String(salario));
+    return true;
+  }, [String(tipoCotizante)]);
 
-    // El asesor no vale con escribirlo: el 0 queda como «sin asesor» solo
-    // cuando el foco pasa al campo de al lado —el del nombre—, que es lo que
-    // dispara su validación. Un blur suelto no basta.
-    poner('tbxIntermediaryCode', String(ase), true);
-    const campoAse = document.querySelector('[id$="tbxIntermediaryCode"]');
-    const campoNombre = document.querySelector('[id$="tbxIntermediary"]');
-    campoAse?.dispatchEvent(new Event('change', { bubbles: true }));
-    campoNombre?.focus();                       // el foco se va al de al lado
-    campoAse?.dispatchEvent(new Event('blur', { bubbles: true }));
+  await esperar(1500);
 
-    // Y se espera a que ESE postback termine antes de seguir. Si no, llegaba
-    // tarde —justo cuando la fecha ya estaba escrita— y repintaba el formulario
-    // borrándola. Se da por terminado cuando el portal rellena el nombre del
-    // asesor o cuando deja de haber peticiones en vuelo.
-    for (let i = 0; i < 15; i++) {
-      await esperar(600);
-      const quieto = !window.Sys?.WebForms?.PageRequestManager?.getInstance?.()?.get_isInAsyncPostBack?.();
-      if (quieto && (campoNombre?.value?.trim() || i > 4)) break;
+  const previo = await ejecutar(tabId, async (salario, fecha, ase) => {
+    const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+
+    const sueldo = document.querySelector('[id$="Repeater1_ctl00_TxtSalary"]');
+    if (sueldo) {
+      sueldo.focus();
+      setter.call(sueldo, String(salario));
+      sueldo.dispatchEvent(new Event('input', { bubbles: true }));
+      sueldo.dispatchEvent(new Event('change', { bubbles: true }));
+      sueldo.dispatchEvent(new Event('blur', { bubbles: true }));
     }
-    campoNombre?.blur();
-    await esperar(1200);
 
-    // La fecha, de última y sin tocar el foco: cada cambio de foco en esta
-    // pantalla puede disparar otra recarga parcial.
-    await ponerFecha(fecha);
-    await esperar(600);
-    if (!document.querySelector('[id$="TxtInitialdate"]')?.value) {
+    // El asesor no se escribe a mano. El portal lo resuelve con un web method
+    // que, además del nombre, llena el campo oculto del id (`hddIntermediary`),
+    // que es el que de verdad viaja al servidor: escribiendo solo el texto
+    // visible ese oculto quedaba vacío y la novedad se iba sin asesor.
+    const codigo = document.querySelector('[id$="tbxIntermediaryCode"]');
+    if (codigo) setter.call(codigo, String(ase));
+    let asesorNombre = '';
+    try {
+      asesorNombre = await new Promise((r) => {
+        window.PageMethods.FindIntermediary(String(ase), (res) => {
+          if (res) { window.onSucess(res); r(res.Name || ''); } else r('');
+        }, () => r(''));
+        setTimeout(() => r(''), 8000);
+      });
+    } catch (e) {
+      asesorNombre = '';
+    }
+    await esperar(500);
+
+    // La fecha, de última y por el calendario del propio portal: su campo tiene
+    // un MaskedEdit que descarta el valor asignado a mano, pero el
+    // CalendarExtender la escribe como si la hubiera elegido una persona y así
+    // se queda, incluso si después hay otra recarga.
+    const ponerFecha = () => {
+      const campo = document.querySelector('[id$="TxtInitialdate"]');
+      if (!campo) return '';
+      const [d, mm, aa] = String(fecha).split('/').map(Number);
+      const calendario = (window.Sys?.Application?.getComponents?.() || [])
+        .find((c) => /CE_initialDate$/i.test(c.get_id?.() || ''));
+
+      if (calendario?.set_selectedDate) {
+        calendario.set_selectedDate(new Date(aa, mm - 1, d));
+      } else {
+        setter.call(campo, fecha);
+        campo.dispatchEvent(new Event('input', { bubbles: true }));
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      return campo.value || '';
+    };
+
+    let fechaPuesta = ponerFecha();
+    if (!fechaPuesta) {
       await esperar(1500);
-      await ponerFecha(fecha);
+      fechaPuesta = ponerFecha();
     }
 
     return {
       solicitud: (document.querySelector('[id$="TxbApplicationNumber"]')?.value || '').trim(),
-      fecha: document.querySelector('[id$="TxtInitialdate"]')?.value || '',
-      asesor: document.querySelector('[id$="tbxIntermediary"]')?.value || '',
+      fecha: fechaPuesta,
+      asesor: asesorNombre || document.querySelector('[id$="tbxIntermediary"]')?.value || '',
+      asesorId: document.querySelector('[id$="hddIntermediary"]')?.value || '',
     };
-  }, [String(tipoCotizante), Math.round(Number(ibc)), `${dia}/${m}/${a}`, asesor]);
+  }, [Math.round(Number(ibc)), `${dia}/${m}/${a}`, asesor]);
 
   await esperar(2500);
 
@@ -4296,6 +4297,7 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
       fecha: v('TxtInitialdate'),
       asesor: v('tbxIntermediaryCode'),
       asesorNombre: v('tbxIntermediary'),
+      asesorId: v('hddIntermediary'),
       solicitud: v('TxbApplicationNumber'),
       avisos: [...document.querySelectorAll('span, div')]
         .map((e) => (e.innerText || '').trim())
@@ -4304,12 +4306,20 @@ async function suraRadicar(tabId, { tipo = 'CC', documento, tipoCotizante = '2',
     };
   }).catch(() => null);
 
-  // Sin fecha el portal devuelve «Valor Requerido»: aplicar solo gastaría un
-  // intento y dejaría la pantalla sucia para el siguiente.
-  if (!antesDeAplicar?.fecha) {
+  // Lo que el portal rechazaría de todas formas se detiene aquí: aplicar solo
+  // gastaría un intento y dejaría la pantalla sucia para el siguiente. Sin
+  // fecha responde «Valor Requerido»; sin el id del asesor, la novedad se iría
+  // sin asesor aunque en pantalla se vea el nombre.
+  const falta = [
+    !antesDeAplicar?.fecha && 'la fecha de ingreso no se quedó escrita (el campo tiene máscara)',
+    !antesDeAplicar?.salario && 'el salario quedó vacío',
+    !antesDeAplicar?.asesorId && 'el portal no resolvió el asesor',
+  ].filter(Boolean);
+
+  if (falta.length) {
     return {
       ok: false, nombre: consulta.nombre, formulario: antesDeAplicar,
-      error: 'La fecha de ingreso no se quedó escrita en el portal (el campo tiene máscara). No se aplicó nada.',
+      error: `No se aplicó nada: ${falta.join(' y ')}.`,
     };
   }
 
