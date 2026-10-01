@@ -455,6 +455,10 @@ class FormularioEpsService
                 // ajustamos Y al borde inferior menos la altura de la fuente + margen mínimo.
                 $cellH  = $fontSize + 1;               // celda justa alrededor del texto
                 $textY  = $y + $h - $cellH;            // anclar al fondo del rect
+                // Como sello, el rect mapeado es el recuadro: el texto va centrado en él.
+                if (! empty($campo['recuadro'])) {
+                    $textY = $y + ($h - $cellH) / 2;
+                }
 
                 $pdf->SetXY($x, $textY);
 
@@ -480,9 +484,8 @@ class FormularioEpsService
                     };
                     $pdf->SetDrawColor((int) ($campo['color_r'] ?? 0), (int) ($campo['color_g'] ?? 0), (int) ($campo['color_b'] ?? 0));
                     $pdf->SetLineWidth(1.2);
-                    // Del alto de la celda más 1 pt arriba y abajo: así el recuadro calza con
-                    // una fila de casillas del mismo alto (Fecha de Radicado de Sanitas).
-                    $pdf->Rect($inicio - 4, $textY - 1, $anchoTexto + 8, $cellH + 2);
+                    // Alto: el del rect mapeado (en Sanitas, el del cuadro «Fecha de Radicado»).
+                    $pdf->Rect($inicio - 5, $y, $anchoTexto + 10, $h);
                     $pdf->SetLineWidth(0.2);
                     $pdf->SetDrawColor(0, 0, 0);
                 }
