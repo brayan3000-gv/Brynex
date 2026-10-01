@@ -61,9 +61,14 @@ body {
 /* El estado flota bajo su columna: no suma altura al encabezado ni empuja la tabla.
    Sale al hacer clic en el encabezado (foco dentro de la columna) y se queda
    a la vista mientras haya un estado elegido. */
-.th-sub-host { position:relative;height:0;display:none; }
-th:focus-within > .th-sub-host, .th-sub-host.activo { display:block; }
-.th-sub-flota { position:absolute;top:0;left:0;right:0;z-index:40;background:#0f172a;border:1px solid rgba(251,191,36,0.55);border-top:none;border-radius:0 0 8px 8px;padding:0.2rem 0.3rem;box-shadow:0 6px 14px rgba(0,0,0,0.35); }
+/* El filtro de estado vive en el encabezado, no flotando encima: antes era
+   absoluto y tapaba la primera fila de la tabla, y solo asomaba mientras el
+   encabezado tenía el foco —así que había que atinarle sin perder el ratón—. */
+.th-sub-host { display:block;margin-top:0.15rem; }
+.th-sub-flota { margin:0; }
+.th-sub { width:100%;max-width:100%;border:1px solid rgba(251,191,36,0.35);border-radius:5px;padding:0.1rem 0.25rem;background:rgba(251,191,36,0.07); }
+.th-sub:hover { border-color:rgba(251,191,36,0.75);background:rgba(251,191,36,0.14); }
+.th-sub.activo { border-color:#fbbf24;background:rgba(251,191,36,0.2);color:#fde68a; }
 .th-select:hover { border-bottom-color:rgba(255,255,255,0.5); }
 .th-select:focus { border-bottom-color:#3b82f6;outline:none; }
 .th-select option { background:#0f172a;color:#fff;font-weight:600;text-transform:none; }
@@ -499,7 +504,7 @@ function sortClass($col, $currSort, $currDir) {
                 <div class="th-sub-host {{ !empty($radColF['eps']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['eps_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="eps_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['eps']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos</option>
+                        <option value="">⚐ Estado</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['eps'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
                 </form></div>
@@ -517,7 +522,7 @@ function sortClass($col, $currSort, $currDir) {
                 <div class="th-sub-host {{ !empty($radColF['arl']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['arl_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="arl_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['arl']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos</option>
+                        <option value="">⚐ Estado</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['arl'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
                 </form></div>
@@ -535,7 +540,7 @@ function sortClass($col, $currSort, $currDir) {
                 <div class="th-sub-host {{ !empty($radColF['caja']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['caja_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="caja_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['caja']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos</option>
+                        <option value="">⚐ Estado</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['caja'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
                 </form></div>
@@ -553,7 +558,7 @@ function sortClass($col, $currSort, $currDir) {
                 <div class="th-sub-host {{ !empty($radColF['pension']) ? 'activo' : '' }}"><form method="GET" action="{{ route('admin.afiliaciones.index') }}" class="th-sub-flota" style="margin:0;">
                     @foreach(request()->except(['pension_estado','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
                     <select name="pension_estado" onchange="this.form.submit()" class="th-select th-sub {{ !empty($radColF['pension']) ? 'activo' : '' }}" title="Estado del radicado de esta entidad">
-                        <option value="">Todos</option>
+                        <option value="">⚐ Estado</option>
                         @foreach(\App\Models\Radicado::todosEstados() as $val => $lbl)<option value="{{ $val }}" {{ ($radColF['pension'] ?? '') === $val ? 'selected' : '' }}>{{ $lbl }}</option>@endforeach
                     </select>
                 </form></div>
