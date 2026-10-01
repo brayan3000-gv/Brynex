@@ -39,7 +39,15 @@ body {
    ve de un vistazo que no son solo los del aliado activo, sin gastar una
    etiqueta en decirlo. */
 .afil-header.brynex { background:linear-gradient(135deg,#2e1065 0%,#6d28d9 55%,#8b5cf6 100%);box-shadow:0 2px 14px rgba(124,58,237,0.35); }
-.afil-header.brynex select, .afil-header.brynex input[type=text] { background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.3); }
+.afil-header.brynex select, .afil-header.brynex input[type=text] { background:rgba(255,255,255,0.14);border-color:rgba(255,255,255,0.35);color:#fff; }
+/* Sobre el morado el gris de siempre no se leía: el texto va en blanco y la
+   ayuda del buscador, en blanco translúcido. */
+.afil-header.brynex input[type=text]::placeholder { color:rgba(255,255,255,0.8); }
+.afil-header.brynex select option { background:#2e1065;color:#fff; }
+/* Los títulos acompañan al card. */
+.tbl-afil.brynex thead th { background:linear-gradient(135deg,#2e1065 0%,#4c1d95 100%); }
+.tbl-afil.brynex thead th a { color:#ddd6fe; }
+.tbl-afil.brynex thead th a:hover { color:#fff; }
 .afil-title  { font-size:1.3rem;font-weight:800;letter-spacing:0.02em; }
 .afil-sub    { font-size:0.78rem;color:#94a3b8;margin-top:0.15rem; }
 
@@ -449,7 +457,7 @@ function sortClass($col, $currSort, $currDir) {
 // Usamos una función en blade con include sintetizado directamente
 @endphp
 <div class="tbl-wrap">
-<table class="tbl-afil">
+<table class="tbl-afil {{ $gestionados ? 'brynex' : '' }}">
     <thead>
         <tr>
             {{-- Razón Social --}}
