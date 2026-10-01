@@ -1836,7 +1836,7 @@ function pCcfPaso(d) {
   // ni guiones, y sin el barrio («B/ SELVA»), que va en su propio campo.
   const normalizarDireccion = t => {
     let x = String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
-    x = x.replace(/\s*(?:\bB\/|\bBARRIO\b|\bBR\.)\s.*$/, '');
+    x = x.replace(/\s*(?:\bB\/|\bBARRIO\b\s|\bBR\.\s).*$/, '');   // «B/BOSQUES» también va pegado, sin espacio
     x = x.replace(/[#\-.,°]/g, ' ').replace(/\b(?:NRO|NUM|NUMERO)\b/g, ' ').replace(/\bNO\s+(?=\d)/g, ' ').replace(/\s+/g, ' ').trim();
     x = x.replace(/^([A-Z]+)(?=\d)/, '$1 ');                    // «CALLE72J2» → «CALLE 72J2»
     const prefijos = [[/^(?:CARRERA|CARRA|CARR|CRRA|CRA|KRA|KR|CRR|CR)\b/, 'CR'], [/^(?:CALLE|CALL|CLL|CLLE|CL)\b/, 'CL'], [/^(?:AVENIDA|AVDA|AVD|AVE|AV)\b/, 'AV'],
@@ -2750,7 +2750,16 @@ function pCfdLlenar(d) {
 /** Lee el número de radicado (002-002-…) después de Finalizar. */
 function pCfdResultado() {
   const t = (document.body.innerText || '').replace(/\s+/g, ' ');
-  const m = t.match(/\b(\d{3}-\d{3}-\d{6,})\b/);
+
+  // Si la pantalla es la LISTA de Radicados (no la de «Tu número de radicado
+  // es: …»), el primer 002-002-… que se ve es el del último trabajador
+  // radicado, no el de este. Pasó el 28-sep-2026: Daniela Ariza quedó con el
+  // número de Rosalba Tobar. Se devuelve para que se busque por cédula.
+  if (/Aqu[ií] podr[aá]s visualizar los radicados/i.test(t) && !/Tu n[uú]mero de radicado es/i.test(t)) {
+    return { radicado: false, buscarEnRadicados: true, motivo: 'en-lista', texto: t.slice(0, 600) };
+  }
+
+  const m = t.match(/n[uú]mero de radicado es:?\s*(\d{3}-\d{3}-\d{6,})/i) || t.match(/\b(\d{3}-\d{3}-\d{6,})\b/);
   const exito = /exitos|radicad[oa]|registrad[oa]|recibimos tu solicitud/i.test(t);
 
   // Comfandi a veces contesta «Tu solicitud de afiliación no pudo ser radicada
