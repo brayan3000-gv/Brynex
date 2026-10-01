@@ -3915,7 +3915,23 @@ async function suraLogin(tabId, { usuario, contrasena, tipoDocumento = 'C', nit 
     };
 
     comoElRaton(campoClave);
-    for (let i = 0; i < 20 && !document.querySelector('.ui-keyboard'); i++) await esperar(300);
+    for (let i = 0; i < 10 && !document.querySelector('.ui-keyboard'); i++) await esperar(300);
+
+    // Si no se abrió, se le pide al propio plugin que se muestre: es jQuery
+    // Keyboard, y su teclado solo sale con un clic de confianza —algo que una
+    // extensión no puede fabricar, a diferencia del robot del servidor, que
+    // usa clics reales del navegador—. Llamar a su API evita esa barrera.
+    if (!document.querySelector('.ui-keyboard')) {
+      try {
+        const jq = window.jQuery || window.$;
+        const campo = jq && jq('#suraPassword');
+        const teclado = campo && (campo.data('keyboard') || (campo.getkeyboard && campo.getkeyboard()));
+        if (teclado?.reveal) teclado.reveal();
+        else if (campo?.keyboard) { campo.keyboard(); campo.data('keyboard')?.reveal?.(); }
+      } catch { /* sin jQuery: se intentará escribir en el campo */ }
+
+      for (let i = 0; i < 10 && !document.querySelector('.ui-keyboard'); i++) await esperar(300);
+    }
 
     if (document.querySelector('.ui-keyboard')) {
       for (const caracter of String(clave).split('')) {
