@@ -1462,13 +1462,25 @@ class PlanoPagoController extends Controller
         $pdfContent = $soporte['pdf'];
         $origen = $soporte['origen'];
 
+        // El archivo lleva el mes en que se pagó la planilla, como el envío por
+        // WhatsApp y el portal de empresas: el del plano si paga mes actual, el
+        // siguiente si es mes vencido. Con now() una planilla de agosto pagada en
+        // septiembre salía como «Octubre» si se bajaba en octubre.
+        $pago = now();
+        if ($plano->anio_plano && $plano->mes_plano) {
+            $pago = \Carbon\Carbon::create((int) $plano->anio_plano, (int) $plano->mes_plano, 1);
+            if (! $plano->paga_mes_actual) {
+                $pago->addMonth();
+            }
+        }
+
         return response($pdfContent)
             ->header('X-Soporte-Origen', $origen)
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', "inline; filename=\"" . \App\Services\PlanillaWhatsappService::generarNombreArchivoPdf(
                 trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}"),
-                now()->month,
-                now()->year
+                $pago->month,
+                $pago->year
             ) . "\"")
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
