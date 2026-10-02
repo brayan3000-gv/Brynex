@@ -165,20 +165,25 @@ class PortalEmpresaController extends Controller
 
         // Con número pero sin el pago registrado: todavía no hay soporte.
         abort_unless($pagada, 404);
-        // Pagada por un operador del que no hay soporte: mejor nada que un PDF
-        // con formato de Enlace. Mi Planilla sale real de su portal o no sale.
-        abort_unless(
-            EnlaceInformeIndividualService::esMiPlanilla($pagada->operador_id)
-                || \App\Services\PlanillaFormularioService::tieneSoporte($pagada->operador_id),
-            404
-        );
+        // Solo la original del operador (Simple, ARUS o Mi Planilla con la clave
+        // de la persona), nunca la copia que arma BryNex: la empresa la usa
+        // como soporte ante terceros.
+        if (! $pagada->es_operador_autorizado) {
+            return $this->planillaNoDisponible($plano->numero_planilla, false);
+        }
 
         try {
             $soporte = app(EnlaceInformeIndividualService::class)
                 ->conTope(15)
-                ->soporte($plano, $pagada->operador_id);
-        } catch (\RuntimeException $e) {
-            abort(404);
+                ->soporteOriginal($plano, $pagada->operador_id);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Portal empresas: no salió la planilla original', [
+                'plano_id' => $plano->id,
+                'planilla' => $plano->numero_planilla,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return $this->planillaNoDisponible($plano->numero_planilla, true);
         }
 
         $nombre = PlanillaWhatsappService::generarNombreArchivoPdf(
@@ -190,6 +195,26 @@ class PortalEmpresaController extends Controller
         return response($soporte['pdf'])
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', "inline; filename=\"{$nombre}\"");
+    }
+
+    /**
+     * Lo que ve la empresa cuando la original no se puede entregar. Sin
+     * detalles internos (credenciales, operador): solo qué hacer.
+     */
+    private function planillaNoDisponible(string $numero, bool $reintentar)
+    {
+        $texto = $reintentar
+            ? 'No pudimos traer en este momento la planilla original del operador. Intenta de nuevo en unos minutos; si sigue igual, escríbenos y te la enviamos.'
+            : 'La planilla original de este pago no se puede descargar desde el portal. Escríbenos y te la enviamos.';
+
+        return response(
+            '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Planilla '.e($numero).'</title>'
+            .'<body style="font-family:system-ui,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:90vh;margin:0;padding:16px">'
+            .'<div style="max-width:460px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:1.4rem 1.6rem;box-shadow:0 8px 24px rgba(0,0,0,.06)">'
+            .'<div style="font-weight:800;color:#0f172a;margin-bottom:.5rem">Planilla '.e($numero).'</div>'
+            .'<div style="color:#334155;font-size:.95rem;line-height:1.5">'.e($texto).'</div></div></body>',
+            $reintentar ? 503 : 404
+        )->header('Content-Type', 'text/html; charset=utf-8');
     }
 
     // ─── Facturas y saldo ────────────────────────────────────────────────
