@@ -18,10 +18,12 @@ use Illuminate\Support\Facades\Auth;
 class PlanillaWhatsappService
 {
     /**
-     * Códigos de operadores autorizados para envío de PDF por WhatsApp.
-     * Solo ARUS Enlace, Enlace y Simple tienen plantilla PDF configurada.
+     * Códigos de operadores autorizados para envío de PDF por WhatsApp: los que
+     * corren sobre Enlace (ARUS, Simple), con soporte real y plantilla, y Mi
+     * Planilla, que se baja del portal con la clave de cada persona (sin la
+     * clave no se puede: ver `sin_clave_miplanilla`).
      */
-    public const OPERADORES_AUTORIZADOS = ['SIMPLE', 'ARUS'];
+    public const OPERADORES_AUTORIZADOS = ['SIMPLE', 'ARUS', 'MIPLANI'];
 
     /**
      * Consulta las planillas pagadas en el periodo para el aliado y detecta su operador.
@@ -118,6 +120,14 @@ class PlanillaWhatsappService
                 ->groupBy('plano_id');
         }
 
+        // Quiénes tienen su clave de Mi Planilla: sin ella su planilla no se baja.
+        $conClaveMiPlanilla = \App\Models\ClaveAcceso::where('aliado_id', $aliadoId)
+            ->where('entidad', 'like', '%PLANILLA%')
+            ->where('activo', true)
+            ->whereNotNull('contrasena')->where('contrasena', '<>', '')
+            ->whereNotNull('cedula')
+            ->pluck('cedula')->map(fn ($c) => (string) $c)->flip();
+
         foreach ($planos as $plano) {
             $gastosPlano = $gastos->get($plano->numero_planilla);
             $gasto = $gastosPlano ? $gastosPlano->first() : null;
@@ -155,6 +165,12 @@ class PlanillaWhatsappService
                     strtoupper($operadorDetectado->codigo),
                     self::OPERADORES_AUTORIZADOS
                 );
+            }
+
+            $plano->sin_clave_miplanilla = strtoupper(trim((string) $plano->operador_codigo)) === 'MIPLANI'
+                && ! $conClaveMiPlanilla->has((string) $plano->cedula);
+            if ($plano->sin_clave_miplanilla) {
+                $plano->es_operador_autorizado = false;
             }
 
             $plano->fecha_pago = $gasto->fecha;
@@ -208,6 +224,7 @@ class PlanillaWhatsappService
                         'envio_error'            => $plano->envio_error,
                         'envio_fecha'            => $plano->envio_fecha,
                         'es_operador_autorizado' => $plano->es_operador_autorizado,
+                        'sin_clave_miplanilla'   => $plano->sin_clave_miplanilla,
                     ]);
                 }
             } elseif ($tipoEnvio === 'empleado_empresa') {
@@ -232,6 +249,7 @@ class PlanillaWhatsappService
                         'envio_error'            => $plano->envio_error,
                         'envio_fecha'            => $plano->envio_fecha,
                         'es_operador_autorizado' => $plano->es_operador_autorizado,
+                        'sin_clave_miplanilla'   => $plano->sin_clave_miplanilla,
                     ]);
                 }
             } elseif ($tipoEnvio === 'contacto_empresa') {
@@ -261,6 +279,7 @@ class PlanillaWhatsappService
                         'envio_error'            => $plano->envio_error,
                         'envio_fecha'            => $plano->envio_fecha,
                         'es_operador_autorizado' => $plano->es_operador_autorizado,
+                        'sin_clave_miplanilla'   => $plano->sin_clave_miplanilla,
                     ]);
                 }
             }

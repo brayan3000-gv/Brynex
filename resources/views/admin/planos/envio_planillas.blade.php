@@ -372,7 +372,10 @@
                         <td style="padding: 0.6rem 0.75rem; color: #475569;" x-text="d.cliente_cedula"></td>
                         <td style="padding: 0.6rem 0.75rem; color: #475569;">
                             <span x-text="d.operador_nombre"></span>
-                            <template x-if="d.es_operador_autorizado === false">
+                            <template x-if="d.sin_clave_miplanilla">
+                                <span style="display: inline-block; margin-left: 4px; font-size: 0.65rem; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 4px; padding: 0 4px;" title="Falta la clave de Mi Planilla de esta persona. Guárdala en Claves (entidad MI PLANILLA) o desde el botón Planilla del historial.">🔑 Sin clave</span>
+                            </template>
+                            <template x-if="d.es_operador_autorizado === false && !d.sin_clave_miplanilla">
                                 <span style="display: inline-block; margin-left: 4px; font-size: 0.65rem; background: #fef3c7; color: #92400e; border: 1px solid #fde68a; border-radius: 4px; padding: 0 4px;" title="Sin plantilla PDF autorizada">⚠️ Sin PDF</span>
                             </template>
                         </td>
@@ -389,7 +392,7 @@
                                  pasó por esta planilla, el estado real manda, o un
                                  «omitido» se queda sin verse nunca. --}}
                             <template x-if="d.es_operador_autorizado === false && (d.envio_state || d.envio_estado) === 'pendiente'">
-                                <span class="badge-info" style="background: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db;" title="El operador de esta planilla no tiene plantilla PDF autorizada para WhatsApp">⚠️ Sin envío</span>
+                                <span class="badge-info" style="background: #f3f4f6; color: #6b7280; border: 1px solid #d1d5db;" :title="d.sin_clave_miplanilla ? 'Falta la clave de Mi Planilla de esta persona' : 'El operador de esta planilla no tiene plantilla PDF autorizada para WhatsApp'">⚠️ Sin envío</span>
                             </template>
                             <template x-if="d.es_operador_autorizado !== false || (d.envio_state || d.envio_estado) !== 'pendiente'">
                                 <span :class="badgeEstado(d.envio_state || d.envio_estado)" x-text="etiquetaEstado(d.envio_state || d.envio_estado)" :title="d.envio_error || ''"></span>
