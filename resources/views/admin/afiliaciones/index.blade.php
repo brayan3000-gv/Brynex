@@ -2676,7 +2676,12 @@ function abrirClavesRS(rsId, rsNombre, delContrato) {
     // Al reabrir tras guardar una clave se conserva el contrato de antes.
     rsContratoActivo = delContrato || (rsId === rsIdActivo ? rsContratoActivo : {});
     rsIdActivo = rsId;
-    if (window.Portales) Portales.montar('rs-portales', rsId, rsContratoActivo, { soloConDatos: true });
+    // «Nueva Clave» se ve salvo que la empresa sea prestada sin permiso de claves.
+    document.getElementById('rs-ca-btn-nueva').style.display = '';
+    if (window.Portales) Portales.montar('rs-portales', rsId, rsContratoActivo, {
+        soloConDatos: true,
+        alVedar: () => { document.getElementById('rs-ca-btn-nueva').style.display = 'none'; },
+    });
     rsNombreActivo = rsNombre;
     var panel   = document.getElementById('rs-claves-panel');
     var overlay = document.getElementById('rs-claves-overlay');

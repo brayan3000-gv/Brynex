@@ -177,6 +177,13 @@ class ClaveAccesoController extends Controller
         $data = $this->validar($request);
         $data['aliado_id'] = session('aliado_id_activo');
 
+        // Empresa prestada sin permiso de claves: tampoco se le cargan. Los
+        // robots usan la más reciente, así que una clave de aquí pisaría la buena.
+        if (! empty($data['razon_social_id']) && ($rs = \App\Models\RazonSocial::find($data['razon_social_id']))
+            && \App\Services\Afiliaciones\PortalesEntidades::clavesVedadas($rs, (int) $data['aliado_id'], auth()->user())) {
+            return response()->json(['success' => false, 'message' => 'Las claves de esta empresa las maneja BryNex.'], 403);
+        }
+
         // Limpiar nulos
         $data = $this->limpiarNulos($data);
 

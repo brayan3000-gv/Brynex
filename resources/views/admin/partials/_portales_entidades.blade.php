@@ -196,7 +196,7 @@ window.Portales = (function () {
     const ORDEN = ['ARL', 'CAJA', 'OTRO', 'EPS'];
     const CORTO = { OTRO: 'SAT' };
 
-    let el = null, rsId = null, contrato = {}, datos = null, editando = null, soloConDatos = false;
+    let el = null, rsId = null, contrato = {}, datos = null, editando = null, soloConDatos = false, alVedar = null;
     // Filtros: tipo (''/ARL/CAJA/EPS), texto, solo las que faltan, solo las que la empresa usa.
     let filtro = { tipo: '', texto: '', faltan: false, usadas: false };
 
@@ -211,6 +211,7 @@ window.Portales = (function () {
         rsId = id;
         contrato = delContrato || {};
         soloConDatos = !!opciones?.soloConDatos;
+        alVedar = opciones?.alVedar || null;
         filtro = { tipo: '', texto: '', faltan: false, usadas: false };
         datos = null;
         el.innerHTML = '<div class="pe-msg">⏳ Cargando portales…</div>';
@@ -222,7 +223,12 @@ window.Portales = (function () {
         const q = new URLSearchParams();
         ['eps', 'arl', 'caja'].forEach(k => contrato[k] && q.set(k, contrato[k]));
         return fetch(`${URL_BASE}/${rsId}?${q}`, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
-            .then(async r => r.ok ? r.json() : Promise.reject(r.status === 403 ? ((await r.json().catch(() => ({}))).message || 'Sin acceso.') : `No se pudieron cargar los portales (${r.status}).`))
+            .then(async r => {
+                if (r.ok) return r.json();
+                // Empresa prestada sin permiso de claves: quien la abrió decide qué más ocultar.
+                if (r.status === 403 && alVedar) alVedar();
+                return Promise.reject(r.status === 403 ? ((await r.json().catch(() => ({}))).message || 'Sin acceso.') : `No se pudieron cargar los portales (${r.status}).`);
+            })
             .then(d => { const primera = !datos; datos = d; if (primera) esqueleto(); pintar(); })
             .catch(e => { el.innerHTML = `<div class="pe-msg">🔒 ${esc(e)}</div>`; datos = null; });
     }
