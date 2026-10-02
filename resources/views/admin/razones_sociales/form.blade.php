@@ -72,10 +72,13 @@
         </div>
         @endif
         {{-- Claves de portales críticos: DIAN, bancos, cámara de comercio.
-             Solo el superadmin del aliado y quien tenga el permiso otorgado. --}}
+             Solo el superadmin del aliado y quien tenga el permiso otorgado.
+             El nombre las separa de los portales de entidades, que sí ve
+             quien afilia. --}}
         @if($puedeVerClaves)
-        <button type="button" class="btn-claves" onclick="abrirModalClaves()">
-            🔐 Claves y accesos
+        <button type="button" class="btn-claves" onclick="abrirModalClaves()"
+                title="DIAN, bancos y cámara de comercio · acceso restringido">
+            🏦 Claves administrativas 🔒
         </button>
         @endif
 
@@ -664,7 +667,7 @@
     <div class="mc-box">
         <div class="mc-head">
             <div>
-                <h3 style="color:#fff;font-size:.92rem;font-weight:800;margin:0">🔐 Claves y accesos</h3>
+                <h3 style="color:#fff;font-size:.92rem;font-weight:800;margin:0">🏦 Claves administrativas 🔒</h3>
                 <div style="color:#cbd5e1;font-size:.72rem;margin-top:.15rem">
                     NIT {{ $rs->nit ? number_format($rs->nit, 0, '', '.') : '—' }}{{ $rs->dv !== null && $rs->dv !== '' ? '-'.$rs->dv : '' }}
                     &nbsp;·&nbsp; {{ Str::limit($rs->razon_social, 45) }}
