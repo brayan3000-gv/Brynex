@@ -180,10 +180,14 @@ class PortalesEntidades
 
         $filas = [];
 
-        // ARL: la configurada en la empresa, y la del contrato si es otra.
+        // Ids de ARL o caja con clave guardada: salen aunque no sean la
+        // configurada (CONSTRUTECH tenía Comfandi y Compensar sin caja puesta).
+        $conClaveDe = fn (string $tipo) => $claves->where('entidad_tipo', $tipo)->pluck('entidad_id')->map(fn ($v) => (int) $v)->all();
+
+        // ARL: la configurada en la empresa, la del contrato y las que tienen clave.
         $arls = DB::table('arls')->get(['id', 'nit', 'nombre_arl'])->keyBy('id');
         $arlConfigurada = $arls->first(fn ($a) => (string) $a->nit !== '0' && (string) $a->nit === (string) $rs->arl_nit);
-        foreach (array_unique(array_filter([$arlConfigurada?->id, $delContrato['arl'] ?? null])) as $id) {
+        foreach (array_unique(array_filter([$arlConfigurada?->id, $delContrato['arl'] ?? null, ...$conClaveDe('ARL')])) as $id) {
             if (($a = $arls->get($id)) && (string) $a->nit !== '0') {
                 $filas[] = self::fila('ARL', (int) $a->id, $a->nombre_arl, null, (int) $a->id === (int) $arlConfigurada?->id);
             }
@@ -192,7 +196,7 @@ class PortalesEntidades
         // Caja: igual.
         $cajas = DB::table('cajas')->get(['id', 'nit', 'nombre'])->keyBy('id');
         $cajaConfigurada = $cajas->first(fn ($c) => (string) $c->nit !== '0' && (string) $c->nit === (string) $rs->caja_nit);
-        foreach (array_unique(array_filter([$cajaConfigurada?->id, $delContrato['caja'] ?? null])) as $id) {
+        foreach (array_unique(array_filter([$cajaConfigurada?->id, $delContrato['caja'] ?? null, ...$conClaveDe('CAJA')])) as $id) {
             if (($c = $cajas->get($id)) && (string) $c->nit !== '0') {
                 $filas[] = self::fila('CAJA', (int) $c->id, $c->nombre, null, (int) $c->id === (int) $cajaConfigurada?->id);
             }

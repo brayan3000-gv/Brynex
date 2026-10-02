@@ -307,7 +307,7 @@ window.Portales = (function () {
         if (general) asesor = [f.asesor_general.nombre, f.asesor_general.correo];
         const sub = [];
         if (f.tipo === 'EPS') sub.push(f.afiliados ? `${f.afiliados} afiliado${f.afiliados === 1 ? '' : 's'} activo${f.afiliados === 1 ? '' : 's'}` : 'sin afiliados');
-        if (f.tipo !== 'EPS' && !f.configurada) sub.push('no es la configurada en la empresa');
+        if (['ARL', 'CAJA'].includes(f.tipo) && !f.configurada) sub.push('no es la configurada en la empresa');
         if (f.tipo === 'OTRO' && !c.usuario) sub.push('entra el representante legal o un delegado, con su cédula');
         if (c.sin_portal) sub.push('sin portal');
         if (f.sura && !c.usuario) sub.push('usuario del portal de Sura');
