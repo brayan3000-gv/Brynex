@@ -367,9 +367,19 @@ class ColmenaPayloadBuilder
             );
     }
 
+    /** Cuando Colmena rechaza la dirección del trabajador, se manda la de la empresa. */
+    private bool $direccionDeLaEmpresa = false;
+
+    public function usarDireccionDeLaEmpresa(bool $si = true): static
+    {
+        $this->direccionDeLaEmpresa = $si;
+
+        return $this;
+    }
+
     private function direccion($cliente, $rs, Contrato $contrato): string
     {
-        $dir = trim((string) $cliente->direccion_vivienda);
+        $dir = $this->direccionDeLaEmpresa ? '' : trim((string) $cliente->direccion_vivienda);
 
         if ($dir === '' || $dir === '0' || mb_strlen($dir) < 5) {
             $dir = trim((string) ($rs?->dir_formulario ?: $rs?->direccion ?: $contrato->aliado?->direccion));

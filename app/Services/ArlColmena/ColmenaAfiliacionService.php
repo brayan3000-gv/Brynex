@@ -145,7 +145,27 @@ class ColmenaAfiliacionService
 
         try {
             $this->avisar('Radicando el ingreso en Colmena');
-            $respuesta = $this->api->afiliarDependiente($payload);
+
+            try {
+                $respuesta = $this->api->afiliarDependiente($payload);
+            } catch (RuntimeException $e) {
+                // Colmena valida la dirección con reglas que no publica. Si la del
+                // trabajador no le sirve, se manda una sola vez la de la empresa:
+                // el rechazo no deja nada radicado, así que no hay duplicado.
+                if (! str_contains($e->getMessage(), 'dirección del trabajador no es válida')) {
+                    throw $e;
+                }
+
+                $this->avisar('Colmena rechazó la dirección del trabajador: se usa la de la empresa');
+                try {
+                    // La bandera no puede quedarse puesta: el builder se reutiliza en lotes.
+                    $payload = $this->builder->usarDireccionDeLaEmpresa()->paraAfiliacion($contrato, $inicio, $arlAnteriorId);
+                } finally {
+                    $this->builder->usarDireccionDeLaEmpresa(false);
+                }
+                $registro->payload = json_encode($payload, JSON_UNESCAPED_UNICODE);
+                $respuesta = $this->api->afiliarDependiente($payload);
+            }
         } catch (Throwable $e) {
             $registro->fill([
                 'estado' => ArlAfiliacion::ESTADO_FALLIDA,
