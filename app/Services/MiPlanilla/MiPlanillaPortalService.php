@@ -199,9 +199,14 @@ class MiPlanillaPortalService
      */
     public function pdfPagada(string $numero): string
     {
-        $planilla = collect($this->planillas()['pagadas'])->first(fn ($p) => (string) ($p['NumeroRadicado'] ?? '') === $numero);
+        $pagadas = collect($this->planillas()['pagadas']);
+        $planilla = $pagadas->first(fn ($p) => (string) ($p['NumeroRadicado'] ?? '') === $numero);
         if (! $planilla) {
-            throw new \RuntimeException("La planilla {$numero} no está entre las pagadas de esta cuenta.");
+            // Con lo que sí trae se ve si es otra cuenta o una planilla vieja que
+            // no está en el primer bloque del tablero.
+            $vistas = $pagadas->pluck('NumeroRadicado')->filter()->take(6)->implode(', ');
+            throw new \RuntimeException("La planilla {$numero} no está entre las pagadas de la cuenta {$this->usuario} en Mi Planilla"
+                .($vistas !== '' ? " (aparecen: {$vistas})." : ' (la cuenta no muestra ninguna pagada).'));
         }
 
         // La fecha va como la arma el portal (getDateTohref): MM/dd/yyyy H:m:s en hora de Colombia.

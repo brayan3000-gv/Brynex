@@ -1430,7 +1430,8 @@ class PlanoPagoController extends Controller
         $esMiPlanilla = \App\Services\EnlaceInformeIndividualService::esMiPlanilla($forceOperadorId);
         if (!$esMiPlanilla && !\App\Services\PlanillaFormularioService::tieneSoporte($forceOperadorId)) {
             $nombre = \DB::table('operadores_planilla')->where('id', $forceOperadorId)->value('nombre');
-            abort(404, "Esta planilla se pagó por {$nombre}. BryNex no tiene el soporte de ese operador: descárgalo desde su portal.");
+
+            return $this->errorSoporte("Esta planilla se pagó por {$nombre}. BryNex no tiene el soporte de ese operador: descárgalo desde su portal.", 404);
         }
 
         if ($request->input('origen') === 'brynex' && !$esMiPlanilla) {
@@ -1443,8 +1444,15 @@ class PlanoPagoController extends Controller
                 $soporte = app(\App\Services\EnlaceInformeIndividualService::class)
                     ->conTope(15)
                     ->soporte($plano, $forceOperadorId ?: null);
-            } catch (\RuntimeException $e) {
-                abort(404, 'No se pudo bajar la planilla del operador: '.$e->getMessage());
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Soporte de planilla: no se pudo bajar del operador', [
+                    'plano_id' => $plano->id,
+                    'planilla' => $plano->numero_planilla,
+                    'operador' => $forceOperadorId,
+                    'error'    => $e->getMessage(),
+                ]);
+
+                return $this->errorSoporte('No se pudo bajar la planilla del operador: '.$e->getMessage(), 502);
             }
         }
 
@@ -1462,6 +1470,22 @@ class PlanoPagoController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('Expires', 'Sat, 26 Jul 1997 05:00:00 GMT');
+    }
+
+    /**
+     * El botón abre el PDF en otra pestaña: si no sale, ahí mismo se dice por
+     * qué. Con abort() en producción solo se veía «404 NOT FOUND».
+     */
+    private function errorSoporte(string $mensaje, int $estado)
+    {
+        return response(
+            '<!doctype html><meta charset="utf-8"><title>Planilla no disponible</title>'
+            .'<body style="font-family:system-ui,sans-serif;background:#f8fafc;display:flex;align-items:center;justify-content:center;min-height:90vh;margin:0">'
+            .'<div style="max-width:520px;background:#fff;border:1px solid #fecaca;border-radius:12px;padding:1.4rem 1.6rem;box-shadow:0 8px 24px rgba(0,0,0,.06)">'
+            .'<div style="font-weight:800;color:#b91c1c;margin-bottom:.5rem">⚠️ No se pudo descargar la planilla</div>'
+            .'<div style="color:#334155;font-size:.95rem;line-height:1.45">'.e($mensaje).'</div></div></body>',
+            $estado
+        )->header('Content-Type', 'text/html; charset=utf-8');
     }
 
     /**
