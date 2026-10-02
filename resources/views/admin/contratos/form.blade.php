@@ -613,7 +613,6 @@
         @if($esEdicion && $contrato->caja_id && collect($cajas)->contains('id', (int)$contrato->caja_id))
         {!! $badgeEstado($rPT->get('caja')) !!}
         @endif
-        <div id="hint-caja-rs" style="display:none;font-size:0.66rem;color:#475569;margin-top:0.2rem;line-height:1.35;"></div>
       </div>
     </div>
     <div x-show="mostrarModoArl" id="panel-modo-arl" style="display:none;margin-top:0.5rem;">
@@ -2315,10 +2314,8 @@ document.querySelectorAll('#sel_plan option[value]').forEach(opt => {
 // había puesto esta misma sugerencia: lo que el usuario escogió no se toca.
 function sugerirCajaRazonSocial(rsId) {
     const sel  = document.getElementById('sel_caja');
-    const hint = document.getElementById('hint-caja-rs');
     if (!sel) return;
     sel.querySelector('optgroup[data-rs]')?.remove();
-    if (hint) { hint.style.display = 'none'; hint.innerHTML = ''; }
 
     const lista = CAJAS_RS[rsId] || [];
     if (!lista.length) return;
@@ -2347,21 +2344,6 @@ function sugerirCajaRazonSocial(rsId) {
         sel.dataset.cajaSugerida = '1';
     } else if (valorAntes) {
         sel.value = valorAntes;   // la misma caja, ahora desde el grupo de arriba
-    }
-
-    if (hint) {
-        let txt;
-        if (delDpto) {
-            txt = `Cliente en <strong>${delDpto.departamento}</strong>: la razón social usa <strong>${delDpto.caja}</strong>.`;
-        } else if (sugerida && DEPT_CLIENTE) {
-            txt = `La razón social no tiene caja en el departamento del cliente; la principal es <strong>${sugerida.caja}</strong>.`;
-        } else if (sugerida) {
-            txt = `Caja principal de la razón social: <strong>${sugerida.caja}</strong>.`;
-        }
-        if (txt && lista.length > 1) {
-            txt += '<br><span style="color:#94a3b8">' + lista.map(c => (c.departamento || '—') + ' → ' + c.caja).join(' · ') + '</span>';
-        }
-        if (txt) { hint.innerHTML = txt; hint.style.display = 'block'; }
     }
 }
 
