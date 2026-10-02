@@ -3,6 +3,7 @@
 namespace App\Services\NuevaEps;
 
 use App\Models\EpsPortalEmpresa;
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\ArlSura\ArlSuraSesionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -46,8 +47,7 @@ class NuevaEpsPortalService
             $fila = DB::table('clave_accesos as c')
                 ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
                 ->where('rs.nit', $nit)
-                ->where('c.tipo', 'EPS')
-                ->where('c.entidad', 'like', '%NUEVA%EPS%')
+                ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, self::ENTIDAD, 'EPS', '%NUEVA%EPS%'))
                 ->where('c.activo', true)
                 ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
                 ->whereNotNull('c.contrasena')->where('c.contrasena', '<>', '')

@@ -2,6 +2,7 @@
 
 namespace App\Services\Caja;
 
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\ArlSura\ArlSuraSesionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -186,8 +187,7 @@ class ComfandiSubsidiosHeadless
         $fila = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
             ->where('rs.nit', preg_replace('/\D/', '', $nit))
-            ->where('c.tipo', 'CAJA')
-            ->where('c.entidad', 'like', '%COMFANDI%')
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, 'comfandi_caja', 'CAJA', '%COMFANDI%'))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
             ->orderByDesc('c.updated_at')

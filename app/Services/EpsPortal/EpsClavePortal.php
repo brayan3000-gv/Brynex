@@ -3,6 +3,7 @@
 namespace App\Services\EpsPortal;
 
 use App\Models\EpsPortalEmpresa;
+use App\Services\Afiliaciones\PortalesEntidades;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -49,15 +50,16 @@ class EpsClavePortal
             $filas = DB::table('clave_accesos as c')
                 ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
                 ->where('rs.nit', $nit)
-                ->where('c.tipo', $tipoClave)
-                ->where('c.entidad', 'like', $patronEntidad)
+                ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, $entidad, $tipoClave, $patronEntidad))
                 ->where('c.activo', true)
                 ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
                 ->whereNotNull('c.contrasena')->where('c.contrasena', '<>', '')
                 ->orderByDesc('c.updated_at')
-                ->get(['c.entidad', 'c.usuario', 'c.contrasena']);
+                ->get(['c.entidad', 'c.entidad_tipo', 'c.usuario', 'c.contrasena']);
 
-            $fila = $filas->first(fn ($f) => ! $aceptaEntidad || $aceptaEntidad((string) $f->entidad));
+            // La criba por nombre es para las claves sin clasificar: las del
+            // catálogo ya son de esa entidad.
+            $fila = $filas->first(fn ($f) => ! $aceptaEntidad || $f->entidad_tipo || $aceptaEntidad((string) $f->entidad));
 
             if (! $fila) {
                 return ['error' => "La empresa no tiene la clave de {$nombre} en el módulo de claves."];

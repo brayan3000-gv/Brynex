@@ -7,6 +7,7 @@ use App\Models\CorreoAfiliacion;
 use App\Models\DocumentoCliente;
 use App\Models\Radicado;
 use App\Services\Afiliaciones\DatosAfiliacion;
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\Correo\BuzonGmail;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
@@ -403,8 +404,9 @@ class SosCorreoService
     }
 
     /**
-     * Asesor de la razón social: "correo de la entidad" de su clave de S.O.S. en el
-     * módulo de claves (o el link, donde se guardó al principio); si no, el de config.
+     * Asesor de la razón social: el de su pestaña de portales; si no tiene, el
+     * "correo de la entidad" de su clave de S.O.S. (o el link, donde se guardó
+     * al principio); si tampoco, el de config.
      *
      * @return array{0: array{nombre:string, correo:string}, 1: ?array{nombre:string, correo:string}}
      */
@@ -415,31 +417,34 @@ class SosCorreoService
         // busca por NIT, así un contrato de Fecop usa el asesor que se guardó en Brygar.
         $contrato->loadMissing('razonSocial');
         $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
-        $clave = DB::table('clave_accesos as c')
-            ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
-            ->when(strlen($nit) >= 8,
-                fn ($q) => $q->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(rs.nit,''),'-',''),'.',''),' ','') = ?", [$nit]),
-                fn ($q) => $q->where('c.razon_social_id', $contrato->razon_social_id))
-            ->where('c.tipo', 'EPS')->where('c.entidad', 'like', '%SOS%')->where('c.activo', true)
-            ->where('rs.aliado_id', '<>', 1)
-            ->orderByRaw('CASE WHEN rs.aliado_id = ? THEN 0 ELSE 1 END', [DatosAfiliacion::ALIADO_PRINCIPAL])
-            ->orderByDesc('c.updated_at')
-            ->first(['c.correo_entidad', 'c.link_acceso', 'c.asesor_nombre', 'c.asesor_correo', 'c.asesor2_nombre', 'c.asesor2_correo']);
 
-        // El asesor de la pestaña de portales manda; los campos viejos quedan de respaldo.
-        $correo = collect([$clave?->asesor_correo, $clave?->correo_entidad, $clave?->link_acceso])
-            ->map(fn ($v) => trim((string) $v))
-            ->first(fn ($v) => filter_var($v, FILTER_VALIDATE_EMAIL));
+        [$propio, $reemplazo] = PortalesEntidades::asesores(self::ENTIDAD, $nit);
 
-        $principal = $correo && strcasecmp($correo, $conf['principal']['correo']) !== 0
-            ? ['nombre' => trim((string) $clave?->asesor_nombre) ?: 'Asesor S.O.S.', 'correo' => $correo]
+        if (! $propio) {
+            $clave = DB::table('clave_accesos as c')
+                ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
+                ->when(strlen($nit) >= 8,
+                    fn ($q) => $q->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(rs.nit,''),'-',''),'.',''),' ','') = ?", [$nit]),
+                    fn ($q) => $q->where('c.razon_social_id', $contrato->razon_social_id))
+                ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, self::ENTIDAD, 'EPS', '%SOS%'))
+                ->where('c.activo', true)
+                ->where('rs.aliado_id', '<>', 1)
+                ->orderByRaw('CASE WHEN rs.aliado_id = ? THEN 0 ELSE 1 END', [DatosAfiliacion::ALIADO_PRINCIPAL])
+                ->orderByDesc('c.updated_at')
+                ->first(['c.correo_entidad', 'c.link_acceso']);
+
+            $correo = collect([$clave?->correo_entidad, $clave?->link_acceso])
+                ->map(fn ($v) => trim((string) $v))
+                ->first(fn ($v) => filter_var($v, FILTER_VALIDATE_EMAIL));
+
+            $propio = $correo ? ['nombre' => 'Asesor S.O.S.', 'correo' => $correo] : null;
+        }
+
+        $principal = $propio && strcasecmp($propio['correo'], $conf['principal']['correo']) !== 0
+            ? $propio
             : $conf['principal'];
 
-        $reemplazo = filter_var(trim((string) $clave?->asesor2_correo), FILTER_VALIDATE_EMAIL)
-            ? ['nombre' => trim((string) $clave->asesor2_nombre) ?: 'Asesor S.O.S.', 'correo' => trim($clave->asesor2_correo)]
-            : ($conf['reemplazo'] ?? null);
-
-        return [$principal, $reemplazo];
+        return [$principal, $reemplazo ?? ($conf['reemplazo'] ?? null)];
     }
 
     private function nombre($cliente): string

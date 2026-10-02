@@ -5,6 +5,7 @@ namespace App\Services\ArlSura;
 use App\Models\ArlCredencial;
 use App\Models\ArlUsuarioPortal;
 use App\Models\RazonSocial;
+use App\Services\Afiliaciones\PortalesEntidades;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -239,8 +240,7 @@ class ArlSuraSesionService
         $clave = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
             ->where('rs.nit', $nit)
-            ->where('c.tipo', $tipo)
-            ->where('c.entidad', 'like', '%SURA%')
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, $tipo === 'EPS' ? 'eps_sura' : 'arl_sura', $tipo, '%SURA%'))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')
             ->whereNotNull('c.contrasena')

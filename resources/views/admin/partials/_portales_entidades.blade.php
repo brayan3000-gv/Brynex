@@ -224,7 +224,9 @@ window.Portales = (function () {
         const c = f.clave || {};
         const usuario = c.usuario || f.sura?.usuario;
         const pass = c.contrasena || f.sura?.contrasena;
-        const asesor = [c.asesor_nombre, c.asesor_correo, c.asesor_telefono].filter(Boolean);
+        let asesor = [c.asesor_nombre, c.asesor_correo, c.asesor_telefono].filter(Boolean);
+        const general = !asesor.length && f.asesor_general;
+        if (general) asesor = [f.asesor_general.nombre, f.asesor_general.correo];
         const sub = [];
         if (f.tipo === 'EPS') sub.push(f.afiliados ? `${f.afiliados} afiliado${f.afiliados === 1 ? '' : 's'} activo${f.afiliados === 1 ? '' : 's'}` : 'sin afiliados');
         if (f.tipo !== 'EPS' && !f.configurada) sub.push('no es la configurada en la empresa');
@@ -251,7 +253,7 @@ window.Portales = (function () {
             </td>
             <td class="pe-mono">${usuario ? esc(usuario) : '<span class="pe-vacio">—</span>'}</td>
             <td>${passHtml}</td>
-            <td style="font-size:.72rem;color:#475569;max-width:200px">${asesor.length ? asesor.map(esc).join('<br>') : '<span class="pe-vacio">—</span>'}</td>
+            <td style="font-size:.72rem;color:#475569;max-width:200px">${asesor.length ? asesor.map(esc).join('<br>') : '<span class="pe-vacio">—</span>'}${general ? '<div class="pe-sub">asesor general (para todas las empresas)</div>' : ''}</td>
             <td style="text-align:center">${c.link_acceso ? `<a href="${esc(c.link_acceso)}" target="_blank" rel="noopener" class="pe-btn" style="text-decoration:none">🔗</a>` : ''}</td>
             <td style="text-align:right">${btn}</td>
         </tr>`;

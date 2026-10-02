@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\EpsSura\EpsSuraCarteraService;
 use App\Services\NuevaEps\NuevaEpsMoraService;
 use App\Services\SaludTotal\SaludTotalCarteraService;
@@ -30,11 +31,14 @@ class EpsRevisarMora extends Command
 
     protected $description = 'Revisa la mora y los aportes mal cobrados en los portales de las EPS, y abre las tareas';
 
-    /** Qué EPS se revisan, con el patrón que identifica su clave en el llavero. */
+    /**
+     * Qué EPS se revisan: su portal en el catálogo (PortalesEntidades) y el
+     * patrón con que se buscan las claves que aún no están clasificadas.
+     */
     private const EPS = [
-        'NUEVA_EPS' => ['nombre' => 'Nueva EPS', 'patron' => '%NUEVA%'],
-        'SALUD_TOTAL' => ['nombre' => 'Salud Total', 'patron' => '%SALUD%TOTAL%'],
-        'EPS_SURA' => ['nombre' => 'EPS SURA', 'patron' => '%SURA%'],
+        'NUEVA_EPS' => ['nombre' => 'Nueva EPS', 'portal' => 'nueva_eps', 'patron' => '%NUEVA%'],
+        'SALUD_TOTAL' => ['nombre' => 'Salud Total', 'portal' => 'salud_total', 'patron' => '%SALUD%TOTAL%'],
+        'EPS_SURA' => ['nombre' => 'EPS SURA', 'portal' => 'eps_sura', 'patron' => '%SURA%'],
     ];
 
     public function handle(NuevaEpsMoraService $nuevaEps, SaludTotalCarteraService $saludTotal, EpsSuraCarteraService $epsSura): int
@@ -56,7 +60,7 @@ class EpsRevisarMora extends Command
                 continue;
             }
 
-            $empresas = $this->empresas($eps['patron']);
+            $empresas = $this->empresas($eps['portal'], $eps['patron']);
 
             if (! $empresas) {
                 $this->warn("{$eps['nombre']}: ninguna empresa tiene clave en el módulo de claves.");
@@ -107,12 +111,11 @@ class EpsRevisarMora extends Command
      *
      * @return array<int, object>
      */
-    private function empresas(string $patron): array
+    private function empresas(string $portal, string $patron): array
     {
         $consulta = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
-            ->where('c.tipo', 'EPS')
-            ->where('c.entidad', 'like', $patron)
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, $portal, 'EPS', $patron))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
             ->whereNotNull('c.contrasena')->where('c.contrasena', '<>', '')

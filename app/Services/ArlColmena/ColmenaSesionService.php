@@ -2,6 +2,7 @@
 
 namespace App\Services\ArlColmena;
 
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\ArlSura\ArlSuraSesionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -129,8 +130,7 @@ class ColmenaSesionService
         return DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
             ->where('rs.nit', $nit)
-            ->where('c.tipo', 'ARL')
-            ->where('c.entidad', 'like', '%COLMENA%')
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, 'arl_colmena', 'ARL', '%COLMENA%'))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')
             ->whereNotNull('c.contrasena')

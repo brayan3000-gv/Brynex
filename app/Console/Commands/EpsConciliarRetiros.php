@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\NuevaEps\NuevaEpsRetirosService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -64,8 +65,7 @@ class EpsConciliarRetiros extends Command
     {
         $consulta = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
-            ->where('c.tipo', 'EPS')
-            ->where('c.entidad', 'like', '%NUEVA%')
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, 'nueva_eps', 'EPS', '%NUEVA%'))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
             ->whereNotNull('c.contrasena')->where('c.contrasena', '<>', '')

@@ -100,6 +100,29 @@ class PortalesEntidades
     /** Portales que no son de una EPS aunque estén tipificados así. */
     private const OTROS = ['SAT'];
 
+    /**
+     * Portal de los robots (la `entidad` de EpsPortalEmpresa, las llaves de
+     * config/boxalud.php) → entidad del catálogo: código de EPS, o NIT de la
+     * ARL o la caja.
+     */
+    public const PORTALES = [
+        'eps_sura' => ['EPS', 'EPS010'],
+        'sanitas' => ['EPS', 'EPS005'],
+        'salud_total' => ['EPS', 'EPS002'],
+        'nueva_eps' => ['EPS', 'EPS037'],
+        'sos' => ['EPS', 'EPS018'],
+        'coosalud' => ['EPS', 'EPS042'],
+        'emssanar' => ['EPS', 'ESSC18'],
+        'asmet' => ['EPS', 'ESSC62'],
+        'comfenalco' => ['EPS', 'EPS012'],
+        'arl_sura' => ['ARL', '800256161'],
+        'arl_colmena' => ['ARL', '800226175'],
+        'comfandi_caja' => ['CAJA', '890303208'],
+        'comfenalco_caja' => ['CAJA', '890303093'],
+    ];
+
+    private static array $ids = [];
+
     // ─── Acceso ────────────────────────────────────────────────────────
 
     /**
@@ -199,6 +222,9 @@ class PortalesEntidades
                 ];
             }
 
+            // El asesor de config/afiliaciones_correo.php sirve para cualquier
+            // empresa: si no hay uno propio, la entidad no queda «faltando».
+            $f['asesor_general'] = self::asesorGeneral($f['tipo'], $f['id']);
             $f['del_contrato'] = (int) ($delContrato[strtolower($f['tipo'])] ?? 0) === $f['id'];
             $f['estado'] = self::estado($f);
         }
@@ -247,7 +273,7 @@ class PortalesEntidades
         }
 
         $portal = ($c && $c['usuario'] && $c['contrasena']) || isset($f['sura']);
-        $correo = $c && $c['asesor_correo'];
+        $correo = ($c && $c['asesor_correo']) || $f['asesor_general'];
 
         return match (true) {
             $portal && $correo => 'portal_correo',
@@ -416,6 +442,117 @@ class PortalesEntidades
         $clave->update(['entidad_tipo' => $tipo, 'entidad_id' => $entidadId]);
 
         return $clave;
+    }
+
+    // ─── Para los robots ───────────────────────────────────────────────
+
+    /**
+     * Deja una consulta sobre `clave_accesos` solo con las claves de la entidad
+     * de ese portal.
+     *
+     * Las clasificadas van por `entidad_id`, sin mirar cómo se escribió el
+     * nombre ni el tipo («Portal», «EPS»…). Las que no se pudieron clasificar
+     * se siguen buscando como antes, por tipo y LIKE, para que ninguna
+     * empresa se quede sin la clave que hoy le funciona.
+     *
+     * @param  \Illuminate\Database\Query\Builder|\Illuminate\Database\Eloquent\Builder  $query
+     */
+    public static function filtrarClaves($query, string $portal, string $tipoLegado, string $patronLegado, string $alias = 'c')
+    {
+        [$tipo, $id] = self::entidadDelPortal($portal) ?? [null, null];
+
+        return $query->where(function ($q) use ($alias, $tipo, $id, $tipoLegado, $patronLegado) {
+            if ($tipo && $id) {
+                $q->where(fn ($x) => $x->where("{$alias}.entidad_tipo", $tipo)->where("{$alias}.entidad_id", $id));
+            }
+            $q->orWhere(fn ($x) => $x->whereNull("{$alias}.entidad_tipo")
+                ->where("{$alias}.tipo", $tipoLegado)
+                ->where("{$alias}.entidad", 'like', $patronLegado));
+        });
+    }
+
+    /** [tipo, id] del catálogo para un portal de los robots, o null si no está. */
+    public static function entidadDelPortal(string $portal): ?array
+    {
+        if (! isset(self::PORTALES[$portal])) {
+            return null;
+        }
+        [$tipo, $codigo] = self::PORTALES[$portal];
+        $id = self::idCatalogo($tipo, $codigo);
+
+        return $id ? [$tipo, $id] : null;
+    }
+
+    /** Id en eps (por código), arls o cajas (por NIT). */
+    public static function idCatalogo(string $tipo, string $codigo): ?int
+    {
+        return self::$ids["{$tipo}|{$codigo}"] ??= (int) match ($tipo) {
+            'EPS' => DB::table('eps')->where('codigo', $codigo)->value('id'),
+            'ARL' => DB::table('arls')->where('nit', $codigo)->value('id'),
+            'CAJA' => DB::table('cajas')->where('nit', $codigo)->value('id'),
+            default => 0,
+        } ?: null;
+    }
+
+    /**
+     * El asesor de esa entidad para la empresa, y su reemplazo, de la pestaña
+     * de portales. Si hay varias filas de la empresa (una por aliado), manda la
+     * de Brygar y después la más reciente. Null donde no hay: quien llama usa
+     * el asesor general de config/afiliaciones_correo.php.
+     *
+     * @return array{0: ?array{nombre:string, correo:string}, 1: ?array{nombre:string, correo:string}}
+     */
+    public static function asesores(string $portal, ?string $nit): array
+    {
+        $nit = self::nit($nit);
+        $entidad = self::entidadDelPortal($portal);
+
+        if (strlen($nit) < 6 || ! $entidad) {
+            return [null, null];
+        }
+
+        $fila = DB::table('clave_accesos as c')
+            ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
+            ->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(rs.nit,''),'-',''),'.',''),' ','') = ?", [$nit])
+            ->where('rs.aliado_id', '<>', self::ALIADO_PRUEBAS)
+            ->where('c.entidad_tipo', $entidad[0])->where('c.entidad_id', $entidad[1])
+            ->where('c.activo', true)
+            ->where(fn ($q) => $q->whereNotNull('c.asesor_correo')->orWhereNotNull('c.asesor2_correo'))
+            ->orderByRaw('CASE WHEN rs.aliado_id = ? THEN 0 ELSE 1 END', [DatosAfiliacion::ALIADO_PRINCIPAL])
+            ->orderByDesc('c.updated_at')
+            ->first(['c.asesor_nombre', 'c.asesor_correo', 'c.asesor2_nombre', 'c.asesor2_correo']);
+
+        $persona = function (?string $nombre, ?string $correo) {
+            $correo = trim((string) $correo);
+
+            return filter_var($correo, FILTER_VALIDATE_EMAIL)
+                ? ['nombre' => trim((string) $nombre) ?: 'Asesor', 'correo' => $correo]
+                : null;
+        };
+
+        return [
+            $persona($fila?->asesor_nombre, $fila?->asesor_correo),
+            $persona($fila?->asesor2_nombre, $fila?->asesor2_correo),
+        ];
+    }
+
+    /**
+     * El asesor general de config para una entidad del catálogo (el que se usa
+     * con cualquier empresa que no tenga uno propio), o null.
+     */
+    public static function asesorGeneral(string $tipo, int $id): ?array
+    {
+        foreach (config('afiliaciones_correo.asesores', []) as $portal => $conf) {
+            $entidad = isset($conf['codigo_eps'])
+                ? ['EPS', self::idCatalogo('EPS', $conf['codigo_eps'])]
+                : self::entidadDelPortal($portal);
+
+            if ($entidad && $entidad[0] === $tipo && (int) $entidad[1] === $id && ! empty($conf['principal']['correo'])) {
+                return $conf['principal'];
+            }
+        }
+
+        return null;
     }
 
     // ─── Catálogo ──────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 
 namespace App\Services\Caja;
 
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\ArlSura\ArlSuraSesionService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -237,17 +238,17 @@ class ComfenalcoSubsidiosHeadless
         $filas = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
             ->where('rs.nit', preg_replace('/\D/', '', $nit))
-            ->where('c.tipo', 'CAJA')
-            ->where('c.entidad', 'like', '%COMFENALCO%')
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, ComfenalcoCajaService::ENTIDAD, 'CAJA', '%COMFENALCO%'))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
             ->whereNotNull('c.contrasena')->where('c.contrasena', '<>', '')
             ->orderByDesc('c.updated_at')
-            ->get(['c.entidad', 'c.usuario', 'c.contrasena']);
+            ->get(['c.entidad', 'c.entidad_tipo', 'c.usuario', 'c.contrasena']);
 
         // Comfenalco Cartagena no abre este portal: mejor quedarse sin clave que
-        // gastar intentos —y arriesgar un bloqueo— con la de otra ciudad.
-        $fila = $filas->first(fn ($f) => ComfenalcoCajaService::esDelValle((string) $f->entidad));
+        // gastar intentos —y arriesgar un bloqueo— con la de otra ciudad. Las
+        // clasificadas ya son de la del Valle.
+        $fila = $filas->first(fn ($f) => $f->entidad_tipo || ComfenalcoCajaService::esDelValle((string) $f->entidad));
 
         return $fila ? ['usuario' => trim($fila->usuario), 'contrasena' => (string) $fila->contrasena] : null;
     }

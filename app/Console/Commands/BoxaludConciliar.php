@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\Boxalud\BoxaludCruceService;
 use App\Services\TareaAutomaticaService;
 use Illuminate\Console\Command;
@@ -47,7 +48,7 @@ class BoxaludConciliar extends Command
             }
 
             $conf = config("boxalud.{$eps}");
-            $empresas = $this->empresas($conf['clave_entidad']);
+            $empresas = $this->empresas($eps, $conf['clave_entidad']);
 
             if (! $empresas) {
                 $this->warn("{$conf['nombre']}: ninguna empresa tiene clave en el módulo de claves.");
@@ -101,12 +102,11 @@ class BoxaludConciliar extends Command
      *
      * @return array<int, object>
      */
-    private function empresas(string $patron): array
+    private function empresas(string $portal, string $patron): array
     {
         $consulta = DB::table('clave_accesos as c')
             ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
-            ->where('c.tipo', 'EPS')
-            ->where('c.entidad', 'like', $patron)
+            ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, $portal, 'EPS', $patron))
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')->where('c.usuario', '<>', '')
             ->whereNotNull('c.contrasena')->where('c.contrasena', '<>', '')

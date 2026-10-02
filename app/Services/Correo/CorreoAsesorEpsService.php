@@ -7,6 +7,7 @@ use App\Models\CorreoAfiliacion;
 use App\Models\DocumentoCliente;
 use App\Models\Radicado;
 use App\Services\Afiliaciones\DatosAfiliacion;
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\EpsPortal\EpsRadicado;
 use App\Services\FormularioEpsService;
 use App\Services\Sos\SosCorreoService;
@@ -99,7 +100,11 @@ class CorreoAsesorEpsService
             $avisos[] = 'El cliente tiene beneficiarios pero no hay documentos de ellos cargados (registro civil, declaración extrajuicio…).';
         }
 
-        $principal = $conf['principal'];
+        // El asesor de la empresa en su pestaña de portales; si no tiene, el general.
+        [$propio, $reemplazo] = PortalesEntidades::asesores($entidad, $rs?->nit);
+        $principal = $propio && strcasecmp($propio['correo'], $conf['principal']['correo']) !== 0
+            ? $propio
+            : $conf['principal'];
         $asunto = 'Solicitud de Afiliación'.($independiente ? ' Independiente' : '')." – {$nombre} – {$tipoDoc} {$contrato->cedula}";
 
         $salario = (float) ($contrato->salario ?: $contrato->ibc);
@@ -166,7 +171,7 @@ class CorreoAsesorEpsService
             'independiente' => $independiente,
             'buzon'         => DatosAfiliacion::buzon($contrato->aliado_id),
             'para'          => $principal,
-            'reemplazo'     => $conf['reemplazo'] ?? null,
+            'reemplazo'     => $reemplazo ?? ($conf['reemplazo'] ?? null),
             'asunto'        => $asunto,
             'cuerpo'        => implode("\n", $lineas),
             'adjuntos'      => $adjuntos,

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\PortalPeticion;
 use App\Models\Radicado;
+use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\AlertaOperativaService;
 use App\Services\Sos\SosConciliacionService;
 use Illuminate\Console\Command;
@@ -115,8 +116,7 @@ class PortalesPedirRevision extends Command
             ->where('c.estado', 'vigente')
             ->whereExists(fn ($q) => $q->select(DB::raw(1))->from('clave_accesos as k')
                 ->whereColumn('k.razon_social_id', 'rs.id')
-                ->where('k.tipo', 'EPS')
-                ->where('k.entidad', 'like', '%SOS%')
+                ->where(fn ($q) => PortalesEntidades::filtrarClaves($q, 'sos', 'EPS', '%SOS%', 'k'))
                 ->where('k.activo', true)
                 ->whereNotNull('k.contrasena')->where('k.contrasena', '<>', ''))
             ->groupBy('rs.nit', 'rs.razon_social')
