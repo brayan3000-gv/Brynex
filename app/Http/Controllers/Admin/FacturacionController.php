@@ -4075,7 +4075,11 @@ class FacturacionController extends Controller
                 ->keyBy('numero_planilla');
         }
 
-        $operadoresTodosMap = \DB::table('operadores_planilla')->pluck('id', 'nombre');
+        // Por nombre en mayúsculas: el pagado_a del gasto no siempre trae las
+        // mismas mayúsculas que el catálogo, y sin cruzar se caía al operador
+        // del cliente aunque la tabla mostrara otro.
+        $operadoresTodosMap = \DB::table('operadores_planilla')->pluck('id', 'nombre')
+            ->mapWithKeys(fn ($id, $nombre) => [mb_strtoupper(trim($nombre)) => $id]);
 
         // Lo que dijo el operador de cada número de planilla (si cruza, a qué hora
         // se pagó) y si este aliado puede bajar los soportes reales de ARUS o Simple.
@@ -4093,6 +4097,24 @@ class FacturacionController extends Controller
                 ->whereIn('codigo', array_keys(\App\Services\SuaporteApiService::HOSTS))->pluck('id'))
             ->exists();
 
+        // Operadores de los que el botón «Planilla» entrega algo cierto: el PDF
+        // real (Enlace con credenciales del aliado, Mi Planilla con la clave de
+        // la persona) o la plantilla propia del operador. Los demás no lo muestran:
+        // antes una de Mi Planilla salía con el formato de ARUS (oct-2026).
+        $conPlantilla = \DB::table('operador_planillas_templates')
+            ->whereNotNull('formulario_pdf')->where('formulario_pdf', '<>', '')
+            ->pluck('operador_planilla_id')->map(fn ($id) => (int) $id)->all();
+        $tieneClaveMiPlanilla = \App\Services\MiPlanilla\MiPlanillaPortalService::tieneClave((int) $aliadoId, (string) $cedula);
+        $operadoresConPlanilla = \DB::table('operadores_planilla')->get(['id', 'codigo'])
+            ->filter(function ($op) use ($conPlantilla, $aliadoConSoporteOperador, $tieneClaveMiPlanilla) {
+                $codigo = strtoupper(trim((string) $op->codigo));
+
+                return in_array((int) $op->id, $conPlantilla, true)
+                    || ($aliadoConSoporteOperador && array_key_exists($codigo, \App\Services\SuaporteApiService::HOSTS))
+                    || ($tieneClaveMiPlanilla && $codigo === 'MIPLANI');
+            })
+            ->map(fn ($op) => (int) $op->id)->values()->all();
+
         $feEstados = $this->estadosFacturaElectronica($facturas, $aliadoId);
 
         return view('admin.facturacion.historial', compact(
@@ -4101,7 +4123,7 @@ class FacturacionController extends Controller
             'aniosDisp', 'rsSocDisp', 'meses', 'contratosporRS',
             'soportesPlanilla', 'operadoresPlanillaInfo', 'gastosPlanilla',
             'operadoresTodosMap', 'feEstados',
-            'verificacionPlanillas', 'pagosOperador', 'aliadoConSoporteOperador'
+            'verificacionPlanillas', 'pagosOperador', 'aliadoConSoporteOperador', 'operadoresConPlanilla'
         ));
     }
 

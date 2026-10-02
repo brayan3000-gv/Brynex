@@ -1427,14 +1427,25 @@ class PlanoPagoController extends Controller
         // con la hora exacta del pago. Solo existe para ARUS y Simple con
         // credenciales cargadas; si no se puede, se arma el de BryNex como antes.
         // `origen=brynex` fuerza el generado, para comparar los dos.
-        if ($request->input('origen') === 'brynex') {
+        $esMiPlanilla = \App\Services\EnlaceInformeIndividualService::esMiPlanilla($forceOperadorId);
+        if (!$esMiPlanilla && !\App\Services\PlanillaFormularioService::tieneSoporte($forceOperadorId)) {
+            $nombre = \DB::table('operadores_planilla')->where('id', $forceOperadorId)->value('nombre');
+            abort(404, "Esta planilla se pagó por {$nombre}. BryNex no tiene el soporte de ese operador: descárgalo desde su portal.");
+        }
+
+        if ($request->input('origen') === 'brynex' && !$esMiPlanilla) {
             $soporte = ['pdf' => (new \App\Services\PlanillaFormularioService())->generar($plano, $forceOperadorId), 'origen' => 'brynex'];
         } else {
             // Con tope: alguien está esperando el PDF. Si el operador no responde
             // en 15 s se entrega el de BryNex (antes llegó a esperar 38 s).
-            $soporte = app(\App\Services\EnlaceInformeIndividualService::class)
-                ->conTope(15)
-                ->soporte($plano, $forceOperadorId ?: null);
+            // Mi Planilla no tiene "el de BryNex": si su portal falla, se dice por qué.
+            try {
+                $soporte = app(\App\Services\EnlaceInformeIndividualService::class)
+                    ->conTope(15)
+                    ->soporte($plano, $forceOperadorId ?: null);
+            } catch (\RuntimeException $e) {
+                abort(404, 'No se pudo bajar la planilla del operador: '.$e->getMessage());
+            }
         }
 
         $pdfContent = $soporte['pdf'];

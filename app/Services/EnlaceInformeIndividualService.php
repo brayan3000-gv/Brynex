@@ -273,6 +273,12 @@ class EnlaceInformeIndividualService
      */
     public function soporte(Plano $plano, ?int $operadorPlanillaId = null): array
     {
+        // Mi Planilla no corre sobre Enlace ni tiene plantilla: o sale el PDF
+        // real de su portal, o nada (antes salía uno con formato de ARUS).
+        if (self::esMiPlanilla($operadorPlanillaId)) {
+            return $this->deMiPlanilla($plano);
+        }
+
         $delOperador = $this->obtener($plano, $operadorPlanillaId);
 
         if ($delOperador['success']) {
@@ -283,6 +289,48 @@ class EnlaceInformeIndividualService
             'pdf'    => app(PlanillaFormularioService::class)->generar($plano, $operadorPlanillaId),
             'origen' => 'brynex',
         ];
+    }
+
+    public static function esMiPlanilla(?int $operadorPlanillaId): bool
+    {
+        return $operadorPlanillaId
+            && strtoupper(trim((string) DB::table('operadores_planilla')->where('id', $operadorPlanillaId)->value('codigo'))) === 'MIPLANI';
+    }
+
+    /**
+     * El PDF de la planilla tal como lo baja el tablero de Mi Planilla, con la
+     * clave de la persona (cada independiente es su propio aportante, así que
+     * la planilla es solo de ella). Se guarda en el mismo lugar que los de Enlace.
+     *
+     * @return array{pdf: string, origen: string}
+     *
+     * @throws RuntimeException si no tiene clave, no deja entrar o no está pagada
+     */
+    private function deMiPlanilla(Plano $plano): array
+    {
+        $ruta = self::rutaEnDisco($plano);
+
+        if (Storage::disk('local')->exists($ruta)) {
+            return ['pdf' => Storage::disk('local')->get($ruta), 'origen' => 'disco'];
+        }
+
+        $numero = self::numeroParaOperador($plano->numero_planilla);
+        if ($numero === null) {
+            throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
+        }
+
+        $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi);
+        $robot->login();
+
+        try {
+            $pdf = $robot->pdfPagada($numero);
+        } finally {
+            rescue(fn () => $robot->logout(), report: false);
+        }
+
+        Storage::disk('local')->put($ruta, $pdf);
+
+        return ['pdf' => $pdf, 'origen' => 'operador'];
     }
 
     /**

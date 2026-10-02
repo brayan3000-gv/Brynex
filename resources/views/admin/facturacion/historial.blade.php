@@ -12,12 +12,6 @@ $esAdmin       = in_array(auth()->user()->rol ?? '', ['superadmin','admin']);
 // SuperAdmin de BryNex: puede anular facturas con planilla pagada
 $esSuperBrynex = auth()->user()->es_brynex && auth()->user()->hasRole('superadmin');
 
-// Obtener los operadores que tienen plantillas de formulario PDF configuradas
-$operadoresConfiguradosIds = \DB::table('operador_planillas_templates')
-    ->whereNotNull('formulario_pdf')
-    ->where('formulario_pdf', '<>', '')
-    ->pluck('operador_planilla_id')
-    ->toArray();
 @endphp
 
 @section('contenido')
@@ -237,7 +231,7 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                  // Buscar ID del operador basado en el nombre registrado en gastos si no está en la API
                  $gastoOpNombre = $gastosPlanilla->get($numeroPlanillaOp)?->pagado_a;
                  $operadorId = $opInfo?->id 
-                            ?? ($gastoOpNombre ? ($operadoresTodosMap->get($gastoOpNombre) ?? null) : null)
+                            ?? ($gastoOpNombre ? ($operadoresTodosMap->get(mb_strtoupper(trim($gastoOpNombre))) ?? null) : null)
                             ?? $cliente->operador_planilla_id;
              }
              @endphp
@@ -369,9 +363,10 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                             $pagoOp = $numeroPlanillaOp ? $pagosOperador->get($numeroPlanillaOp) : null;
                             $tituloPlanilla = $pagoOp
                                 ? 'Planilla real del operador · pagada '.sqldate($pagoOp, 'd/m/Y H:i:s')
-                                : ($aliadoConSoporteOperador ? 'Descargar la planilla del operador (si no está, se genera la de BryNex)' : 'Descargar PDF Planilla');
+                                : (str_contains(mb_strtoupper($nombreOp), 'MI PLANILLA') ? 'Descargar la planilla real de Mi Planilla'
+                                : ($aliadoConSoporteOperador ? 'Descargar la planilla del operador (si no está, se genera la de BryNex)' : 'Descargar PDF Planilla'));
                         @endphp
-                        @if($numeroPlanillaOp && ($aliadoConSoporteOperador || in_array($operadorId, $operadoresConfiguradosIds)))
+                        @if($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConPlanilla, true))
                         <a href="{{ route('admin.planos.certificado_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}{{ $operadorId ? '&forzar_operador_id=' . $operadorId : '' }}"
                            onclick="this.href = this.href.split('&t=')[0] + '&t=' + new Date().getTime()"
                            target="_blank" class="btn-act-sm" style="background:#0f172a;color:#fff;border-color:#0f172a;" title="{{ $tituloPlanilla }}">

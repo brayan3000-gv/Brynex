@@ -69,14 +69,9 @@ class MiPlanillaPortalService
      */
     public static function paraCedula(int $aliadoId, string $cedula): self
     {
-        $clave = ClaveAcceso::where('aliado_id', $aliadoId)
-            ->where('cedula', $cedula)
-            ->where('entidad', 'like', '%PLANILLA%')
-            ->where('activo', true)
-            ->orderByDesc('updated_at')
-            ->first(['usuario', 'contrasena']);
+        $clave = self::clave($aliadoId, $cedula);
 
-        if (! $clave || trim((string) $clave->contrasena) === '') {
+        if (! $clave) {
             throw new \RuntimeException("La cédula {$cedula} no tiene clave de Mi Planilla guardada en BryNex.");
         }
 
@@ -84,6 +79,24 @@ class MiPlanillaPortalService
         $usuario = trim((string) $clave->usuario) !== '' ? trim((string) $clave->usuario) : 'CC'.$cedula;
 
         return new self($usuario, (string) $clave->contrasena);
+    }
+
+    /** ¿La persona tiene su clave de Mi Planilla guardada en BryNex? */
+    public static function tieneClave(int $aliadoId, string $cedula): bool
+    {
+        return self::clave($aliadoId, $cedula) !== null;
+    }
+
+    private static function clave(int $aliadoId, string $cedula): ?ClaveAcceso
+    {
+        $clave = ClaveAcceso::where('aliado_id', $aliadoId)
+            ->where('cedula', $cedula)
+            ->where('entidad', 'like', '%PLANILLA%')
+            ->where('activo', true)
+            ->orderByDesc('updated_at')
+            ->first(['usuario', 'contrasena']);
+
+        return $clave && trim((string) $clave->contrasena) !== '' ? $clave : null;
     }
 
     /**

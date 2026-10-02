@@ -165,10 +165,21 @@ class PortalEmpresaController extends Controller
 
         // Con número pero sin el pago registrado: todavía no hay soporte.
         abort_unless($pagada, 404);
+        // Pagada por un operador del que no hay soporte: mejor nada que un PDF
+        // con formato de Enlace. Mi Planilla sale real de su portal o no sale.
+        abort_unless(
+            EnlaceInformeIndividualService::esMiPlanilla($pagada->operador_id)
+                || \App\Services\PlanillaFormularioService::tieneSoporte($pagada->operador_id),
+            404
+        );
 
-        $soporte = app(EnlaceInformeIndividualService::class)
-            ->conTope(15)
-            ->soporte($plano, $pagada->operador_id);
+        try {
+            $soporte = app(EnlaceInformeIndividualService::class)
+                ->conTope(15)
+                ->soporte($plano, $pagada->operador_id);
+        } catch (\RuntimeException $e) {
+            abort(404);
+        }
 
         $nombre = PlanillaWhatsappService::generarNombreArchivoPdf(
             trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}"),

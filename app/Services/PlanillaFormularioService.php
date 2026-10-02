@@ -20,6 +20,14 @@ class PlanillaFormularioService
         // 1. Intentar autodetectar el operador por el que se pagó la planilla (o usar el forzado)
         $operadorPlanillaId = $forceOperadorId ?? $this->detectarOperadorId($plano);
 
+        // Una planilla pagada en Mi Planilla (u otro operador fuera de Enlace sin
+        // plantilla propia) salía con el formato de ARUS: un soporte de Enlace
+        // para algo que nunca pasó por Enlace (oct-2026).
+        if (!self::tieneSoporte($operadorPlanillaId)) {
+            $nombre = DB::table('operadores_planilla')->where('id', $operadorPlanillaId)->value('nombre');
+            throw new \RuntimeException("BryNex no tiene el soporte de planilla de {$nombre}.");
+        }
+
         // 2. La plantilla configurada del operador; si no tiene una usable, la de
         //    ARUS (es el mismo reporte de Enlace y está calibrada en el editor);
         //    y si tampoco, el dibujo estático de SuaportePdfService.
@@ -43,6 +51,31 @@ class PlanillaFormularioService
 
         // 4. Rellenar la plantilla PDF utilizando FPDI y FPDF
         return $this->rellenarPdf($rutaPdf, $campos, $datos);
+    }
+
+    /**
+     * ¿Se puede armar el soporte de una planilla de este operador? Sí si tiene
+     * plantilla propia, si corre sobre Enlace (la de ARUS es el mismo reporte)
+     * o si no se sabe cuál fue (se asume Enlace, como siempre).
+     */
+    public static function tieneSoporte($operadorPlanillaId): bool
+    {
+        return !in_array((int) $operadorPlanillaId, self::operadoresSinSoporte(), true);
+    }
+
+    /** Ids de los operadores fuera de Enlace que no tienen plantilla. */
+    public static function operadoresSinSoporte(): array
+    {
+        return DB::table('operadores_planilla')
+            ->where(fn ($q) => $q->whereNull('codigo')->orWhereNotIn('codigo', array_keys(SuaporteApiService::HOSTS)))
+            ->whereNotIn('id', DB::table('operador_planillas_templates')
+                ->whereNotNull('operador_planilla_id') // un NULL en el NOT IN no deja pasar nada
+                ->whereNotNull('formulario_pdf')
+                ->where('formulario_pdf', '<>', '')
+                ->select('operador_planilla_id'))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
     }
 
     /**
