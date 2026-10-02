@@ -131,10 +131,11 @@ class PlanillaEnvioWhatsappJob implements ShouldQueue
                     continue;
                 }
 
-                // 3. El PDF: el del operador si se puede, si no el de BryNex.
+                // 3. El PDF real del operador; la copia de BryNex no se manda por
+                //    WhatsApp (si no sale, queda «fallido» con el motivo).
                 //    `$soportes` es una sola instancia para todo el lote, así que
                 //    las personas de una misma empresa comparten sesión.
-                $pdfContenido = $soportes->soporte($plano, $operadorId)['pdf'];
+                $pdfContenido = $soportes->soporteOriginal($plano, $operadorId)['pdf'];
 
                 // 4. Nombre del PDF: período de servicio (mes del lote = mes del filtro UI)
                 $nombreCompleto = trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}");

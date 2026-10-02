@@ -320,6 +320,31 @@ class EnlaceInformeIndividualService
     }
 
     /**
+     * Solo el PDF real del operador, nunca la copia que arma BryNex. Es lo que
+     * se manda por WhatsApp: al cliente le llega el soporte verdadero o nada.
+     *
+     * @return array{pdf: string, origen: string}
+     *
+     * @throws RuntimeException con el motivo si el operador no la entregó
+     */
+    public function soporteOriginal(Plano $plano, ?int $operadorPlanillaId = null): array
+    {
+        if (self::esMiPlanilla($operadorPlanillaId)) {
+            return $this->deMiPlanilla($plano);
+        }
+
+        $delOperador = $this->obtener($plano, $operadorPlanillaId);
+
+        if (! $delOperador['success']) {
+            throw new RuntimeException('No se pudo bajar la planilla real del operador ('
+                .rtrim((string) ($delOperador['message'] ?? 'sin respuesta'), '. ')
+                .'). Por WhatsApp solo se envían originales, no la copia de BryNex.');
+        }
+
+        return ['pdf' => $delOperador['pdf'], 'origen' => $delOperador['origen']];
+    }
+
+    /**
      * Qué hacer con un fallo del operador, para decírselo a quien espera:
      * `sin_credenciales` (el aliado no tiene usuario del operador),
      * `credenciales` (el operador rechazó el usuario o no deja ver al aportante),

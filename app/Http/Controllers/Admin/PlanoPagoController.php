@@ -1898,8 +1898,8 @@ class PlanoPagoController extends Controller
 
         try {
             $apiService = app(\App\Services\WhatsappApiService::class);
-            // El del operador si se puede; si no, el que arma BryNex.
-            $pdfContenido = app(\App\Services\EnlaceInformeIndividualService::class)->soporte($plano, $operadorId)['pdf'];
+            // Solo el real del operador: la copia de BryNex no se manda por WhatsApp.
+            $pdfContenido = app(\App\Services\EnlaceInformeIndividualService::class)->soporteOriginal($plano, $operadorId)['pdf'];
 
             // Nombre del archivo: usar período de servicio actual (mes del filtro UI)
             $nombreArchivo = \App\Services\PlanillaWhatsappService::generarNombreArchivoPdf(

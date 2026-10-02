@@ -161,7 +161,8 @@ class EnviarPlanillaTool implements IaToolInterface
             $plano = $item['plano'];
 
             try {
-                $pdfContenido = $soportes->soporte($plano, $item['operador_id'])['pdf'];
+                // Solo el real del operador: la copia de BryNex no se manda por WhatsApp.
+                $pdfContenido = $soportes->soporteOriginal($plano, $item['operador_id'])['pdf'];
 
                 // El mes de servicio es el mes actual (cuando se paga/envía la planilla), no el
                 // período cotizado que cubre el plano (mes_plano/anio_plano puede ser el vencido).
