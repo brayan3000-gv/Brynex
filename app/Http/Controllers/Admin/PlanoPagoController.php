@@ -1505,8 +1505,7 @@ class PlanoPagoController extends Controller
         $cedula = (string) $data['cedula'];
         abort_unless(\App\Models\Cliente::where('aliado_id', $aliadoId)->where('cedula', $cedula)->exists(), 404);
 
-        // El usuario del portal es tipo y número de documento pegados (CC15817622).
-        $usuario = strtoupper(preg_replace('/\s+/', '', (string) ($data['usuario'] ?? ''))) ?: 'CC'.$cedula;
+        $usuario = \App\Services\MiPlanilla\MiPlanillaPortalService::usuarioPortal((string) ($data['usuario'] ?? ''), $cedula);
 
         $robot = new \App\Services\MiPlanilla\MiPlanillaPortalService($usuario, $data['contrasena']);
         try {

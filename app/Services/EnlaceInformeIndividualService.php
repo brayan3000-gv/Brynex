@@ -319,7 +319,7 @@ class EnlaceInformeIndividualService
             throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
         }
 
-        $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi);
+        $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi, $plano->tipo_doc);
         $robot->login();
 
         try {

@@ -67,7 +67,7 @@ class MiPlanillaPortalService
      *
      * @throws \RuntimeException si no tiene clave de Mi Planilla
      */
-    public static function paraCedula(int $aliadoId, string $cedula): self
+    public static function paraCedula(int $aliadoId, string $cedula, ?string $tipoDoc = null): self
     {
         $clave = self::clave($aliadoId, $cedula);
 
@@ -75,10 +75,24 @@ class MiPlanillaPortalService
             throw new \RuntimeException("La cédula {$cedula} no tiene clave de Mi Planilla guardada en BryNex.");
         }
 
-        // El usuario del portal es tipo y número de documento pegados (CC15817622).
-        $usuario = trim((string) $clave->usuario) !== '' ? trim((string) $clave->usuario) : 'CC'.$cedula;
+        return new self(self::usuarioPortal((string) $clave->usuario, $cedula, $tipoDoc), (string) $clave->contrasena);
+    }
 
-        return new self($usuario, (string) $clave->contrasena);
+    /**
+     * El usuario del portal es tipo y número de documento pegados (CC15817622).
+     * En Claves muchas quedaron con el número solo ("10385420"), y así el
+     * portal no deja entrar: se le antepone el tipo.
+     */
+    public static function usuarioPortal(string $usuario, string $cedula, ?string $tipoDoc = null): string
+    {
+        $usuario = strtoupper(preg_replace('/\s+/', '', $usuario));
+        $tipo = strtoupper(trim((string) $tipoDoc)) ?: 'CC';
+
+        if ($usuario === '') {
+            return $tipo.$cedula;
+        }
+
+        return ctype_digit($usuario) ? $tipo.$usuario : $usuario;
     }
 
     /** ¿La persona tiene su clave de Mi Planilla guardada en BryNex? */
