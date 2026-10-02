@@ -403,6 +403,13 @@ class SaludTotalNovedadService
      * solo se completan los campos vacíos, porque la fecha de expedición o una
      * observación escrita a mano no vienen del portal.
      *
+     * Solo se guarda lo que cuelga de esta persona (`CotizanteId`): cuando la
+     * pareja también cotiza, el portal devuelve el grupo entero y los hijos
+     * pueden colgar del otro —a Yzamar Concepción le aparecían los cinco de su
+     * esposo—. Un cónyuge que además cotiza por su cuenta sí es beneficiario
+     * suyo si cuelga de ella, así que lo que descarta es el parentesco, no el
+     * ser cotizante en otro lado.
+     *
      * @param  array  $grupo  tal como lo entrega `ConsultaGrupoFamiliar`
      * @return array{nuevos:int, total:int}
      */
@@ -414,9 +421,12 @@ class SaludTotalNovedadService
 
         foreach ($grupo as $g) {
             $documento = trim((string) ($g['BeneficiarioId'] ?? ''));
+            $deQuienCuelga = trim((string) ($g['CotizanteId'] ?? ''));
 
-            // El cotizante no es beneficiario de sí mismo.
-            if ($documento === '' || $documento === (string) $contrato->cedula || ($g['EsCotizanteSiNo'] ?? 0) == 1) {
+            // Ni la persona misma, ni quien cuelgue de otro cotizante.
+            if ($documento === '' || $documento === (string) $contrato->cedula
+                || strtoupper(trim((string) ($g['Parentesco'] ?? ''))) === 'COTIZANTE'
+                || ($deQuienCuelga !== '' && $deQuienCuelga !== (string) $contrato->cedula)) {
                 continue;
             }
 
