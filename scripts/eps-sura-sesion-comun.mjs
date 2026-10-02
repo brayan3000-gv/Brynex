@@ -17,6 +17,7 @@ const URL_LOGIN =
   'https://login.sura.com/sso/servicelogin.aspx' +
   '?continueTo=https%3A%2F%2Fepsapps.suramericana.com%2FSemp%2F&service=epssura';
 const URL_EMPRESA = 'https://epsapps.suramericana.com/Semp/faces/empleadores/login/loginEmpresas.jspx';
+const URL_SALIDA = 'https://epsapps.suramericana.com/Semp/faces/administracion/salidaSegura/salidaSegura.jspx';
 
 export const esperar = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -68,6 +69,20 @@ export async function entrarEmpresaEps(pagina, { tipoDocumento, usuario, contras
 
   // El SSO todavía puede estar llegando a Semp: se deja asentar antes de ir.
   await esperar(3000);
+
+  await seleccionarEmpresa(pagina, nitEmpresa);
+}
+
+/**
+ * Cambia a otra empresa del mismo usuario, sin volver a iniciar sesión.
+ *
+ * El portal lo permite desde su propia pantalla, y es la única forma sensata de
+ * recorrer varias empresas de un mismo representante: SURA admite una sola
+ * sesión por usuario y la que se deja abierta tarda en liberarse, así que
+ * cerrar y volver a entrar para la siguiente empresa hace que la segunda se
+ * quede fuera con «Usted no tiene acceso a los recursos de esta Aplicación».
+ */
+export async function seleccionarEmpresa(pagina, nitEmpresa) {
   await pagina.goto(URL_EMPRESA, { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
 
   const SEL_NIT = '[id="loginEmpresas:dniEmpresa"]';
@@ -146,7 +161,30 @@ export async function entrarEmpresaEps(pagina, { tipoDocumento, usuario, contras
  * sin problema (probado con LALA GROUP el 2-oct-2026), así que la diferencia
  * está en lo que ve el robot y hay que poder mirarlo.
  */
-async function dejarRastro(pagina, nombre) {
+/**
+ * Cierra la sesión del portal antes de soltar el navegador.
+ *
+ * EPS SURA solo admite una sesión por usuario, y cerrar Chrome no la cierra:
+ * queda viva en el servidor un rato largo. Mientras tanto, el siguiente que
+ * entre con ese usuario —otra empresa del mismo representante, la corrida
+ * siguiente, o la persona desde su navegador— pasa el login pero el portal le
+ * niega los recursos con «Usted no tiene acceso a los recursos de esta
+ * Aplicación», que parece falta de permiso y no lo es. Por eso la conciliación
+ * fallaba justo en la segunda empresa de un mismo usuario (LALA CONFECCIONES y
+ * LALA GROUP comparten el 1130666712).
+ *
+ * Nunca lanza: si el cierre falla, el trabajo ya está hecho y lo único que pasa
+ * es que la sesión caduca sola.
+ */
+export async function salirDelPortal(pagina) {
+  try {
+    if (!pagina || pagina.isClosed()) return;
+    await pagina.goto(URL_SALIDA, { waitUntil: 'networkidle2', timeout: 20000 });
+    await esperar(1000);
+  } catch { /* la sesión caduca sola */ }
+}
+
+export async function dejarRastro(pagina, nombre) {
   try {
     const carpeta = 'storage/app/robots/eps-sura';
     mkdirSync(carpeta, { recursive: true });

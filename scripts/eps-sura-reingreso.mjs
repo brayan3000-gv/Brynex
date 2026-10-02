@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
-import { entrarEmpresaEps, esperar, texto } from './eps-sura-sesion-comun.mjs';
+import { entrarEmpresaEps, esperar, texto, salirDelPortal } from './eps-sura-sesion-comun.mjs';
 
 /**
  * Baja el comprobante en PDF exportándolo desde el visor de informes.
@@ -723,5 +723,8 @@ try {
   } catch {}
   salir({ ok: false, modo, paso, error: String(e.message || e).slice(0, 300), alertas, captura });
 } finally {
+  // Antes de soltar el navegador: la sesión del portal no se cierra sola
+  // y el siguiente trámite del mismo usuario se quedaría fuera.
+  await salirDelPortal(pagina);
   await navegador.close().catch(() => {});
 }

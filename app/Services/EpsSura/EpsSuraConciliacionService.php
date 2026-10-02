@@ -80,6 +80,16 @@ class EpsSuraConciliacionService
         $total = $porEmpresa->flatten()->count();
         $avisar("{$total} radicados de EPS SURA por revisar en {$porEmpresa->count()} empresas.", $detalle);
 
+        // Las empresas se agrupan por el usuario del portal, no por NIT: SURA
+        // admite una sola sesión por usuario y la deja viva un rato después de
+        // cerrar el navegador, así que entrar una vez por empresa dejaba fuera a
+        // la segunda del mismo representante —LALA CONFECCIONES y LALA GROUP
+        // comparten el 1130666712, y el 2-oct-2026 la primera se concilió y la
+        // segunda falló un minuto después con «Usted no tiene acceso a los
+        // recursos de esta Aplicación»—. Con una sola sesión por usuario, el
+        // robot cambia de empresa por dentro y el problema desaparece.
+        $porUsuario = [];
+
         foreach ($porEmpresa as $nitEmpresa => $radicados) {
             $empresa = $radicados->first()->contrato->razonSocial->razon_social;
             $credencial = ArlSuraSesionService::credencialPara($aliadoId, '', (string) $nitEmpresa);
@@ -97,40 +107,55 @@ class EpsSuraConciliacionService
                 continue;
             }
 
-            foreach ($radicados->chunk(self::POR_LOTE) as $lote) {
-                $avisar("{$empresa}: consultando {$lote->count()} en el portal…", $detalle);
+            $llave = $credencial->getKey() ?: $credencial->usuario;
+            $porUsuario[$llave] ??= ['credencial' => $credencial, 'empresas' => []];
+            $porUsuario[$llave]['empresas'][(string) $nitEmpresa] = ['nombre' => $empresa, 'radicados' => $radicados];
+        }
 
-                $salida = $this->consultarPortal($credencial, (string) $nitEmpresa, $lote);
-                $porDocumento = collect($salida['resultados'] ?? [])->keyBy('numero');
+        foreach ($porUsuario as $grupo) {
+            $credencial = $grupo['credencial'];
+            $nombres = collect($grupo['empresas'])->pluck('nombre')->implode(', ');
+            $cuantos = collect($grupo['empresas'])->sum(fn ($e) => $e['radicados']->count());
+            $avisar("{$nombres}: consultando {$cuantos} en el portal…", $detalle);
+
+            // Todas las empresas del usuario van en la misma corrida; el límite
+            // por proceso se reparte entre ellas para no eternizar un Chrome.
+            foreach ($this->repartir($grupo['empresas']) as $tanda) {
+                $salida = $this->consultarPortal($credencial, $tanda);
+                $porCedula = collect($salida['resultados'] ?? [])->keyBy(fn ($x) => ($x['nit'] ?? '').':'.($x['numero'] ?? ''));
 
                 if (($salida['paso'] ?? null) === 'login') {
                     $credencial->update(['ultimo_error' => mb_substr((string) ($salida['error'] ?? ''), 0, 300)]);
 
-                    // Con el login caído, los demás lotes de la empresa fallarían
-                    // igual y sumarían intentos fallidos contra el usuario.
-                    foreach ($radicados as $r) {
-                        $detalle[] = $this->fila($r, 'error', 'No se pudo entrar al portal: '.($salida['error'] ?? 'login fallido'));
+                    // Con el login caído, lo que falte de este usuario fallaría
+                    // igual y sumaría intentos fallidos contra él.
+                    foreach ($tanda as $nitEmpresa => $radicados) {
+                        foreach ($radicados as $r) {
+                            $detalle[] = $this->fila($r, 'error', 'No se pudo entrar al portal: '.($salida['error'] ?? 'login fallido'));
+                        }
                     }
-                    $avisar("{$empresa}: falló el login.", $detalle);
+                    $avisar("{$nombres}: falló el login.", $detalle);
 
                     continue 2;
                 }
 
-                foreach ($lote as $r) {
-                    $cedula = preg_replace('/\D/', '', (string) $r->contrato->cedula);
-                    $res = $porDocumento->get($cedula);
+                foreach ($tanda as $nitEmpresa => $radicados) {
+                    foreach ($radicados as $r) {
+                        $cedula = preg_replace('/\D/', '', (string) $r->contrato->cedula);
+                        $res = $porCedula->get($nitEmpresa.':'.$cedula);
 
-                    if (! $res) {
-                        $detalle[] = $this->fila($r, 'error', $salida['error'] ?? 'El portal no devolvió respuesta para esta cédula.');
+                        if (! $res) {
+                            $detalle[] = $this->fila($r, 'error', $salida['error'] ?? 'El portal no devolvió respuesta para esta cédula.');
 
-                        continue;
+                            continue;
+                        }
+
+                        $detalle[] = $this->resolver($r, $res, $simular, $usuarioId);
                     }
-
-                    $detalle[] = $this->resolver($r, $res, $simular, $usuarioId);
                 }
-
-                $avisar("{$empresa}: listo.", $detalle);
             }
+
+            $avisar("{$nombres}: listo.", $detalle);
         }
 
         $cuenta = collect($detalle)->countBy('accion');
@@ -227,22 +252,70 @@ class EpsSuraConciliacionService
      *
      * @return array{ok:bool, empresa?:string, resultados?:array, error?:string}
      */
-    private function consultarPortal($credencial, string $nit, Collection $lote): array
+    /**
+     * Parte las empresas de un usuario en tandas que quepan en un Chrome.
+     *
+     * El login cuesta, así que conviene meter cuantas más cédulas mejor en cada
+     * proceso; pero un proceso eterno se cae y se pierde todo, por eso el tope.
+     * Una empresa nunca se parte entre tandas: cambiar de empresa y volver
+     * costaría más que lo que se ahorra.
+     *
+     * @param  array<string, array{nombre:string, radicados:Collection}>  $empresas
+     * @return array<int, array<string, Collection>>
+     */
+    private function repartir(array $empresas): array
     {
+        $tandas = [];
+        $actual = [];
+        $cuenta = 0;
+
+        foreach ($empresas as $nit => $empresa) {
+            foreach ($empresa['radicados']->chunk(self::POR_LOTE) as $trozo) {
+                if ($cuenta && $cuenta + $trozo->count() > self::POR_LOTE) {
+                    $tandas[] = $actual;
+                    $actual = [];
+                    $cuenta = 0;
+                }
+
+                $actual[(string) $nit] = isset($actual[(string) $nit])
+                    ? $actual[(string) $nit]->concat($trozo)
+                    : $trozo;
+                $cuenta += $trozo->count();
+            }
+        }
+
+        if ($actual) {
+            $tandas[] = $actual;
+        }
+
+        return $tandas;
+    }
+
+    /**
+     * Una corrida del robot: un login y todas las empresas de esa tanda.
+     *
+     * @param  array<string, Collection>  $tanda  NIT => radicados
+     */
+    private function consultarPortal($credencial, array $tanda): array
+    {
+        $cuantos = collect($tanda)->sum(fn (Collection $c) => $c->count());
+
         $entrada = json_encode([
             'tipoDocumento' => $credencial->tipo_documento,
             'usuario'       => $credencial->usuario,
             'contrasena'    => $credencial->contrasena,
-            'nitEmpresa'    => $nit,
-            'documentos'    => $lote->map(fn (Radicado $r) => [
-                'tipo'   => $r->contrato->cliente?->tipo_doc ?: 'CC',
-                'numero' => (string) $r->contrato->cedula,
+            'empresas'      => collect($tanda)->map(fn (Collection $radicados, $nit) => [
+                'nit'        => (string) $nit,
+                'documentos' => $radicados->map(fn (Radicado $r) => [
+                    'tipo'   => $r->contrato->cliente?->tipo_doc ?: 'CC',
+                    'numero' => (string) $r->contrato->cedula,
+                ])->values()->all(),
             ])->values()->all(),
         ], JSON_UNESCAPED_UNICODE);
 
         $resultado = Process::path(base_path())
-            // Login ~40 s y unos 12 s por cédula; con holgura.
-            ->timeout(180 + 25 * $lote->count())
+            // Login ~40 s, unos 12 s por cédula y el cambio de empresa; con holgura.
+            ->timeout(180 + 25 * $cuantos + 30 * count($tanda))
             ->input($entrada)
             ->run(ArlSuraSesionService::binarioNode().' scripts/eps-sura-consultar.mjs');
 
@@ -251,7 +324,7 @@ class EpsSuraConciliacionService
         if (! ($salida['ok'] ?? false)) {
             // El mensaje nunca trae la clave: el script no la imprime.
             Log::warning('EPS SURA: la consulta del portal falló', [
-                'nit'   => $nit,
+                'nit'   => implode(',', array_keys($tanda)),
                 'paso'  => $salida['paso'] ?? null,
                 'error' => $salida['error'] ?? trim($resultado->errorOutput()),
             ]);

@@ -18,7 +18,7 @@
 import { rmSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
-import { entrarEmpresaEps, esperar, texto } from './eps-sura-sesion-comun.mjs';
+import { entrarEmpresaEps, esperar, texto, salirDelPortal } from './eps-sura-sesion-comun.mjs';
 
 const URL_INFORME = 'https://epsapps.suramericana.com/Semp/faces/pos/afiliadosporestado/parametros.jspx';
 
@@ -259,5 +259,8 @@ try {
   } catch {}
   salir({ ok: false, paso, error: String(e.message || e).slice(0, 300), captura });
 } finally {
+  // Antes de soltar el navegador: la sesión del portal no se cierra sola
+  // y el siguiente trámite del mismo usuario se quedaría fuera.
+  await salirDelPortal(pagina);
   await navegador.close().catch(() => {});
 }

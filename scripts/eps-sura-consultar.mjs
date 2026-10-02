@@ -8,15 +8,24 @@
  * responde "El afiliado no existe como cotizante de la empresa."—, que es
  * justo lo que hace falta para saber si el trámite de EPS ya está hecho.
  *
- * Entrada por stdin: {tipoDocumento, usuario, contrasena, nitEmpresa,
- *                     documentos: [{tipo: 'CC', numero: '123'}]}
- * Salida por stdout: {ok, empresa, resultados: [{tipo, numero, encontrado,
+ * Entrada por stdin, una empresa:
+ *   {tipoDocumento, usuario, contrasena, nitEmpresa, documentos: [{tipo, numero}]}
+ * o varias del mismo usuario, en una sola sesión:
+ *   {tipoDocumento, usuario, contrasena, empresas: [{nit, documentos: [...]}]}
+ *
+ * Lo segundo existe porque SURA admite **una sola sesión por usuario** y la
+ * deja viva un rato largo después de cerrar el navegador: entrar una vez por
+ * empresa hacía que la segunda del mismo representante se quedara fuera con
+ * «Usted no tiene acceso a los recursos de esta Aplicación». Dentro de la
+ * sesión, cambiar de empresa es solo volver a la pantalla del NIT.
+ *
+ * Salida por stdout: {ok, empresa, resultados: [{nit, tipo, numero, encontrado,
  *                     estado, nombre, parentesco, cotiza, ips, empresa, mensaje}], error}
  */
 import { rmSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
-import { entrarEmpresaEps, esperar, pulsarId, texto } from './eps-sura-sesion-comun.mjs';
+import { entrarEmpresaEps, seleccionarEmpresa, esperar, pulsarId, texto, dejarRastro, salirDelPortal } from './eps-sura-sesion-comun.mjs';
 
 const URL_CONSULTA = 'https://epsapps.suramericana.com/Semp/faces/pos/afiliadosCotizantes/parametros.jspx';
 
@@ -36,7 +45,13 @@ try { entrada = JSON.parse(await leerStdin() || '{}'); }
 catch { salir({ ok: false, error: 'Entrada JSON inválida.' }); }
 
 const { usuario, contrasena, nitEmpresa, documentos = [] } = entrada;
-if (!usuario || !contrasena || !nitEmpresa) salir({ ok: false, error: 'Faltan credenciales o NIT de la empresa.' });
+
+// Una empresa suelta se trata como una lista de una, para tener un solo camino.
+const empresas = Array.isArray(entrada.empresas) && entrada.empresas.length
+  ? entrada.empresas
+  : (nitEmpresa ? [{ nit: nitEmpresa, documentos }] : []);
+
+if (!usuario || !contrasena || !empresas.length) salir({ ok: false, error: 'Faltan credenciales o empresas que consultar.' });
 
 const ejecutable = await (async () => {
   const { access } = await import('node:fs/promises');
@@ -77,16 +92,32 @@ let paso = 'inicio';
 const resultados = [];
 let empresa = null;
 
+let rastroGuardado = false;
+
+/** Deja ver por dónde va cuando son varias empresas (stderr: stdout lleva el JSON). */
+const vaPorEmpresa = (nit) => process.stderr.write(`@paso cambiando a la empresa ${nit}\n`);
+
 try {
   pagina = await navegador.newPage();
 
   // El paso se distingue: si falla el login, quien llama no debe insistir
   // (Sura bloquea al usuario tras varios intentos fallidos).
   paso = 'login';
-  await entrarEmpresaEps(pagina, entrada);
+  await entrarEmpresaEps(pagina, { ...entrada, nitEmpresa: empresas[0].nit });
+
+  for (const [indice, laEmpresa] of empresas.entries()) {
+    const nitActual = String(laEmpresa.nit);
+
+    // La primera ya quedó elegida con el login; de la segunda en adelante se
+    // cambia dentro de la misma sesión.
+    if (indice > 0) {
+      paso = `empresa ${nitActual}`;
+      vaPorEmpresa(nitActual);
+      await seleccionarEmpresa(pagina, nitActual);
+    }
 
   // ── Una consulta por documento ──
-  for (const doc of documentos) {
+  for (const doc of (laEmpresa.documentos || [])) {
     const numero = String(doc.numero || '').replace(/\D/g, '');
     const tipo = TIPOS[String(doc.tipo || 'CC').toUpperCase()] || 'CC';
     const r = { tipo: doc.tipo || 'CC', numero, encontrado: false, estado: null, nombre: null,
@@ -139,14 +170,22 @@ try {
         empresa ??= r.empresa;
       } else {
         // Ni una cosa ni la otra: el portal mostró algo inesperado (sesión
-        // caída, mantenimiento). Se reporta sin adivinar.
+        // caída, mantenimiento). Se reporta sin adivinar, y de la primera se
+        // guarda la pantalla: el texto recortado no alcanza para saber si fue
+        // el portal o el robot, y sin la captura se discute a ciegas.
         r.mensaje = 'Respuesta no reconocida: ' + t.replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!rastroGuardado) {
+          rastroGuardado = true;
+          await dejarRastro(pagina, `consulta-${numero}`);
+        }
       }
     } catch (e) {
       r.mensaje = 'Error consultando: ' + String(e.message || e).slice(0, 200);
     }
 
+    r.nit = nitActual;
     resultados.push(r);
+  }
   }
 
   salir({ ok: true, empresa, resultados });
@@ -160,5 +199,8 @@ try {
   } catch {}
   salir({ ok: false, paso, error: String(e.message || e).slice(0, 300), resultados, captura });
 } finally {
+  // Antes de soltar el navegador: la sesión del portal no se cierra sola
+  // y el siguiente trámite del mismo usuario se quedaría fuera.
+  await salirDelPortal(pagina);
   await navegador.close().catch(() => {});
 }
