@@ -1476,6 +1476,9 @@ class PlanoPagoController extends Controller
 
         return response($pdfContent)
             ->header('X-Soporte-Origen', $origen)
+            // Si salió la de BryNex, por qué no salió la real (el historial lo avisa).
+            ->header('X-Soporte-Motivo', rawurlencode((string) ($soporte['motivo'] ?? '')))
+            ->header('X-Soporte-Motivo-Tipo', (string) ($soporte['motivo_tipo'] ?? ''))
             ->header('Content-Type', 'application/pdf')
             ->header('Content-Disposition', "inline; filename=\"" . \App\Services\PlanillaWhatsappService::generarNombreArchivoPdf(
                 trim("{$plano->primer_nombre} {$plano->segundo_nombre} {$plano->primer_ape} {$plano->segundo_ape}"),

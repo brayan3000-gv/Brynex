@@ -850,6 +850,7 @@ function abrirPlanilla(ev, url) {
     if (_plBlob) { URL.revokeObjectURL(_plBlob); _plBlob = null; }
     pasos.innerHTML = '';
     document.getElementById('pl-error').style.display = 'none';
+    document.getElementById('pl-aviso').style.display = 'none';
     document.getElementById('pl-visor').style.display = 'none';
     document.getElementById('pl-visor').src = 'about:blank';
     document.getElementById('pl-acciones').style.display = 'none';
@@ -905,16 +906,41 @@ function abrirPlanilla(ev, url) {
             terminar();
             nuevoPaso('Listo');
             cerrarPaso('ok');
-            const origen = resp.headers.get('X-Soporte-Origen');
-            document.getElementById('pl-titulo').textContent = origen === 'brynex'
-                ? '📄 Planilla (armada por BryNex)' : '📄 Planilla real del operador';
+            const esCopia = resp.headers.get('X-Soporte-Origen') === 'brynex';
             const nombre = (/filename="([^"]+)"/.exec(resp.headers.get('Content-Disposition') || '') || [])[1] || 'planilla.pdf';
             _plBlob = URL.createObjectURL(blob);
-            const visor = document.getElementById('pl-visor');
-            visor.src = _plBlob; visor.style.display = 'block';
-            const abrir = document.getElementById('pl-abrir'), bajar = document.getElementById('pl-bajar');
-            abrir.href = _plBlob; bajar.href = _plBlob; bajar.download = nombre;
-            document.getElementById('pl-acciones').style.display = 'flex';
+            const mostrarPdf = () => {
+                document.getElementById('pl-aviso').style.display = 'none';
+                document.getElementById('pl-titulo').textContent = esCopia
+                    ? '📄 Copia armada por BryNex (no es la real)' : '📄 Planilla real del operador';
+                const visor = document.getElementById('pl-visor');
+                visor.src = _plBlob; visor.style.display = 'block';
+                const abrir = document.getElementById('pl-abrir'), bajar = document.getElementById('pl-bajar');
+                abrir.href = _plBlob; bajar.href = _plBlob;
+                bajar.download = esCopia ? 'COPIA_BRYNEX_' + nombre : nombre;
+                document.getElementById('pl-acciones').style.display = 'flex';
+            };
+            if (!esCopia) return mostrarPdf();
+
+            // La real no salió: primero se dice por qué y qué hacer, y la copia
+            // de BryNex solo se ve si se pide.
+            let motivo = '';
+            try { motivo = decodeURIComponent(resp.headers.get('X-Soporte-Motivo') || ''); } catch (e) {}
+            const tipoMotivo = resp.headers.get('X-Soporte-Motivo-Tipo') || 'otro';
+            const SOLUCION = {
+                sin_credenciales: 'No hay usuario del operador configurado para este aliado o razón social. Cárgalo en Configuración → Operadores de planilla y vuelve a intentar.',
+                credenciales: 'El operador rechazó el usuario o la clave, o ese usuario no tiene permiso sobre este aportante. Revisa las credenciales en Configuración → Operadores de planilla y vuelve a intentar.',
+                conexion: 'El portal del operador no respondió a tiempo. Suele ser pasajero: reintenta en unos minutos.',
+                planilla: 'El operador no encuentra esa planilla pagada para este aportante. Revisa el número de planilla en la confirmación del pago.',
+                otro: 'Reintenta; si sigue igual, revisa el número de planilla y las credenciales del operador.',
+            };
+            document.getElementById('pl-titulo').textContent = '⚠️ No se pudo bajar la planilla real';
+            document.getElementById('pl-aviso-motivo').textContent = motivo || 'El operador no la entregó.';
+            document.getElementById('pl-aviso-solucion').textContent = SOLUCION[tipoMotivo] || SOLUCION.otro;
+            document.getElementById('pl-aviso-config').style.display = (tipoMotivo === 'credenciales' || tipoMotivo === 'sin_credenciales') ? 'inline-block' : 'none';
+            document.getElementById('pl-ver-copia').onclick = mostrarPdf;
+            document.getElementById('pl-reintentar').onclick = () => abrirPlanilla(null, url);
+            document.getElementById('pl-aviso').style.display = 'block';
         })
         .catch((e) => {
             if (corrida !== _plCorrida) return;
@@ -998,6 +1024,18 @@ function cerrarSoportePlanilla() {
         <div style="padding:.6rem 1.1rem;flex-shrink:0">
             <ul id="pl-pasos" style="list-style:none;margin:0;padding:0"></ul>
             <div id="pl-error" style="display:none;margin-top:.6rem;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:.5rem .7rem;font-size:.8rem"></div>
+            {{-- La real no salió y BryNex armó una copia: se avisa antes de mostrarla --}}
+            <div id="pl-aviso" style="display:none;margin-top:.6rem;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:.7rem .85rem;font-size:.8rem;color:#78350f">
+                <div style="font-weight:800;margin-bottom:.3rem">No se pudo descargar la planilla real del operador</div>
+                <div style="margin-bottom:.45rem"><b>Motivo:</b> <span id="pl-aviso-motivo"></span></div>
+                <div style="margin-bottom:.45rem">BryNex puede armar una <b>copia con los datos que tenemos</b>, con el mismo formato, pero <b>no es el soporte real del operador</b>: puede no coincidir en valores, fecha u hora de pago.</div>
+                <div style="margin-bottom:.6rem"><b>Cómo solucionarlo:</b> <span id="pl-aviso-solucion"></span></div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                    <button type="button" id="pl-reintentar" style="background:#1e3a8a;color:#fff;border:none;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">🔄 Reintentar</button>
+                    <button type="button" id="pl-ver-copia" style="background:#fff;color:#92400e;border:1px solid #f59e0b;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">👁 Ver copia de BryNex</button>
+                    <a id="pl-aviso-config" href="{{ route('admin.configuracion.operadores.index') }}" target="_blank" style="display:none;background:#fff;color:#334155;border:1px solid #cbd5e1;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">⚙️ Credenciales del operador</a>
+                </div>
+            </div>
             <div id="pl-acciones" style="display:none;gap:.5rem;margin-top:.6rem">
                 <a id="pl-abrir" href="#" target="_blank" style="background:#1e3a8a;color:#fff;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">↗ Abrir en pestaña</a>
                 <a id="pl-bajar" href="#" style="background:#15803d;color:#fff;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">⬇️ Descargar</a>

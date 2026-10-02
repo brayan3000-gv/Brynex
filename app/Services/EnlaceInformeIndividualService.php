@@ -289,7 +289,10 @@ class EnlaceInformeIndividualService
      * no, el que arma BryNex. Es lo que deben usar la descarga, el envío masivo y
      * el asistente, para que los tres entreguen lo mismo.
      *
-     * @return array{pdf: string, origen: string}
+     * Cuando sale el de BryNex trae `motivo` (por qué no salió el real) y
+     * `motivo_tipo` (ver tipoDeMotivo()), para avisarle a quien lo pidió.
+     *
+     * @return array{pdf: string, origen: string, motivo?: string, motivo_tipo?: string}
      */
     public function soporte(Plano $plano, ?int $operadorPlanillaId = null): array
     {
@@ -306,11 +309,36 @@ class EnlaceInformeIndividualService
         }
 
         $this->paso('El operador no la entregó: armando la de BryNex');
+        $motivo = (string) ($delOperador['message'] ?? '');
 
         return [
-            'pdf'    => app(PlanillaFormularioService::class)->generar($plano, $operadorPlanillaId),
-            'origen' => 'brynex',
+            'pdf'         => app(PlanillaFormularioService::class)->generar($plano, $operadorPlanillaId),
+            'origen'      => 'brynex',
+            'motivo'      => $motivo,
+            'motivo_tipo' => self::tipoDeMotivo($motivo),
         ];
+    }
+
+    /**
+     * Qué hacer con un fallo del operador, para decírselo a quien espera:
+     * `sin_credenciales` (el aliado no tiene usuario del operador),
+     * `credenciales` (el operador rechazó el usuario o no deja ver al aportante),
+     * `planilla` (no aparece pagada o el número no sirve), `conexion` (el
+     * portal no respondió: reintentar más tarde) u `otro`.
+     */
+    public static function tipoDeMotivo(string $mensaje): string
+    {
+        $m = mb_strtolower($mensaje);
+
+        return match (true) {
+            str_contains($m, 'sin credenciales')                                   => 'sin_credenciales',
+            str_contains($m, 'no figura pagada'),
+            str_contains($m, 'no es un número de planilla')                       => 'planilla',
+            str_contains($m, self::SIN_RESPUESTA),
+            (bool) preg_match('/curl|timed? ?out|a tiempo|ssl|connect|conexi|resolve|\b50[0-9]\b|no respondi/', $m) => 'conexion',
+            self::estadoPorMensaje($mensaje) === 'sin_acceso'                      => 'credenciales',
+            default                                                                => 'otro',
+        };
     }
 
     public static function esMiPlanilla(?int $operadorPlanillaId): bool
