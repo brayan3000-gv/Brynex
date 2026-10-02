@@ -45,18 +45,38 @@ class SaludTotalCliente
 
     private ?string $appAbierta = null;
 
+    /** A quién contarle por dónde va, para que la pantalla lo muestre mientras ocurre. */
+    private $alAvanzar = null;
+
     private function __construct(private string $nit, private string $tipoUsuario, private string $documentoUsuario)
     {
         $this->cookies = new CookieJar();
     }
 
+    /** Avisa cada paso a quien pase la función: el modal lo pinta mientras pasa. */
+    public function alAvanzar(?callable $f): self
+    {
+        $this->alAvanzar = $f;
+
+        return $this;
+    }
+
+    private function paso(string $texto): void
+    {
+        if ($this->alAvanzar) {
+            ($this->alAvanzar)($texto);
+        }
+    }
+
     /**
      * Inicia sesión. Lanza `SaludTotalLoginException` si el portal rechaza la clave.
      */
-    public static function entrar(string $nit, string $usuario, string $contrasena): self
+    public static function entrar(string $nit, string $usuario, string $contrasena, ?callable $alAvanzar = null): self
     {
         [$tipo, $numero] = EpsClavePortal::separarUsuario($usuario);
         $cliente = new self(preg_replace('/\D/', '', $nit), self::TIPOS_DOC[$tipo] ?? 'C', $numero);
+        $cliente->alAvanzar($alAvanzar);
+        $cliente->paso('Entrando al portal de Salud Total');
 
         $r = $cliente->http()->post(self::BASE.'/ApiOficinaVirtual/Login/Login', [
             'tipoUsuario'     => 2, // empleador
@@ -85,6 +105,8 @@ class SaludTotalCliente
         if (! $cliente->jwtOficina || ! $cliente->jwtAfiliados) {
             throw new RuntimeException('Salud Total aceptó la clave pero no entregó los tokens de sesión.');
         }
+
+        $cliente->paso('Sesión abierta en el portal');
 
         return $cliente;
     }
@@ -256,6 +278,7 @@ class SaludTotalCliente
      */
     public function grupoFamiliar(string $tipoDocBrynex, string $documento): array
     {
+        $this->paso('Consultando el grupo familiar con la empresa');
         $tipoId = $this->idTipoDocumento($tipoDocBrynex);
 
         $r = $this->http()->withToken($this->jwtAfiliados, 'bearer')
@@ -270,6 +293,7 @@ class SaludTotalCliente
     /** Datos de la persona en Salud Total (nombres, estado, contratos activos e inactivos), sin importar la empresa. */
     public function datosPersona(string $tipoDocBrynex, string $documento): ?array
     {
+        $this->paso('Buscando a la persona en Salud Total');
         $this->abrirApp('NovedadLaboral');
 
         $r = $this->ajax()->get(self::BASE.'/NovedadInicioLaboral/NovedadInicioLaboral/ConsultarDatosAfectadoPorDocumento/', [
@@ -282,6 +306,7 @@ class SaludTotalCliente
     /** Novedades de inicio laboral registradas por la empresa en el rango (AAAA-MM-DD). */
     public function seguimiento(string $desde, string $hasta): array
     {
+        $this->paso('Revisando las novedades ya radicadas por la empresa');
         $this->abrirApp('SeguimientoLaboral');
 
         $r = $this->ajax()->get(self::BASE.'/NovedadInicioLaboral/SeguimientoIngreso/GetConsultaNovedadesRelacion/', [
@@ -294,6 +319,7 @@ class SaludTotalCliente
     /** Motivos de rechazo de una novedad. */
     public function inconsistencias(string $numeroFormulario): array
     {
+        $this->paso("Leyendo los motivos de rechazo del formulario {$numeroFormulario}");
         $this->abrirApp('SeguimientoLaboral');
 
         $r = $this->ajax()->get(self::BASE.'/NovedadInicioLaboral/SeguimientoIngreso/GetAfiliacionesGetInconsistenciasGrilla/', [
@@ -308,6 +334,7 @@ class SaludTotalCliente
     /** PDF del certificado de una novedad aprobada. */
     public function certificado(string $numeroFormulario): ?string
     {
+        $this->paso('Bajando el certificado de la novedad');
         $this->abrirApp('SeguimientoLaboral');
 
         $url = $this->ajax()->asForm()->post(self::BASE.'/NovedadInicioLaboral/SeguimientoIngreso/GenerarCertificado/', [
@@ -320,12 +347,15 @@ class SaludTotalCliente
     /** PDF del Formulario Único de Afiliación de una novedad (existe desde que se radica). */
     public function formularioPdf(string $numeroFormulario): ?string
     {
+        $this->paso('Bajando el Formulario Único en PDF');
+
         return $this->descargarPdf(self::BASE.'/generarpdffua/default.aspx?IDForm='.urlencode($numeroFormulario));
     }
 
     /** Tipos de cotizante que ofrece el formulario: código PILA → texto. */
     public function tiposCotizante(): array
     {
+        $this->paso('Leyendo los tipos de cotizante del formulario');
         $this->abrirApp('NovedadLaboral');
 
         $html = $this->http()->get(self::BASE.'/NovedadInicioLaboral/NovedadInicioLaboral/RegistroNovedad')->body();
@@ -348,6 +378,7 @@ class SaludTotalCliente
     public function registrarNovedad(array $p): array
     {
         $this->abrirApp('NovedadLaboral');
+        $this->paso('Leyendo la firma digitalizada de la empresa');
 
         $firma = $this->ajax()->get(self::BASE.'/NovedadInicioLaboral/NovedadInicioLaboral/ConsultaFirmaEmpleador/')->json()[0] ?? null;
 
@@ -357,6 +388,7 @@ class SaludTotalCliente
 
         $tipo = $this->tipoDocPortal($p['tipo_doc']);
 
+        $this->paso('Validando los datos del formulario');
         $validacion = $this->ajax()->get(self::BASE.'/NovedadInicioLaboral/NovedadInicioLaboral/ValidacionFormulario/', [
             'datosFormulario' => implode(',', [$tipo, $p['documento'], $p['fecha_ingreso'], $p['tipo_cotizante'], $p['ibc'], '']),
         ])->json();
@@ -383,12 +415,15 @@ class SaludTotalCliente
             'codigoCertificado'  => (string) Str::uuid(),
         ];
 
+        $this->paso('Registrando la novedad en el portal');
         $r = $this->ajax()->asForm()->post(self::BASE.'/NovedadInicioLaboral/NovedadInicioLaboral/PostFormularioUnico/', ['novedad' => $envio]);
         $numero = (string) ($r->json('numeroFormulario') ?? '');
 
         if (! $r->ok() || $r->json('result') !== 0 || ! preg_match('/^\d{6,}$/', $numero)) {
             throw new RuntimeException('Salud Total no confirmó el registro: '.($r->json('msg_err') ?: substr($r->body(), 0, 200)));
         }
+
+        $this->paso("Novedad registrada: formulario {$numero}");
 
         return ['numeroFormulario' => $numero, 'urlPdf' => $r->json('urlPdf'), 'envio' => collect($envio)->except('firmaEmpleador')->all()];
     }

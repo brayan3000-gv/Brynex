@@ -1068,6 +1068,7 @@ Route::middleware('auth')->group(function () {
             // Novedad de inicio laboral en Salud Total desde el radicado de EPS.
             $stc = \App\Http\Controllers\Admin\SaludTotalController::class;
             Route::get('/{contrato}/salud-total/precheck', [$stc, 'precheck'])->name('salud-total.precheck');
+            Route::get('/{contrato}/salud-total/progreso', [$stc, 'progreso'])->name('salud-total.progreso');
             Route::post('/{contrato}/salud-total/consultar', [$stc, 'consultar'])->name('salud-total.consultar');
             Route::post('/{contrato}/salud-total/registrar', [$stc, 'registrar'])->name('salud-total.registrar');
             // Novedad de inicio laboral en S.O.S.: el portal lo opera la extensión BryNex Portales.

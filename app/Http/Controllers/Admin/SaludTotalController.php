@@ -7,6 +7,7 @@ use App\Models\Contrato;
 use App\Services\SaludTotal\SaludTotalNovedadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 /**
@@ -28,6 +29,16 @@ class SaludTotalController extends Controller
         $prep = $this->servicio->preparar($this->contrato($contratoId));
 
         return response()->json(['ok' => ! $prep['problemas']] + $prep);
+    }
+
+    /** Por dónde va el trámite: el modal lo pregunta cada par de segundos. */
+    public function progreso(int $contratoId)
+    {
+        $this->contrato($contratoId);
+
+        return response()->json(
+            Cache::get(SaludTotalNovedadService::claveDelPaso($contratoId)) ?: ['paso' => null]
+        )->header('Cache-Control', 'no-store');
     }
 
     public function consultar(Request $request, int $contratoId)

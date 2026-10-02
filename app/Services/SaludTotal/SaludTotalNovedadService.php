@@ -2,12 +2,14 @@
 
 namespace App\Services\SaludTotal;
 
+use App\Models\Beneficiario;
 use App\Models\Contrato;
 use App\Models\EpsAfiliacion;
 use App\Models\Radicado;
 use App\Models\RadicadoMovimiento;
 use App\Services\EpsPortal\EpsClavePortal;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -34,6 +36,47 @@ class SaludTotalNovedadService
 
     /** El portal solo acepta fechas de ingreso a ±30 días de hoy (`ConsultaFechasLimite`). */
     private const DIAS_FECHA = 30;
+
+    /** Sesiones abiertas por NIT, para que un lote entre una sola vez por empresa. */
+    private array $sesiones = [];
+
+    /** Dónde anotar el paso en curso mientras se atiende un contrato. */
+    private ?string $clavePaso = null;
+
+    /** Lo que dio el grupo familiar del trámite en curso, para contarlo al final. */
+    private array $familia = ['nuevos' => 0, 'total' => 0];
+
+    public static function claveDelPaso(int $contratoId): string
+    {
+        return "salud-total:paso:{$contratoId}";
+    }
+
+    /**
+     * Lo que se va haciendo, para que el modal lo muestre mientras ocurre: va
+     * por HTTP y son segundos, pero son varias peticiones al portal y sin esto
+     * el usuario solo ve un reloj.
+     */
+    private function paso(string $texto): void
+    {
+        if ($this->clavePaso) {
+            Cache::put($this->clavePaso, ['paso' => $texto, 'en' => now()->toDateTimeString()], 600);
+        }
+    }
+
+    /** Corre algo contando los pasos de ese contrato, y limpia al salir. */
+    private function contando(Contrato $contrato, callable $trabajo)
+    {
+        $previa = $this->clavePaso;
+        $this->clavePaso = self::claveDelPaso($contrato->id);
+        $this->paso('Revisando los datos del contrato');
+
+        try {
+            return $trabajo();
+        } finally {
+            Cache::forget($this->clavePaso);
+            $this->clavePaso = $previa;
+        }
+    }
 
     /**
      * Revisa el contrato sin tocar el portal.
@@ -121,6 +164,11 @@ class SaludTotalNovedadService
      */
     public function consultar(Contrato $contrato): array
     {
+        return $this->contando($contrato, fn () => $this->consultarAhora($contrato));
+    }
+
+    private function consultarAhora(Contrato $contrato): array
+    {
         $prep = $this->preparar($contrato);
 
         if ($prep['problemas']) {
@@ -134,9 +182,11 @@ class SaludTotalNovedadService
         $grupo    = $st->grupoFamiliar($d['tipo_doc'], $d['documento']);
         $titular  = collect($grupo)->first(fn ($g) => (string) ($g['BeneficiarioId'] ?? '') === $d['documento']);
         $novedad  = $this->novedadExistente($st, $d['documento'], $contrato->fecha_ingreso);
+        $familia  = $this->guardarBeneficiarios($contrato, $grupo);
 
         return [
             'ok'               => true,
+            'beneficiarios'    => $familia,
             'resumen'          => $prep['resumen'],
             'nombre_eps'       => $persona ? trim(implode(' ', array_filter([$persona['PrimerNombre'] ?? null, $persona['SegundoNombre'] ?? null, $persona['Apellido1'] ?? null, $persona['Apellido2'] ?? null]))) : null,
             'estado_eps'       => $persona ? trim((string) ($persona['estadoAfiliado'] ?? '')) : null,
@@ -157,6 +207,11 @@ class SaludTotalNovedadService
      */
     public function registrar(Contrato $contrato, ?int $usuarioId): array
     {
+        return $this->contando($contrato, fn () => $this->registrarAhora($contrato, $usuarioId));
+    }
+
+    private function registrarAhora(Contrato $contrato, ?int $usuarioId): array
+    {
         $prep = $this->preparar($contrato);
 
         if ($prep['problemas']) {
@@ -172,11 +227,13 @@ class SaludTotalNovedadService
             $this->aplicarNovedad($st, $contrato, $radicado, $existente, $usuarioId, 'Ya tenía novedad en Salud Total');
             $this->bitacora($contrato, $radicado, 'existente', $existente['numero'], $d, $existente, null, $usuarioId);
 
-            return ['ok' => true, 'ya_existia' => true, 'radicado' => $existente['numero'], 'estado_eps' => $existente['estado']];
+            return ['ok' => true, 'ya_existia' => true, 'radicado' => $existente['numero'], 'estado_eps' => $existente['estado'],
+                'nombre_eps' => $this->nombreEnSaludTotal($st, $d), 'beneficiarios' => $this->familiaDe($st, $contrato, $d)];
         }
 
-        $titular = collect($st->grupoFamiliar($d['tipo_doc'], $d['documento']))
-            ->first(fn ($g) => (string) ($g['BeneficiarioId'] ?? '') === $d['documento']);
+        $grupo   = $st->grupoFamiliar($d['tipo_doc'], $d['documento']);
+        $titular = collect($grupo)->first(fn ($g) => (string) ($g['BeneficiarioId'] ?? '') === $d['documento']);
+        $this->familia = $this->guardarBeneficiarios($contrato, $grupo);
 
         if ($titular && ($titular['TieneContratoVigente'] ?? false) && str_starts_with(strtolower((string) ($titular['EstadoGeneral'] ?? '')), 'activo')) {
             $obs = 'Ya activo en Salud Total con '.$contrato->razonSocial->razon_social.' desde '.substr((string) $titular['FechaAfiliacion'], 0, 10)
@@ -184,7 +241,8 @@ class SaludTotalNovedadService
             $this->marcarRadicado($radicado, null, Radicado::ESTADO_OK, null, $obs, $usuarioId);
             $this->bitacora($contrato, $radicado, 'existente', null, $d, $titular, null, $usuarioId);
 
-            return ['ok' => true, 'ya_activo' => true, 'desde' => substr((string) $titular['FechaAfiliacion'], 0, 10)];
+            return ['ok' => true, 'ya_activo' => true, 'desde' => substr((string) $titular['FechaAfiliacion'], 0, 10),
+                'nombre_eps' => trim((string) ($titular['Nombres'] ?? '')) ?: null, 'beneficiarios' => $this->familia];
         }
 
         if ($prep['resumen']['fuera_de_plazo']) {
@@ -226,7 +284,9 @@ class SaludTotalNovedadService
         $this->marcarRadicado($radicado, $res['numeroFormulario'], Radicado::ESTADO_TRAMITE, $ruta, $obs, $usuarioId);
         $this->bitacora($contrato, $radicado, 'exitosa', $res['numeroFormulario'], $res['envio'], $res, null, $usuarioId, $ruta);
 
-        return ['ok' => true, 'radicado' => $res['numeroFormulario'], 'pdf' => (bool) $ruta];
+        return ['ok' => true, 'radicado' => $res['numeroFormulario'], 'pdf' => (bool) $ruta,
+            'nombre_eps' => trim(implode(' ', array_filter([$persona['PrimerNombre'] ?? null, $persona['SegundoNombre'] ?? null, $persona['Apellido1'] ?? null, $persona['Apellido2'] ?? null]))),
+            'beneficiarios' => $this->familia];
     }
 
     /**
@@ -298,9 +358,22 @@ class SaludTotalNovedadService
         return 'tramite';
     }
 
-    /** Abre sesión con la clave del módulo de claves; si la rechaza, la bloquea. */
-    public function sesion(string $nit): SaludTotalCliente
+    /**
+     * Abre sesión con la clave del módulo de claves; si la rechaza, la bloquea.
+     *
+     * La guarda por NIT: un lote de la misma empresa entra una sola vez, que el
+     * login es lo más lento de todo el trámite. Una sesión vieja se descarta por
+     * si el portal ya la cerró.
+     */
+    public function sesion(string $nit, bool $reusar = true): SaludTotalCliente
     {
+        $nit  = preg_replace('/\D/', '', $nit);
+        $vive = now()->subMinutes(15);
+
+        if ($reusar && isset($this->sesiones[$nit]) && $this->sesiones[$nit]['desde']->gt($vive)) {
+            return $this->sesiones[$nit]['st']->alAvanzar(fn (string $t) => $this->paso($t));
+        }
+
         $cred = $this->credencial($nit);
 
         if (isset($cred['error'])) {
@@ -308,7 +381,7 @@ class SaludTotalNovedadService
         }
 
         try {
-            $st = SaludTotalCliente::entrar($nit, $cred['usuario'], $cred['contrasena']);
+            $st = SaludTotalCliente::entrar($nit, $cred['usuario'], $cred['contrasena'], fn (string $t) => $this->paso($t));
         } catch (SaludTotalLoginException $e) {
             EpsClavePortal::rechazada($cred['empresa'], $cred['usuario'], $cred['contrasena'], $e->getMessage());
             Log::warning('Salud Total: login rechazado', ['nit' => $nit, 'error' => $e->getMessage()]);
@@ -316,8 +389,94 @@ class SaludTotalNovedadService
         }
 
         EpsClavePortal::exito($cred['empresa']);
+        $this->sesiones[$nit] = ['st' => $st, 'desde' => now()];
 
         return $st;
+    }
+
+    /**
+     * Guarda en BryNex el grupo familiar que trae el portal.
+     *
+     * Salud Total devuelve a toda la familia en la misma consulta que ya se hace
+     * para saber si el cotizante está activo, así que los beneficiarios salen
+     * gratis. Lo que ya está en BryNex no se pisa: de un beneficiario conocido
+     * solo se completan los campos vacíos, porque la fecha de expedición o una
+     * observación escrita a mano no vienen del portal.
+     *
+     * @param  array  $grupo  tal como lo entrega `ConsultaGrupoFamiliar`
+     * @return array{nuevos:int, total:int}
+     */
+    public function guardarBeneficiarios(Contrato $contrato, array $grupo): array
+    {
+        $cedula = (int) preg_replace('/\D/', '', (string) $contrato->cedula);
+        $nuevos = 0;
+        $total  = 0;
+
+        foreach ($grupo as $g) {
+            $documento = trim((string) ($g['BeneficiarioId'] ?? ''));
+
+            // El cotizante no es beneficiario de sí mismo.
+            if ($documento === '' || $documento === (string) $contrato->cedula || ($g['EsCotizanteSiNo'] ?? 0) == 1) {
+                continue;
+            }
+
+            $nombres = trim(preg_replace('/\s+/', ' ', (string) ($g['Nombres'] ?? '')));
+
+            if ($nombres === '') {
+                continue;
+            }
+
+            $total++;
+            $afiliacion = substr((string) ($g['FechaAfiliacion'] ?? ''), 0, 10);
+
+            $datos = [
+                'tipo_doc'      => strtoupper(trim((string) ($g['TipoDocumento'] ?? ''))) ?: null,
+                'nombres'       => $nombres,
+                'parentesco'    => trim((string) ($g['Parentesco'] ?? '')) ?: null,
+                'fecha_ingreso' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $afiliacion) ? $afiliacion : null,
+            ];
+
+            $b = Beneficiario::where('aliado_id', $contrato->aliado_id)
+                ->where('cc_cliente', $cedula)
+                ->where('n_documento', $documento)
+                ->first();
+
+            if (! $b) {
+                Beneficiario::create($datos + [
+                    'aliado_id'   => $contrato->aliado_id,
+                    'cc_cliente'  => $cedula,
+                    'n_documento' => $documento,
+                    'observacion' => $this->notaBeneficiario($g),
+                ]);
+                $nuevos++;
+
+                continue;
+            }
+
+            // Solo lo que falte: del resto el portal no sabe más que BryNex.
+            $faltantes = collect($datos)->filter(fn ($v, $k) => $v !== null && blank($b->{$k}))->all();
+
+            if ($faltantes) {
+                $b->update($faltantes);
+            }
+        }
+
+        if ($nuevos) {
+            $this->paso("Guardados {$nuevos} beneficiarios del grupo familiar");
+        }
+
+        return ['nuevos' => $nuevos, 'total' => $total];
+    }
+
+    private function notaBeneficiario(array $g): string
+    {
+        $edad = (int) ($g['Edad'] ?? 0);
+
+        return 'Traído del grupo familiar de Salud Total el '.now()->format('d/m/Y')
+            .(trim((string) ($g['EstadoGeneral'] ?? '')) !== '' ? ' · '.trim($g['EstadoGeneral']) : '')
+            .($edad > 0 ? ' · '.$edad.' años' : '')
+            .(trim((string) ($g['ipsmedicaid'] ?? '')) !== '' ? ' · IPS '.trim($g['ipsmedicaid']) : '')
+            .(trim((string) ($g['DocumentosFaltantes'] ?? '')) !== '' ? ' · faltan documentos: '.trim($g['DocumentosFaltantes']) : '');
     }
 
     public function credencial(string $nit): array
@@ -401,6 +560,20 @@ class SaludTotalNovedadService
             'ruta_pdf'        => $ruta,
             'usuario_id'      => $usuarioId,
         ]);
+    }
+
+    /** El nombre que tiene en Salud Total, para el desenlace del modal. */
+    private function nombreEnSaludTotal(SaludTotalCliente $st, array $d): ?string
+    {
+        $p = $st->datosPersona($d['tipo_doc'], $d['documento']);
+
+        return $p ? trim(implode(' ', array_filter([$p['PrimerNombre'] ?? null, $p['SegundoNombre'] ?? null, $p['Apellido1'] ?? null, $p['Apellido2'] ?? null]))) : null;
+    }
+
+    /** El grupo familiar, guardado de paso en BryNex. */
+    private function familiaDe(SaludTotalCliente $st, Contrato $contrato, array $d): array
+    {
+        return $this->familia = $this->guardarBeneficiarios($contrato, $st->grupoFamiliar($d['tipo_doc'], $d['documento']));
     }
 
     private function mismoApellido(Contrato $contrato, string $apellidosEps): bool
