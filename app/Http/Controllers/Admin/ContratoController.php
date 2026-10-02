@@ -1457,12 +1457,18 @@ class ContratoController extends Controller
         $idsTP = TipoModalidad::where('es_tiempo_parcial', true)->pluck('id')->map(fn ($id) => (int) $id)->toArray();
         $modalidadesAfpObligatorio = array_values(array_unique(array_merge([0, 10], $idsTP)));
 
+        // Razones sociales: activas primero (ordenadas por nombre), inactivas al final
+        $razonesSociales = RazonSocial::where('aliado_id', $alidoId)
+            ->orderByRaw("CASE WHEN estado = 'Activa' THEN 0 ELSE 1 END")
+            ->orderBy('razon_social')
+            ->get();
+
         return [
-            // Razones sociales: activas primero (ordenadas por nombre), inactivas al final
-            'razonesSociales' => RazonSocial::where('aliado_id', $alidoId)
-                ->orderByRaw("CASE WHEN estado = 'Activa' THEN 0 ELSE 1 END")
-                ->orderBy('razon_social')
-                ->get(),
+            'razonesSociales' => $razonesSociales,
+            // Cajas de cada razón social por departamento (la principal y las de
+            // otros departamentos): el formulario sugiere la del cliente.
+            'cajasRazonSocial' => \App\Models\RazonSocialCaja::porRazonSocial($razonesSociales),
+            'deptCliente' => $this->departamentoCliente($cliente),
             'asesores' => Asesor::where('aliado_id', $alidoId)->where('activo', true)->orderBy('nombre')->get(),
             'epsList' => Eps::seleccionables()->orderBy('nombre')->get(),
             'pensiones' => Pension::orderBy('razon_social')->get(),
@@ -1623,13 +1629,7 @@ class ContratoController extends Controller
      */
     private function cajasOrdenadas(?object $cliente): \Illuminate\Support\Collection
     {
-        // Obtener el departamento del cliente según su municipio_id
-        $deptCliente = null;
-        if ($cliente && $cliente->municipio_id) {
-            $deptCliente = DB::table('ciudades')
-                ->where('id', $cliente->municipio_id)
-                ->value('departamento_id');
-        }
+        $deptCliente = $this->departamentoCliente($cliente);
 
         $cajas = Caja::orderBy('nombre')->get();
 
@@ -1650,6 +1650,18 @@ class ContratoController extends Controller
         $resto->each(fn ($c) => $c->es_local = false);
 
         return $locales->merge($resto);
+    }
+
+    /** El departamento del cliente según su municipio (ciudades.departamento_id). */
+    private function departamentoCliente(?object $cliente): ?int
+    {
+        if (! $cliente || ! $cliente->municipio_id) {
+            return null;
+        }
+
+        $dpto = DB::table('ciudades')->where('id', $cliente->municipio_id)->value('departamento_id');
+
+        return $dpto ? (int) $dpto : null;
     }
 
     // ─── Duplicar contrato Plan Ingreso-Retiro (id=12) ───────────────

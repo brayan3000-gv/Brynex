@@ -318,8 +318,82 @@
                         </option>
                         @endforeach
                     </select>
+                    @php
+                        $dptoRs = (int) substr(str_pad((string) ($rs?->cod_departamento ?? ''), 2, '0', STR_PAD_LEFT), 0, 2);
+                        $dptoRsNombre = $dptoRs ? $departamentos->firstWhere('id', $dptoRs)?->nombre : null;
+                    @endphp
+                    @if($dptoRsNombre)
+                    <div style="font-size:.68rem;color:#64748b;margin-top:.25rem">
+                        Es la de <strong>{{ $dptoRsNombre }}</strong>, el departamento de la empresa.
+                    </div>
+                    @endif
                 </div>
             </div>
+        </div>
+
+        {{-- ── Cajas por departamento ── --}}
+        @php
+            $nombreDpto = $departamentos->pluck('nombre', 'id');
+            $nombreCaja = $cajas->pluck('nombre', 'id');
+        @endphp
+        <div class="card">
+            <div class="card-title">🗺️ Cajas por Departamento <span style="font-weight:500;color:#94a3b8;text-transform:none">(opcional)</span></div>
+            <div style="font-size:.7rem;color:#64748b;margin-bottom:.75rem">
+                Si la empresa tiene trabajadores en otro departamento con otra caja (por ejemplo
+                Comfandi en el Valle y Compensar en Bogotá), agréguela aquí: una por departamento.
+                Al crear el contrato se sugiere la del departamento del cliente.
+            </div>
+
+            @if($rs && ($original ?? null))
+                {{-- Copia de otro aliado: las cajas son de la empresa y se cambian en la original. --}}
+                @forelse($cajasDpto as $f)
+                <div style="font-size:.8rem;padding:.3rem 0;border-bottom:1px solid #f1f5f9">
+                    <strong>{{ $nombreDpto[$f['departamento_id']] ?? '—' }}</strong> → {{ $nombreCaja[$f['caja_id']] ?? '—' }}
+                </div>
+                @empty
+                <div style="font-size:.78rem;color:#94a3b8">Sin cajas adicionales.</div>
+                @endforelse
+                <div style="font-size:.68rem;color:#94a3b8;margin-top:.5rem">Vienen de {{ $origenAliado }}: se cambian en su razón social.</div>
+            @else
+            <div x-data="cajasDpto()">
+                <template x-for="(f, i) in filas" :key="f.k">
+                    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.5rem;align-items:end;margin-bottom:.5rem">
+                        <div>
+                            <label class="flb" x-show="i === 0">Departamento</label>
+                            <select class="finp" :name="`cajas_dpto[${i}][departamento_id]`" x-model="f.departamento_id"
+                                    @change="alCambiarDpto(f)">
+                                <option value="">— Departamento —</option>
+                                @foreach($departamentos as $d)
+                                <option value="{{ $d->id }}">{{ $d->nombre }}</option>
+                                @endforeach
+                            </select>
+                            <div x-show="repetido(f, i)" style="font-size:.66rem;color:#b91c1c;margin-top:.15rem">
+                                Ese departamento ya está: se guarda solo una caja por departamento.
+                            </div>
+                        </div>
+                        <div>
+                            <label class="flb" x-show="i === 0">Caja</label>
+                            <select class="finp" :name="`cajas_dpto[${i}][caja_id]`" x-model="f.caja_id">
+                                <option value="">— Caja —</option>
+                                <template x-for="c in ordenadas(f.departamento_id)" :key="c.id">
+                                    <option :value="c.id" :selected="c.id == f.caja_id"
+                                            x-text="(c.id_dept == f.departamento_id ? '★ ' : '') + c.nombre"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <button type="button" @click="filas.splice(i, 1)" title="Quitar"
+                                style="padding:.42rem .65rem;border:1.5px solid #fecaca;background:#fef2f2;color:#b91c1c;border-radius:7px;cursor:pointer;font-weight:700">✕</button>
+                    </div>
+                </template>
+                <div x-show="!filas.length" style="font-size:.78rem;color:#94a3b8;margin-bottom:.5rem">
+                    Solo la caja principal.
+                </div>
+                <button type="button" @click="filas.push({k: Date.now(), departamento_id: '', caja_id: ''})"
+                        style="padding:.4rem .8rem;border:1.5px dashed #93c5fd;background:#eff6ff;color:#1d4ed8;border-radius:7px;font-size:.78rem;font-weight:700;cursor:pointer">
+                    + Agregar caja en otro departamento
+                </button>
+            </div>
+            @endif
         </div>
 
         {{-- ── Datos Comerciales ── --}}
@@ -1273,6 +1347,26 @@ function habilitarAliados() {
 }
 </script>
 @endif
+
+<script>
+// Cajas por departamento: filas departamento → caja, ninguna obligatoria.
+// Las del departamento elegido salen primero con ★.
+function cajasDpto() {
+    const cajas = @json($cajas->filter(fn ($c) => (string) $c->nit !== '0')->values());
+    return {
+        filas: @json(collect(old('cajas_dpto', $cajasDpto ?? []))->values())
+            .map((f, i) => ({ k: i + 1, departamento_id: String(f.departamento_id ?? ''), caja_id: String(f.caja_id ?? '') })),
+        cajasDe(d) { return d ? cajas.filter(c => c.id_dept == d) : []; },
+        ordenadas(d) { return [...this.cajasDe(d), ...cajas.filter(c => !d || c.id_dept != d)]; },
+        // Si el departamento tiene una sola caja se pone sola; si tiene varias, se escoge.
+        alCambiarDpto(f) {
+            const l = this.cajasDe(f.departamento_id);
+            if (!l.some(c => c.id == f.caja_id)) f.caja_id = l.length === 1 ? String(l[0].id) : '';
+        },
+        repetido(f, i) { return f.departamento_id && this.filas.some((o, j) => j < i && o.departamento_id == f.departamento_id); },
+    };
+}
+</script>
 
 @if($rs && ($original ?? null))
 <script>

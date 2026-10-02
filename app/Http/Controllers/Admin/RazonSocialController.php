@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\RazonSocial;
+use App\Models\RazonSocialCaja;
 use App\Services\RazonSocialCompartida;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,10 +61,12 @@ class RazonSocialController extends Controller
     public function create()
     {
         $arls  = DB::table('arls')->orderBy('nombre_arl')->get(['id', 'nit', 'nombre_arl']);
-        $cajas = DB::table('cajas')->orderBy('nombre')->get(['id', 'nit', 'nombre']);
+        $cajas = $this->cajasCatalogo();
         $rs    = null;
+        $departamentos = $this->departamentos();
+        $cajasDpto = collect();
 
-        return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs'));
+        return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs', 'departamentos', 'cajasDpto'));
     }
 
     // ─── Guardar ──────────────────────────────────────────────────
@@ -76,6 +79,7 @@ class RazonSocialController extends Controller
         $request->merge(['id' => $nextId]);
 
         $data = $this->validar($request);
+        $cajasDpto = $this->validarCajasDpto($request);
 
         // Verificar que el NIT no exista para este aliado (si se proporciona)
         if (!empty($data['nit'])) {
@@ -98,6 +102,7 @@ class RazonSocialController extends Controller
         $data['n_plano']         = 1;
 
         DB::table('razones_sociales')->insert($data);
+        RazonSocialCaja::guardar($nextId, $cajasDpto);
 
         return redirect()->route('admin.configuracion.razones.index')
             ->with('success', '✅ Razón Social creada correctamente.');
@@ -115,7 +120,10 @@ class RazonSocialController extends Controller
         abort_if(!$rs, 404);
 
         $arls  = DB::table('arls')->orderBy('nombre_arl')->get(['id', 'nit', 'nombre_arl']);
-        $cajas = DB::table('cajas')->orderBy('nombre')->get(['id', 'nit', 'nombre']);
+        $cajas = $this->cajasCatalogo();
+        $departamentos = $this->departamentos();
+        // Una copia muestra las de su original (no se editan aquí).
+        $cajasDpto = RazonSocialCaja::deFicha($rs);
 
         // Estado de las credenciales de API por operador (sin exponer secretos)
         $operadoresCred = OperadorCredencialController::estadoPorOperador($aliadoId, $id);
@@ -131,7 +139,8 @@ class RazonSocialController extends Controller
             RazonSocial::find($id), (int) $aliadoId, auth()->user());
 
         return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs', 'operadoresCred',
-            'original', 'origenAliado', 'copias', 'puedeHabilitar', 'camposEmpresa', 'clavesVedadas'));
+            'original', 'origenAliado', 'copias', 'puedeHabilitar', 'camposEmpresa', 'clavesVedadas',
+            'departamentos', 'cajasDpto'));
     }
 
     // ─── Actualizar ───────────────────────────────────────────────
@@ -146,6 +155,7 @@ class RazonSocialController extends Controller
         abort_if(!$rs, 404);
 
         $data = $this->validar($request, $id);
+        $cajasDpto = $this->validarCajasDpto($request);
         unset($data['id']); // no cambiar PK en update
 
         // En una copia los datos de la empresa vienen de la original: se
@@ -177,6 +187,12 @@ class RazonSocialController extends Controller
             ->where('id', $id)
             ->where('aliado_id', $aliadoId)
             ->update($data);
+
+        // Las cajas por departamento son de la empresa: solo las cambia la
+        // original, y las copias las leen de ella.
+        if (! $rs->origen_id) {
+            RazonSocialCaja::guardar($id, $cajasDpto);
+        }
 
         // La original pasa sus datos de empresa a los aliados que la usan.
         $copias = $rs->origen_id ? 0 : RazonSocialCompartida::sincronizar($id);
@@ -281,6 +297,7 @@ class RazonSocialController extends Controller
             ->where('id', $id)
             ->where('aliado_id', $aliadoId)
             ->delete();
+        RazonSocialCaja::where('razon_social_id', $id)->delete();
 
         return redirect()->route('admin.configuracion.razones.index')
             ->with('success', '🗑️ Razón Social eliminada.');
@@ -414,6 +431,29 @@ class RazonSocialController extends Controller
             ->update(['estado' => $nuevoEstado]);
 
         return back()->with('success', "Estado cambiado a: {$nuevoEstado}");
+    }
+
+    // ─── Cajas por departamento ───────────────────────────────────
+
+    /** Las cajas con su departamento, para agruparlas en los selectores. */
+    private function cajasCatalogo()
+    {
+        return DB::table('cajas')->orderBy('nombre')->get(['id', 'nit', 'nombre', 'id_dept']);
+    }
+
+    private function departamentos()
+    {
+        return DB::table('departamentos')->orderBy('nombre')->get(['id', 'nombre']);
+    }
+
+    /** Las filas departamento → caja del formulario (ninguna es obligatoria). */
+    private function validarCajasDpto(Request $request): array
+    {
+        return $request->validate([
+            'cajas_dpto'                   => 'nullable|array|max:40',
+            'cajas_dpto.*.departamento_id' => 'nullable|integer|exists:departamentos,id',
+            'cajas_dpto.*.caja_id'         => 'nullable|integer|exists:cajas,id',
+        ])['cajas_dpto'] ?? [];
     }
 
     // ─── Validación ───────────────────────────────────────────────

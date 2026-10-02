@@ -613,6 +613,7 @@
         @if($esEdicion && $contrato->caja_id && collect($cajas)->contains('id', (int)$contrato->caja_id))
         {!! $badgeEstado($rPT->get('caja')) !!}
         @endif
+        <div id="hint-caja-rs" style="display:none;font-size:0.66rem;color:#475569;margin-top:0.2rem;line-height:1.35;"></div>
       </div>
     </div>
     <div x-show="mostrarModoArl" id="panel-modo-arl" style="display:none;margin-top:0.5rem;">
@@ -2115,6 +2116,10 @@ const MODALIDADES_ARL_LIBRE = @json($modalidadesArlLibre ?? []);
 // TarifaAsesorService::NIVELES_ARL_POR_MODALIDAD, la misma que restringe el tarifario.
 const NIVELES_ARL_POR_MODALIDAD = @json($nivelesArlPorModalidad ?? []);
 const ARL_ID_RS             = {{ $arlIdRazonSocial ?? 'null' }};
+// Cajas de cada razón social por departamento: {rs_id: [{departamento_id,
+// departamento, caja_id, caja, principal}]}, la principal primero.
+const CAJAS_RS      = @json((object) ($cajasRazonSocial ?? []));
+const DEPT_CLIENTE  = {{ $deptCliente ?? 'null' }};
 const SALARIO_MINIMO        = {{ $salarioMinimo ?? 0 }};
 const PLAN_DATA             = {};
 // URLs generadas por Laravel (incluyen subdirectorio correcto)
@@ -2303,6 +2308,71 @@ document.querySelectorAll('#sel_plan option[value]').forEach(opt => {
     };
 });
 
+// ── Caja según la razón social y el departamento del cliente ─────────────
+// Pone arriba del selector las cajas de la razón social (la principal y las de
+// otros departamentos) y escoge la del departamento del cliente; si la empresa
+// no tiene caja allá, la principal. Solo llena la caja si estaba vacía o si la
+// había puesto esta misma sugerencia: lo que el usuario escogió no se toca.
+function sugerirCajaRazonSocial(rsId) {
+    const sel  = document.getElementById('sel_caja');
+    const hint = document.getElementById('hint-caja-rs');
+    if (!sel) return;
+    sel.querySelector('optgroup[data-rs]')?.remove();
+    if (hint) { hint.style.display = 'none'; hint.innerHTML = ''; }
+
+    const lista = CAJAS_RS[rsId] || [];
+    if (!lista.length) return;
+
+    const grupo = document.createElement('optgroup');
+    grupo.label = '🏢 De la razón social';
+    grupo.dataset.rs = '1';
+    lista.forEach(c => {
+        const o = new Option(c.caja + (c.departamento ? ' — ' + c.departamento : '') + (c.principal ? ' (principal)' : ''), c.caja_id);
+        if (DEPT_CLIENTE && c.departamento_id === DEPT_CLIENTE) o.textContent = '★ ' + o.textContent;
+        grupo.appendChild(o);
+    });
+    const valorAntes = sel.value || sel.dataset.valorPrevio || '';
+    sel.insertBefore(grupo, sel.options[0]?.nextSibling || null);
+
+    const delDpto   = DEPT_CLIENTE ? lista.find(c => c.departamento_id === DEPT_CLIENTE) : null;
+    const sugerida  = delDpto || lista.find(c => c.principal) || null;
+
+    if (sugerida && (!valorAntes || sel.dataset.cajaSugerida === '1')) {
+        if (sel.disabled) {
+            sel.dataset.valorPrevio = String(sugerida.caja_id);   // el plan no lleva caja: se repone al cambiarlo
+        } else {
+            sel.value = String(sugerida.caja_id);
+            sel.style.cssText = STYLE_COMPLETO;
+        }
+        sel.dataset.cajaSugerida = '1';
+    } else if (valorAntes) {
+        sel.value = valorAntes;   // la misma caja, ahora desde el grupo de arriba
+    }
+
+    if (hint) {
+        let txt;
+        if (delDpto) {
+            txt = `Cliente en <strong>${delDpto.departamento}</strong>: la razón social usa <strong>${delDpto.caja}</strong>.`;
+        } else if (sugerida && DEPT_CLIENTE) {
+            txt = `La razón social no tiene caja en el departamento del cliente; la principal es <strong>${sugerida.caja}</strong>.`;
+        } else if (sugerida) {
+            txt = `Caja principal de la razón social: <strong>${sugerida.caja}</strong>.`;
+        }
+        if (txt && lista.length > 1) {
+            txt += '<br><span style="color:#94a3b8">' + lista.map(c => (c.departamento || '—') + ' → ' + c.caja).join(' · ') + '</span>';
+        }
+        if (txt) { hint.innerHTML = txt; hint.style.display = 'block'; }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sel = document.getElementById('sel_caja');
+    // Escoger la caja a mano apaga la sugerencia para esta razón social.
+    sel?.addEventListener('change', () => { sel.dataset.cajaSugerida = '0'; });
+    const rs = document.getElementById('sel_rs');
+    if (rs && rs.value) sugerirCajaRazonSocial(rs.value);
+});
+
 function onRazonSocialChange(sel) {
     const opt    = sel.options[sel.selectedIndex];
     const arlNit = opt?.dataset?.arl || '';
@@ -2320,6 +2390,7 @@ function onRazonSocialChange(sel) {
     if (arlNit && arlNitMap[arlNit]) {
         document.getElementById('sel_arl').value = arlNitMap[arlNit];
     }
+    sugerirCajaRazonSocial(sel.value);
     // Resetear Plan al cambiar Razón Social SOLO en modo creación
     if (!ES_EDICION) {
         const selPlan = document.getElementById('sel_plan');
