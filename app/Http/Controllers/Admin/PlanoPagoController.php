@@ -1889,7 +1889,7 @@ class PlanoPagoController extends Controller
                     if (!in_array($codigoOp, \App\Services\PlanillaWhatsappService::OPERADORES_AUTORIZADOS)) {
                         return response()->json([
                             'ok' => false,
-                            'mensaje' => "El operador '{$operador->nombre}' no tiene plantilla PDF autorizada para envío por WhatsApp. Solo ARUS, Simple y Mi Planilla están habilitados."
+                            'mensaje' => "El operador '{$operador->nombre}' no tiene plantilla PDF autorizada para envío por WhatsApp. Solo Enlace, Simple y Mi Planilla están habilitados."
                         ], 422);
                     }
                 }

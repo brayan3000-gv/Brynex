@@ -894,6 +894,7 @@
             $operadorCorto = function ($nombre) {
                 $mapa = [
                     'arus enlace'      => 'Enlace',
+                    'enlace'           => 'Enlace',
                     'aportes en línea' => 'Aportes',
                     'aportes en linea' => 'Aportes',
                     'mi planilla'      => 'MiPlanilla',
@@ -1354,7 +1355,7 @@
                                 📄 Descargar Txt para todos los operadores
                             </button>
                             <div style="font-size: .7rem; color: #64748b; margin-top: .35rem; text-align: center; line-height: 1.3;">
-                                Este archivo plano (PILA) sirve para <strong>cualquier operador</strong> (MiPlanilla, Aportes en Línea, Arus, Asopagos, etc.).
+                                Este archivo plano (PILA) sirve para <strong>cualquier operador</strong> (MiPlanilla, Aportes en Línea, Enlace, Asopagos, etc.).
                             </div>
                         </div>
 
@@ -1370,7 +1371,7 @@
                             <button class="btn-descarga-secundario"
                                     onclick="ejecutarDescarga('xlsx')"
                                     @if($pagado) disabled @endif>
-                                📊 Excel Simple (Arus)
+                                📊 Excel Simple (Enlace)
                             </button>
 
                             <button class="btn-descarga-secundario"

@@ -88,7 +88,7 @@ class RazonSocialOperadorService
             }
         }
 
-        return ['success' => false, 'message' => $motivos ? implode(' ', $motivos) : 'Sin credenciales de ARUS ni Simple.'];
+        return ['success' => false, 'message' => $motivos ? implode(' ', $motivos) : 'Sin credenciales de Enlace ni Simple.'];
     }
 
     /**

@@ -252,7 +252,7 @@ class WhatsappApiService
                 for ($v = 1; $v <= $cantVariables; $v++) {
                     $muestras[] = match($v) {
                         1 => 'Juan Perez',
-                        2 => 'ARUS Enlace',
+                        2 => 'Enlace',
                         3 => $plantilla->usaMoldeCorto() ? '$150.000' : '86659838',
                         default => 'Ejemplo ' . $v
                     };

@@ -35,7 +35,7 @@ class EnlaceCredenciales extends Command
             ->first();
 
         if (!$operador) {
-            $this->error('El operador Enlace/ARUS no está activo para este aliado.');
+            $this->error('El operador Enlace no está activo para este aliado.');
             return self::FAILURE;
         }
 

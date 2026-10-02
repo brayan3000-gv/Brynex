@@ -298,7 +298,7 @@
             <span class="c-badge" style="background:#cffafe;color:#0e7490">Planillas SS</span>
             <div class="c-icon">🏦</div>
             <div class="c-title">Operadores de Planilla</div>
-            <div class="c-desc">Active o desactive los operadores (Simple, ARUS, SOI, etc.) que aparecen en el selector al descargar la planilla Excel de seguridad social.</div>
+            <div class="c-desc">Active o desactive los operadores (Simple, Enlace, SOI, etc.) que aparecen en el selector al descargar la planilla Excel de seguridad social.</div>
         </a>
         @endif
 

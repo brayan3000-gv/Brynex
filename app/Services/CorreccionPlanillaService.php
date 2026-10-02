@@ -458,7 +458,8 @@ class CorreccionPlanillaService
     /** Operadores que BryNex liquida por API: el resto se hace en su portal. */
     public static function operadorConApi(?string $operador): bool
     {
-        return in_array(mb_strtolower(trim((string) $operador)), ['arus enlace', 'simple'], true);
+        // «arus enlace» es el nombre viejo de Enlace (oct-2026): queda por los registros guardados así.
+        return in_array(mb_strtolower(trim((string) $operador)), ['enlace', 'arus enlace', 'simple'], true);
     }
 
     /** Día de la fecha dentro del período (1–30), o null si es de otro mes. */
