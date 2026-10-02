@@ -412,6 +412,11 @@ class ConfiguracionAliadoController extends Controller
             // embebido, que se ejecuta al abrirlo directamente (XSS).
             'seguro_logo' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
             'recibo_doble_copia' => 'nullable|boolean',
+            // Seguimiento de prospectos (cotizaciones)
+            'prospectos.recordatorio' => 'nullable|boolean',
+            'prospectos.recordatorio_celular' => 'nullable|string|max:20',
+            'prospectos.dias_sin_respuesta' => 'nullable|integer|min:1|max:365',
+            'prospectos.dias_cierre' => 'nullable|integer|min:1|max:365',
         ]);
 
         DB::transaction(function () use ($request, $alidoId) {
@@ -427,6 +432,22 @@ class ConfiguracionAliadoController extends Controller
             // Los parámetros globales de BryNex y las tarifas ARL ya no se guardan aquí:
             // se movieron a BryNex → Parámetros BryNex (BrynexController::guardarParametros),
             // porque son del sistema y no del aliado.
+
+            // ── 1. Seguimiento de prospectos: vive solo en la fila global ──
+            if ($request->has('prospectos')) {
+                $p = $request->input('prospectos', []);
+                $entero = fn ($v) => ($v !== null && $v !== '') ? (int) $v : null;
+                ConfiguracionAliado::updateOrCreate(
+                    ['aliado_id' => $alidoId, 'plan_id' => null],
+                    [
+                        'prospectos_recordatorio' => (bool) ($p['recordatorio'] ?? false),
+                        'prospectos_recordatorio_celular' => preg_replace('/\D/', '', (string) ($p['recordatorio_celular'] ?? '')) ?: null,
+                        'prospectos_dias_sin_respuesta' => $entero($p['dias_sin_respuesta'] ?? null),
+                        'prospectos_dias_cierre' => $entero($p['dias_cierre'] ?? null),
+                        'activo' => true,
+                    ]
+                );
+            }
 
             // ── 2. Configuraciones por plan ──
             foreach ($request->input('configs', []) as $planKey => $data) {

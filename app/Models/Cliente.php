@@ -209,9 +209,20 @@ class Cliente extends BaseModel
             ->toArray();
     }
 
-    public static function listaAsesores(): array
+    /**
+     * Asesores del aliado activo (id => nombre). Cada aliado ve solo los suyos;
+     * si no hay aliado en sesión (comandos), la lista va vacía.
+     */
+    public static function listaAsesores(?int $aliadoId = null): array
     {
+        $aliadoId = $aliadoId ?? (int) session('aliado_id_activo');
+        if (! $aliadoId) {
+            return [];
+        }
+
         return DB::table('asesores')
+            ->where('aliado_id', $aliadoId)
+            ->whereNull('deleted_at')
             ->orderBy('nombre')
             ->pluck('nombre', 'id')
             ->toArray();

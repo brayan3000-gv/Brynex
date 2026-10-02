@@ -200,6 +200,17 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping(30)
             ->appendOutputTo(storage_path('logs/corridas-resumen.log'));
 
+        // Prospectos cotizados: pasa a «sin respuesta», cierra los abandonados y
+        // avisa las llamadas del día, según lo que cada aliado configure en
+        // Parámetros. Sin configuración no hace nada.
+        $schedule->command('cotizaciones:seguimiento')
+            ->dailyAt('07:30')
+            ->timezone('America/Bogota')
+            ->name('cotizaciones-seguimiento')
+            ->withoutOverlapping(30)
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/cotizaciones-seguimiento.log'));
+
         // S.O.S. no se puede revisar de noche: su login pide reCAPTCHA y hace
         // falta una persona. En vez de dejar los radicados sin confirmar, el
         // lunes por la mañana se pide por WhatsApp que alguien entre, y la

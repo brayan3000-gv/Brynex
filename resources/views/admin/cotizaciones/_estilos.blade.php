@@ -128,6 +128,23 @@ select.cz-input {
 }
 .cz-money .cz-input { padding-left: 1.45rem; }
 
+.cz-input--solo-lectura { display: flex; align-items: center; background: #f8fafc; color: #475569; }
+/* Selector persona / empresa */
+.cz-segmento { display: inline-flex; background: #f1f5f9; border-radius: 9px; padding: 3px; gap: 2px; }
+.cz-segmento button {
+    border: none; background: none; color: #64748b; font-family: inherit; font-size: .78rem; font-weight: 600;
+    padding: .35rem .8rem; border-radius: 7px; cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.cz-segmento--activo { background: #fff; color: #1d4ed8; box-shadow: 0 1px 3px rgba(15,23,42,.12); }
+/* Trabajadores de una empresa */
+.cz-trab { border: 1px solid #e2e8f0; border-radius: 10px; padding: .85rem .9rem .6rem; margin-bottom: .7rem; background: #fafbfc; }
+.cz-trab-grid { display: grid; grid-template-columns: 1.3fr 1.2fr 1.3fr 1fr .6fr auto; gap: .7rem .8rem; align-items: end; }
+.cz-trab-quitar .cz-btn { width: 38px; padding: 0; font-size: 1.1rem; color: #94a3b8; }
+.cz-trab-quitar .cz-btn:hover:not(:disabled) { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
+.cz-trab-quitar .cz-btn:disabled { opacity: .4; cursor: default; }
+.cz-trab-res { font-size: .78rem; color: #64748b; margin-top: .55rem; min-height: 1.1rem; }
+.cz-trab-res strong { color: #0f172a; font-variant-numeric: tabular-nums; }
+
 /* Barra de guardar: normal en escritorio, fija abajo en celular */
 .cz-actions { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; }
 .cz-actions-total { display: none; }
@@ -171,6 +188,28 @@ select.cz-input {
 .cz-total-valor--afiliacion { color: #fcd34d; }
 .cz-total-valor--prop { color: #93c5fd; }
 .cz-total-valor--mes { color: #34d399; font-size: 1.3rem; font-weight: 800; }
+
+/* ── Modal ── */
+.cz-modal-fondo { position: fixed; inset: 0; z-index: 9998; background: rgba(15,23,42,.55); display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.cz-modal { background: #fff; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.25); width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+.cz-modal-cab { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 1px solid #e5e7eb; }
+.cz-modal-cab h3 { margin: 0; font-size: 1rem; font-weight: 600; color: #1e293b; }
+.cz-modal-cerrar { background: none; border: none; font-size: 1.5rem; color: #94a3b8; cursor: pointer; line-height: 1; }
+.cz-modal-cerrar:hover { color: #ef4444; }
+.cz-modal-cuerpo { padding: 1.1rem 1.25rem; }
+.cz-modal-nota { font-size: .78rem; color: #64748b; margin: 0 0 .6rem; line-height: 1.45; }
+.cz-modal-cuerpo textarea { font-size: .84rem; }
+.cz-modal-pie { display: flex; justify-content: flex-end; gap: .6rem; padding: .9rem 1.25rem; border-top: 1px solid #e5e7eb; flex-wrap: wrap; }
+
+/* Menú de estado rápido en el listado */
+.cz-estado-menu { position: relative; display: inline-block; }
+.cz-estado-menu > button { background: none; border: none; padding: 0; cursor: pointer; font-family: inherit; }
+.cz-estado-menu > button .cz-estado::after { content: '▾'; margin-left: .1rem; opacity: .6; }
+.cz-estado-lista { position: absolute; top: calc(100% + 4px); left: 0; z-index: 50; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; box-shadow: 0 10px 30px rgba(15,23,42,.15); padding: .35rem; min-width: 190px; }
+.cz-estado-lista button { display: flex; align-items: center; gap: .5rem; width: 100%; background: none; border: none; text-align: left; padding: .45rem .6rem; border-radius: 7px; font-family: inherit; font-size: .8rem; color: #334155; cursor: pointer; }
+.cz-estado-lista button:hover { background: #f1f5f9; }
+.cz-estado-lista button:disabled { color: #cbd5e1; cursor: default; }
+.cz-estado-lista .cz-estado { font-size: .68rem; padding: .15rem .5rem; }
 
 /* ── Estados ── */
 .cz-estado {
@@ -230,6 +269,8 @@ select.cz-input {
 .cz-tabla tbody tr:hover { background: #fafbff; }
 .cz-num { text-align: right !important; font-variant-numeric: tabular-nums; }
 .cz-persona { display: flex; align-items: center; gap: .7rem; min-width: 0; }
+.cz-tabla .cz-td-persona { min-width: 240px; }
+.cz-tabla .cz-td-origen { min-width: 150px; }
 .cz-avatar {
     width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
     display: flex; align-items: center; justify-content: center;
@@ -322,7 +363,7 @@ a.cz-pag-btn:hover, a.cz-pag-num:hover { background: #eff6ff; border-color: #93c
     .cz-header-icon { display: none; }
     .cz-title { font-size: 1rem; }
     .cz-header-actions { width: 100%; }
-    .cz-header-actions > *, .cz-header-actions form { flex: 1; }
+    .cz-header-actions > *, .cz-header-actions form { flex: 1 1 42%; }
     .cz-header-actions form .cz-btn-header { width: 100%; }
     .cz-card { padding: 1rem; }
 
@@ -334,6 +375,15 @@ a.cz-pag-btn:hover, a.cz-pag-num:hover { background: #eff6ff; border-color: #93c
     .cz-btn { height: 44px; }
     .cz-btn--chico { height: 38px; }
     .cz-grid, .cz-gestion-form .cz-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cz-trab-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .cz-trab-grid .cz-field { grid-column: auto; }
+    .cz-trab-grid > .cz-field:first-child, .cz-trab-grid > .cz-trab-quitar { grid-column: 1 / -1; }
+    .cz-trab-quitar .cz-label { display: none; }
+    .cz-trab-quitar .cz-btn { width: 100%; font-size: .8rem; }
+    .cz-trab-quitar .cz-btn::after { content: ' Quitar trabajador'; }
+    .cz-segmento { width: 100%; }
+    .cz-segmento button { flex: 1; }
+    .cz-card-head { flex-wrap: wrap; }
     .cz-field { grid-column: 1 / -1; }
     .cz-field.cz-m-mitad { grid-column: span 1; }
     .cz-actions .cz-btn--borde { display: none; }
@@ -355,6 +405,8 @@ a.cz-pag-btn:hover, a.cz-pag-num:hover { background: #eff6ff; border-color: #93c
     .cz-tabla td { display: block; padding: 0; min-width: 0; }
     .cz-td-persona  { grid-area: persona; }
     .cz-td-estado   { grid-area: estado; justify-self: end; }
+    .cz-estado-lista { left: auto; right: 0; }
+    .cz-modal-pie .cz-btn { flex: 1; }
     .cz-td-contacto { grid-area: contacto; }
     .cz-td-valor    { grid-area: valor; justify-self: end; text-align: right; }
     .cz-td-origen   { grid-area: origen; display: flex !important; align-items: center; flex-wrap: wrap; gap: .3rem .6rem; }

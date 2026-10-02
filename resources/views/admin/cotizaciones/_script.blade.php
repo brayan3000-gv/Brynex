@@ -4,7 +4,25 @@
         const cfg = window.CZ_COTIZADOR;
         const vacio = () => ({ eps: 0, pen: 0, arl: 0, caja: 0, admon: 0, seguro: 0, iva: 0, total: 0 });
 
+        let secuencia = 0;
+        const nuevoTrabajador = (t = {}) => ({
+            key: ++secuencia,
+            cargo: t.cargo || '',
+            nombre: t.nombre || '',
+            modalidadId: t.modalidadId || '',
+            planId: t.planId || '',
+            salario: t.salario || cfg.salario,
+            nivelArl: t.nivelArl || '1',
+            completo: { ...vacio(), ...(t.completo || {}) },
+            proporcional: { ...vacio(), ...(t.proporcional || t.completo || {}) },
+            cargando: false,
+            error: false,
+            turno: 0,
+        });
+
         return {
+            tipo: cfg.tipo === 'empresa' ? 'empresa' : 'persona',
+            trabajadores: (cfg.trabajadores || []).map(nuevoTrabajador),
             tipoDoc: cfg.tipoDoc,
             celular: cfg.celular,
             salario: cfg.salario,
@@ -41,12 +59,34 @@
                 return cfg.planes.filter(p => permitidos.includes(String(p.id)));
             },
 
+            get modalidadesEmpresa() {
+                return cfg.modalidades.filter(m => !m.independiente && (cfg.planesPorModalidad[m.id] || []).length > 0);
+            },
+
+            planesDe(modalidadId) {
+                if (!modalidadId) return [];
+                const permitidos = (cfg.planesPorModalidad[modalidadId] || []).map(String);
+                return cfg.planes.filter(p => permitidos.includes(String(p.id)));
+            },
+
+            nombrePlan(planId) {
+                const p = cfg.planes.find(p => String(p.id) === String(planId));
+                return p ? p.nombre : '';
+            },
+
             get hayProporcional() { return this.diasProporcionales < 30; },
+            get hayCotizacion() {
+                return this.tipo === 'empresa' ? this.trabajadores.some(t => t.planId) : !!this.planId;
+            },
+            get totalAfiliacion() {
+                return (this.costoAfiliacion || 0) * (this.tipo === 'empresa' ? this.trabajadores.length : 1);
+            },
             get celularLimpio() { return (this.celular || '').replace(/\D/g, ''); },
             get celularValido() { return this.celularLimpio.length >= 10; },
 
             init() {
                 this.calcularDias();
+                if (this.tipo === 'empresa' && this.trabajadores.length === 0) this.agregarTrabajador();
 
                 // El perfil manda sobre qué modalidades se listan: si lo guardado no
                 // coincide con la modalidad, gana la modalidad para que no se pierda.
@@ -63,7 +103,9 @@
                         // Solo sirve lo guardado si trae el desglose; lo que deja el
                         // asistente de IA es apenas el valor mensual, y ahí se recalcula.
                         const g = cfg.guardado;
-                        if (g && g.completo && g.completo.total !== undefined) {
+                        if (this.tipo === 'empresa') {
+                            this.sumarTrabajadores();
+                        } else if (g && g.completo && g.completo.total !== undefined) {
                             this.diasProporcionales = g.dias_proporcionales || 30;
                             this.resultFull = { ...vacio(), ...g.completo };
                             this.resultProp = { ...vacio(), ...(g.proporcional || g.completo) };
@@ -110,6 +152,85 @@
                 this.diasProporcionales = Math.max(1, 30 - dia + 1);
             },
 
+            cambiarTipo(tipo) {
+                if (this.tipo === tipo) return;
+                this.tipo = tipo;
+                if (tipo === 'empresa') {
+                    if (this.trabajadores.length === 0) this.agregarTrabajador();
+                    this.sumarTrabajadores();
+                } else {
+                    this.recalcular();
+                }
+            },
+
+            agregarTrabajador() {
+                const anterior = this.trabajadores[this.trabajadores.length - 1];
+                this.trabajadores.push(nuevoTrabajador(anterior ? {
+                    modalidadId: anterior.modalidadId, planId: anterior.planId,
+                    salario: anterior.salario, nivelArl: anterior.nivelArl,
+                    completo: anterior.completo, proporcional: anterior.proporcional,
+                } : {}));
+                this.sumarTrabajadores();
+            },
+
+            quitarTrabajador(i) {
+                if (this.trabajadores.length <= 1) return;
+                this.trabajadores.splice(i, 1);
+                this.sumarTrabajadores();
+            },
+
+            onModalidadTrabajador(t) {
+                const permitidos = (cfg.planesPorModalidad[t.modalidadId] || []).map(String);
+                if (t.planId && !permitidos.includes(String(t.planId))) t.planId = '';
+                this.cotizarTrabajador(t);
+            },
+
+            cotizarTrabajador(t) {
+                this.calculo = this.cotizarUno(t);
+                return this.calculo;
+            },
+
+            async cotizarUno(t) {
+                if (!t.modalidadId || !t.planId || !t.salario) {
+                    t.completo = vacio(); t.proporcional = vacio();
+                    this.sumarTrabajadores();
+                    return;
+                }
+                const turno = ++t.turno;
+                t.cargando = true; t.error = false;
+                try {
+                    const dias = this.diasProporcionales;
+                    const [completo, proporcional] = await Promise.all([
+                        this.pedir(30, t),
+                        dias < 30 ? this.pedir(dias, t) : null,
+                    ]);
+                    if (turno !== t.turno) return;
+                    t.completo = completo;
+                    t.proporcional = proporcional || { ...completo };
+                    this.sumarTrabajadores();
+                } catch (e) {
+                    if (turno !== t.turno) return;
+                    console.error('Error cotizando trabajador:', e);
+                    t.error = true;
+                } finally {
+                    if (turno === t.turno) t.cargando = false;
+                }
+            },
+
+            // El resumen de la empresa es la suma de sus trabajadores, concepto por concepto.
+            sumarTrabajadores() {
+                const suma = (campo) => {
+                    const total = vacio();
+                    this.trabajadores.forEach(t => {
+                        Object.keys(total).forEach(k => { total[k] += Number(t[campo]?.[k] || 0); });
+                    });
+                    return total;
+                };
+                this.resultFull = suma('completo');
+                this.resultProp = suma('proporcional');
+                this.error = this.trabajadores.some(t => t.error);
+            },
+
             onPerfilChange() {
                 this.modalidadId = '';
                 this.planId = '';
@@ -127,11 +248,15 @@
             },
 
             recalcular() {
-                this.calculo = this.cotizar();
+                if (this.tipo === 'empresa') {
+                    this.calculo = Promise.all(this.trabajadores.map(t => this.cotizarUno(t)));
+                } else {
+                    this.calculo = this.cotizar();
+                }
                 return this.calculo;
             },
 
-            async pedir(dias) {
+            async pedir(dias, t = null) {
                 const r = await fetch(cfg.urlCotizar, {
                     method: 'POST',
                     headers: {
@@ -140,11 +265,11 @@
                         'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                     },
                     body: JSON.stringify({
-                        tipo_modalidad_id: this.modalidadId,
-                        plan_id: this.planId,
-                        salario: this.salario,
-                        ibc: this.salario, // el backend calcula el IBC real
-                        n_arl: this.nivelArl,
+                        tipo_modalidad_id: t ? t.modalidadId : this.modalidadId,
+                        plan_id: t ? t.planId : this.planId,
+                        salario: t ? t.salario : this.salario,
+                        ibc: t ? t.salario : this.salario, // el backend calcula el IBC real
+                        n_arl: t ? t.nivelArl : this.nivelArl,
                         administracion: this.administracion,
                         dias,
                     }),
@@ -201,12 +326,20 @@
                 if (this.calculo) await this.calculo;
 
                 this.$refs.resultado.value = JSON.stringify({
+                    tipo: this.tipo,
                     dias_proporcionales: this.diasProporcionales,
                     proporcional: this.resultProp,
                     completo: this.resultFull,
                     costo_afiliacion: this.costoAfiliacion,
                     administracion: this.administracion,
+                    trabajadores: this.tipo === 'empresa' ? this.trabajadores.length : 1,
                 });
+                this.$refs.trabajadores.value = this.tipo === 'empresa' ? JSON.stringify(this.trabajadores.map(t => ({
+                    cargo: t.cargo, nombre: t.nombre,
+                    modalidad_id: t.modalidadId, plan_id: t.planId,
+                    salario: t.salario, n_arl: t.nivelArl,
+                    completo: t.completo, proporcional: t.proporcional,
+                }))) : '';
                 this.$refs.resultado.form.submit();
             },
         };

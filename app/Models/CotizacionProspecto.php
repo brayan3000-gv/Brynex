@@ -32,6 +32,9 @@ class CotizacionProspecto extends BaseModel
 
     protected $fillable = [
         'aliado_id',
+        'tipo',
+        'empresa_nombre',
+        'empresa_nit',
         'asesor_id',
         'tipo_doc',
         'cedula',
@@ -131,6 +134,27 @@ class CotizacionProspecto extends BaseModel
     public function gestiones()
     {
         return $this->hasMany(CotizacionGestion::class, 'cotizacion_id')->orderBy('created_at', 'desc');
+    }
+
+    /** Trabajadores cotizados (solo cuando el prospecto es una empresa). */
+    public function trabajadores()
+    {
+        return $this->hasMany(CotizacionTrabajador::class, 'cotizacion_id')->orderBy('orden');
+    }
+
+    public function esEmpresa(): bool
+    {
+        return $this->tipo === 'empresa';
+    }
+
+    /** Nombre con el que se presenta: la empresa si la hay, si no la persona. */
+    public function getNombreMostrarAttribute(): string
+    {
+        if ($this->esEmpresa() && $this->empresa_nombre) {
+            return $this->empresa_nombre;
+        }
+
+        return $this->nombre_completo ?: 'Sin nombre';
     }
 
     public function creador()

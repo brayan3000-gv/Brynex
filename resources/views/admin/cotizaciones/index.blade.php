@@ -39,6 +39,10 @@
         </div>
     </div>
 
+    @if(session('error'))
+        <div class="cz-flash cz-flash--error">{{ session('error') }}</div>
+    @endif
+
     {{-- ══ PESTAÑAS POR ESTADO ══ --}}
     <nav class="cz-tabs" aria-label="Filtrar por estado">
         <a href="{{ $urlTab() }}" class="cz-tab {{ !$estado && !$porLlamar ? 'cz-tab--activo' : '' }}">
@@ -104,7 +108,8 @@
             <tbody>
                 @forelse($prospectos as $prospecto)
                 @php
-                    $nombre = nombre_oracion($prospecto->nombre_completo ?: 'Sin nombre');
+                    $esEmpresa = $prospecto->esEmpresa();
+                    $nombre = $esEmpresa && $prospecto->empresa_nombre ? $prospecto->empresa_nombre : nombre_oracion($prospecto->nombre_completo ?: 'Sin nombre');
                     $palabras = preg_split('/\s+/', $nombre, -1, PREG_SPLIT_NO_EMPTY);
                     $iniciales = mb_substr($palabras[0] ?? 'S', 0, 1) . mb_substr($palabras[count($palabras) > 2 ? 2 : 1] ?? '', 0, 1);
                     $celularLimpio = preg_replace('/\D/', '', (string) $prospecto->celular);
@@ -117,10 +122,12 @@
                     </td>
                     <td class="cz-td-persona">
                         <div class="cz-persona">
-                            <div class="cz-avatar cz-avatar--{{ $prospecto->estado }}">{{ $iniciales }}</div>
+                            <div class="cz-avatar cz-avatar--{{ $prospecto->estado }}">{{ $esEmpresa ? '🏢' : $iniciales }}</div>
                             <div style="min-width:0;">
                                 <a href="{{ route('admin.cotizaciones.show', $prospecto->id) }}" class="cz-nombre">{{ $nombre }}</a>
-                                @if($prospecto->cedula)
+                                @if($esEmpresa)
+                                    <div class="cz-sub">{{ $prospecto->empresa_nit ? 'NIT '.$prospecto->empresa_nit.' · ' : '' }}{{ nombre_oracion($prospecto->nombre_completo ?: 'Sin contacto') }}</div>
+                                @elseif($prospecto->cedula)
                                     <div class="cz-sub">{{ $prospecto->tipo_doc ?: 'CC' }} {{ $prospecto->cedula }}</div>
                                 @endif
                             </div>
@@ -140,7 +147,13 @@
                         @if($prospecto->valor_mensual)
                             <div class="cz-valor">${{ number_format($prospecto->valor_mensual, 0, ',', '.') }}</div>
                         @endif
-                        <div class="cz-sub">{{ $prospecto->plan->nombre ?? ($prospecto->valor_mensual ? '' : 'Sin cotizar') }}</div>
+                        <div class="cz-sub">
+                            @if($esEmpresa)
+                                {{ $prospecto->trabajadores_count }} {{ $prospecto->trabajadores_count == 1 ? 'trabajador' : 'trabajadores' }}
+                            @else
+                                {{ $prospecto->plan->nombre ?? ($prospecto->valor_mensual ? '' : 'Sin cotizar') }}
+                            @endif
+                        </div>
                     </td>
                     <td class="cz-td-origen">
                         @if($prospecto->canal_origen)
@@ -149,7 +162,28 @@
                         <div class="cz-sub">{{ $prospecto->asesor ? nombre_oracion($prospecto->asesor->nombre) : 'Sin asesor' }}</div>
                     </td>
                     <td class="cz-td-estado">
-                        <span class="cz-estado cz-estado--{{ $prospecto->estado }}">{{ $estados[$prospecto->estado] ?? $prospecto->estado }}</span>
+                        @can('cotizaciones.gestionar')
+                            @if($prospecto->estado !== 'convertido')
+                            <div class="cz-estado-menu" x-data="{ abierto: false }" @click.outside="abierto = false">
+                                <button type="button" @click="abierto = !abierto" title="Cambiar estado">
+                                    <span class="cz-estado cz-estado--{{ $prospecto->estado }}">{{ $estados[$prospecto->estado] ?? $prospecto->estado }}</span>
+                                </button>
+                                <form method="POST" action="{{ route('admin.cotizaciones.estado', $prospecto->id) }}" class="cz-estado-lista" x-show="abierto" x-cloak>
+                                    @csrf
+                                    @foreach($estados as $key => $val)
+                                        @continue($key === 'convertido')
+                                        <button type="submit" name="estado" value="{{ $key }}" {{ $key === $prospecto->estado ? 'disabled' : '' }}>
+                                            <span class="cz-estado cz-estado--{{ $key }}">{{ $val }}</span>
+                                        </button>
+                                    @endforeach
+                                </form>
+                            </div>
+                            @else
+                                <span class="cz-estado cz-estado--{{ $prospecto->estado }}">{{ $estados[$prospecto->estado] ?? $prospecto->estado }}</span>
+                            @endif
+                        @else
+                            <span class="cz-estado cz-estado--{{ $prospecto->estado }}">{{ $estados[$prospecto->estado] ?? $prospecto->estado }}</span>
+                        @endcan
                     </td>
                     <td class="cz-td-llamada">
                         @if($prospecto->proxima_llamada)

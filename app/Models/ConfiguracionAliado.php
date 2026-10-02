@@ -17,6 +17,8 @@ class ConfiguracionAliado extends BaseModel
         'mora_dia_habil_inicio', 'mora_minimo', 'mora_segundo',
         'marketing_max_campanas', 'marketing_dias_periodo',
         'ingreso_retiro_valor_mensual', 'tiempo_parcial_costo_afiliacion', 'arl_descuento_porcentaje',
+        'prospectos_recordatorio', 'prospectos_recordatorio_celular',
+        'prospectos_dias_sin_respuesta', 'prospectos_dias_cierre',
     ];
     protected $casts = [
         'administracion'             => 'decimal:2',
@@ -32,6 +34,9 @@ class ConfiguracionAliado extends BaseModel
         'ingreso_retiro_valor_mensual'    => 'decimal:2',
         'tiempo_parcial_costo_afiliacion' => 'decimal:2',
         'arl_descuento_porcentaje'        => 'integer',
+        'prospectos_recordatorio'         => 'boolean',
+        'prospectos_dias_sin_respuesta'   => 'integer',
+        'prospectos_dias_cierre'          => 'integer',
     ];
 
     public function aliado(): BelongsTo

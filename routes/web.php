@@ -243,6 +243,8 @@ Route::middleware('auth')->group(function () {
             Route::post('cotizaciones/{id}/gestion', [\App\Http\Controllers\Admin\CotizacionController::class, 'registrarGestion'])->name('cotizaciones.gestion');
             Route::post('cotizaciones/{id}/cotizar', [\App\Http\Controllers\Admin\CotizacionController::class, 'cotizar'])->name('cotizaciones.cotizar');
             Route::post('cotizaciones/{id}/convertir', [\App\Http\Controllers\Admin\CotizacionController::class, 'convertirACliente'])->name('cotizaciones.convertir');
+            Route::post('cotizaciones/{id}/whatsapp', [\App\Http\Controllers\Admin\CotizacionController::class, 'enviarWhatsapp'])->name('cotizaciones.whatsapp');
+            Route::post('cotizaciones/{id}/estado', [\App\Http\Controllers\Admin\CotizacionController::class, 'cambiarEstado'])->name('cotizaciones.estado');
         });
         Route::middleware(['permiso:cotizaciones.ver', 'permiso.escritura:cotizaciones.gestionar'])->group(function () {
             Route::get('cotizaciones/{id}/pdf', [\App\Http\Controllers\Admin\CotizacionController::class, 'descargarPdf'])->name('cotizaciones.pdf');

@@ -289,7 +289,7 @@
               data-arl="{{ $plan->incluye_arl ? '1':'0' }}"
               data-pen="{{ $plan->incluye_pension ? '1':'0' }}"
               data-caja="{{ $plan->incluye_caja ? '1':'0' }}"
-              {{ ($esEdicion && old('plan_id', $contrato->plan_id ?? '') == $plan->id) ? 'selected' : '' }}>
+              {{ (($esEdicion || !empty($contrato->plan_id)) && old('plan_id', $contrato->plan_id ?? '') == $plan->id) ? 'selected' : '' }}>
             {{ $plan->nombre }}
           </option>
           @endforeach
@@ -3684,7 +3684,7 @@ function cotizador() {
         seguroId:        '{{ old('seguro_id', $contrato->seguro_id ?? '') }}',
         nivelArl:        {{ (int)old('n_arl', $contrato->n_arl ?? 1) }},
         pctCaja:         {{ (float)old('porcentaje_caja', $contrato->porcentaje_caja ?? 2) }},
-        planId:          '{{ $esEdicion ? old('plan_id', $contrato->plan_id ?? '') : '' }}',
+        planId:          '{{ ($esEdicion || !empty($contrato->plan_id)) ? old('plan_id', $contrato->plan_id ?? '') : '' }}',
         planNombre:      '',
         tipoModalidadId: '{{ old('tipo_modalidad_id', $contrato->tipo_modalidad_id ?? '') }}',
         pagaMesActual:   '{{ old('paga_mes_actual', ($contrato->paga_mes_actual ?? false) ? '1' : '0') }}',

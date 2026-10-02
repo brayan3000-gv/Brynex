@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\CotizacionProspecto;
 use App\Models\CotizacionGestion;
 use App\Models\Cliente;
-use App\Models\Contrato;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -29,12 +28,15 @@ class CotizacionController extends Controller
         $porLlamar = $request->boolean('llamar');
 
         $query = CotizacionProspecto::with(['asesor', 'creador', 'plan'])
+            ->withCount('trabajadores')
             ->where('aliado_id', $aliadoId);
 
         if ($buscar) {
             $query->where(function ($q) use ($buscar) {
                 $q->where('cedula', 'LIKE', "%{$buscar}%")
                   ->orWhere('celular', 'LIKE', "%{$buscar}%")
+                  ->orWhere('empresa_nombre', 'LIKE', "%{$buscar}%")
+                  ->orWhere('empresa_nit', 'LIKE', "%{$buscar}%")
                   ->orWherePalabrasSinTildes(['primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido'], $buscar);
             });
         }
@@ -115,12 +117,14 @@ class CotizacionController extends Controller
         // Si es_independiente no viene, asume 0
         $data['es_independiente'] = $request->input('es_independiente', 0);
         $data['resultado_cotizacion'] = $request->input('resultado_cotizacion') ? json_decode($request->input('resultado_cotizacion'), true) : null;
+        $trabajadores = $this->trabajadoresDesde($request, $data);
 
         if (empty($data['estado'])) {
             $data['estado'] = 'sin_respuesta';
         }
 
         $prospecto = CotizacionProspecto::create($data);
+        $this->guardarTrabajadores($prospecto, $trabajadores);
 
         // Crear automáticamente la gestión inicial de cotización
         $fechaCotizacion = $prospecto->fecha_cotizacion 
@@ -143,14 +147,16 @@ class CotizacionController extends Controller
     public function show(int $id)
     {
         $aliadoId = session('aliado_id_activo');
-        $prospecto = CotizacionProspecto::with(['gestiones.usuario', 'asesor', 'creador', 'modalidad', 'plan', 'municipio'])
+        $prospecto = CotizacionProspecto::with(['gestiones.usuario', 'asesor', 'creador', 'modalidad', 'plan', 'municipio', 'trabajadores'])
             ->where('aliado_id', $aliadoId)
             ->findOrFail($id);
             
-        $cotizacionCalc = $this->calcularCotizacion($prospecto);
         $lookups = $this->getLookups();
+        $servicio = app(\App\Services\CotizacionProspectoService::class);
+        $mensajeWhatsapp = $servicio->mensajeWhatsapp($prospecto);
+        $whatsappApi = $this->whatsappApiDisponible($prospecto);
 
-        return view('admin.cotizaciones.show', compact('prospecto', 'cotizacionCalc', 'lookups'));
+        return view('admin.cotizaciones.show', compact('prospecto', 'lookups', 'mensajeWhatsapp', 'whatsappApi'));
     }
 
     public function update(Request $request, int $id)
@@ -174,8 +180,10 @@ class CotizacionController extends Controller
         if ($request->has('resultado_cotizacion')) {
             $data['resultado_cotizacion'] = $request->input('resultado_cotizacion') ? json_decode($request->input('resultado_cotizacion'), true) : null;
         }
+        $trabajadores = $this->trabajadoresDesde($request, $data);
 
         $prospecto->update($data);
+        $this->guardarTrabajadores($prospecto, $trabajadores);
 
         return redirect()->route('admin.cotizaciones.show', $id)
             ->with('success', 'Prospecto actualizado correctamente.');
@@ -224,9 +232,42 @@ class CotizacionController extends Controller
         if ($request->has('plan_id')) $prospecto->plan_id = $request->plan_id;
         if ($request->has('salario_base')) $prospecto->salario_base = $request->salario_base;
 
-        $cotizacionCalc = $this->calcularCotizacion($prospecto);
+        return response()->json(app(\App\Services\CotizacionProspectoService::class)->resultado($prospecto));
+    }
 
-        return response()->json($cotizacionCalc);
+    /** Manda la cotización (PDF + texto) por la API de WhatsApp del aliado. */
+    public function enviarWhatsapp(Request $request, int $id)
+    {
+        $request->validate(['texto' => 'required|string|max:3000']);
+
+        $aliadoId = session('aliado_id_activo');
+        $prospecto = CotizacionProspecto::with('trabajadores')->where('aliado_id', $aliadoId)->findOrFail($id);
+
+        $resultado = app(\App\Services\CotizacionProspectoService::class)
+            ->enviarWhatsapp($prospecto, $request->input('texto'), auth()->id());
+
+        return redirect()->route('admin.cotizaciones.show', $id)
+            ->with($resultado['ok'] ? 'success' : 'error', $resultado['mensaje']);
+    }
+
+    /**
+     * Si el PDF puede salir por la API: el aliado la tiene configurada y el número
+     * del prospecto tiene una conversación con la ventana de 24 h abierta.
+     */
+    private function whatsappApiDisponible(CotizacionProspecto $prospecto): array
+    {
+        $config = \App\Models\WhatsappConfig::paraAliado((int) $prospecto->aliado_id);
+        if (! $config->activo || ! $config->credencialesCompletas()) {
+            return ['configurado' => false, 'ventana' => false];
+        }
+        if (! \App\Services\WhatsappApiService::esCelularColombiano((string) $prospecto->celular)) {
+            return ['configurado' => true, 'ventana' => false];
+        }
+        $conversacion = \App\Models\WhatsappConversacion::where('aliado_id', $prospecto->aliado_id)
+            ->where('wa_contact_id', \App\Services\WhatsappApiService::normalizarNumero((string) $prospecto->celular))
+            ->first();
+
+        return ['configurado' => true, 'ventana' => (bool) $conversacion?->ventanaActiva()];
     }
 
     public function convertirACliente(Request $request, int $id)
@@ -250,8 +291,10 @@ class CotizacionController extends Controller
 
         if ($clienteExistente) {
             $prospecto->update(['estado' => 'convertido', 'cliente_id' => $clienteExistente->id]);
-            return redirect()->route('admin.clientes.edit', $clienteExistente->id)
-                ->with('success', 'El prospecto se vinculó a un cliente existente.');
+            $this->gestionAutomatica($prospecto, 'Prospecto convertido: se vinculó al cliente existente '.$clienteExistente->cedula.'.');
+
+            return redirect()->route('admin.contratos.create', ['cedula' => $clienteExistente->cedula, 'cotizacion' => $prospecto->id])
+                ->with('success', 'El prospecto se vinculó a un cliente existente. El contrato arranca con lo cotizado.');
         }
 
         // Crear nuevo cliente
@@ -274,22 +317,68 @@ class CotizacionController extends Controller
         ]);
 
         $prospecto->update(['estado' => 'convertido', 'cliente_id' => $cliente->id]);
+        $this->gestionAutomatica($prospecto, 'Prospecto convertido a cliente.');
 
-        return redirect()->route('admin.clientes.edit', $cliente->id)
-            ->with('success', 'Prospecto convertido a cliente exitosamente. Puede completar su contrato ahora.');
+        return redirect()->route('admin.contratos.create', ['cedula' => $cliente->cedula, 'cotizacion' => $prospecto->id])
+            ->with('success', 'Cliente creado. El contrato arranca con el plan y los valores cotizados: revise y guarde.');
+    }
+
+    /** Cambio de estado rápido desde el listado o el detalle. */
+    public function cambiarEstado(Request $request, int $id)
+    {
+        $request->validate([
+            'estado' => 'required|in:'.implode(',', array_keys(CotizacionProspecto::ESTADOS)),
+            'proxima_llamada' => 'nullable|date',
+        ]);
+
+        $aliadoId = session('aliado_id_activo');
+        $prospecto = CotizacionProspecto::where('aliado_id', $aliadoId)->findOrFail($id);
+        $nuevo = $request->input('estado');
+
+        if ($nuevo === 'convertido') {
+            return redirect()->back()->with('error', 'Para pasar a convertido use «Convertir a cliente» en el detalle.');
+        }
+
+        $anterior = CotizacionProspecto::ESTADOS[$prospecto->estado] ?? $prospecto->estado;
+        $cambios = ['estado' => $nuevo];
+        if ($request->filled('proxima_llamada')) {
+            $cambios['proxima_llamada'] = $request->input('proxima_llamada');
+        } elseif (in_array($nuevo, CotizacionProspecto::ESTADOS_CERRADOS)) {
+            $cambios['proxima_llamada'] = null;
+        }
+        $prospecto->update($cambios);
+
+        CotizacionGestion::create([
+            'cotizacion_id' => $prospecto->id,
+            'user_id' => auth()->id(),
+            'tipo_gestion' => 'Nota',
+            'descripcion' => 'Estado cambiado de «'.$anterior.'» a «'.CotizacionProspecto::ESTADOS[$nuevo].'» desde el listado.',
+            'resultado' => $nuevo,
+            'proxima_llamada' => $cambios['proxima_llamada'] ?? null,
+        ]);
+
+        return redirect()->back()->with('success', 'Estado actualizado: '.CotizacionProspecto::ESTADOS[$nuevo].'.');
+    }
+
+    private function gestionAutomatica(CotizacionProspecto $prospecto, string $texto): void
+    {
+        CotizacionGestion::create([
+            'cotizacion_id' => $prospecto->id,
+            'user_id' => auth()->id(),
+            'tipo_gestion' => 'Nota',
+            'descripcion' => $texto,
+            'resultado' => $prospecto->estado,
+            'proxima_llamada' => null,
+        ]);
     }
 
     public function descargarPdf(int $id)
     {
         $aliadoId = session('aliado_id_activo');
-        $prospecto = CotizacionProspecto::where('aliado_id', $aliadoId)->findOrFail($id);
-        $cotizacionCalc = $this->calcularCotizacion($prospecto);
-        $aliado = \App\Models\Aliado::find($aliadoId);
+        $prospecto = CotizacionProspecto::with('trabajadores')->where('aliado_id', $aliadoId)->findOrFail($id);
+        $servicio = app(\App\Services\CotizacionProspectoService::class);
 
-        $pdf = \PDF::loadView('pdf.cotizacion_prospecto', compact('prospecto', 'cotizacionCalc', 'aliado'));
-        app(\App\Services\TrazaArchivoService::class)->marcarPdf($pdf);
-        
-        return $pdf->download("Cotizacion_Prospecto_{$prospecto->cedula}.pdf");
+        return $servicio->pdf($prospecto)->download($servicio->nombreArchivoPdf($prospecto));
     }
 
     // --- Helpers ---
@@ -297,6 +386,9 @@ class CotizacionController extends Controller
     private function validarProspecto(Request $request, ?int $id = null): array
     {
         return $request->validate([
+            'tipo'                => 'nullable|in:persona,empresa',
+            'empresa_nombre'      => 'required_if:tipo,empresa|nullable|string|max:200',
+            'empresa_nit'         => 'nullable|string|max:20',
             'tipo_doc'            => 'nullable|string|max:10',
             'cedula'              => 'nullable|string|max:20',
             'nombre_completo'     => 'required|string|max:200',
@@ -322,7 +414,77 @@ class CotizacionController extends Controller
             'estado'              => 'nullable|string|max:20',
             'asesor_id'           => 'nullable|integer',
             'proxima_llamada'     => 'nullable|date',
+        ], [
+            'empresa_nombre.required_if' => 'Escriba el nombre de la empresa que se cotiza.',
         ]);
+    }
+
+    /**
+     * Trabajadores de una cotización de empresa, tal como los manda el formulario
+     * (JSON en `trabajadores`). Para una persona devuelve una lista vacía y deja
+     * los campos de empresa en blanco.
+     */
+    private function trabajadoresDesde(Request $request, array &$data): array
+    {
+        $data['tipo'] = ($data['tipo'] ?? 'persona') === 'empresa' ? 'empresa' : 'persona';
+
+        if ($data['tipo'] !== 'empresa') {
+            $data['empresa_nombre'] = null;
+            $data['empresa_nit'] = null;
+
+            return [];
+        }
+
+        // Una empresa no tiene un plan único: lo que se cotiza está en cada trabajador.
+        $data['modalidad_id'] = null;
+        $data['plan_id'] = null;
+        $data['salario_base'] = null;
+        $data['es_independiente'] = 0;
+
+        $lista = json_decode((string) $request->input('trabajadores'), true);
+        if (! is_array($lista) || $lista === []) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'trabajadores' => 'Agregue al menos un trabajador con su cargo y su plan.',
+            ]);
+        }
+
+        $trabajadores = [];
+        foreach (array_values($lista) as $i => $t) {
+            $cargo = trim((string) ($t['cargo'] ?? ''));
+            // La modalidad «Dependiente E» tiene id 0: no sirve empty() aquí.
+            $sinDato = fn ($v) => $v === null || $v === '';
+            if ($cargo === '' || $sinDato($t['modalidad_id'] ?? null) || $sinDato($t['plan_id'] ?? null)) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'trabajadores' => 'El trabajador '.($i + 1).' necesita cargo, modalidad y plan.',
+                ]);
+            }
+            $trabajadores[] = [
+                'orden' => $i + 1,
+                'cargo' => mb_substr($cargo, 0, 100),
+                'nombre' => mb_substr(trim((string) ($t['nombre'] ?? '')), 0, 150) ?: null,
+                'modalidad_id' => (int) $t['modalidad_id'],
+                'plan_id' => (int) $t['plan_id'],
+                'salario' => (int) ($t['salario'] ?? 0),
+                'n_arl' => max(1, min(5, (int) ($t['n_arl'] ?? 1))),
+                'resultado' => [
+                    'completo' => is_array($t['completo'] ?? null) ? $t['completo'] : null,
+                    'proporcional' => is_array($t['proporcional'] ?? null) ? $t['proporcional'] : null,
+                ],
+            ];
+        }
+
+        return $trabajadores;
+    }
+
+    /** Reemplaza los trabajadores del prospecto por los que llegaron del formulario. */
+    private function guardarTrabajadores(CotizacionProspecto $prospecto, array $trabajadores): void
+    {
+        DB::transaction(function () use ($prospecto, $trabajadores) {
+            $prospecto->trabajadores()->delete();
+            foreach ($trabajadores as $t) {
+                $prospecto->trabajadores()->create($t + ['aliado_id' => $prospecto->aliado_id]);
+            }
+        });
     }
 
     private function getLookups(): array
@@ -371,29 +533,6 @@ class CotizacionController extends Controller
     /** Asesores del aliado activo (id => nombre) para los selectores del módulo. */
     private function asesoresDelAliado(): array
     {
-        return DB::table('asesores')
-            ->where('aliado_id', session('aliado_id_activo'))
-            ->whereNull('deleted_at')
-            ->orderBy('nombre')
-            ->pluck('nombre', 'id')
-            ->toArray();
-    }
-
-    private function calcularCotizacion(CotizacionProspecto $prospecto): array
-    {
-        if (!$prospecto->modalidad_id || !$prospecto->plan_id) {
-            return [];
-        }
-
-        // Crear un Contrato en memoria para usar su lógica de cotización
-        $contratoMock = new Contrato([
-            'aliado_id' => $prospecto->aliado_id,
-            'tipo_modalidad_id' => $prospecto->modalidad_id,
-            'plan_id' => $prospecto->plan_id,
-            'salario' => $prospecto->salario_base,
-            'n_arl' => 1, // Por defecto riesgo 1
-        ]);
-
-        return $contratoMock->calcularCotizacion();
+        return Cliente::listaAsesores();
     }
 }

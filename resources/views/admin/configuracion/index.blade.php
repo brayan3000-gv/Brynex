@@ -241,6 +241,54 @@
       </div>
     </div>
 
+    {{-- Card: Seguimiento de prospectos (cotizaciones) --}}
+    <div x-data="{ aviso: {{ $globalMoraCfg?->prospectos_recordatorio ? 'true' : 'false' }} }"
+         style="background:#fdf4ff;border-radius:9px;padding:0.85rem;border:1.5px solid #e9d5ff;grid-column:span 3;">
+      <div style="font-size:0.62rem;font-weight:700;color:#7e22ce;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.55rem;">
+        📞 Cotizaciones — Seguimiento automático de prospectos
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.85rem;align-items:start;">
+        <div>
+          <label style="display:flex;align-items:center;gap:0.55rem;cursor:pointer;margin-bottom:0.4rem;">
+            <input type="hidden" name="prospectos[recordatorio]" value="0">
+            <input type="checkbox" name="prospectos[recordatorio]" value="1" x-model="aviso"
+                   style="width:18px;height:18px;accent-color:#7e22ce;cursor:pointer;">
+            <span x-text="aviso ? 'Aviso diario activado' : 'Aviso diario desactivado'"
+                  :style="aviso ? 'color:#7e22ce;font-weight:700;font-size:0.82rem' : 'color:#94a3b8;font-weight:600;font-size:0.82rem'"></span>
+          </label>
+          <div style="font-size:0.72rem;color:#6b21a8;line-height:1.45;">
+            Cada mañana (7:30) llega por WhatsApp la lista de prospectos con <strong>llamada para hoy o vencida</strong>.
+            Si el prospecto tiene asesor con celular, le llega al asesor; si no, a este número.
+          </div>
+          <input type="text" name="prospectos[recordatorio_celular]" inputmode="numeric" placeholder="Celular para los avisos (10 dígitos)"
+                 value="{{ $globalMoraCfg?->prospectos_recordatorio_celular }}"
+                 style="margin-top:0.45rem;width:100%;padding:0.45rem 0.6rem;border:2px solid #e9d5ff;border-radius:7px;font-size:0.85rem;font-family:monospace;color:#6b21a8;background:#fff;">
+        </div>
+        <div>
+          <div style="font-size:0.72rem;color:#6b21a8;line-height:1.45;margin-bottom:0.4rem;">
+            <strong>Pasar a «Sin respuesta»</strong> cuando un interesado o pendiente lleva estos días sin ninguna gestión. Vacío = no hacer nada.
+          </div>
+          <div style="display:flex;align-items:center;gap:0.35rem;">
+            <input type="number" min="1" max="365" name="prospectos[dias_sin_respuesta]" placeholder="Ej: 5"
+                   value="{{ $globalMoraCfg?->prospectos_dias_sin_respuesta }}"
+                   style="width:90px;padding:0.45rem 0.6rem;border:2px solid #e9d5ff;border-radius:7px;font-size:0.9rem;font-family:monospace;font-weight:700;color:#7e22ce;background:#fff;text-align:center;">
+            <span style="color:#7e22ce;font-size:0.75rem;">días sin gestión</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.72rem;color:#6b21a8;line-height:1.45;margin-bottom:0.4rem;">
+            <strong>Cerrar como «No interesado»</strong> cuando un prospecto abierto lleva estos días sin gestión ni respuesta. Queda una nota en su historial. Vacío = no cerrar.
+          </div>
+          <div style="display:flex;align-items:center;gap:0.35rem;">
+            <input type="number" min="1" max="365" name="prospectos[dias_cierre]" placeholder="Ej: 30"
+                   value="{{ $globalMoraCfg?->prospectos_dias_cierre }}"
+                   style="width:90px;padding:0.45rem 0.6rem;border:2px solid #e9d5ff;border-radius:7px;font-size:0.9rem;font-family:monospace;font-weight:700;color:#7e22ce;background:#fff;text-align:center;">
+            <span style="color:#7e22ce;font-size:0.75rem;">días sin gestión</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 

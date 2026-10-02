@@ -77,6 +77,27 @@ class ContratoController extends Controller
             $contrato->cargo = $solicitudPortal->datos['cargo'] ?? null;
         }
 
+        // Viene de convertir un prospecto cotizado: el contrato arranca con el
+        // plan, la modalidad, el salario y las tarifas que se le cotizaron.
+        $cotizacion = $request->integer('cotizacion')
+            ? \App\Models\CotizacionProspecto::where('aliado_id', $alidoId)->find($request->integer('cotizacion'))
+            : null;
+        if ($cotizacion && ! $cotizacion->esEmpresa()) {
+            $contrato->tipo_modalidad_id = $cotizacion->modalidad_id;
+            $contrato->plan_id = $cotizacion->plan_id;
+            $contrato->salario = $cotizacion->salario_base ?: null;
+            $contrato->ibc = $cotizacion->salario_base ?: null;
+            $contrato->n_arl = $cotizacion->n_arl ?: 1;
+            $contrato->asesor_id = $cotizacion->asesor_id;
+            $contrato->fecha_ingreso = $cotizacion->fecha_ingreso;
+            if ($cotizacion->administracion !== null) {
+                $contrato->administracion = $cotizacion->administracion;
+            }
+            if ($cotizacion->costo_afiliacion !== null) {
+                $contrato->costo_afiliacion = $cotizacion->costo_afiliacion;
+            }
+        }
+
         return view('admin.contratos.form', array_merge(
             $this->datosFormulario($alidoId, $cliente, null, null),
             ['contrato' => $contrato, 'cliente' => $cliente, 'solicitudPortal' => $solicitudPortal]
