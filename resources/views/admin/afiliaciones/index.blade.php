@@ -2694,7 +2694,7 @@ function abrirClavesRS(rsId, rsNombre, delContrato) {
     // Al reabrir tras guardar una clave se conserva el contrato de antes.
     rsContratoActivo = delContrato || (rsId === rsIdActivo ? rsContratoActivo : {});
     rsIdActivo = rsId;
-    if (window.Portales) Portales.montar('rs-portales', rsId, rsContratoActivo);
+    if (window.Portales) Portales.montar('rs-portales', rsId, rsContratoActivo, { soloConDatos: true });
     rsNombreActivo = rsNombre;
     var panel   = document.getElementById('rs-claves-panel');
     var overlay = document.getElementById('rs-claves-overlay');

@@ -4,8 +4,11 @@
 
     Lo usan la pestaña «Portales» de la ficha de la razón social y el panel 🔑
     de Afiliaciones. Se incluye una sola vez por página y se monta con
-        Portales.montar(elemento, rsId, { eps, arl, caja })
-    donde eps/arl/caja (opcionales) son las del contrato, para resaltarlas.
+        Portales.montar(elemento, rsId, { eps, arl, caja }, { soloConDatos })
+    donde eps/arl/caja (opcionales) son las del contrato, para resaltarlas, y
+    soloConDatos deja fuera las entidades sin clave ni asesor (el panel de
+    Afiliaciones es para entrar a los portales; lo que falta se llena en la
+    ficha de la razón social). La del contrato se muestra igual si falta.
     Los datos salen de PortalEntidadController.
 --}}
 @once
@@ -168,7 +171,7 @@ window.Portales = (function () {
     };
     const GRUPOS = { ARL: '🛡️ ARL', CAJA: '🏠 Caja de compensación', EPS: '🏥 EPS' };
 
-    let el = null, rsId = null, contrato = {}, datos = null, editando = null;
+    let el = null, rsId = null, contrato = {}, datos = null, editando = null, soloConDatos = false;
     // Filtros: tipo (''/ARL/CAJA/EPS), texto, solo las que faltan, solo las que la empresa usa.
     let filtro = { tipo: '', texto: '', faltan: false, usadas: false };
 
@@ -178,10 +181,11 @@ window.Portales = (function () {
     const OJO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
     const OJO_NO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-2.2 3.2M6.6 6.6C3.8 8.3 2 12 2 12s3.5 7 10 7c1.9 0 3.6-.6 5-1.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m3 3 18 18"/></svg>';
 
-    function montar(contenedor, id, delContrato) {
+    function montar(contenedor, id, delContrato, opciones) {
         el = typeof contenedor === 'string' ? document.getElementById(contenedor) : contenedor;
         rsId = id;
         contrato = delContrato || {};
+        soloConDatos = !!opciones?.soloConDatos;
         filtro = { tipo: '', texto: '', faltan: false, usadas: false };
         datos = null;
         el.innerHTML = '<div class="pe-msg">⏳ Cargando portales…</div>';
@@ -207,7 +211,7 @@ window.Portales = (function () {
                 <input type="search" class="pe-buscar" placeholder="Buscar entidad…" data-pe="buscar" autocomplete="off">
                 ${tipos.map(([k, t]) => `<button type="button" class="pe-filtro ${k === '' ? 'activo' : ''}" data-tipo="${k}">${t}</button>`).join('')}
                 <span class="pe-sep"></span>
-                <button type="button" class="pe-filtro" data-solo="faltan">Solo faltan</button>
+                ${soloConDatos ? '' : '<button type="button" class="pe-filtro" data-solo="faltan">Solo faltan</button>'}
                 <button type="button" class="pe-filtro" data-solo="usadas">Con afiliados</button>
             </div>
             <div data-pe="lista"></div>`;
@@ -226,6 +230,7 @@ window.Portales = (function () {
     }
 
     function pasaFiltro(f) {
+        if (soloConDatos && ['falta', 'no_aplica'].includes(f.estado) && !f.del_contrato) return false;
         if (filtro.tipo && f.tipo !== filtro.tipo) return false;
         if (filtro.faltan && f.estado !== 'falta') return false;
         if (filtro.usadas && !(f.tipo !== 'EPS' || f.afiliados > 0 || f.del_contrato)) return false;
@@ -240,7 +245,9 @@ window.Portales = (function () {
             <span class="pe-cifra ${r.faltan_con_afiliados ? 'mal' : 'bien'}">${r.faltan_con_afiliados
                 ? `🔴 Faltan ${r.faltan_con_afiliados} que la empresa usa`
                 : '✅ Las entidades que la empresa usa tienen datos'}</span>
-            <span class="pe-sub" style="margin:0">${r.faltan} de ${r.total} sin datos en total</span>`;
+            <span class="pe-sub" style="margin:0">${soloConDatos
+                ? 'Aquí solo se ven las que tienen datos; las que faltan se llenan en la pestaña Portales de la razón social.'
+                : `${r.faltan} de ${r.total} sin datos en total`}</span>`;
 
         let h = '';
         let hay = 0;
@@ -261,7 +268,7 @@ window.Portales = (function () {
             h += '<div class="pe-msg">Ninguna entidad con ese filtro.</div>';
         }
 
-        if (datos.sin_clasificar.length && !filtro.texto && !filtro.tipo) {
+        if (datos.sin_clasificar.length && !filtro.texto && !filtro.tipo && !soloConDatos) {
             h += `<div class="pe-grupo">❓ Claves sin clasificar</div>
                 <div class="pe-aviso">Se guardaron con un nombre que no dice la entidad (p. ej. «EPS» o «Caja»). Asígnalas para que cuenten arriba.</div>
                 <div class="pe-tabla">${datos.sin_clasificar.map(sinClasificar).join('')}</div>`;
