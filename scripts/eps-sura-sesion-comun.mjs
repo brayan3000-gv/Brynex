@@ -11,6 +11,7 @@
  * todo lo que lee la página va con reintentos.
  */
 import { loginSso } from './arl-sura-sesion-comun.mjs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 
 const URL_LOGIN =
   'https://login.sura.com/sso/servicelogin.aspx' +
@@ -93,22 +94,67 @@ export async function entrarEmpresaEps(pagina, { tipoDocumento, usuario, contras
     if (!campo) return; // una sola empresa: el portal no pregunta
   }
 
-  await pagina.select('[id="loginEmpresas:tipoDniEmpresa"]', 'NI').catch(() => {});
-  await pagina.click(SEL_NIT, { clickCount: 3 });
-  await pagina.type(SEL_NIT, String(nitEmpresa), { delay: 40 });
-  await pulsarId(pagina, 'loginEmpresas:generar');
-
-  // Entró cuando el formulario de la empresa desaparece; si sigue ahí, el
-  // portal no la aceptó (el usuario no la administra, NIT mal escrito). Los
-  // enlaces del menú no sirven de señal: también existen en esta pantalla.
+  // Se intenta varias veces recargando la pantalla. El SSO sigue asentándose
+  // cuando el robot llega aquí, y si la vista se dibujó antes de que la sesión
+  // de Semp estuviera lista, el formulario se envía contra un ViewState que ya
+  // no vale: el portal devuelve la misma pantalla con el NIT escrito y el aviso
+  // «Usted no tiene acceso a los recursos de esta Aplicación», que parece falta
+  // de permiso y no lo es —el 2-oct-2026 el mismo usuario entró a mano a esa
+  // empresa sin problema mientras el robot fallaba—. Una recarga limpia basta.
   let sigue = true;
-  for (let i = 0; i < 25 && sigue; i++) {
-    await esperar(800);
-    try { sigue = !!(await pagina.$(SEL_NIT)); } catch { sigue = true; }
+
+  for (let intento = 1; intento <= 3 && sigue; intento++) {
+    if (intento > 1) {
+      await pagina.goto(URL_EMPRESA, { waitUntil: 'networkidle2', timeout: 60000 }).catch(() => {});
+      await esperar(2000);
+      if (! await pagina.$(SEL_NIT).catch(() => null)) return; // ya quedó dentro
+    }
+
+    await pagina.select('[id="loginEmpresas:tipoDniEmpresa"]', 'NI').catch(() => {});
+    await pagina.click(SEL_NIT, { clickCount: 3 });
+    await pagina.type(SEL_NIT, String(nitEmpresa), { delay: 40 });
+    await pulsarId(pagina, 'loginEmpresas:generar');
+
+    // Entró cuando el formulario de la empresa desaparece; si sigue ahí, el
+    // portal no la aceptó (el usuario no la administra, NIT mal escrito, o la
+    // vista venía caducada). Los enlaces del menú no sirven de señal: también
+    // existen en esta pantalla.
+    sigue = true;
+    for (let i = 0; i < 25 && sigue; i++) {
+      await esperar(800);
+      try { sigue = !!(await pagina.$(SEL_NIT)); } catch { sigue = true; }
+    }
+
+    if (sigue) {
+      process.stderr.write(`@paso la empresa ${nitEmpresa} no entró (intento ${intento} de 3)\n`);
+    }
   }
 
   if (sigue) {
     const t = (await texto(pagina)).replace(/\s+/g, ' ').trim();
+    await dejarRastro(pagina, `empresa-${nitEmpresa}`);
     throw new Error(`El portal no aceptó la empresa ${nitEmpresa}: ${t.slice(0, 200)}`);
+  }
+}
+
+/**
+ * Captura y HTML de la pantalla donde se atascó.
+ *
+ * El mensaje del portal no alcanza para saber por qué: la misma pantalla sale
+ * cuando el usuario no administra la empresa, cuando el NIT no entró en el
+ * campo y cuando el botón no llegó a pulsarse. A mano el mismo usuario entra
+ * sin problema (probado con LALA GROUP el 2-oct-2026), así que la diferencia
+ * está en lo que ve el robot y hay que poder mirarlo.
+ */
+async function dejarRastro(pagina, nombre) {
+  try {
+    const carpeta = 'storage/app/robots/eps-sura';
+    mkdirSync(carpeta, { recursive: true });
+    const sello = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    await pagina.screenshot({ path: `${carpeta}/${nombre}-${sello}.png`, fullPage: true });
+    writeFileSync(`${carpeta}/${nombre}-${sello}.html`, await pagina.content());
+    process.stderr.write(`@paso rastro guardado en ${carpeta}/${nombre}-${sello}\n`);
+  } catch (e) {
+    process.stderr.write(`@paso no se pudo guardar el rastro: ${e.message}\n`);
   }
 }
