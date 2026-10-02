@@ -135,6 +135,8 @@
                 <div>
                     <label class="ca-lbl">Entidad / Portal *</label>
                     <input type="text" id="ca-f-entidad" class="ca-inp" placeholder="Ej: Portal EPS Sura, Gmail...">
+                    @include('admin.partials._entidad_clave')
+                    <script>EntidadClave.mejorar('ca-f-tipo', 'ca-f-entidad');</script>
                 </div>
                 {{-- Usuario --}}
                 <div>
@@ -384,7 +386,7 @@
                 document.getElementById('ca-modal-titulo').textContent  = '✏️ Editar Clave #' + clave.id;
                 document.getElementById('ca-modal-id').value            = clave.id;
                 document.getElementById('ca-f-tipo').value              = clave.tipo || 'Portal';
-                document.getElementById('ca-f-entidad').value           = clave.entidad || '';
+                document.getElementById('ca-f-entidad').value           = clave.entidad || ''; EntidadClave.refrescar('ca-f-entidad');
                 document.getElementById('ca-f-usuario').value           = clave.usuario || '';
                 document.getElementById('ca-f-contrasena').value        = clave.contrasena || '';
                 document.getElementById('ca-f-link').value              = clave.link_acceso || '';
@@ -395,7 +397,7 @@
                 document.getElementById('ca-modal-titulo').textContent = '🔑 Nueva Clave';
                 document.getElementById('ca-modal-id').value           = '';
                 document.getElementById('ca-f-tipo').value             = 'Portal';
-                document.getElementById('ca-f-entidad').value          = '';
+                document.getElementById('ca-f-entidad').value          = ''; EntidadClave.refrescar('ca-f-entidad');
                 document.getElementById('ca-f-usuario').value          = '';
                 document.getElementById('ca-f-contrasena').value       = '';
                 document.getElementById('ca-f-link').value             = '';

@@ -671,6 +671,47 @@ class PortalesEntidades
         };
     }
 
+    /**
+     * Opciones del campo «Entidad» en los formularios de claves, por tipo: así
+     * no se escribe a mano «Sura ARL», «SAT» o «EPS». El valor es el nombre que
+     * buscan los robots; la etiqueta, el del catálogo. Los tipos que no están
+     * aquí (Portal, DIAN, Banco, Otro) siguen con texto libre.
+     *
+     * @return array<string, array<int, array{valor:string, etiqueta:string, grupo?:string}>>
+     */
+    public static function opcionesFormulario(): array
+    {
+        // Los alias son los mismos de la clasificación: al editar una clave
+        // vieja («Sura ARL», «EMSANAR») la lista la reconoce.
+        $eps = DB::table('eps')->whereNull('reemplazada_por_id')->where('codigo', '<>', 'N/A')
+            ->orderByDesc('vigente')->orderBy('nombre')->get(['id', 'codigo', 'nombre', 'vigente'])
+            ->map(fn ($e) => [
+                'valor' => self::nombreEntidad('EPS', (int) $e->id),
+                'etiqueta' => $e->nombre,
+                'grupo' => $e->vigente ? 'Vigentes' : 'Otras',
+                'alias' => array_keys(self::ALIAS_EPS, $e->codigo, true),
+            ])->all();
+
+        $operadores = DB::table('operadores_planilla')->where('activo', true)->where('codigo', '<>', 'OTROS')
+            ->orderBy('orden')->pluck('nombre')
+            ->map(fn ($n) => ['valor' => $n, 'etiqueta' => $n])->all();
+
+        return [
+            'EPS' => $eps,
+            'ARL' => DB::table('arls')->where('nit', '<>', '0')->orderBy('nombre_arl')->get(['id', 'nombre_arl'])
+                ->map(fn ($a) => ['valor' => $a->nombre_arl, 'etiqueta' => $a->nombre_arl, 'alias' => array_keys(self::ALIAS_ARL, (int) $a->id, true)])->all(),
+            'CAJA' => DB::table('cajas')->where('nit', '<>', '0')->orderBy('nombre')->get(['id', 'nombre'])
+                ->map(fn ($c) => ['valor' => $c->nombre, 'etiqueta' => $c->nombre, 'alias' => array_keys(self::ALIAS_CAJA, (int) $c->id, true)])->all(),
+            // Sin «NINGUNA» ni «PENSIONADO», que no son fondos.
+            'AFP' => DB::table('pensiones')->whereNotIn('id', [1, 4])->orderBy('razon_social')->pluck('razon_social')
+                ->map(fn ($n) => ['valor' => mb_strtoupper($n), 'etiqueta' => $n])->all(),
+            'Operadores' => $operadores,
+            'MinTrabajo' => $operadores,
+            'Correo' => collect(['Gmail', 'Hotmail / Outlook', 'Yahoo'])
+                ->map(fn ($n) => ['valor' => $n, 'etiqueta' => $n])->all(),
+        ];
+    }
+
     /** Para el selector de «Sin clasificar». */
     public static function catalogo(): array
     {
@@ -690,12 +731,17 @@ class PortalesEntidades
     {
         $llave = self::llave($entidad);
 
+        // Sin alias, el nombre exacto del catálogo: es lo que manda el selector
+        // del formulario de claves (p. ej. «CAPRESOCA», «COMFAMILIAR HUILA»).
+        $porNombre = fn (string $tabla, string $columna) => $llave === '' ? null
+            : (DB::table($tabla)->get(['id', $columna])->first(fn ($f) => self::llave((string) $f->{$columna}) === $llave)?->id);
+
         return match ($tipo) {
             'EPS' => isset(self::ALIAS_EPS[$llave])
                 ? (int) DB::table('eps')->where('codigo', self::ALIAS_EPS[$llave])->value('id') ?: null
-                : null,
-            'ARL' => self::ALIAS_ARL[$llave] ?? null,
-            'CAJA' => self::ALIAS_CAJA[$llave] ?? null,
+                : (($id = $porNombre('eps', 'nombre')) ? (int) $id : null),
+            'ARL' => self::ALIAS_ARL[$llave] ?? (($id = $porNombre('arls', 'nombre_arl')) ? (int) $id : null),
+            'CAJA' => self::ALIAS_CAJA[$llave] ?? (($id = $porNombre('cajas', 'nombre')) ? (int) $id : null),
             'OTRO' => collect(self::OTROS_PORTALES)->search(fn ($p) => self::llave($p['nombre']) === $llave) ?: null,
             default => null,
         };

@@ -1496,6 +1496,8 @@ function sortClass($col, $currSort, $currDir) {
                 <div>
                     <label class="ca-lbl">Entidad / Portal *</label>
                     <input type="text" id="rs-ca-f-entidad" class="ca-inp" placeholder="Ej: Portal EPS Sura, Gmail...">
+                    @include('admin.partials._entidad_clave')
+                    <script>EntidadClave.mejorar('rs-ca-f-tipo', 'rs-ca-f-entidad');</script>
                 </div>
                 {{-- Usuario --}}
                 <div>
@@ -2716,7 +2718,7 @@ function abrirModalClaveRS(id = null) {
             document.getElementById('rs-ca-modal-id').value            = clave.id;
             document.getElementById('rs-ca-modal-rs-id').value         = clave.razon_social_id || rsIdActivo;
             document.getElementById('rs-ca-f-tipo').value              = clave.tipo || 'Portal';
-            document.getElementById('rs-ca-f-entidad').value           = clave.entidad || '';
+            document.getElementById('rs-ca-f-entidad').value           = clave.entidad || ''; EntidadClave.refrescar('rs-ca-f-entidad');
             document.getElementById('rs-ca-f-usuario').value           = clave.usuario || '';
             document.getElementById('rs-ca-f-contrasena').value        = clave.contrasena || '';
             document.getElementById('rs-ca-f-link').value              = clave.link_acceso || '';
@@ -2729,7 +2731,7 @@ function abrirModalClaveRS(id = null) {
         document.getElementById('rs-ca-modal-id').value           = '';
         document.getElementById('rs-ca-modal-rs-id').value         = rsIdActivo;
         document.getElementById('rs-ca-f-tipo').value             = 'Portal';
-        document.getElementById('rs-ca-f-entidad').value          = '';
+        document.getElementById('rs-ca-f-entidad').value          = ''; EntidadClave.refrescar('rs-ca-f-entidad');
         document.getElementById('rs-ca-f-usuario').value          = '';
         document.getElementById('rs-ca-f-contrasena').value       = '';
         document.getElementById('rs-ca-f-link').value             = '';

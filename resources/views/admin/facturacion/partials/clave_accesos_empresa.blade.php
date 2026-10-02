@@ -117,6 +117,8 @@
                 <div>
                     <label class="eca-lbl">Entidad / Portal *</label>
                     <input type="text" id="eca-f-entidad" class="eca-inp" placeholder="Ej: Portal DIAN, Gmail empresa...">
+                    @include('admin.partials._entidad_clave')
+                    <script>EntidadClave.mejorar('eca-f-tipo', 'eca-f-entidad');</script>
                 </div>
                 {{-- Usuario --}}
                 <div>
@@ -314,7 +316,7 @@
                 document.getElementById('eca-modal-titulo').textContent = '✏️ Editar Clave #' + clave.id;
                 document.getElementById('eca-modal-id').value           = clave.id;
                 document.getElementById('eca-f-tipo').value             = clave.tipo || 'Portal';
-                document.getElementById('eca-f-entidad').value          = clave.entidad || '';
+                document.getElementById('eca-f-entidad').value          = clave.entidad || ''; EntidadClave.refrescar('eca-f-entidad');
                 document.getElementById('eca-f-usuario').value          = clave.usuario || '';
                 document.getElementById('eca-f-contrasena').value       = clave.contrasena || '';
                 document.getElementById('eca-f-link').value             = clave.link_acceso || '';
@@ -325,7 +327,7 @@
                 document.getElementById('eca-modal-titulo').textContent = '🔑 Nueva Clave — {{ $empresa->empresa }}';
                 document.getElementById('eca-modal-id').value           = '';
                 document.getElementById('eca-f-tipo').value             = 'Portal';
-                document.getElementById('eca-f-entidad').value          = '';
+                document.getElementById('eca-f-entidad').value          = ''; EntidadClave.refrescar('eca-f-entidad');
                 document.getElementById('eca-f-usuario').value          = '';
                 document.getElementById('eca-f-contrasena').value       = '';
                 document.getElementById('eca-f-link').value             = '';

@@ -622,6 +622,8 @@
                 <div>
                     <label class="ca-lbl">Entidad / Portal *</label>
                     <input type="text" id="glb-ca-f-entidad" class="ca-inp" placeholder="Ej: Portal EPS Sura, Gmail...">
+                    @include('admin.partials._entidad_clave')
+                    <script>EntidadClave.mejorar('glb-ca-f-tipo', 'glb-ca-f-entidad');</script>
                 </div>
                 {{-- Usuario --}}
                 <div>
@@ -718,7 +720,7 @@ function abrirModalClaveGlobal(clave = null) {
         document.getElementById('glb-ca-modal-id').value            = clave.id;
         document.getElementById('glb-ca-f-rs-id').value             = clave.razon_social_id || '';
         document.getElementById('glb-ca-f-tipo').value              = clave.tipo || 'Portal';
-        document.getElementById('glb-ca-f-entidad').value           = clave.entidad || '';
+        document.getElementById('glb-ca-f-entidad').value           = clave.entidad || ''; EntidadClave.refrescar('glb-ca-f-entidad');
         document.getElementById('glb-ca-f-usuario').value           = clave.usuario || '';
         document.getElementById('glb-ca-f-contrasena').value        = clave.contrasena || '';
         document.getElementById('glb-ca-f-link').value              = clave.link_acceso || '';
@@ -730,7 +732,7 @@ function abrirModalClaveGlobal(clave = null) {
         document.getElementById('glb-ca-modal-id').value           = '';
         document.getElementById('glb-ca-f-rs-id').value            = '';
         document.getElementById('glb-ca-f-tipo').value             = 'Portal';
-        document.getElementById('glb-ca-f-entidad').value          = '';
+        document.getElementById('glb-ca-f-entidad').value          = ''; EntidadClave.refrescar('glb-ca-f-entidad');
         document.getElementById('glb-ca-f-usuario').value          = '';
         document.getElementById('glb-ca-f-contrasena').value       = '';
         document.getElementById('glb-ca-f-link').value             = '';
