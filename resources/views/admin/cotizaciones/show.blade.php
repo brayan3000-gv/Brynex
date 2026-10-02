@@ -45,10 +45,10 @@
                 Volver
             </a>
             @if($prospecto->valor_mensual)
-                <a href="{{ route('admin.cotizaciones.pdf', $prospecto->id) }}" class="cz-btn-header" title="Descargar la cotización en PDF">
+                <button type="button" class="cz-btn-header" onclick="window.dispatchEvent(new CustomEvent('abrir-whatsapp', { detail: 'pdf' }))" title="Descargar la cotización en PDF">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v12m0 0l-4-4m4 4l4-4M4 20h16"/></svg>
                     PDF
-                </a>
+                </button>
                 <button type="button" class="cz-btn-header" onclick="window.dispatchEvent(new CustomEvent('abrir-whatsapp'))" title="Enviar la cotización por WhatsApp">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.948h.003c4.368 0 7.927-3.559 7.931-7.928a7.86 7.86 0 0 0-2.327-5.594Z"/></svg>
                     WhatsApp
@@ -82,33 +82,63 @@
         </div>
     @endif
 
-    {{-- ══ ENVIAR POR WHATSAPP ══ --}}
+    {{-- ══ COMPARTIR: PDF Y WHATSAPP ══ --}}
     @if($prospecto->valor_mensual)
-    <div x-data="{ abierto: false, texto: @js($mensajeWhatsapp), celular: @js(preg_replace('/\D/', '', (string) $prospecto->celular)) }"
-         @abrir-whatsapp.window="abierto = true" @keydown.escape.window="abierto = false">
+    <div x-data="{
+            abierto: false,
+            modo: 'whatsapp',
+            conProporcional: true,
+            textos: @js($mensajeWhatsapp),
+            texto: @js($mensajeWhatsapp['con']),
+            celular: @js(preg_replace('/\D/', '', (string) $prospecto->celular)),
+            urlPdf: @js(route('admin.cotizaciones.pdf', $prospecto->id)),
+            get pdf() { return this.urlPdf + '?proporcional=' + (this.conProporcional ? 1 : 0); },
+            cambiarProporcional() { this.texto = this.conProporcional ? this.textos.con : this.textos.sin; },
+         }"
+         @abrir-whatsapp.window="abierto = true; modo = $event.detail === 'pdf' ? 'pdf' : 'whatsapp'" @keydown.escape.window="abierto = false">
         <div class="cz-modal-fondo" x-show="abierto" x-cloak @click.self="abierto = false">
             <div class="cz-modal" role="dialog" aria-modal="true" aria-labelledby="cz-wa-titulo">
                 <div class="cz-modal-cab">
-                    <h3 id="cz-wa-titulo">Enviar cotización por WhatsApp</h3>
+                    <h3 id="cz-wa-titulo" x-text="modo === 'pdf' ? 'Descargar cotización en PDF' : 'Enviar cotización por WhatsApp'"></h3>
                     <button type="button" class="cz-modal-cerrar" @click="abierto = false" aria-label="Cerrar">&times;</button>
                 </div>
                 <form action="{{ route('admin.cotizaciones.whatsapp', $prospecto->id) }}" method="POST">
                     @csrf
+                    <input type="hidden" name="proporcional" :value="conProporcional ? 1 : 0">
                     <div class="cz-modal-cuerpo">
-                        <p class="cz-modal-nota">Al <strong>{{ $prospecto->celular ?: 'sin celular' }}</strong>. Puede ajustar el mensaje antes de enviarlo.</p>
-                        <textarea name="texto" class="cz-input" rows="12" x-model="texto" required maxlength="3000"></textarea>
-                        @if(!$whatsappApi['configurado'])
-                            <p class="cz-modal-nota">El aliado no tiene la API de WhatsApp configurada: el mensaje se abre en su WhatsApp y el PDF se adjunta a mano (botón PDF).</p>
-                        @elseif(!$whatsappApi['ventana'])
-                            <p class="cz-modal-nota">Este número no tiene una conversación abierta en las últimas 24 h, así que la API no deja mandar el PDF. Ábralo en WhatsApp; cuando el prospecto responda, ya se podrá enviar con el PDF adjunto.</p>
-                        @else
-                            <p class="cz-modal-nota">Hay conversación abierta: se envía el PDF adjunto con este texto y queda registrado en el chat y en las gestiones.</p>
+                        @if($tieneProporcional)
+                            <label class="cz-opcion">
+                                <input type="checkbox" x-model="conProporcional" @change="cambiarProporcional()">
+                                <span>
+                                    <strong>Incluir el primer mes proporcional</strong>
+                                    <small>Ingresa el {{ $prospecto->fecha_ingreso?->format('d/m/Y') }}: el primer mes se cobra por {{ $prospecto->resultado_cotizacion['dias_proporcionales'] ?? '' }} días. Sin marcar, la cotización sale solo con el mes completo.</small>
+                                </span>
+                            </label>
                         @endif
+
+                        <div x-show="modo === 'pdf'">
+                            <p class="cz-modal-nota">Se descarga el PDF con el logo del aliado, los datos {{ $prospecto->esEmpresa() ? 'de la empresa y sus trabajadores' : 'del prospecto y el plan' }}, y los totales.</p>
+                        </div>
+
+                        <div x-show="modo === 'whatsapp'">
+                            <p class="cz-modal-nota">Al <strong>{{ $prospecto->celular ?: 'sin celular' }}</strong>. Puede ajustar el mensaje antes de enviarlo.</p>
+                            <textarea name="texto" class="cz-input" rows="11" x-model="texto" required maxlength="3000"></textarea>
+                            @if(!$whatsappApi['configurado'])
+                                <p class="cz-modal-nota">El aliado no tiene la API de WhatsApp configurada: el mensaje se abre en su WhatsApp y el PDF se adjunta a mano.</p>
+                            @elseif(!$whatsappApi['ventana'])
+                                <p class="cz-modal-nota">Este número no tiene una conversación abierta en las últimas 24 h, así que la API no deja mandar el PDF. Ábralo en WhatsApp; cuando el prospecto responda, ya se podrá enviar con el PDF adjunto.</p>
+                            @else
+                                <p class="cz-modal-nota">Hay conversación abierta: se envía el PDF adjunto con este texto y queda registrado en el chat y en las gestiones.</p>
+                            @endif
+                        </div>
                     </div>
                     <div class="cz-modal-pie">
-                        <a :href="'https://wa.me/57' + celular + '?text=' + encodeURIComponent(texto)" target="_blank" rel="noopener" class="cz-btn cz-btn--borde" x-show="celular.length >= 10">Abrir en WhatsApp</a>
+                        <a :href="pdf" class="cz-btn" :class="modo === 'pdf' ? 'cz-btn--primario' : 'cz-btn--borde'">Descargar PDF</a>
+                        <template x-if="modo === 'whatsapp'">
+                            <a :href="'https://wa.me/57' + celular + '?text=' + encodeURIComponent(texto)" target="_blank" rel="noopener" class="cz-btn cz-btn--borde" x-show="celular.length >= 10">Abrir en WhatsApp</a>
+                        </template>
                         @if($whatsappApi['configurado'] && $whatsappApi['ventana'])
-                            <button type="submit" class="cz-btn cz-btn--primario">Enviar con el PDF</button>
+                            <button type="submit" class="cz-btn cz-btn--primario" x-show="modo === 'whatsapp'">Enviar con el PDF</button>
                         @endif
                     </div>
                 </form>

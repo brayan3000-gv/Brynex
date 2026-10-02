@@ -298,84 +298,77 @@
                 <span x-text="tipo === 'empresa' ? 'Agregue los trabajadores con su cargo y plan.' : 'Elija modalidad y plan para ver el cálculo.'"></span>
             </div>
 
-            <div class="cz-resumen-cuerpo" x-show="hayCotizacion" x-cloak :class="{ 'cz-calculando': cargando, 'cz-sin-prop': !hayProporcional }">
+            <div class="cz-resumen-cuerpo" x-show="hayCotizacion" x-cloak :class="{ 'cz-calculando': cargando }">
 
-                {{-- Empresa: un renglón por trabajador --}}
-                <template x-if="tipo === 'empresa'">
-                    <div>
-                        <div class="cz-fila cz-fila--head">
-                            <div>Trabajador</div>
-                            <div class="cz-col-prop">Primer mes<br><span x-text="`${diasProporcionales} días`"></span></div>
-                            <div>Mes completo</div>
-                        </div>
-                        <template x-for="t in trabajadores" :key="t.key">
-                            <div class="cz-fila" x-show="t.planId">
-                                <div><span x-text="t.cargo || 'Sin cargo'"></span> <span class="cz-pct" x-text="nombrePlan(t.planId)"></span></div>
-                                <div class="cz-col-prop" x-text="fmt(t.proporcional.total)"></div>
-                                <div x-text="fmt(t.completo.total)"></div>
-                            </div>
-                        </template>
+                {{-- Bloque 1: primer mes ponderado por los días que faltan del mes --}}
+                <div class="cz-bloque cz-bloque--ponderado" x-show="hayProporcional && resultProp.total > 0">
+                    <div class="cz-bloque-titulo">
+                        Primer mes ponderado
+                        <span x-text="`${diasProporcionales} días`"></span>
                     </div>
-                </template>
-
-                <div x-show="tipo === 'persona'">
-
-                <div class="cz-fila cz-fila--head">
-                    <div>Concepto</div>
-                    <div class="cz-col-prop">Primer mes<br><span x-text="`${diasProporcionales} días`"></span></div>
-                    <div>Mes completo</div>
+                    <template x-if="tipo === 'empresa'">
+                        <div>
+                            <template x-for="t in trabajadores" :key="'p' + t.key">
+                                <div class="cz-fila" x-show="t.planId">
+                                    <div><span x-text="t.cargo || 'Sin cargo'"></span> <span class="cz-pct" x-text="nombrePlan(t.planId)"></span></div>
+                                    <div x-text="fmt(t.proporcional.total)"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="tipo === 'persona'">
+                        <div>
+                            <div class="cz-fila" x-show="resultProp.eps > 0"><div>Salud (EPS) <span class="cz-pct" x-text="pctEps > 0 ? `${pctEps}%` : ''"></span></div><div x-text="fmt(resultProp.eps)"></div></div>
+                            <div class="cz-fila" x-show="resultProp.pen > 0"><div>Pensión (AFP) <span class="cz-pct" x-text="pctPen > 0 ? `${pctPen}%` : ''"></span></div><div x-text="fmt(resultProp.pen)"></div></div>
+                            <div class="cz-fila" x-show="resultProp.arl > 0"><div>Riesgos (ARL) <span class="cz-pct" x-text="pctArl > 0 ? `${pctArl}%` : ''"></span></div><div x-text="fmt(resultProp.arl)"></div></div>
+                            <div class="cz-fila" x-show="resultProp.caja > 0"><div>Caja (CCF) <span class="cz-pct" x-text="pctCaja > 0 ? `${pctCaja}%` : ''"></span></div><div x-text="fmt(resultProp.caja)"></div></div>
+                            <div class="cz-fila cz-fila--fijo" x-show="resultProp.admon > 0"><div>Administración</div><div x-text="fmt(resultProp.admon)"></div></div>
+                            <div class="cz-fila cz-fila--fijo" x-show="resultProp.seguro > 0"><div>Seguro</div><div x-text="fmt(resultProp.seguro)"></div></div>
+                        </div>
+                    </template>
+                    <div class="cz-bloque-total">
+                        <div>Total primer mes <small>por <span x-text="diasProporcionales"></span> días</small></div>
+                        <div class="cz-total-valor cz-total-valor--prop" x-text="fmt(resultProp.total)"></div>
+                    </div>
                 </div>
 
-                <div class="cz-fila">
-                    <div>Salud (EPS) <span class="cz-pct" x-show="pctEps > 0 && (resultFull.eps || resultProp.eps) > 0" x-text="`${pctEps}%`"></span></div>
-                    <div class="cz-col-prop" x-text="fmt(resultProp.eps)"></div>
-                    <div x-text="fmt(resultFull.eps)"></div>
-                </div>
-                <div class="cz-fila">
-                    <div>Pensión (AFP) <span class="cz-pct" x-show="pctPen > 0 && (resultFull.pen || resultProp.pen) > 0" x-text="`${pctPen}%`"></span></div>
-                    <div class="cz-col-prop" x-text="fmt(resultProp.pen)"></div>
-                    <div x-text="fmt(resultFull.pen)"></div>
-                </div>
-                <div class="cz-fila">
-                    <div>Riesgos (ARL) <span class="cz-pct" x-show="pctArl > 0 && (resultFull.arl || resultProp.arl) > 0" x-text="`${pctArl}%`"></span></div>
-                    <div class="cz-col-prop" x-text="fmt(resultProp.arl)"></div>
-                    <div x-text="fmt(resultFull.arl)"></div>
-                </div>
-                <div class="cz-fila">
-                    <div>Caja (CCF) <span class="cz-pct" x-show="pctCaja > 0 && (resultFull.caja || resultProp.caja) > 0" x-text="`${pctCaja}%`"></span></div>
-                    <div class="cz-col-prop" x-text="fmt(resultProp.caja)"></div>
-                    <div x-text="fmt(resultFull.caja)"></div>
-                </div>
-                <div class="cz-fila cz-fila--fijo">
-                    <div>Administración</div>
-                    <div class="cz-col-prop" x-text="fmt(resultFull.admon)"></div>
-                    <div x-text="fmt(resultFull.admon)"></div>
-                </div>
-                <div class="cz-fila cz-fila--fijo" x-show="resultFull.seguro > 0">
-                    <div>Seguro</div>
-                    <div class="cz-col-prop" x-text="fmt(resultFull.seguro)"></div>
-                    <div x-text="fmt(resultFull.seguro)"></div>
-                </div>
+                {{-- Bloque 2: mes completo --}}
+                <div class="cz-bloque" x-show="resultFull.total > 0">
+                    <div class="cz-bloque-titulo">
+                        Mes completo
+                        <span>30 días</span>
+                    </div>
+                    <template x-if="tipo === 'empresa'">
+                        <div>
+                            <template x-for="t in trabajadores" :key="'c' + t.key">
+                                <div class="cz-fila" x-show="t.planId">
+                                    <div><span x-text="t.cargo || 'Sin cargo'"></span> <span class="cz-pct" x-text="nombrePlan(t.planId)"></span></div>
+                                    <div x-text="fmt(t.completo.total)"></div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <template x-if="tipo === 'persona'">
+                        <div>
+                            <div class="cz-fila" x-show="resultFull.eps > 0"><div>Salud (EPS) <span class="cz-pct" x-text="pctEps > 0 ? `${pctEps}%` : ''"></span></div><div x-text="fmt(resultFull.eps)"></div></div>
+                            <div class="cz-fila" x-show="resultFull.pen > 0"><div>Pensión (AFP) <span class="cz-pct" x-text="pctPen > 0 ? `${pctPen}%` : ''"></span></div><div x-text="fmt(resultFull.pen)"></div></div>
+                            <div class="cz-fila" x-show="resultFull.arl > 0"><div>Riesgos (ARL) <span class="cz-pct" x-text="pctArl > 0 ? `${pctArl}%` : ''"></span></div><div x-text="fmt(resultFull.arl)"></div></div>
+                            <div class="cz-fila" x-show="resultFull.caja > 0"><div>Caja (CCF) <span class="cz-pct" x-text="pctCaja > 0 ? `${pctCaja}%` : ''"></span></div><div x-text="fmt(resultFull.caja)"></div></div>
+                            <div class="cz-fila cz-fila--fijo" x-show="resultFull.admon > 0"><div>Administración</div><div x-text="fmt(resultFull.admon)"></div></div>
+                            <div class="cz-fila cz-fila--fijo" x-show="resultFull.seguro > 0"><div>Seguro</div><div x-text="fmt(resultFull.seguro)"></div></div>
+                        </div>
+                    </template>
+                    <div class="cz-bloque-total">
+                        <div>Mensual completo <small>meses siguientes</small></div>
+                        <div class="cz-total-valor cz-total-valor--mes" x-text="fmt(resultFull.total)"></div>
+                    </div>
                 </div>
 
+                {{-- Afiliación: pago único --}}
                 <div class="cz-totales">
                     <div class="cz-total">
                         <div class="cz-total-nombre">Afiliación <span class="cz-total-detalle" x-text="tipo === 'empresa' ? `(pago único · ${trabajadores.length} × ${fmt(costoAfiliacion)})` : '(pago único)'"></span></div>
                         <div class="cz-total-valor cz-total-valor--afiliacion" x-text="fmt(totalAfiliacion)"></div>
-                    </div>
-                    <div class="cz-total" x-show="hayProporcional">
-                        <div>
-                            <div class="cz-total-nombre">Primer mes proporcional</div>
-                            <div class="cz-total-detalle">Por <span x-text="diasProporcionales"></span> días</div>
-                        </div>
-                        <div class="cz-total-valor cz-total-valor--prop" x-text="fmt(resultProp.total)"></div>
-                    </div>
-                    <div class="cz-total">
-                        <div>
-                            <div class="cz-total-nombre">Mensual completo</div>
-                            <div class="cz-total-detalle">Meses siguientes (30 días)</div>
-                        </div>
-                        <div class="cz-total-valor cz-total-valor--mes" x-text="fmt(resultFull.total)"></div>
                     </div>
                 </div>
             </div>

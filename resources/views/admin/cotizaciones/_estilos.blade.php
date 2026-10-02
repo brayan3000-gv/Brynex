@@ -167,19 +167,21 @@ select.cz-input {
 .cz-resumen-cuerpo { transition: opacity .15s; }
 .cz-resumen-cuerpo.cz-calculando { opacity: .45; }
 .cz-fila {
-    display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px; gap: .4rem; align-items: baseline;
-    font-size: .8rem; padding: .38rem 0; border-bottom: 1px solid rgba(255,255,255,.08);
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .6rem; align-items: baseline;
+    font-size: .8rem; padding: .36rem 0; border-bottom: 1px solid rgba(255,255,255,.08);
     font-variant-numeric: tabular-nums;
 }
-.cz-sin-prop .cz-fila { grid-template-columns: minmax(0, 1fr) 96px; }
-.cz-sin-prop .cz-col-prop { display: none; }
-.cz-fila > :not(:first-child) { text-align: right; }
-.cz-fila--head > div { white-space: nowrap; }
-.cz-fila--head { font-size: .66rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; align-items: end; }
+.cz-fila > :last-child { text-align: right; white-space: nowrap; }
 .cz-fila--fijo { color: #93c5fd; }
-.cz-col-prop { color: #cbd5e1; }
 .cz-pct { color: #94a3b8; font-size: .68rem; }
-.cz-totales { margin-top: .9rem; background: rgba(2,6,23,.5); border-radius: 10px; padding: .2rem .85rem; }
+/* Cada resumen va en su bloque: primer mes ponderado y mes completo */
+.cz-bloque { background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08); border-radius: 10px; padding: .55rem .8rem .2rem; margin-bottom: .7rem; }
+.cz-bloque--ponderado { border-color: rgba(147,197,253,.35); }
+.cz-bloque-titulo { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; font-size: .8rem; font-weight: 700; color: #f8fafc; padding-bottom: .4rem; border-bottom: 1px solid rgba(255,255,255,.12); }
+.cz-bloque-titulo span { font-size: .68rem; font-weight: 600; color: #93c5fd; text-transform: uppercase; letter-spacing: .04em; }
+.cz-bloque-total { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .55rem 0 .45rem; font-size: .82rem; font-weight: 600; }
+.cz-bloque-total small { display: block; font-size: .66rem; font-weight: 500; color: #94a3b8; }
+.cz-totales { margin-top: .2rem; background: rgba(2,6,23,.5); border-radius: 10px; padding: .2rem .85rem; }
 .cz-total { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .65rem 0; border-bottom: 1px solid rgba(255,255,255,.1); font-variant-numeric: tabular-nums; }
 .cz-total:last-child { border-bottom: none; }
 .cz-total-nombre { font-size: .82rem; font-weight: 600; }
@@ -199,6 +201,10 @@ select.cz-input {
 .cz-modal-cuerpo { padding: 1.1rem 1.25rem; }
 .cz-modal-nota { font-size: .78rem; color: #64748b; margin: 0 0 .6rem; line-height: 1.45; }
 .cz-modal-cuerpo textarea { font-size: .84rem; }
+.cz-opcion { display: flex; gap: .65rem; align-items: flex-start; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: .7rem .8rem; margin-bottom: .8rem; cursor: pointer; }
+.cz-opcion input { width: 18px; height: 18px; accent-color: #2563eb; margin-top: .1rem; flex-shrink: 0; cursor: pointer; }
+.cz-opcion strong { display: block; font-size: .84rem; color: #1e3a8a; }
+.cz-opcion small { display: block; font-size: .74rem; color: #475569; line-height: 1.4; margin-top: .15rem; }
 .cz-modal-pie { display: flex; justify-content: flex-end; gap: .6rem; padding: .9rem 1.25rem; border-top: 1px solid #e5e7eb; flex-wrap: wrap; }
 
 /* Menú de estado rápido en el listado */
@@ -387,7 +393,6 @@ a.cz-pag-btn:hover, a.cz-pag-num:hover { background: #eff6ff; border-color: #93c
     .cz-field { grid-column: 1 / -1; }
     .cz-field.cz-m-mitad { grid-column: span 1; }
     .cz-actions .cz-btn--borde { display: none; }
-    .cz-fila { grid-template-columns: minmax(0, 1fr) 82px 82px; font-size: .8rem; }
 
     .cz-filtros .cz-btn { width: 100%; }
 

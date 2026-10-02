@@ -108,13 +108,27 @@ class CotizacionProspectoService
         return ['completo' => $completo, 'proporcional' => $proporcional];
     }
 
-    public function pdf(CotizacionProspecto $prospecto)
+    /** ¿La cotización tiene un primer mes distinto del completo (ingreso después del 1.°)? */
+    public function tieneProporcional(CotizacionProspecto $prospecto): bool
+    {
+        $r = $this->resultado($prospecto);
+
+        return $r['dias'] < 30 && ($r['proporcional']['total'] ?? 0) > 0
+            && ($r['proporcional']['total'] ?? 0) != ($r['completo']['total'] ?? 0);
+    }
+
+    /**
+     * @param  bool  $conProporcional  Si se muestra el primer mes proporcional; con false
+     *                                 la cotización sale solo con el mes completo.
+     */
+    public function pdf(CotizacionProspecto $prospecto, bool $conProporcional = true)
     {
         $prospecto->loadMissing(['modalidad', 'plan', 'trabajadores.plan', 'trabajadores.modalidad']);
         $aliado = Aliado::find($prospecto->aliado_id);
         $resultado = $this->resultado($prospecto);
+        $incluirProporcional = $conProporcional;
 
-        $pdf = \PDF::loadView('pdf.cotizacion_prospecto', compact('prospecto', 'resultado', 'aliado'));
+        $pdf = \PDF::loadView('pdf.cotizacion_prospecto', compact('prospecto', 'resultado', 'aliado', 'incluirProporcional'));
         app(TrazaArchivoService::class)->marcarPdf($pdf);
 
         return $pdf;
@@ -129,7 +143,7 @@ class CotizacionProspectoService
     }
 
     /** Texto con el que se manda la cotización por WhatsApp. */
-    public function mensajeWhatsapp(CotizacionProspecto $prospecto): string
+    public function mensajeWhatsapp(CotizacionProspecto $prospecto, bool $conProporcional = true): string
     {
         $aliado = Aliado::find($prospecto->aliado_id);
         $r = $this->resultado($prospecto);
@@ -163,7 +177,7 @@ class CotizacionProspectoService
             $afiliacion = $r['costo_afiliacion'];
         }
 
-        if ($r['dias'] < 30 && ($r['proporcional']['total'] ?? 0) > 0) {
+        if ($conProporcional && $r['dias'] < 30 && ($r['proporcional']['total'] ?? 0) > 0) {
             $lineas[] = '*Primer mes ('.$r['dias'].' días):* '.$pesos($r['proporcional']['total']);
         }
         if ($afiliacion > 0) {
@@ -182,7 +196,7 @@ class CotizacionProspectoService
      *
      * @return array{ok: bool, mensaje: string}
      */
-    public function enviarWhatsapp(CotizacionProspecto $prospecto, string $texto, ?int $userId): array
+    public function enviarWhatsapp(CotizacionProspecto $prospecto, string $texto, ?int $userId, bool $conProporcional = true): array
     {
         $aliadoId = (int) $prospecto->aliado_id;
         $celular = (string) $prospecto->celular;
@@ -207,7 +221,7 @@ class CotizacionProspectoService
 
         $archivo = $this->nombreArchivoPdf($prospecto);
         $ruta = "whatsapp/cotizaciones/{$aliadoId}/".uniqid().'_'.$archivo;
-        Storage::disk('local')->put($ruta, $this->pdf($prospecto)->output());
+        Storage::disk('local')->put($ruta, $this->pdf($prospecto, $conProporcional)->output());
 
         try {
             $api = app(WhatsappApiService::class);

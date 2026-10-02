@@ -4,7 +4,7 @@
     $completo = $resultado['completo'];
     $proporcional = $resultado['proporcional'];
     $dias = $resultado['dias'];
-    $hayProporcional = $dias < 30 && ($proporcional['total'] ?? 0) > 0;
+    $hayProporcional = ($incluirProporcional ?? true) && $dias < 30 && ($proporcional['total'] ?? 0) > 0;
     $nTrab = max(1, count($resultado['trabajadores']));
     $afiliacion = $resultado['costo_afiliacion'] * ($esEmpresa ? $nTrab : 1);
     $logo = $aliado && $aliado->logo && file_exists(public_path('storage/'.$aliado->logo)) ? public_path('storage/'.$aliado->logo) : null;

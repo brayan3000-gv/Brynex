@@ -153,10 +153,16 @@ class CotizacionController extends Controller
             
         $lookups = $this->getLookups();
         $servicio = app(\App\Services\CotizacionProspectoService::class);
-        $mensajeWhatsapp = $servicio->mensajeWhatsapp($prospecto);
+        // Dos versiones del mensaje: con el primer mes proporcional y solo con el mes
+        // completo; el modal cambia entre las dos según lo que se marque.
+        $mensajeWhatsapp = [
+            'con' => $servicio->mensajeWhatsapp($prospecto, true),
+            'sin' => $servicio->mensajeWhatsapp($prospecto, false),
+        ];
+        $tieneProporcional = $prospecto->valor_mensual ? $servicio->tieneProporcional($prospecto) : false;
         $whatsappApi = $this->whatsappApiDisponible($prospecto);
 
-        return view('admin.cotizaciones.show', compact('prospecto', 'lookups', 'mensajeWhatsapp', 'whatsappApi'));
+        return view('admin.cotizaciones.show', compact('prospecto', 'lookups', 'mensajeWhatsapp', 'tieneProporcional', 'whatsappApi'));
     }
 
     public function update(Request $request, int $id)
@@ -238,13 +244,13 @@ class CotizacionController extends Controller
     /** Manda la cotización (PDF + texto) por la API de WhatsApp del aliado. */
     public function enviarWhatsapp(Request $request, int $id)
     {
-        $request->validate(['texto' => 'required|string|max:3000']);
+        $request->validate(['texto' => 'required|string|max:3000', 'proporcional' => 'nullable|boolean']);
 
         $aliadoId = session('aliado_id_activo');
         $prospecto = CotizacionProspecto::with('trabajadores')->where('aliado_id', $aliadoId)->findOrFail($id);
 
         $resultado = app(\App\Services\CotizacionProspectoService::class)
-            ->enviarWhatsapp($prospecto, $request->input('texto'), auth()->id());
+            ->enviarWhatsapp($prospecto, $request->input('texto'), auth()->id(), $request->boolean('proporcional', true));
 
         return redirect()->route('admin.cotizaciones.show', $id)
             ->with($resultado['ok'] ? 'success' : 'error', $resultado['mensaje']);
@@ -372,13 +378,15 @@ class CotizacionController extends Controller
         ]);
     }
 
-    public function descargarPdf(int $id)
+    public function descargarPdf(Request $request, int $id)
     {
         $aliadoId = session('aliado_id_activo');
         $prospecto = CotizacionProspecto::with('trabajadores')->where('aliado_id', $aliadoId)->findOrFail($id);
         $servicio = app(\App\Services\CotizacionProspectoService::class);
 
-        return $servicio->pdf($prospecto)->download($servicio->nombreArchivoPdf($prospecto));
+        // ?proporcional=0 saca la cotización solo con el mes completo.
+        return $servicio->pdf($prospecto, $request->boolean('proporcional', true))
+            ->download($servicio->nombreArchivoPdf($prospecto));
     }
 
     // --- Helpers ---
