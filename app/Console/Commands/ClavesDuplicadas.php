@@ -127,9 +127,12 @@ class ClavesDuplicadas extends Command
             return self::FAILURE;
         }
 
+        // Las clasificadas se comparan por la entidad del catálogo («ARL SURA» y
+        // «SURA» son la misma); las demás, por el texto como antes.
         $otras = ClaveAcceso::where('id', '<>', $buena->id)
-            ->where('tipo', $buena->tipo)
-            ->where('entidad', $buena->entidad)
+            ->when($buena->entidad_tipo && $buena->entidad_id,
+                fn ($q) => $q->where('entidad_tipo', $buena->entidad_tipo)->where('entidad_id', $buena->entidad_id),
+                fn ($q) => $q->where('tipo', $buena->tipo)->where('entidad', $buena->entidad))
             ->where('activo', true)
             ->whereHas('razonSocial', fn ($q) => $q->where('nit', $nit))
             ->get();

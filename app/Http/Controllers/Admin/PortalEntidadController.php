@@ -36,6 +36,7 @@ class PortalEntidadController extends Controller
             $delContrato,
         ) + [
             'puede_gestionar' => (bool) auth()->user()->can('claves_acceso.gestionar'),
+            'puede_eliminar' => (bool) auth()->user()->can('claves_acceso.eliminar'),
             'catalogo' => PortalesEntidades::catalogo(),
         ]);
     }
@@ -76,6 +77,30 @@ class PortalEntidadController extends Controller
             'success' => true,
             'message' => 'Guardado.'.$r['aviso'],
         ]);
+    }
+
+    /** Crea o edita una clave que no es de EPS, ARL, caja ni SAT (correo, operador…). */
+    public function otra(Request $request, int $id)
+    {
+        $rs = $this->razonSocial($id);
+
+        $data = $request->validate([
+            'clave_id' => 'nullable|integer',
+            'tipo' => 'required|string|max:80',
+            'entidad' => 'required|string|max:150',
+            'usuario' => 'nullable|string|max:150',
+            'contrasena' => 'nullable|string|max:200',
+            'link_acceso' => 'nullable|string|max:350',
+            'observacion' => 'nullable|string|max:300',
+        ], ['entidad.required' => 'Escribe el nombre del portal o del correo.']);
+
+        $datos = collect($data)->except('clave_id')
+            ->map(fn ($v) => is_string($v) ? (trim($v) === '' ? null : trim($v)) : $v)
+            ->all();
+
+        PortalesEntidades::guardarOtra($rs, $data['clave_id'] ?? null, $datos, $this->aliadoActivo());
+
+        return response()->json(['success' => true, 'message' => 'Guardado.']);
     }
 
     /** Liga una clave «sin clasificar» a su entidad. */

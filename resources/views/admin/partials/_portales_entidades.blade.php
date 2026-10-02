@@ -87,7 +87,24 @@
                 <div class="pe-error" id="peError"></div>
                 <div class="pe-aviso" id="peSura" style="display:none"></div>
 
-                <div class="pe-sec" style="margin-top:0">🔐 Portal de empleador</div>
+                {{-- Solo para correos, operadores y otros portales fuera del catálogo --}}
+                <div id="peLibre" class="pe-grid" style="margin-bottom:.6rem">
+                    <div>
+                        <label class="pe-lbl">Tipo</label>
+                        <select class="pe-inp" name="libre_tipo">
+                            <option value="Correo">Correo</option>
+                            <option value="Operadores">Operador de planilla</option>
+                            <option value="Portal">Otro portal</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="pe-lbl">Nombre</label>
+                        <input class="pe-inp" name="libre_entidad" maxlength="150" placeholder="Gmail, Aportes en Línea…">
+                    </div>
+                </div>
+
+                <div class="pe-sec" style="margin-top:0" id="pePortalTitulo">🔐 Portal de empleador</div>
                 <div class="pe-grid">
                     <div>
                         <label class="pe-lbl">Usuario</label>
@@ -147,7 +164,7 @@
                 <div class="pe-sec">📝 Otros</div>
                 <label class="pe-lbl">Observación</label>
                 <input class="pe-inp" name="observacion" maxlength="300">
-                <label class="pe-check">
+                <label class="pe-check" id="peNoAplica">
                     <input type="checkbox" name="no_aplica" value="1">
                     <span><strong>No aplica</strong> para esta empresa (no trabaja con esta entidad).</span>
                 </label>
@@ -155,6 +172,7 @@
             <div class="pe-foot">
                 <div style="font-size:.66rem;color:#94a3b8" id="peOrigen"></div>
                 <div style="display:flex;gap:.5rem">
+                    <button type="button" class="pe-btn" id="peEliminar" style="color:#b91c1c;display:none" onclick="Portales.eliminar()">🗑 Eliminar</button>
                     <button type="button" class="pe-btn" onclick="Portales.cerrar()">Cancelar</button>
                     <button type="submit" id="peGuardar" style="padding:.42rem 1.1rem;background:#2563eb;border:none;border-radius:8px;color:#fff;font-size:.8rem;font-weight:700;cursor:pointer">💾 Guardar</button>
                 </div>
@@ -173,7 +191,8 @@ window.Portales = (function () {
         falta:         '🔴 Falta',
         no_aplica:     '⚪ No aplica',
     };
-    const GRUPOS = { ARL: '🛡️ ARL', CAJA: '🏠 Caja de compensación', OTRO: '🏛️ SAT (MinSalud)', EPS: '🏥 EPS' };
+    const GRUPOS = { ARL: '🛡️ ARL', CAJA: '🏠 Caja de compensación', OTRO: '🏛️ SAT (MinSalud)', EPS: '🏥 EPS',
+        CORREO: '✉️ Correos', OTRAS: '🧾 Operadores y otros portales' };
     const ORDEN = ['ARL', 'CAJA', 'OTRO', 'EPS'];
     const CORTO = { OTRO: 'SAT' };
 
@@ -211,7 +230,7 @@ window.Portales = (function () {
     // La barra se pinta una sola vez: si se rehiciera con cada letra, el
     // buscador perdería el foco mientras se escribe.
     function esqueleto() {
-        const tipos = [['', 'Todas'], ['ARL', 'ARL'], ['CAJA', 'Caja'], ['OTRO', 'SAT'], ['EPS', 'EPS']];
+        const tipos = [['', 'Todas'], ['ARL', 'ARL'], ['CAJA', 'Caja'], ['OTRO', 'SAT'], ['EPS', 'EPS'], ['CORREO', 'Correos'], ['OTRAS', 'Operadores']];
         el.innerHTML = `<div class="pe-resumen" data-pe="resumen"></div>
             <div class="pe-barra">
                 <input type="search" class="pe-buscar" placeholder="Buscar entidad…" data-pe="buscar" autocomplete="off">
@@ -270,6 +289,23 @@ window.Portales = (function () {
             if (aviso) h += `<div class="pe-aviso">${aviso}</div>`;
             if (filas.length) h += '<div class="pe-tabla">' + filas.map(fila).join('') + '</div>';
         });
+
+        // Correos, operadores y otros portales: no son de una entidad, pero
+        // van en la misma tabla (antes estaban en la lista vieja de claves).
+        if (!filtro.faltan) {
+            const q = plano(filtro.texto).trim();
+            ['CORREO', 'OTRAS'].forEach(grupo => {
+                if (filtro.tipo && filtro.tipo !== grupo) return;
+                const otras = (datos.otras || []).filter(c => c.grupo === grupo && (!q || plano(c.entidad + ' ' + c.tipo + ' ' + (c.usuario || '')).includes(q)));
+                if (!otras.length && (q || filtro.tipo !== grupo)) return;
+                hay += otras.length;
+                h += `<div class="pe-grupo">${GRUPOS[grupo]}${otras.length ? ` · ${otras.length}` : ''}</div>`;
+                if (otras.length) h += '<div class="pe-tabla">' + otras.map(otra).join('') + '</div>';
+                if (datos.puede_gestionar && !q) {
+                    h += `<button type="button" class="pe-btn" style="margin-top:.35rem" onclick="Portales.editarOtra(null, '${grupo === 'CORREO' ? 'Correo' : 'Operadores'}')">➕ Agregar ${grupo === 'CORREO' ? 'correo' : 'operador u otro portal'}</button>`;
+                }
+            });
+        }
 
         if (!hay && (filtro.texto || filtro.faltan || filtro.usadas || filtro.tipo)) {
             h += '<div class="pe-msg">Ninguna entidad con ese filtro.</div>';
@@ -334,6 +370,23 @@ window.Portales = (function () {
         </div>`;
     }
 
+    function otra(c) {
+        const sub = [c.tipo];
+        if (c.cargada_por) sub.push('↔ ' + c.cargada_por);
+        return `<div class="pe-fila">
+            <span class="pe-estado portal">🔑 Guardada</span>
+            <div style="min-width:0">
+                <div class="pe-nombre">${esc(c.entidad)}</div>
+                <div class="pe-sub">${sub.map(esc).join(' · ')}</div>
+            </div>
+            <div class="pe-mono" title="${esc(c.usuario || '')}">${c.usuario ? esc(c.usuario) : '<span class="pe-vacio">—</span>'}</div>
+            <div style="min-width:0">${claveHtml(c.contrasena)}</div>
+            <div style="font-size:.72rem;color:#475569;min-width:0;overflow:hidden;text-overflow:ellipsis" title="${esc(c.observacion || '')}">${c.observacion ? esc(c.observacion) : '<span class="pe-vacio">—</span>'}</div>
+            <div>${c.link_acceso ? `<a href="${esc(c.link_acceso)}" target="_blank" rel="noopener" class="pe-btn" style="text-decoration:none" title="Abrir el portal">🔗</a>` : ''}</div>
+            <div style="text-align:right">${datos.puede_gestionar ? `<button type="button" class="pe-btn" onclick="Portales.editarOtra(${c.id})">✏️ Editar</button>` : ''}</div>
+        </div>`;
+    }
+
     function sinClasificar(c) {
         const opciones = ['EPS', 'ARL', 'CAJA'].map(t =>
             `<optgroup label="${t}">${(datos.catalogo[t] || []).map(e => `<option value="${t}|${e.id}">${esc(e.nombre)}</option>`).join('')}</optgroup>`
@@ -359,6 +412,7 @@ window.Portales = (function () {
         const c = f.clave || {};
         const form = document.getElementById('peForm');
         form.reset();
+        modoLibre(false, c);
         document.getElementById('peError').style.display = 'none';
         document.getElementById('peTitulo').textContent = `${GRUPOS[tipo]} · ${f.nombre}`;
         document.getElementById('peSubtitulo').textContent = datos.razon_social.nombre + (datos.razon_social.nit ? ` · NIT ${datos.razon_social.nit}` : '');
@@ -390,10 +444,60 @@ window.Portales = (function () {
         editando = null;
     }
 
+    // Correos, operadores y otros portales: el mismo formulario sin asesor ni «no aplica».
+    function editarOtra(id, tipoNuevo) {
+        const c = (datos.otras || []).find(x => x.id === id) || { tipo: tipoNuevo };
+        editando = { libre: true, clave: c };
+        const form = document.getElementById('peForm');
+        form.reset();
+        modoLibre(true, c);
+        document.getElementById('peError').style.display = 'none';
+        document.getElementById('peTitulo').textContent = c.id ? `${c.entidad}` : 'Nueva clave';
+        document.getElementById('peSubtitulo').textContent = datos.razon_social.nombre + (datos.razon_social.nit ? ` · NIT ${datos.razon_social.nit}` : '');
+        const tipos = [...form.elements.libre_tipo.options].map(o => o.value);
+        if (c.tipo && !tipos.includes(c.tipo)) form.elements.libre_tipo.add(new Option(c.tipo, c.tipo));
+        form.elements.libre_tipo.value = c.tipo || 'Correo';
+        form.elements.libre_entidad.value = c.entidad || '';
+        ['usuario', 'link_acceso', 'observacion'].forEach(k => form.elements[k].value = c[k] || '');
+        form.elements.contrasena.value = '';
+        form.elements.contrasena.placeholder = c.contrasena ? 'En blanco conserva la actual' : '';
+        document.getElementById('peSura').style.display = 'none';
+        document.getElementById('peOrigen').textContent = c.id
+            ? `Clave #${c.id}${c.cargada_por ? ' · la cargó ' + c.cargada_por : ''}${c.actualizada ? ' · ' + c.actualizada : ''}`
+            : 'Nueva';
+        document.getElementById('peModal').style.display = 'flex';
+        setTimeout(() => (c.id ? form.elements.usuario : form.elements.libre_entidad).focus(), 50);
+    }
+
+    function modoLibre(libre, c) {
+        document.getElementById('peLibre').style.display = libre ? '' : 'none';
+        document.getElementById('pePortalTitulo').style.display = libre ? 'none' : '';
+        document.getElementById('peNoAplica').style.display = libre ? 'none' : '';
+        if (libre) document.getElementById('peAsesor').style.display = 'none';
+        document.getElementById('peEliminar').style.display = datos.puede_eliminar && c?.id ? '' : 'none';
+    }
+
+    function eliminar() {
+        const c = editando?.libre ? editando.clave : editando?.clave;
+        if (!c?.id || !confirm('¿Eliminar esta clave? Desaparece para todos los aliados que comparten la empresa.')) return;
+        fetch(`${URL_BASE.replace(/\/portales$/, '')}/${c.id}`, {
+            method: 'DELETE',
+            headers: { 'X-CSRF-TOKEN': csrf(), 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+        }).then(async r => {
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw (r.status === 404 ? 'Solo la puede eliminar el aliado que la cargó.' : (d.message || `Error ${r.status}`));
+            cerrar(); recargar().then(() => avisar('Clave eliminada.'));
+        }).catch(msg => {
+            const e = document.getElementById('peError');
+            e.textContent = msg; e.style.display = 'block';
+        });
+    }
+
     function guardar(ev) {
         ev.preventDefault();
         if (!editando) return;
         const form = ev.target;
+        if (editando.libre) return guardarOtra(form);
         const fd = new FormData(form);
         fd.set('tipo', editando.tipo);
         fd.set('entidad_id', editando.id);
@@ -403,6 +507,23 @@ window.Portales = (function () {
         const btn = document.getElementById('peGuardar');
         btn.disabled = true; btn.textContent = 'Guardando…';
         enviar(`${URL_BASE}/${rsId}`, fd)
+            .then(d => { cerrar(); recargar().then(() => avisar(d.message)); })
+            .catch(msg => {
+                const e = document.getElementById('peError');
+                e.textContent = msg; e.style.display = 'block';
+            })
+            .finally(() => { btn.disabled = false; btn.textContent = '💾 Guardar'; });
+    }
+
+    function guardarOtra(form) {
+        const fd = new FormData();
+        if (editando.clave.id) fd.set('clave_id', editando.clave.id);
+        fd.set('tipo', form.elements.libre_tipo.value);
+        fd.set('entidad', form.elements.libre_entidad.value);
+        ['usuario', 'contrasena', 'link_acceso', 'observacion'].forEach(k => fd.set(k, form.elements[k].value));
+        const btn = document.getElementById('peGuardar');
+        btn.disabled = true; btn.textContent = 'Guardando…';
+        enviar(`${URL_BASE}/${rsId}/otra`, fd)
             .then(d => { cerrar(); recargar().then(() => avisar(d.message)); })
             .catch(msg => {
                 const e = document.getElementById('peError');
@@ -448,7 +569,7 @@ window.Portales = (function () {
         setTimeout(() => n.remove(), 4000);
     }
 
-    return { montar, recargar, editar, cerrar, guardar, asignar, ojo };
+    return { montar, recargar, editar, editarOtra, eliminar, cerrar, guardar, asignar, ojo };
 })();
 </script>
 @endonce

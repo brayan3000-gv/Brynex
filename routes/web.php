@@ -302,6 +302,7 @@ Route::middleware('auth')->group(function () {
             Route::post('clave-accesos', [$cac, 'store'])->name('clave_accesos.store');
             Route::put('clave-accesos/{id}', [$cac, 'update'])->name('clave_accesos.update');
             Route::post('clave-accesos/portales/{id}', [\App\Http\Controllers\Admin\PortalEntidadController::class, 'store'])->whereNumber('id')->name('clave_accesos.portales.store');
+            Route::post('clave-accesos/portales/{id}/otra', [\App\Http\Controllers\Admin\PortalEntidadController::class, 'otra'])->whereNumber('id')->name('clave_accesos.portales.otra');
             Route::post('clave-accesos/portales/{id}/asignar', [\App\Http\Controllers\Admin\PortalEntidadController::class, 'asignar'])->whereNumber('id')->name('clave_accesos.portales.asignar');
         });
         Route::delete('clave-accesos/{id}', [$cac, 'destroy'])->name('clave_accesos.destroy')->middleware('permiso:claves_acceso.eliminar');

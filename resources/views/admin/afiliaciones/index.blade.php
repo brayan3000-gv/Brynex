@@ -1446,30 +1446,12 @@ function sortClass($col, $currSort, $currDir) {
 
     {{-- Tabla --}}
     <div style="flex:1;overflow-y:auto;padding:1rem 1.25rem;" id="rs-claves-body">
-        {{-- Portales de EPS, ARL y caja de la empresa, con la del contrato
-             resaltada: lo mismo que la pestaña de la razón social. --}}
+        {{-- Todas las claves de la empresa, en una sola tabla: EPS, ARL, caja y
+             SAT ligadas al catálogo (con la del contrato resaltada), y debajo
+             los correos y operadores. Es la misma de la pestaña de la razón social. --}}
         <div style="font-size:0.85rem;font-weight:800;color:#1c1917;margin-bottom:0.5rem;">🏥 Portales de entidades</div>
         <div id="rs-portales" style="margin-bottom:1.4rem;"></div>
 
-        <div style="font-size:0.85rem;font-weight:800;color:#1c1917;margin-bottom:0.5rem;">🗂️ Todas las claves de esta razón social</div>
-        <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
-            <thead>
-                <tr style="background:#fef9c3;border-bottom:2px solid #fde68a;">
-                    <th class="ca-th">Tipo</th>
-                    <th class="ca-th">Entidad / Portal</th>
-                    <th class="ca-th">Usuario</th>
-                    <th class="ca-th">Contraseña</th>
-                    <th class="ca-th" style="text-align:center;">Link</th>
-                    <th class="ca-th">Correo</th>
-                    <th class="ca-th">Observación</th>
-                    <th class="ca-th" style="text-align:center;">Estado</th>
-                    <th class="ca-th" style="text-align:center;">Acciones</th>
-                </tr>
-            </thead>
-            <tbody id="rs-claves-tbody">
-                <tr><td colspan="9" style="text-align:center;padding:2rem;color:#94a3b8;font-size:0.85rem;">Selecciona una razón social.</td></tr>
-            </tbody>
-        </table>
     </div>
 </div>
 
@@ -2704,73 +2686,8 @@ function abrirClavesRS(rsId, rsNombre, delContrato) {
     panel.style.display   = 'flex';
     setTimeout(function(){ panel.style.transform = 'translateX(0)'; }, 10);
 
-    // Cargar claves
-    var loading = document.getElementById('rs-claves-loading');
-    var body    = document.getElementById('rs-claves-body');
-    var tbody   = document.getElementById('rs-claves-tbody');
-    // El cuerpo queda a la vista: los portales cargan por su cuenta y no
-    // tienen por qué esperar a la lista de claves.
-    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.2rem;color:#94a3b8;font-size:0.8rem;">⏳ Cargando claves...</td></tr>';
-    body.style.display = 'block';
-
-    fetch('/admin/clave-accesos/razon-social/' + rsId, {
-        headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': CSRF }
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(claves) {
-        loading.style.display = 'none';
-        body.style.display    = 'block';
-        tbody.innerHTML = '';
-        clavesCargadas = claves || [];
-        if (clavesCargadas.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:2rem;color:#94a3b8;font-size:0.85rem;">No hay claves registradas para esta razón social. Use ➕ Nueva Clave para agregar.</td></tr>';
-            return;
-        }
-        var colores = {
-            'Portal':['#eff6ff','#1d4ed8'],'Correo':['#fef3c7','#92400e'],
-            'EPS':['#dcfce7','#15803d'],'ARL':['#fce7f3','#9d174d'],
-            'AFP':['#e0e7ff','#3730a3'],'CAJA':['#fff7ed','#c2410c'],
-            'DIAN':['#fef9c3','#713f12'],'MinTrabajo':['#f0fdf4','#166534'],
-            'Banco':['#f5f3ff','#6d28d9'],'Operadores':['#f3e8ff','#7e22ce'],'Otro':['#f1f5f9','#475569']
-        };
-        clavesCargadas.forEach(function(c) {
-            var col = colores[c.tipo] || ['#f1f5f9','#475569'];
-            var tipoBadge = '<span style="background:'+col[0]+';color:'+col[1]+';padding:0.15rem 0.5rem;border-radius:999px;font-size:0.68rem;font-weight:700;">'+(c.tipo||'—')+'</span>';
-            var linkBtn = c.link_acceso
-                ? '<a href="'+c.link_acceso+'" target="_blank" style="background:#eff6ff;color:#2563eb;padding:0.18rem 0.5rem;border-radius:5px;font-size:0.7rem;font-weight:600;border:1px solid #bfdbfe;text-decoration:none;">🔗 Abrir</a>'
-                : '<span style="color:#cbd5e1;">—</span>';
-            var estadoBadge = c.activo
-                ? '<span style="background:#dcfce7;color:#16a34a;padding:0.12rem 0.45rem;border-radius:999px;font-size:0.65rem;font-weight:700;">ACTIVO</span>'
-                : '<span style="background:#fee2e2;color:#dc2626;padding:0.12rem 0.45rem;border-radius:999px;font-size:0.65rem;font-weight:700;">INACTIVO</span>';
-            var masked = c.contrasena ? '•'.repeat(Math.min(c.contrasena.length,8))+' 👁' : '<span style="color:#cbd5e1;">—</span>';
-            var passHtml = c.contrasena
-                ? '<span style="font-family:monospace;font-size:0.77rem;cursor:pointer;" onclick="verPassClaveRS(this, '+c.id+', \''+btoa(unescape(encodeURIComponent(c.contrasena)))+'\')" title="Click para revelar">'+masked+'</span>'
-                : masked;
-            var tr = document.createElement('tr');
-            tr.style.cssText = 'border-bottom:1px solid #fef3c7;';
-            tr.onmouseover = function(){ this.style.background='#fffbeb'; };
-            tr.onmouseout  = function(){ this.style.background='transparent'; };
-            tr.innerHTML =
-                '<td style="padding:0.38rem 0.65rem;">'+tipoBadge+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;font-weight:600;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+(c.entidad||'')+'">'+(c.entidad||'—')+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;font-family:monospace;font-size:0.77rem;">'+(c.usuario||'<span style="color:#cbd5e1;">—</span>')+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;">'+passHtml+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;text-align:center;">'+linkBtn+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;font-size:0.75rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+(c.correo_entidad||'')+'">'+(c.correo_entidad||'<span style="color:#cbd5e1;">—</span>')+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;font-size:0.73rem;color:#64748b;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="'+(c.observacion||'')+'">'+(c.observacion||'')+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;text-align:center;">'+estadoBadge+'</td>'+
-                '<td style="padding:0.38rem 0.65rem;text-align:center;white-space:nowrap;">' +
-                    '<button onclick="abrirModalClaveRS(' + c.id + ')" style="background:#fef3c7;border:1px solid #fde68a;border-radius:5px;padding:0.18rem 0.55rem;font-size:0.7rem;font-weight:600;cursor:pointer;color:#92400e;" title="Editar">✏️</button> ' +
-                    '<button onclick="eliminarClaveRS(' + c.id + ')" style="background:#fee2e2;border:1px solid #fca5a5;border-radius:5px;padding:0.18rem 0.55rem;font-size:0.7rem;font-weight:600;cursor:pointer;color:#dc2626;" title="Eliminar">🗑</button>' +
-                '</td>';
-            tbody.appendChild(tr);
-        });
-    })
-    .catch(function() {
-        loading.style.display = 'none';
-        body.style.display    = 'block';
-        mostrarNotifClavesRS('Error al cargar las claves.', 'error');
-    });
+    document.getElementById('rs-claves-loading').style.display = 'none';
+    document.getElementById('rs-claves-body').style.display = 'block';
 }
 
 function cerrarClavesRS() {

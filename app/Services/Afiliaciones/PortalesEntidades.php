@@ -255,6 +255,14 @@ class PortalesEntidades
             ->map(fn ($c) => self::claveJson($c, $verContrasena, $aliadoActivo))
             ->values()->all();
 
+        // Lo que no es de una entidad del catálogo (correos, operadores,
+        // portales sueltos): va en la misma tabla, en sus propios grupos.
+        $otras = $claves
+            ->filter(fn ($c) => ! $c->entidad_id && ! in_array(strtoupper((string) $c->tipo), self::TIPOS, true))
+            ->sortBy(fn ($c) => mb_strtoupper((string) $c->entidad))
+            ->map(fn ($c) => self::claveJson($c, $verContrasena, $aliadoActivo) + ['grupo' => self::grupoOtra($c)])
+            ->values()->all();
+
         $faltan = collect($filas)->where('estado', 'falta');
 
         return [
@@ -263,12 +271,21 @@ class PortalesEntidades
             'sin_caja' => ! $cajaConfigurada,
             'filas' => $filas,
             'sin_clasificar' => $sinClasificar,
+            'otras' => $otras,
             'resumen' => [
                 'total' => count($filas),
                 'faltan' => $faltan->count(),
                 'faltan_con_afiliados' => $faltan->filter(fn ($f) => $f['tipo'] !== 'EPS' || $f['afiliados'] > 0)->count(),
             ],
         ];
+    }
+
+    /** CORREO para cuentas de correo; OTRAS para operadores y lo demás. */
+    private static function grupoOtra(ClaveAcceso $c): string
+    {
+        $texto = strtoupper($c->tipo.' '.$c->entidad);
+
+        return preg_match('/CORREO|GMAIL|HOTMAIL|OUTLOOK|YAHOO/', $texto) ? 'CORREO' : 'OTRAS';
     }
 
     private static function fila(string $tipo, int $id, string $nombre, ?int $afiliados, bool $configurada = false): array
@@ -440,6 +457,36 @@ class PortalesEntidades
         }
 
         return ['clave' => $clave, 'aviso' => $aviso];
+    }
+
+    /**
+     * Crea o edita una clave que no es de una entidad del catálogo (un correo,
+     * un operador, otro portal). Se edita por NIT igual que las demás; la
+     * nueva queda en la fila del aliado activo si la tiene.
+     */
+    public static function guardarOtra(RazonSocial $rs, ?int $claveId, array $datos, int $aliadoActivo): ClaveAcceso
+    {
+        $filas = self::filasDeNit($rs);
+
+        $clave = $claveId
+            ? ClaveAcceso::whereIn('razon_social_id', $filas->pluck('id'))->findOrFail($claveId)
+            : new ClaveAcceso([
+                'aliado_id' => (int) ($filas->first(fn ($f) => (int) $f->aliado_id === $aliadoActivo) ?? $rs)->aliado_id,
+                'razon_social_id' => ($filas->first(fn ($f) => (int) $f->aliado_id === $aliadoActivo) ?? $rs)->id,
+                'activo' => true,
+            ]);
+
+        if (! isset($datos['contrasena']) || $datos['contrasena'] === '' || $datos['contrasena'] === '__oculta__') {
+            unset($datos['contrasena']);
+        }
+
+        $clave->fill($datos)->save();
+
+        if ($clave->usuario && $clave->contrasena) {
+            ClavePortalSincronizador::propagar($clave);
+        }
+
+        return $clave;
     }
 
     /** Liga una clave vieja a su entidad del catálogo, sin tocar nada más. */
