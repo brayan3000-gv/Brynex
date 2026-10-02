@@ -133,6 +133,17 @@ async function abrirAfiliarColmena(contratoId) {
     prog.parar();
 
     document.getElementById('acmCargando').style.display  = 'none';
+
+    // Un error del servidor (permiso, sesión vencida…) no trae el resumen: se
+    // dice qué pasó en vez de pintar el formulario lleno de «undefined».
+    if (!data || !data.resumen) {
+        const cargando = document.getElementById('acmCargando');
+        cargando.style.display = 'block';
+        cargando.innerHTML = '<div class="acm-prob"><strong>No se pudo revisar el contrato.</strong><br>' +
+            ((data && data.message) ? data.message : 'El servidor no respondió como se esperaba.') +
+            ' Cierra esta ventana y vuelve a intentarlo; si sigue igual, avísanos.</div>';
+        return;
+    }
     document.getElementById('acmContenido').style.display = 'block';
 
     const r = data.resumen || {};

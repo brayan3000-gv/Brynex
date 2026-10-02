@@ -260,11 +260,14 @@ class ArlColmenaController extends Controller
      */
     private function contrato(Request $request, int $id): Contrato
     {
-        $aliadoId = (int) session('aliado_id_activo', Auth::user()->aliado_id);
-
-        return Contrato::with(['razonSocial', 'eps', 'pension', 'tipoModalidad', 'aliado'])
-            ->where('aliado_id', $aliadoId)
-            ->findOrFail($id);
+        // `paraTramite` valida el permiso por contrato: BryNex puede abrir el de
+        // cualquier aliado que gestione aunque no sea el activo en la sesión
+        // (la vista de «gestionados» los lista todos). Filtrar por el aliado
+        // activo daba un 404 y el modal quedaba lleno de «undefined».
+        // `cliente` se deja perezoso a propósito: con `with()` se pierde el
+        // filtro por aliado y trae la ficha de otro.
+        return Contrato::paraTramite($id)
+            ->loadMissing(['razonSocial', 'eps', 'pension', 'tipoModalidad', 'aliado']);
     }
 
     /** Abrir sesión en Colmena levanta un navegador: no cabe en los 30 s de PHP. */
