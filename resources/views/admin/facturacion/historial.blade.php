@@ -376,7 +376,7 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                         </button>
                         @elseif($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConPlanilla, true))
                         <a href="{{ route('admin.planos.certificado_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}{{ $operadorId ? '&forzar_operador_id=' . $operadorId : '' }}"
-                           onclick="this.href = this.href.split('&t=')[0] + '&t=' + new Date().getTime()"
+                           onclick="return abrirPlanilla(event, this.href)"
                            target="_blank" class="btn-act-sm" style="background:#0f172a;color:#fff;border-color:#0f172a;" title="{{ $tituloPlanilla }}">
                             ⬇️ Planilla
                         </a>
@@ -814,19 +814,124 @@ async function guardarClaveMiPlanilla(ev) {
         }
         // Ya hay clave: todos los botones de Mi Planilla pasan a descargar directo.
         document.querySelectorAll('.btn-planilla-mp').forEach(b => {
-            b.onclick = () => window.open(b.dataset.url + '&t=' + Date.now(), '_blank');
+            b.onclick = (ev) => abrirPlanilla(ev, b.dataset.url);
             b.title = 'Descargar la planilla real de Mi Planilla';
         });
-        document.getElementById('mp-form').style.display = 'none';
-        const link = document.getElementById('mp-descargar');
-        link.href = _mpUrl + '&t=' + Date.now();
-        link.style.display = 'block';
+        // Sigue de una vez con la descarga, mostrando los pasos.
+        cerrarClaveMiPlanilla();
+        abrirPlanilla(null, _mpUrl);
     } catch (e) {
         err.textContent = '❌ ' + e.message;
         err.style.display = 'block';
     } finally {
         btn.disabled = false; btn.textContent = '💾 Guardar y descargar';
     }
+}
+
+// ── Descarga de la planilla con sus pasos ──────────────
+// El servidor anota en qué va (ingresando, buscando, descargando) y aquí se
+// consulta cada medio segundo, con los segundos de cada paso. Al final el PDF
+// se ve en el mismo recuadro, con botones para abrirlo o guardarlo.
+const PL_PROGRESO_URL = '{{ route('admin.planos.certificado_pdf.progreso') }}';
+let _plCorrida = 0, _plBlob = null;
+function abrirPlanilla(ev, url) {
+    // Ctrl/Cmd + clic o clic del medio: se deja abrir directo en otra pestaña.
+    if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1)) return true;
+    if (ev) ev.preventDefault();
+
+    const corrida = ++_plCorrida;
+    const token = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+    const inicio = performance.now();
+    const seg = () => ((performance.now() - inicio) / 1000).toFixed(1);
+    const pasos = document.getElementById('pl-pasos');
+    const reloj = document.getElementById('pl-reloj');
+    let inicioPaso = inicio, vistos = 0;
+
+    if (_plBlob) { URL.revokeObjectURL(_plBlob); _plBlob = null; }
+    pasos.innerHTML = '';
+    document.getElementById('pl-error').style.display = 'none';
+    document.getElementById('pl-visor').style.display = 'none';
+    document.getElementById('pl-visor').src = 'about:blank';
+    document.getElementById('pl-acciones').style.display = 'none';
+    document.getElementById('pl-titulo').textContent = '⏳ Descargando planilla…';
+    document.getElementById('modal-pl-ov').style.display = 'flex';
+
+    const cerrarPaso = (estado) => {
+        const li = pasos.lastElementChild;
+        if (!li) return;
+        li.querySelector('.pl-ico').textContent = estado === 'ok' ? '✅' : '❌';
+        li.querySelector('.pl-seg').textContent = ((performance.now() - inicioPaso) / 1000).toFixed(1) + ' s';
+    };
+    const nuevoPaso = (texto) => {
+        cerrarPaso('ok');
+        inicioPaso = performance.now();
+        const li = document.createElement('li');
+        li.style.cssText = 'display:flex;align-items:center;gap:.5rem;padding:.3rem 0;font-size:.82rem;color:#334155;border-bottom:1px dashed #e2e8f0';
+        li.innerHTML = '<span class="pl-ico">⏳</span><span style="flex:1"></span><span class="pl-seg" style="font-family:monospace;color:#94a3b8;font-size:.75rem"></span>';
+        li.children[1].textContent = texto;
+        pasos.appendChild(li);
+    };
+    nuevoPaso('Conectando con BryNex');
+
+    const tic = setInterval(() => {
+        if (corrida !== _plCorrida) return clearInterval(tic);
+        reloj.textContent = seg() + ' s';
+        const li = pasos.lastElementChild;
+        if (li && li.querySelector('.pl-ico').textContent === '⏳') {
+            li.querySelector('.pl-seg').textContent = ((performance.now() - inicioPaso) / 1000).toFixed(1) + ' s';
+        }
+    }, 100);
+    const sondeo = setInterval(async () => {
+        if (corrida !== _plCorrida) return clearInterval(sondeo);
+        try {
+            const r = await fetch(PL_PROGRESO_URL + '?progreso=' + token, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
+            const d = await r.json();
+            if (corrida === _plCorrida) (d.pasos || []).slice(vistos).forEach(t => { vistos++; nuevoPaso(t); });
+        } catch (e) { /* el siguiente sondeo lo intenta otra vez */ }
+    }, 500);
+    const terminar = () => { clearInterval(tic); clearInterval(sondeo); reloj.textContent = seg() + ' s'; };
+
+    const base = url.split('&t=')[0];
+    fetch(base + '&progreso=' + token + '&t=' + Date.now(), { credentials: 'same-origin' })
+        .then(async (resp) => {
+            if (corrida !== _plCorrida) return;
+            const tipo = resp.headers.get('Content-Type') || '';
+            if (!resp.ok || !tipo.includes('pdf')) {
+                const html = await resp.text();
+                const texto = new DOMParser().parseFromString(html, 'text/html').body.innerText.trim();
+                throw new Error(texto.replace(/^⚠️\s*No se pudo descargar la planilla\s*/, '') || ('Error ' + resp.status));
+            }
+            const blob = await resp.blob();
+            terminar();
+            nuevoPaso('Listo');
+            cerrarPaso('ok');
+            const origen = resp.headers.get('X-Soporte-Origen');
+            document.getElementById('pl-titulo').textContent = origen === 'brynex'
+                ? '📄 Planilla (armada por BryNex)' : '📄 Planilla real del operador';
+            const nombre = (/filename="([^"]+)"/.exec(resp.headers.get('Content-Disposition') || '') || [])[1] || 'planilla.pdf';
+            _plBlob = URL.createObjectURL(blob);
+            const visor = document.getElementById('pl-visor');
+            visor.src = _plBlob; visor.style.display = 'block';
+            const abrir = document.getElementById('pl-abrir'), bajar = document.getElementById('pl-bajar');
+            abrir.href = _plBlob; bajar.href = _plBlob; bajar.download = nombre;
+            document.getElementById('pl-acciones').style.display = 'flex';
+        })
+        .catch((e) => {
+            if (corrida !== _plCorrida) return;
+            terminar();
+            cerrarPaso('error');
+            document.getElementById('pl-titulo').textContent = '⚠️ No se pudo descargar la planilla';
+            const err = document.getElementById('pl-error');
+            err.textContent = e.message || 'Error de conexión.';
+            err.style.display = 'block';
+        });
+    return false;
+}
+function cerrarPlanilla() {
+    _plCorrida++;
+    document.getElementById('modal-pl-ov').style.display = 'none';
+    document.getElementById('pl-visor').src = 'about:blank';
+    if (_plBlob) { URL.revokeObjectURL(_plBlob); _plBlob = null; }
 }
 
 // ── Modal Soporte Planilla ─────────────────────────────
@@ -875,6 +980,30 @@ function cerrarSoportePlanilla() {
         <div style="flex:1;background:#e8edf2;padding:.35rem 0 0;overflow:hidden;">
             <iframe id="recibo-frame" src="" style="width:100%;height:100%;border:none;display:block;"></iframe>
         </div>
+    </div>
+</div>
+
+{{-- Modal de descarga de la planilla (pasos + visor) --}}
+<div id="modal-pl-ov"
+     onclick="if(event.target.id==='modal-pl-ov')cerrarPlanilla()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);z-index:99997;align-items:center;justify-content:center;padding:.75rem">
+    <div style="background:#fff;border-radius:14px;width:min(820px,97vw);max-height:94vh;display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:.7rem 1.1rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+            <div style="color:#fff;font-size:.9rem;font-weight:800" id="pl-titulo">⏳ Descargando planilla…</div>
+            <div style="display:flex;align-items:center;gap:.6rem">
+                <span id="pl-reloj" style="font-family:monospace;color:#bfdbfe;font-size:.85rem;font-weight:700">0.0 s</span>
+                <button onclick="cerrarPlanilla()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;width:28px;height:28px;font-size:1rem;cursor:pointer;font-weight:700">&#x2715;</button>
+            </div>
+        </div>
+        <div style="padding:.6rem 1.1rem;flex-shrink:0">
+            <ul id="pl-pasos" style="list-style:none;margin:0;padding:0"></ul>
+            <div id="pl-error" style="display:none;margin-top:.6rem;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:.5rem .7rem;font-size:.8rem"></div>
+            <div id="pl-acciones" style="display:none;gap:.5rem;margin-top:.6rem">
+                <a id="pl-abrir" href="#" target="_blank" style="background:#1e3a8a;color:#fff;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">↗ Abrir en pestaña</a>
+                <a id="pl-bajar" href="#" style="background:#15803d;color:#fff;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">⬇️ Descargar</a>
+            </div>
+        </div>
+        <iframe id="pl-visor" title="Planilla" style="display:none;flex:1;min-height:60vh;border:0;border-top:1px solid #e2e8f0;background:#f1f5f9"></iframe>
     </div>
 </div>
 

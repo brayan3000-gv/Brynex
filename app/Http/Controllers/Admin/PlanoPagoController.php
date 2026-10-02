@@ -1440,9 +1440,12 @@ class PlanoPagoController extends Controller
             // Con tope: alguien está esperando el PDF. Si el operador no responde
             // en 15 s se entrega el de BryNex (antes llegó a esperar 38 s).
             // Mi Planilla no tiene "el de BryNex": si su portal falla, se dice por qué.
+            // Con `progreso` el historial va mostrando el paso en que va.
+            $llave = self::llaveProgreso($request->input('progreso'));
             try {
                 $soporte = app(\App\Services\EnlaceInformeIndividualService::class)
                     ->conTope(15)
+                    ->alAvanzar(fn ($paso) => $llave && \Illuminate\Support\Facades\Cache::put($llave, [...\Illuminate\Support\Facades\Cache::get($llave, []), $paso], 300))
                     ->soporte($plano, $forceOperadorId ?: null);
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('Soporte de planilla: no se pudo bajar del operador', [
@@ -1470,6 +1473,21 @@ class PlanoPagoController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
             ->header('Pragma', 'no-cache')
             ->header('Expires', 'Sat, 26 Jul 1997 05:00:00 GMT');
+    }
+
+    /** En qué paso va la descarga que pidió el historial (ver descargarCertificadoPdf). */
+    public function progresoCertificadoPdf(Request $request)
+    {
+        $llave = self::llaveProgreso($request->input('progreso'));
+
+        return response()->json(['pasos' => $llave ? \Illuminate\Support\Facades\Cache::get($llave, []) : []]);
+    }
+
+    private static function llaveProgreso($token): ?string
+    {
+        return is_string($token) && preg_match('/^[A-Za-z0-9]{8,40}$/', $token)
+            ? 'soporte-planilla:'.(int) session('aliado_id_activo').':'.auth()->id().':'.$token
+            : null;
     }
 
     /**

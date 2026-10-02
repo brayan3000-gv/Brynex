@@ -77,6 +77,24 @@ class EnlaceInformeIndividualService
      */
     private array $sesionesFallidas = [];
 
+    /** A quién se le cuenta cada paso (el botón muestra en qué va). */
+    private ?\Closure $alAvanzar = null;
+
+    /** Cada paso de la descarga ("Ingresando a Simple", "Descargando el PDF") se le pasa a `$fn`. */
+    public function alAvanzar(callable $fn): static
+    {
+        $this->alAvanzar = \Closure::fromCallable($fn);
+
+        return $this;
+    }
+
+    private function paso(string $texto): void
+    {
+        if ($this->alAvanzar) {
+            rescue(fn () => ($this->alAvanzar)($texto), report: false);
+        }
+    }
+
     /**
      * Una copia del servicio que se rinde con el operador a los `$segundos`.
      *
@@ -117,6 +135,7 @@ class EnlaceInformeIndividualService
         $ruta = self::rutaEnDisco($plano);
 
         if (Storage::disk('local')->exists($ruta)) {
+            $this->paso('Ya estaba descargada: abriéndola');
             $pdf = Storage::disk('local')->get($ruta);
 
             if ($operadorPlanillaId) {
@@ -165,6 +184,7 @@ class EnlaceInformeIndividualService
 
         foreach ($conCredenciales as [$operador, $cred]) {
             try {
+                $this->paso("Ingresando a {$operador->nombre}");
                 $pdf = $this->descargar($plano, $operador->codigo, $cred);
                 Storage::disk('local')->put($ruta, $pdf);
                 $this->registrarPago($plano, (int) $operador->id, $pdf);
@@ -285,6 +305,8 @@ class EnlaceInformeIndividualService
             return ['pdf' => $delOperador['pdf'], 'origen' => $delOperador['origen']];
         }
 
+        $this->paso('El operador no la entregó: armando la de BryNex');
+
         return [
             'pdf'    => app(PlanillaFormularioService::class)->generar($plano, $operadorPlanillaId),
             'origen' => 'brynex',
@@ -311,6 +333,8 @@ class EnlaceInformeIndividualService
         $ruta = self::rutaEnDisco($plano);
 
         if (Storage::disk('local')->exists($ruta)) {
+            $this->paso('Ya estaba descargada: abriéndola');
+
             return ['pdf' => Storage::disk('local')->get($ruta), 'origen' => 'disco'];
         }
 
@@ -320,10 +344,11 @@ class EnlaceInformeIndividualService
         }
 
         $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi, $plano->tipo_doc);
+        $this->paso('Ingresando a Mi Planilla');
         $robot->login();
 
         try {
-            $pdf = $robot->pdfPagada($numero);
+            $pdf = $robot->pdfPagada($numero, fn ($t) => $this->paso($t));
         } finally {
             rescue(fn () => $robot->logout(), report: false);
         }
@@ -575,6 +600,7 @@ class EnlaceInformeIndividualService
         }
 
         // 3. ¿La planilla figura pagada para este aportante?
+        $this->paso('Buscando la planilla');
         $respuesta = $this->ajax($http, $pagina, $viewState, 'tx_ntu:obtenerPeriodos', 'click', 'click', [
             'javax.faces.partial.execute' => 'tx_ntu:obtenerPeriodos tx_ntu:numeroPlanilla tx_ntu:estadoPago tx_ntu:codigoEmpresaConsultante',
             'javax.faces.partial.render'  => 'tx_ntu:panelPeriodos',
@@ -599,6 +625,7 @@ class EnlaceInformeIndividualService
         $viewState = $this->viewStateParcial($respuesta) ?? $viewState;
 
         // 5. Generar. Exactamente los campos que manda el navegador.
+        $this->paso('Descargando el PDF');
         $hoy = now();
         $campos = [
             'form' => 'form',

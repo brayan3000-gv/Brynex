@@ -211,8 +211,10 @@ class MiPlanillaPortalService
      *
      * @throws \RuntimeException si no está entre las pagadas o no llega un PDF
      */
-    public function pdfPagada(string $numero): string
+    public function pdfPagada(string $numero, ?callable $paso = null): string
     {
+        $paso ??= fn () => null;
+        $paso('Buscando la planilla');
         $pagadas = collect($this->planillas()['pagadas']);
         $planilla = $pagadas->first(fn ($p) => (string) ($p['NumeroRadicado'] ?? '') === $numero);
         if (! $planilla) {
@@ -227,6 +229,7 @@ class MiPlanillaPortalService
         $f = self::fecha($planilla['FechaPlanilla']);
         $fecha = sprintf('%02d/%02d/%d %d:%d:%d', $f->month, $f->day, $f->year, $f->hour, $f->minute, $f->second);
 
+        $paso('Descargando el PDF');
         $resp = $this->http->get('/PrivadoIndependientes/Planilla/GenerarPDF', ['query' => [
             'planillaId' => $planilla['IdPlanilla'],
             'fechaPlanilla' => $fecha,
