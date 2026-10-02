@@ -167,12 +167,13 @@
 
             <div class="op-info">
                 <div class="op-nombre">{{ $op->nombre }}</div>
+                {{-- El `codigo` (ARUS, SIMPLE, APL…) es interno: no se muestra.
+                     ARUS, por ejemplo, ya no dice nada del operador, que hoy es Enlace. --}}
                 <div class="op-codigo">
-                    Código: <strong>{{ $op->codigo }}</strong>
                     @if($op->codigo_ni)
                         <span class="op-ni">PILA: {{ $op->codigo_ni }}</span>
                     @else
-                        <span style="color:#94a3b8;font-size:.65rem"> · código PILA pendiente</span>
+                        <span style="color:#94a3b8;font-size:.65rem">Código PILA pendiente</span>
                     @endif
                 </div>
             </div>
