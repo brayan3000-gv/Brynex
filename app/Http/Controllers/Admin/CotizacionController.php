@@ -26,8 +26,9 @@ class CotizacionController extends Controller
         $asesorId = $request->get('asesor_id');
         $fechaIni = $request->get('fecha_ini');
         $fechaFin = $request->get('fecha_fin');
+        $porLlamar = $request->boolean('llamar');
 
-        $query = CotizacionProspecto::with(['asesor', 'creador'])
+        $query = CotizacionProspecto::with(['asesor', 'creador', 'plan'])
             ->where('aliado_id', $aliadoId);
 
         if ($buscar) {
@@ -54,27 +55,36 @@ class CotizacionController extends Controller
             $query->whereBetween('fecha_cotizacion', [$fechaIni, $fechaFin]);
         }
 
-        $prospectos = $query->orderByDesc('id')->paginate(30);
+        // "Por llamar": seguimientos abiertos cuya llamada es hoy o ya se venció,
+        // la más atrasada primero.
+        if ($porLlamar) {
+            $query->whereNotIn('estado', CotizacionProspecto::ESTADOS_CERRADOS)
+                ->whereDate('proxima_llamada', '<=', today())
+                ->orderBy('proxima_llamada');
+        }
 
-        $asesores = DB::table('asesores')->orderBy('nombre')->pluck('nombre', 'id');
-        
-        $estados = [
-            'interesado' => 'Interesado',
-            'sin_respuesta' => 'Sin Respuesta',
-            'pendiente_resp' => 'Pendiente Respuesta',
-            'no_interesado' => 'No Interesado',
-            'convertido' => 'Convertido a Cliente',
-        ];
+        $prospectos = $query->orderByDesc('id')->paginate(30)->withQueryString();
 
-        $canales = [
-            'redes_sociales' => 'Redes Sociales',
-            'whatsapp' => 'WhatsApp',
-            'campana' => 'Campaña Publicitaria',
-            'referido' => 'Referido / Amigo',
-            'empresa' => 'Empresa / Empleado',
-        ];
+        // Totales del aliado para las pestañas (no dependen de los filtros).
+        $conteos = CotizacionProspecto::where('aliado_id', $aliadoId)
+            ->selectRaw('estado, COUNT(*) as n')
+            ->groupBy('estado')
+            ->pluck('n', 'estado')
+            ->map(fn ($n) => (int) $n);
 
-        return view('admin.cotizaciones.index', compact('prospectos', 'buscar', 'estado', 'canal', 'asesorId', 'fechaIni', 'fechaFin', 'asesores', 'estados', 'canales'));
+        $conteoPorLlamar = CotizacionProspecto::where('aliado_id', $aliadoId)
+            ->whereNotIn('estado', CotizacionProspecto::ESTADOS_CERRADOS)
+            ->whereDate('proxima_llamada', '<=', today())
+            ->count();
+
+        $asesores = $this->asesoresDelAliado();
+        $estados = CotizacionProspecto::ESTADOS;
+        $canales = CotizacionProspecto::CANALES;
+
+        return view('admin.cotizaciones.index', compact(
+            'prospectos', 'buscar', 'estado', 'canal', 'asesorId', 'fechaIni', 'fechaFin',
+            'asesores', 'estados', 'canales', 'porLlamar', 'conteos', 'conteoPorLlamar'
+        ));
     }
 
     public function create()
@@ -342,7 +352,7 @@ class CotizacionController extends Controller
         $cfg = \App\Models\ConfiguracionAliado::paraAliado($aliadoId);
 
         return [
-            'asesores'      => Cliente::listaAsesores(),
+            'asesores'      => $this->asesoresDelAliado(),
             'ciudades'      => $ciudades,
             'planes'        => $planes,
             'modalidades'   => $modalidades,
@@ -353,21 +363,20 @@ class CotizacionController extends Controller
             'administracion_default' => $cfg ? $cfg->administracion : 0,
             'modalidadesIndependientes' => [10, 13, 14],
             'tipos_doc'     => \App\Models\Cliente::TIPOS_DOC,
-            'canales'       => [
-                'redes_sociales' => 'Redes Sociales',
-                'whatsapp' => 'WhatsApp',
-                'campana' => 'Campaña Publicitaria',
-                'referido' => 'Referido / Amigo',
-                'empresa' => 'Empresa / Empleado',
-            ],
-            'estados' => [
-                'interesado' => 'Interesado',
-                'sin_respuesta' => 'Sin Respuesta',
-                'pendiente_resp' => 'Pendiente Respuesta',
-                'no_interesado' => 'No Interesado',
-                'convertido' => 'Convertido a Cliente',
-            ]
+            'canales'       => CotizacionProspecto::CANALES,
+            'estados'       => CotizacionProspecto::ESTADOS,
         ];
+    }
+
+    /** Asesores del aliado activo (id => nombre) para los selectores del módulo. */
+    private function asesoresDelAliado(): array
+    {
+        return DB::table('asesores')
+            ->where('aliado_id', session('aliado_id_activo'))
+            ->whereNull('deleted_at')
+            ->orderBy('nombre')
+            ->pluck('nombre', 'id')
+            ->toArray();
     }
 
     private function calcularCotizacion(CotizacionProspecto $prospecto): array

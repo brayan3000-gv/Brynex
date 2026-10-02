@@ -11,6 +11,25 @@ class CotizacionProspecto extends BaseModel
 
     protected $table = 'cotizaciones_prospectos';
 
+    public const ESTADOS = [
+        'interesado' => 'Interesado',
+        'sin_respuesta' => 'Sin Respuesta',
+        'pendiente_resp' => 'Pendiente Respuesta',
+        'no_interesado' => 'No Interesado',
+        'convertido' => 'Convertido a Cliente',
+    ];
+
+    /** Estados en los que ya no se le hace seguimiento al prospecto. */
+    public const ESTADOS_CERRADOS = ['no_interesado', 'convertido'];
+
+    public const CANALES = [
+        'redes_sociales' => 'Redes Sociales',
+        'whatsapp' => 'WhatsApp',
+        'campana' => 'Campaña Publicitaria',
+        'referido' => 'Referido / Amigo',
+        'empresa' => 'Empresa / Empleado',
+    ];
+
     protected $fillable = [
         'aliado_id',
         'asesor_id',
@@ -60,6 +79,22 @@ class CotizacionProspecto extends BaseModel
             return $value;
         }
         return trim("{$this->primer_nombre} {$this->segundo_nombre} {$this->primer_apellido} {$this->segundo_apellido}");
+    }
+
+    /**
+     * Valor mensual cotizado. El cotizador del panel guarda el desglose en
+     * `completo`; el asistente de IA solo deja `valor_mensual`. En Ingreso-Retiro
+     * no hay mes completo y lo que se cobra es el proporcional.
+     */
+    public function getValorMensualAttribute(): ?float
+    {
+        $r = $this->resultado_cotizacion ?: [];
+        $completo = (float) ($r['completo']['total'] ?? 0);
+        $valor = $completo > 0
+            ? $completo
+            : ($r['proporcional']['total'] ?? $r['valor_mensual'] ?? null);
+
+        return $valor ? (float) $valor : null;
     }
 
     // Relaciones
