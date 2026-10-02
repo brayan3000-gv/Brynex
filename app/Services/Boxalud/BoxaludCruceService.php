@@ -194,10 +194,27 @@ class BoxaludCruceService
             return [
                 'causa' => 'radicado_confirmado',
                 'estado' => $estado,
+                'numero' => $enPortal['afiliacion'] ?: null,
                 'observacion' => "Ya afiliado en {$conf['nombre']} con la empresa al ".now()->format('d/m/Y')
                     .' («'.trim((string) $estado).'»'
                     .($enPortal['fecha_inicio'] ? ', desde el '.$enPortal['fecha_inicio'] : '').')'
                     .' — conciliación automática del portal.',
+            ];
+        }
+
+        // Un borrador no afilia a nadie y además estorba: mientras exista, el
+        // portal no deja volver a afiliar a esa persona («ya tiene una
+        // afiliación en ese plan en estado Borrador»), y solo lo ve y lo anula
+        // la empresa que lo dejó. Hay que terminarlo o anularlo a mano.
+        if ($situacion === 'borrador' && $vigente) {
+            return [
+                'causa' => 'afiliacion_en_borrador',
+                'estado' => $estado,
+                'tarea' => "Terminar o anular la afiliación en borrador de {$conf['nombre']}.",
+                'observacion' => "La afiliación quedó **en borrador** en {$conf['nombre']}"
+                    .($enPortal['fecha_inicio'] ? ' (inicio '.$enPortal['fecha_inicio'].')' : '')
+                    .': así no está afiliado y el portal tampoco deja radicarla de nuevo hasta que se termine o se anule'
+                    .' (Consulta afiliaciones → estado Borrador, con la clave de esta empresa).',
             ];
         }
 
@@ -225,8 +242,12 @@ class BoxaludCruceService
             }
 
             $anterior = $fresco->estado;
+            // El número de afiliación del portal es el que la EPS reconoce; si
+            // el radicado no traía ninguno (se cerró a mano, o lo radicó la
+            // empresa), se queda con él en vez de dejarlo vacío.
             $fresco->update([
                 'estado' => Radicado::ESTADO_OK,
+                'numero_radicado' => $fresco->numero_radicado ?: ($caso['numero'] ?? null),
                 'canal_envio' => 'portal',
                 'fecha_confirmacion' => now(),
                 'user_id' => $usuarioId,
@@ -286,7 +307,16 @@ class BoxaludCruceService
     /**
      * El estado del portal, reducido a lo que hay que decidir.
      *
-     * Los nombres salen de cómo los escribe Boxalud; lo que no cuadre con
+     * Los cuatro primeros son los que de verdad usa Boxalud, leídos del combo
+     * de «Consulta afiliaciones» de Coosalud el 1-oct-2026: Radicado, Borrador,
+     * Para radicar pendiente por documentos y Por aprobación de traslado. Van
+     * antes que los patrones porque dos de ellos engañan: **«Radicado» es la
+     * afiliación hecha**, no una en trámite, y **«Por aprobación de traslado»
+     * todavía no afilia a nadie** aunque lleve la palabra «aprobación», que es
+     * la que marcaba «vigente» y habría cerrado el radicado antes de tiempo.
+     *
+     * Los patrones de abajo se quedan para Emssanar y Asmet, que son el mismo
+     * software pero nunca se han mirado por dentro; lo que no cuadre con
      * ninguno queda como desconocido a propósito.
      */
     public static function situacion(string $estado): string
@@ -295,6 +325,10 @@ class BoxaludCruceService
 
         return match (true) {
             $estado === '' => 'desconocida',
+            $estado === 'radicado' => 'vigente',
+            $estado === 'borrador' => 'borrador',
+            str_starts_with($estado, 'para radicar pendiente por documentos') => 'en_tramite',
+            str_starts_with($estado, 'por aprobacion de traslado') => 'en_tramite',
             (bool) preg_match('/anulad|rechazad|retirad|finalizad|inactiv|termin|excluid|cancelad|no activ/', $estado) => 'terminada',
             (bool) preg_match('/activ|aprobad|vigente|afiliad|matriculad/', $estado) => 'vigente',
             (bool) preg_match('/radicad|tramit|proceso|pendiente|estudio|revision/', $estado) => 'en_tramite',
