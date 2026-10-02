@@ -706,7 +706,6 @@ class PortalesEntidades
             'AFP' => DB::table('pensiones')->whereNotIn('id', [1, 4])->orderBy('razon_social')->pluck('razon_social')
                 ->map(fn ($n) => ['valor' => mb_strtoupper($n), 'etiqueta' => $n])->all(),
             'Operadores' => $operadores,
-            'MinTrabajo' => $operadores,
             'Correo' => collect(['Gmail', 'Hotmail / Outlook', 'Yahoo'])
                 ->map(fn ($n) => ['valor' => $n, 'etiqueta' => $n])->all(),
         ];

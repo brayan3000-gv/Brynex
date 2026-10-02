@@ -260,9 +260,8 @@
                     <option value="AFP" {{ request('tipo') === 'AFP' ? 'selected' : '' }}>AFP / Pensión</option>
                     <option value="CAJA" {{ request('tipo') === 'CAJA' ? 'selected' : '' }}>Caja de Compensación</option>
                     <option value="DIAN" {{ request('tipo') === 'DIAN' ? 'selected' : '' }}>DIAN</option>
-                    <option value="MinTrabajo" {{ request('tipo') === 'MinTrabajo' ? 'selected' : '' }}>Min. Trabajo (PILA)</option>
                     <option value="Banco" {{ request('tipo') === 'Banco' ? 'selected' : '' }}>Banco / Entidad Financiera</option>
-                    <option value="Operadores" {{ request('tipo') === 'Operadores' ? 'selected' : '' }}>Operadores</option>
+                    <option value="Operadores" {{ request('tipo') === 'Operadores' ? 'selected' : '' }}>Operadores PILA</option>
                     <option value="Otro" {{ request('tipo') === 'Otro' ? 'selected' : '' }}>Otro</option>
                 </select>
             </div>
@@ -612,9 +611,8 @@
                         <option value="AFP">AFP / Pensión</option>
                         <option value="CAJA">Caja de Compensación</option>
                         <option value="DIAN">DIAN</option>
-                        <option value="MinTrabajo">Min. Trabajo (PILA)</option>
                         <option value="Banco">Banco / Entidad Financiera</option>
-                        <option value="Operadores">Operadores</option>
+                        <option value="Operadores">Operadores PILA</option>
                         <option value="Otro">Otro</option>
                     </select>
                 </div>

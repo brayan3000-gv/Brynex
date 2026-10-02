@@ -125,9 +125,8 @@
                         <option value="AFP">AFP / Pensión</option>
                         <option value="CAJA">Caja de Compensación</option>
                         <option value="DIAN">DIAN</option>
-                        <option value="MinTrabajo">Min. Trabajo (PILA)</option>
                         <option value="Banco">Banco / Entidad Financiera</option>
-                        <option value="Operadores">Operadores</option>
+                        <option value="Operadores">Operadores PILA</option>
                         <option value="Otro">Otro</option>
                     </select>
                 </div>
