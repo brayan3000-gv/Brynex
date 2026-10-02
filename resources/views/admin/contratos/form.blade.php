@@ -2309,28 +2309,53 @@ document.querySelectorAll('#sel_plan option[value]').forEach(opt => {
 });
 
 // ── Caja según la razón social y el departamento del cliente ─────────────
-// Pone arriba del selector las cajas de la razón social (la principal y las de
-// otros departamentos) y escoge la del departamento del cliente; si la empresa
-// no tiene caja allá, la principal. Solo llena la caja si estaba vacía o si la
-// había puesto esta misma sugerencia: lo que el usuario escogió no se toca.
+// Si la razón social tiene cajas configuradas, el selector queda con dos grupos:
+// las de la razón social (la principal y las de otros departamentos) y abajo
+// las otras, en orden alfabético. Sin cajas configuradas vuelve a la lista de
+// siempre (las del departamento del cliente primero). Escoge la del
+// departamento del cliente; si la empresa no tiene caja allá, la principal.
+// Solo llena la caja si estaba vacía o si la había puesto esta misma
+// sugerencia: lo que el usuario escogió no se toca.
+let CAJA_OPCIONES_ORIGINALES = null;
 function sugerirCajaRazonSocial(rsId) {
     const sel  = document.getElementById('sel_caja');
     if (!sel) return;
-    sel.querySelector('optgroup[data-rs]')?.remove();
+    if (CAJA_OPCIONES_ORIGINALES === null) CAJA_OPCIONES_ORIGINALES = sel.innerHTML;
 
+    const valorAntes = sel.value || sel.dataset.valorPrevio || '';
     const lista = CAJAS_RS[rsId] || [];
-    if (!lista.length) return;
 
+    // Todas las cajas, sacadas de la lista que pintó el servidor.
+    const tmp = document.createElement('select');
+    tmp.innerHTML = CAJA_OPCIONES_ORIGINALES;
+    const todas = [...tmp.options].filter(o => o.value)
+        .map(o => ({ id: o.value, nombre: o.textContent.replace('★', '').trim() }));
+
+    if (!lista.length) {
+        sel.innerHTML = CAJA_OPCIONES_ORIGINALES;
+        sel.value = sel.disabled ? '' : valorAntes;
+        avisarCajaFueraDeRazonSocial();
+        return;
+    }
+
+    sel.innerHTML = '<option value="">-- Ninguna --</option>';
     const grupo = document.createElement('optgroup');
     grupo.label = '🏢 De la razón social';
-    grupo.dataset.rs = '1';
     lista.forEach(c => {
         const o = new Option(c.caja + (c.departamento ? ' — ' + c.departamento : '') + (c.principal ? ' (principal)' : ''), c.caja_id);
         if (DEPT_CLIENTE && c.departamento_id === DEPT_CLIENTE) o.textContent = '★ ' + o.textContent;
         grupo.appendChild(o);
     });
-    const valorAntes = sel.value || sel.dataset.valorPrevio || '';
-    sel.insertBefore(grupo, sel.options[0]?.nextSibling || null);
+    sel.appendChild(grupo);
+
+    const deRs = new Set(lista.map(c => String(c.caja_id)));
+    const otras = document.createElement('optgroup');
+    otras.label = '─── Otras cajas ───────────────';
+    todas.filter(c => !deRs.has(c.id))
+        .sort((a, b) => a.nombre.localeCompare(b.nombre))
+        .forEach(c => otras.appendChild(new Option(c.nombre, c.id)));
+    sel.appendChild(otras);
+    sel.value = sel.disabled ? '' : valorAntes;   // deshabilitada (plan sin caja) sigue vacía
 
     const delDpto   = DEPT_CLIENTE ? lista.find(c => c.departamento_id === DEPT_CLIENTE) : null;
     const sugerida  = delDpto || lista.find(c => c.principal) || null;
@@ -2343,8 +2368,6 @@ function sugerirCajaRazonSocial(rsId) {
             sel.style.cssText = STYLE_COMPLETO;
         }
         sel.dataset.cajaSugerida = '1';
-    } else if (valorAntes) {
-        sel.value = valorAntes;   // la misma caja, ahora desde el grupo de arriba
     }
     avisarCajaFueraDeRazonSocial();
 }
