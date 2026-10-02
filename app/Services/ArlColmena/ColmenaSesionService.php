@@ -23,6 +23,9 @@ use RuntimeException;
  */
 class ColmenaSesionService
 {
+    /** Aliado cuya clave se prueba primero cuando una empresa está cargada en varios (Brygar). */
+    private const ALIADO_PREFERIDO = 2;
+
     /** Login B2C + elección de contrato: son varias redirecciones. */
     private const TIMEOUT_SEGUNDOS = 180;
 
@@ -131,6 +134,9 @@ class ColmenaSesionService
             ->where('c.activo', true)
             ->whereNotNull('c.usuario')
             ->whereNotNull('c.contrasena')
+            // Brygar manda: si cambia la clave, es la que vale, y a los demás
+            // aliados se les cambia después. Entre el resto, la más reciente.
+            ->orderByRaw('CASE WHEN rs.aliado_id = ? THEN 0 ELSE 1 END', [self::ALIADO_PREFERIDO])
             ->orderByDesc('c.updated_at')
             ->orderByDesc('c.id')
             ->get(['c.usuario', 'c.contrasena'])
