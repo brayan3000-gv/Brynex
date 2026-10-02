@@ -87,9 +87,12 @@ class EnviarPlanillaTool implements IaToolInterface
             . "generar {$referenciaPendiente} y que en cuanto esté lista se envía por este mismo WhatsApp. Si la "
             . 'necesita con urgencia, ofrécele pasar con un asesor (hablar_con_asesor).';
 
-        // Operadores con PDF configurado (mismo criterio que el envío masivo en /admin/planos/envio-planillas)
-        $operadorIdsConfigurados = DB::table('operador_planillas_templates')->pluck('operador_planilla_id')->toArray();
-        $operadores = DB::table('operadores_planilla')->whereIn('id', $operadorIdsConfigurados)->get(['id', 'nombre']);
+        // Operadores de los que se baja la planilla original (Simple, ARUS y Mi
+        // Planilla): el mismo criterio que el envío masivo. Por WhatsApp no va
+        // la copia de BryNex, así que tener plantilla ya no basta.
+        $operadores = DB::table('operadores_planilla')
+            ->whereIn('codigo', \App\Services\PlanillaWhatsappService::OPERADORES_AUTORIZADOS)
+            ->get(['id', 'nombre']);
 
         $query = Plano::where('aliado_id', $aliadoId)
             ->where('no_identifi', $cliente->cedula)
@@ -164,9 +167,14 @@ class EnviarPlanillaTool implements IaToolInterface
                 // Solo el real del operador: la copia de BryNex no se manda por WhatsApp.
                 $pdfContenido = $soportes->soporteOriginal($plano, $item['operador_id'])['pdf'];
 
-                // El mes de servicio es el mes actual (cuando se paga/envía la planilla), no el
-                // período cotizado que cubre el plano (mes_plano/anio_plano puede ser el vencido).
+                // El «período de servicio» es el mes en que se pagó la planilla, no el período
+                // cotizado (mes_plano puede ser el vencido): el del plano si paga mes actual,
+                // si no el siguiente. Con now() una planilla pagada en septiembre salía «octubre».
                 $nombreMes = now()->translatedFormat('F Y');
+                if ($plano->anio_plano && $plano->mes_plano) {
+                    $pago = \Carbon\Carbon::create((int) $plano->anio_plano, (int) $plano->mes_plano, 1);
+                    $nombreMes = ($plano->paga_mes_actual ? $pago : $pago->addMonth())->translatedFormat('F Y');
+                }
                 $sujeto = $esPropia ? 'tu última planilla' : "la última planilla de {$nombreCliente}";
                 $caption = "Te enviamos {$sujeto}, período de servicio {$nombreMes}. 📄";
 
