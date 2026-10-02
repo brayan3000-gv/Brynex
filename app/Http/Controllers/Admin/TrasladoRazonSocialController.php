@@ -10,6 +10,7 @@ use App\Models\RazonSocial;
 use App\Models\User;
 use App\Services\CorreccionNovedadesService;
 use App\Services\PlanoPilaTxtService;
+use App\Services\RazonSocialCompartida;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1208,27 +1209,15 @@ class TrasladoRazonSocialController extends Controller
                 return $existente;
             }
 
-            // `razones_sociales.id` no es IDENTITY (tabla legacy): el siguiente a mano.
-            $fila = (array) DB::table('razones_sociales')->where('id', $modelo->id)->first();
-            $fila['id']          = (int) DB::table('razones_sociales')->max('id') + 1;
-            $fila['aliado_id']   = $aliadoId;
-            $fila['estado']      = 'Activa';
-            $fila['n_plano']     = 1;
-            $fila['encargado_id'] = null;
-            $fila['mes_pagos']   = null;
-            $fila['anio_pagos']  = null;
-            $fila['id_legacy']   = null;
-            // La sucursal es del aliado ante el operador (Elites: 01 BRYGAR,
-            // 02 Fecop, 03 Luis Lopez): la del modelo aquí sería la de otro.
-            // Queda vacía hasta crearla en el operador.
-            $fila['codigo_sucursal'] = null;
-            $fila['nombre_sucursal'] = null;
-            $fila['datos_operador']  = null;
-            $fila['datos_operador_at'] = null;
-            $fila['observacion'] = trim(($fila['observacion'] ?? '') . " Creada por traslado de razón social desde el aliado {$modelo->aliado_id}.");
-            DB::table('razones_sociales')->insert($fila);
+            // Copia ligada a la original: los datos de la empresa le llegan
+            // solos y la sucursal, la planilla y el estado quedan del aliado.
+            $id = RazonSocialCompartida::crearCopia(
+                RazonSocialCompartida::original(DB::table('razones_sociales')->where('id', $modelo->id)->first()),
+                $aliadoId,
+                trim(($modelo->observacion ?? '') . " Creada por traslado de razón social desde el aliado {$modelo->aliado_id}."),
+            );
 
-            return RazonSocial::find($fila['id']);
+            return RazonSocial::find($id);
         })();
     }
 

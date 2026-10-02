@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\RazonSocial;
+use App\Services\RazonSocialCompartida;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -119,7 +120,15 @@ class RazonSocialController extends Controller
         // Estado de las credenciales de API por operador (sin exponer secretos)
         $operadoresCred = OperadorCredencialController::estadoPorOperador($aliadoId, $id);
 
-        return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs', 'operadoresCred'));
+        // Empresa prestada: de quién es copia esta fila, o con quién la comparte.
+        $original = $rs->origen_id ? RazonSocialCompartida::original($rs) : null;
+        $origenAliado = $original ? DB::table('aliados')->where('id', $original->aliado_id)->value('nombre') : null;
+        $copias = $rs->origen_id ? collect() : RazonSocialCompartida::copias((int) $rs->id);
+        $puedeHabilitar = RazonSocialCompartida::puedeHabilitar(auth()->user());
+        $camposEmpresa = RazonSocialCompartida::EMPRESA;
+
+        return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs', 'operadoresCred',
+            'original', 'origenAliado', 'copias', 'puedeHabilitar', 'camposEmpresa'));
     }
 
     // ─── Actualizar ───────────────────────────────────────────────
@@ -136,6 +145,13 @@ class RazonSocialController extends Controller
         $data = $this->validar($request, $id);
         unset($data['id']); // no cambiar PK en update
 
+        // En una copia los datos de la empresa vienen de la original: se
+        // cambian allá. Aquí solo lo del aliado (sucursal, estado…).
+        if ($rs->origen_id) {
+            $data = array_diff_key($data, array_flip(RazonSocialCompartida::EMPRESA));
+            $request->request->remove('es_independiente');
+        }
+
         // Verificar que el NIT no exista para este aliado en otra razón social
         if (!empty($data['nit'])) {
             $existeNit = DB::table('razones_sociales')
@@ -150,15 +166,66 @@ class RazonSocialController extends Controller
             }
         }
 
-        $data['es_independiente'] = $request->boolean('es_independiente');
+        if (! $rs->origen_id) {
+            $data['es_independiente'] = $request->boolean('es_independiente');
+        }
 
         DB::table('razones_sociales')
             ->where('id', $id)
             ->where('aliado_id', $aliadoId)
             ->update($data);
 
+        // La original pasa sus datos de empresa a los aliados que la usan.
+        $copias = $rs->origen_id ? 0 : RazonSocialCompartida::sincronizar($id);
+
         return redirect()->route('admin.configuracion.razones.index')
-            ->with('success', '✅ Razón Social actualizada correctamente.');
+            ->with('success', '✅ Razón Social actualizada correctamente.'
+                .($copias ? " También en {$copias} aliado".($copias === 1 ? '' : 's').' que la usa'.($copias === 1 ? '' : 'n').'.' : ''));
+    }
+
+    // ─── Compartir con otros aliados ──────────────────────────────
+
+    /** En qué aliados está la empresa y cómo (original, copia, sin vincular, no la tiene). */
+    public function aliadosCompartida(int $id)
+    {
+        abort_unless(RazonSocialCompartida::puedeHabilitar(auth()->user()), 403);
+
+        $rs = DB::table('razones_sociales')->where('id', $id)->where('aliado_id', session('aliado_id_activo'))->first();
+        abort_if(! $rs, 404);
+
+        return response()->json(RazonSocialCompartida::estadoPorAliado($rs));
+    }
+
+    /**
+     * Habilita la razón social en los aliados elegidos: crea su copia, o liga
+     * la que ya tenían con ese NIT. Solo superadmin de BryNex.
+     */
+    public function habilitarEnAliados(Request $request, int $id)
+    {
+        abort_unless(RazonSocialCompartida::puedeHabilitar(auth()->user()), 403);
+
+        $rs = DB::table('razones_sociales')->where('id', $id)->where('aliado_id', session('aliado_id_activo'))->first();
+        abort_if(! $rs, 404);
+
+        $data = $request->validate([
+            'aliados' => 'required|array|min:1',
+            'aliados.*' => 'integer|exists:aliados,id',
+        ], ['aliados.required' => 'Elige al menos un aliado.']);
+
+        $nombres = DB::table('aliados')->whereIn('id', $data['aliados'])->pluck('nombre', 'id');
+        $quien = auth()->user()->nombre;
+        $hechos = [];
+
+        foreach ($data['aliados'] as $aliadoId) {
+            $r = RazonSocialCompartida::habilitar($rs, (int) $aliadoId,
+                "Habilitada desde {$rs->razon_social} por {$quien} el ".now()->format('d/m/Y').'.');
+            $hechos[] = ($nombres[$aliadoId] ?? "aliado {$aliadoId}").' ('.($r['accion'] === 'creada' ? 'creada' : 'ya la tenía: vinculada').')';
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Habilitada en: '.implode(', ', $hechos).'. Falta crearle la sucursal en el operador a cada uno.',
+        ]);
     }
 
     // ─── Eliminar ─────────────────────────────────────────────────

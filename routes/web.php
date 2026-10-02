@@ -441,6 +441,9 @@ Route::middleware('auth')->group(function () {
             Route::patch('configuracion/razones-sociales/{id}/estado', [$rsc, 'toggleEstado'])->name('configuracion.razones.estado');
             Route::patch('configuracion/razones-sociales/{id}/inactivar', [$rsc, 'inactivar'])->name('configuracion.razones.inactivar');
             Route::post('configuracion/razones-sociales/{id}/sello', [$rsc, 'subirSello'])->name('configuracion.razones.sello');
+            // Prestar la razón social a otro aliado (solo superadmin BryNex, ver RazonSocialCompartida)
+            Route::get('configuracion/razones-sociales/{id}/aliados', [$rsc, 'aliadosCompartida'])->whereNumber('id')->name('configuracion.razones.aliados');
+            Route::post('configuracion/razones-sociales/{id}/habilitar', [$rsc, 'habilitarEnAliados'])->whereNumber('id')->name('configuracion.razones.habilitar');
         });
         Route::delete('configuracion/razones-sociales/{id}', [$rsc, 'destroy'])->name('configuracion.razones.destroy')->middleware('permiso:razones_sociales.eliminar');
 

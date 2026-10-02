@@ -86,6 +86,14 @@
              contra los contratos de todos los aliados, no es un dato de esta
              ficha. Desde aquí se llega directo a la fila de esta empresa —solo
              para quien pueda abrir esa pantalla, que es de BryNex. --}}
+        {{-- Prestar la empresa a otro aliado: crea su copia ligada a esta. --}}
+        @if($rs && ($puedeHabilitar ?? false) && ! $rs->origen_id)
+        <button type="button" class="btn-claves" onclick="abrirHabilitar()"
+                title="Crear esta razón social en otro aliado, con los datos de la empresa sincronizados">
+            ➕ Habilitar en aliado
+        </button>
+        @endif
+
         @if($rs?->arl_poliza && auth()->user()?->can('brynex_cierre.ver'))
         <a href="{{ route('brynex.conciliacion_arl') }}#empresa-{{ preg_replace('/\D/', '', (string) $rs->nit) }}"
            class="btn-claves" style="text-decoration:none;display:inline-block;"
@@ -95,6 +103,24 @@
         @endif
     </div>
 </div>
+
+@if($rs && ($original ?? null))
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:.6rem .9rem;margin-bottom:.9rem;font-size:.78rem;color:#1e3a8a;line-height:1.45">
+    🔗 <strong>Copia de {{ $origenAliado }}.</strong> Los datos de la empresa (nombre, dirección, representante,
+    ARL, caja…) se cambian en la razón social de {{ $origenAliado }} y llegan solos aquí.
+    En esta ficha solo se cambia lo de este aliado: <strong>sucursal</strong>, estado y observación.
+</div>
+@elseif($rs && ($copias ?? collect())->isNotEmpty())
+<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:.6rem .9rem;margin-bottom:.9rem;font-size:.78rem;color:#14532d;line-height:1.6">
+    🤝 <strong>Compartida con:</strong>
+    @foreach($copias as $c)
+    <span style="display:inline-block;background:#fff;border:1px solid #bbf7d0;border-radius:20px;padding:.05rem .55rem;margin:0 .15rem;font-weight:700">
+        {{ $c->aliado }}{{ $c->codigo_sucursal ? ' · suc. '.$c->codigo_sucursal : ' · sin sucursal' }}{{ $c->estado !== 'Activa' ? ' · '.$c->estado : '' }}
+    </span>
+    @endforeach
+    <div style="font-size:.7rem;color:#166534">Al guardar los datos de la empresa aquí, se actualizan también en esos aliados (menos su sucursal).</div>
+</div>
+@endif
 
 @if($errors->any())
 <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;font-size:.82rem;color:#dc2626">
@@ -1141,6 +1167,119 @@ async function eliminarClave(id) {
 function nuevaClave() {}
 function cancelarClave() {}
 @endif
+</script>
+@endif
+
+@if($rs && ($puedeHabilitar ?? false) && ! $rs->origen_id)
+{{-- ══ MODAL: HABILITAR EN ALIADO ══════════════════════════════════════ --}}
+<div id="modalHabilitar" class="mc-overlay" onclick="if(event.target===this) cerrarHabilitar()">
+    <div class="mc-box" style="max-width:520px">
+        <div class="mc-head">
+            <div>
+                <h3 style="color:#fff;font-size:.92rem;font-weight:800;margin:0">➕ Habilitar en aliado</h3>
+                <div style="color:#cbd5e1;font-size:.72rem;margin-top:.15rem">{{ Str::limit($rs->razon_social, 50) }} · NIT {{ $rs->nit }}</div>
+            </div>
+            <button type="button" onclick="cerrarHabilitar()" style="background:none;border:none;color:#cbd5e1;font-size:1.2rem;cursor:pointer;line-height:1">✕</button>
+        </div>
+        <div style="padding:1rem 1.1rem">
+            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:.55rem .8rem;margin-bottom:.8rem;font-size:.72rem;color:#475569;line-height:1.5">
+                Se crea la razón social en el aliado con los datos de la empresa, y queda ligada a esta:
+                lo que cambies aquí le llega solo. Las <strong>claves de portales</strong> las ve de inmediato (van por NIT).
+                La <strong>sucursal</strong> es de cada aliado: hay que crearla en el operador y ponerla en su ficha.
+            </div>
+            <div id="habLista" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+                <div style="padding:1rem;text-align:center;color:#94a3b8;font-size:.8rem">Cargando…</div>
+            </div>
+            <div id="habMsg" style="display:none;margin-top:.7rem;border-radius:8px;padding:.5rem .7rem;font-size:.76rem"></div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:.5rem;padding:.75rem 1.1rem;border-top:1px solid #f1f5f9;background:#f8fafc">
+            <button type="button" class="btn-cancel" onclick="cerrarHabilitar()">Cerrar</button>
+            <button type="button" id="habBtn" class="btn-save" style="padding:.45rem 1.2rem;font-size:.82rem" onclick="habilitarAliados()">Habilitar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const HAB_ESTADOS = {
+    original:     ['Dueña', '#e0e7ff', '#3730a3'],
+    copia:        ['Ya habilitada', '#dcfce7', '#15803d'],
+    sin_vincular: ['La tiene sin vincular', '#fef9c3', '#854d0e'],
+    no_la_tiene:  ['No la tiene', '#f1f5f9', '#475569'],
+};
+
+function abrirHabilitar() {
+    document.getElementById('modalHabilitar').style.display = 'flex';
+    document.getElementById('habMsg').style.display = 'none';
+    const lista = document.getElementById('habLista');
+    lista.innerHTML = '<div style="padding:1rem;text-align:center;color:#94a3b8;font-size:.8rem">Cargando…</div>';
+    fetch(@json(route('admin.configuracion.razones.aliados', $rs->id)), { headers: { 'Accept': 'application/json' } })
+        .then(r => r.ok ? r.json() : Promise.reject(r.status))
+        .then(aliados => {
+            lista.innerHTML = aliados.map(a => {
+                const [txt, bg, fg] = HAB_ESTADOS[a.estado];
+                const elegible = a.estado === 'no_la_tiene' || a.estado === 'sin_vincular';
+                return `<label style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;border-bottom:1px solid #f1f5f9;font-size:.8rem;${elegible ? 'cursor:pointer' : 'opacity:.75'}">
+                    <input type="checkbox" value="${a.aliado_id}" ${elegible ? '' : 'disabled'}>
+                    <span style="flex:1;font-weight:700;color:#0f172a">${a.aliado.replace(/</g, '&lt;')}</span>
+                    ${a.sucursal ? `<span style="font-size:.66rem;color:#64748b">suc. ${a.sucursal}</span>` : ''}
+                    <span style="background:${bg};color:${fg};border-radius:20px;padding:.08rem .5rem;font-size:.64rem;font-weight:800">${txt}</span>
+                </label>`;
+            }).join('');
+        })
+        .catch(e => { lista.innerHTML = `<div style="padding:1rem;color:#b91c1c;font-size:.8rem">No se pudo cargar (${e}).</div>`; });
+}
+
+function cerrarHabilitar() {
+    document.getElementById('modalHabilitar').style.display = 'none';
+}
+
+function habilitarAliados() {
+    const ids = [...document.querySelectorAll('#habLista input:checked')].map(i => i.value);
+    const msg = document.getElementById('habMsg');
+    if (!ids.length) {
+        msg.style.cssText = 'display:block;margin-top:.7rem;border-radius:8px;padding:.5rem .7rem;font-size:.76rem;background:#fee2e2;color:#b91c1c';
+        msg.textContent = 'Elige al menos un aliado.';
+        return;
+    }
+    const btn = document.getElementById('habBtn');
+    btn.disabled = true; btn.textContent = 'Habilitando…';
+    fetch(@json(route('admin.configuracion.razones.habilitar', $rs->id)), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+        body: JSON.stringify({ aliados: ids }),
+    })
+        .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw (d.message || `Error ${r.status}`); return d; })
+        .then(d => {
+            msg.style.cssText = 'display:block;margin-top:.7rem;border-radius:8px;padding:.5rem .7rem;font-size:.76rem;background:#dcfce7;color:#15803d';
+            msg.textContent = '✅ ' + d.message;
+            setTimeout(() => location.reload(), 2500);
+        })
+        .catch(e => {
+            msg.style.cssText = 'display:block;margin-top:.7rem;border-radius:8px;padding:.5rem .7rem;font-size:.76rem;background:#fee2e2;color:#b91c1c';
+            msg.textContent = e;
+        })
+        .finally(() => { btn.disabled = false; btn.textContent = 'Habilitar'; });
+}
+</script>
+@endif
+
+@if($rs && ($original ?? null))
+<script>
+// Copia de otro aliado: los datos de la empresa no se editan aquí (el
+// servidor igual los ignora). Se dejan a la vista, sin poder cambiarlos.
+document.addEventListener('DOMContentLoaded', () => {
+    @json($camposEmpresa).forEach(nombre => {
+        document.querySelectorAll(`form [name="${nombre}"]`).forEach(el => {
+            if (el.type === 'hidden') return;
+            el.readOnly = true;
+            el.tabIndex = -1;
+            el.style.pointerEvents = 'none';
+            el.classList.add('finp-disabled');
+            el.closest('label.toggle-wrap')?.style.setProperty('pointer-events', 'none');
+            el.title = 'Viene de {{ $origenAliado }}: se cambia en su razón social';
+        });
+    });
+});
 </script>
 @endif
 @endsection
