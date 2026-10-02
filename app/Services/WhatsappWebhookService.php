@@ -6,6 +6,7 @@ use App\Events\WhatsappConversacionActualizada;
 use App\Events\WhatsappMensajeNuevo;
 use App\Jobs\MarketingConfirmarBloqueoJob;
 use App\Jobs\ResolverCaptchaAdresJob;
+use App\Jobs\WhatsappAcuseRecepcionJob;
 use App\Jobs\WhatsappDescargarMediaJob;
 use App\Jobs\WhatsappEscalarMultimediaJob;
 use App\Jobs\WhatsappResponderIaJob;
@@ -390,11 +391,24 @@ class WhatsappWebhookService
             WhatsappTranscribirAudioJob::dispatch($mensaje->id)->delay(now()->addSeconds(5));
         }
 
+        $iaActiva = (bool) IaConfiguracionAliado::where('aliado_id', $alidoId)->value('activo_whatsapp');
+
+        // Aliados sin IA en WhatsApp: si en unos minutos nadie le ha contestado, se le manda
+        // un acuse ("recibimos tu mensaje, ya te atendemos") y la conversación queda
+        // pendiente. En Fecop, el 81 % de lo que escribían los clientes (sep-2026) no tuvo
+        // ninguna respuesta, ni un «lo recibimos». Los rechazos de publicidad ya reciben su
+        // propia confirmación, y las reacciones no son un mensaje que haya que contestar.
+        if (!$iaActiva && !$esRechazoPublicidad && !$esBajaEscrita
+            && !in_array($tipo, ['reaction', 'unsupported'], true)
+            && WhatsappAcuseRecepcionJob::aplicaA($alidoId, $waFrom)) {
+            WhatsappAcuseRecepcionJob::dispatch($conversacion->id, $mensaje->id)
+                ->delay(now()->addMinutes(WhatsappAcuseRecepcionJob::MINUTOS_ESPERA));
+        }
+
         // Asistente IA: solo si el bot está activo en esta conversación y el aliado
         // tiene la IA activada para WhatsApp. Se procesa en un Job para no bloquear
         // la respuesta al webhook de Meta (~20s de margen).
         if ($conversacion->bot_activo && !$esRechazoPublicidad) {
-            $iaActiva = IaConfiguracionAliado::where('aliado_id', $alidoId)->value('activo_whatsapp');
             if ($iaActiva) {
                 if (in_array($tipo, ['text', 'button'], true) && !empty($dataMensaje['contenido'])) {
                     // Indicador de "escribiendo" — gratis, no pasa por la IA ni consume tokens.
@@ -843,18 +857,19 @@ class WhatsappWebhookService
      */
     private function procesarParaMultipleConfigs(array $value, array $configs): void
     {
-        // Para el caso multi-aliado con número compartido,
-        // buscamos conversaciones existentes y procesamos la que coincida.
         $mensajes = $value['messages'] ?? [];
+        $aliadoIds = array_map('intval', array_column($configs, 'aliado_id'));
 
         foreach ($mensajes as $msg) {
             $waFrom = $msg['from'] ?? null;
             if (!$waFrom) continue;
 
-            // Buscar si ya existe una conversación activa para este número (ordenando por la más reciente usando COALESCE para evitar problemas con NULLs)
+            // 1. Conversación activa con este número en alguno de los aliados del número
+            //    compartido (la más reciente; COALESCE evita problemas con NULLs).
+            //    Si no hay activa, sirve una cerrada: procesarMensajeEntrante la reabre.
             $convExistente = WhatsappConversacion::where('wa_contact_id', $waFrom)
-                ->whereIn('aliado_id', array_column($configs, 'aliado_id'))
-                ->whereIn('estado', ['abierta', 'asignada'])
+                ->whereIn('aliado_id', $aliadoIds)
+                ->orderByRaw("CASE WHEN estado IN ('abierta','asignada') THEN 0 ELSE 1 END")
                 ->orderByRaw('COALESCE(ultimo_mensaje_at, updated_at) DESC')
                 ->first();
 
@@ -863,9 +878,45 @@ class WhatsappWebhookService
                 if ($config) {
                     $this->procesarMensajeEntrante($msg, $convExistente->aliado_id, $config, $value);
                 }
+                continue;
             }
-            // Si no hay conversación existente, el mensaje se pierde en modo multi-aliado compartido
-            // (se requiere configuración de número propio por aliado para mensajes nuevos)
+
+            // 2. Sin conversación: se busca el celular en clientes y empresas. Antes aquí el
+            //    mensaje se botaba sin dejar rastro; nadie se enteraba de que alguien escribió.
+            $bandeja = app(WhatsappBandejaCompartida::class);
+            $resuelto = $bandeja->resolverAliado($waFrom, $aliadoIds);
+            $aliadoId = $resuelto['aliado_id'];
+            $motivoBandeja = null;
+
+            if (!$aliadoId) {
+                // 3. No se sabe de quién es (o está en varios): a la bandeja de BryNex,
+                //    pendiente, para moverla a mano desde el chat.
+                $aliadoId = WhatsappBandejaCompartida::aliadoBandeja();
+                $motivoBandeja = $resuelto['motivo'];
+
+                if (!in_array($aliadoId, $aliadoIds, true)) {
+                    Log::error('WhatsApp número compartido: mensaje sin aliado y la bandeja de BryNex no usa la cuenta compartida', [
+                        'from' => $waFrom, 'motivo' => $resuelto['motivo'],
+                    ]);
+                    continue;
+                }
+            }
+
+            $config = WhatsappConfig::where('aliado_id', $aliadoId)->first();
+            if (!$config) continue;
+
+            $this->procesarMensajeEntrante($msg, $aliadoId, $config, $value);
+
+            if ($motivoBandeja) {
+                WhatsappConversacion::where('aliado_id', $aliadoId)
+                    ->where('wa_contact_id', $waFrom)
+                    ->first()
+                    ?->marcarPendiente($motivoBandeja);
+
+                Log::info('WhatsApp número compartido: mensaje a la bandeja de BryNex', [
+                    'from' => $waFrom, 'motivo' => $motivoBandeja,
+                ]);
+            }
         }
     }
 }

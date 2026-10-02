@@ -55,6 +55,10 @@
 .conv-preview { font-size:.74rem; color:#94a3b8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:.1rem; }
 .conv-meta { display:flex; flex-direction:column; align-items:flex-end; gap:.25rem; flex-shrink:0; }
 .conv-time { font-size:.68rem; color:#cbd5e1; }
+/* Chip de espera: lleva X esperando, y cuánto queda de ventana */
+.conv-espera { font-size:.58rem; font-weight:700; line-height:1; padding:.18rem .35rem; border-radius:4px; white-space:nowrap; background:#f1f5f9; color:#475569; }
+.conv-espera.urgente { background:#fef3c7; color:#b45309; }
+.conv-espera.vencida { background:#fee2e2; color:#b91c1c; }
 .conv-unread { background:#ef4444; color:#fff; font-size:.58rem; font-weight:700; padding:2px 6px; border-radius:999px; min-width:15px; height:15px; display:inline-flex; align-items:center; justify-content:center; text-align:center; }
 
 /* Chat principal */
@@ -95,6 +99,10 @@
 .msg-wrap { display:flex; flex-direction:column; }
 .msg-wrap.saliente { align-items:flex-end; }
 .msg-sender { font-size:.68rem; color:#94a3b8; margin-bottom:.15rem; }
+/* Nota interna: no se envió al cliente, queda como registro (atendido por otro medio) */
+.msg-wrap.nota { align-items:center; }
+.msg-nota { background:#fef9c3; color:#713f12; border:1px dashed #facc15; border-radius:10px; font-size:.78rem; max-width:80%; }
+.msg-nota .msg-meta { color:#a16207; }
 
 /* Media */
 .msg-image img { max-width:220px; border-radius:8px; cursor:pointer; display:block; }
@@ -151,8 +159,13 @@
             <div class="sidebar-tabs">
                 <a href="{{ route('admin.whatsapp.chat.show', ['id' => $conversacion->id, 'tab' => 'general', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'general' ? 'active' : '' }}">📥 General</a>
+                <a href="{{ route('admin.whatsapp.chat.show', ['id' => $conversacion->id, 'tab' => 'esperando', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
+                   class="sidebar-tab {{ $tab === 'esperando' ? 'active' : '' }}"
+                   title="Escribieron y nadie les ha respondido">⏳ Esperando
+                    <span class="sidebar-badge" style="margin-left:.25rem;background:#d97706" x-show="totalEsperando > 0" x-text="totalEsperando"></span>
+                </a>
                 <a href="{{ route('admin.whatsapp.chat.show', ['id' => $conversacion->id, 'tab' => 'mias', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
-                   class="sidebar-tab {{ $tab === 'mias' ? 'active' : '' }}">👤 Mis chats</a>
+                   class="sidebar-tab {{ $tab === 'mias' ? 'active' : '' }}">👤 Míos</a>
                 <a href="{{ route('admin.whatsapp.chat.show', ['id' => $conversacion->id, 'tab' => 'ia', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'ia' ? 'active' : '' }}">🤖 IA
                     @if($totalIa > 0)<span class="sidebar-badge" style="margin-left:.25rem;">{{ $totalIa }}</span>@endif
@@ -190,13 +203,16 @@
                             <template x-if="c.pendiente_atencion">
                                 <span style="color:#d97706;font-weight:600">⚠️ Pendiente por atender</span>
                             </template>
-                            <template x-if="!c.pendiente_atencion && c.atendida_por_ia">
+                            <template x-if="!c.pendiente_atencion && c.esperando">
+                                <span style="color:#b45309">⏳ <span x-text="c.preview || 'Sin mensajes'"></span></span>
+                            </template>
+                            <template x-if="!c.pendiente_atencion && !c.esperando && c.atendida_por_ia">
                                 <span style="color:#2563eb">🤖 Atendiendo la IA</span>
                             </template>
-                            <template x-if="!c.pendiente_atencion && !c.atendida_por_ia && c.asignado_nombre">
+                            <template x-if="!c.pendiente_atencion && !c.esperando && !c.atendida_por_ia && c.asignado_nombre">
                                 <span style="color:#10b981">● <span x-text="c.asignado_nombre"></span></span>
                             </template>
-                            <template x-if="!c.pendiente_atencion && !c.atendida_por_ia && !c.asignado_nombre">
+                            <template x-if="!c.pendiente_atencion && !c.esperando && !c.atendida_por_ia && !c.asignado_nombre">
                                 <span x-text="c.preview || 'Sin mensajes'"></span>
                             </template>
                         </div>
@@ -204,12 +220,17 @@
                     <div class="conv-meta">
                         <span class="conv-time" x-text="c.hora_display"></span>
                         <span class="conv-unread" x-show="c.total_mensajes_no_leidos > 0" x-text="c.total_mensajes_no_leidos"></span>
+                        <template x-if="c.esperando && c.esperando_desde">
+                            <span class="conv-espera" :class="claseEspera(c)" :title="tituloEspera(c)" x-text="textoEspera(c)"></span>
+                        </template>
                     </div>
                 </a>
             </template>
             <div x-show="listaConversaciones.length === 0" style="text-align:center;padding:2rem 1rem;color:#94a3b8;font-size:.82rem">
                 @if($tipo)
                     No hay conversaciones de tipo «{{ \App\Services\WhatsappTipoContacto::ETIQUETAS[$tipo] ?? $tipo }}» en esta pestaña.
+                @elseif($tab === 'esperando')
+                    Nadie está esperando respuesta. 🎉
                 @else
                     No hay conversaciones.
                 @endif
@@ -257,7 +278,17 @@
                         title="El Asistente IA vuelve a responder en esta conversación">
                     🤖 Reactivar IA
                 </button>
+                <button class="btn-sm btn-outline" @click="modalAtendida = true"
+                        title="Ya le respondiste por otro WhatsApp, llamada o en persona: deja la nota y la saca de «Esperando»">
+                    ✔ Atendido por otro medio
+                </button>
                 <button class="btn-sm btn-outline" @click="modalAsignar = true">👤 Asignar</button>
+                @if($aliadosMover->isNotEmpty())
+                    <button class="btn-sm btn-outline" @click="modalMover = true"
+                            title="Pasa esta conversación (y sus mensajes) al aliado dueño del contacto">
+                        🔀 Mover a aliado
+                    </button>
+                @endif
                 <a x-show="conversacion.contrato_url" :href="conversacion.contrato_url" target="_blank" class="btn-sm btn-success">
                     📄 Ver Cliente
                 </a>
@@ -284,12 +315,19 @@
         {{-- Área de mensajes --}}
         <div class="messages-area" id="messagesArea">
             <template x-for="msg in mensajes" :key="msg.id">
-                <div class="msg-wrap" :class="msg.es_entrante ? 'entrante' : 'saliente'">
-                    <template x-if="!msg.es_entrante && msg.usuario_nombre">
+                <div class="msg-wrap" :class="msg.tipo === 'nota' ? 'nota' : (msg.es_entrante ? 'entrante' : 'saliente')">
+                    <template x-if="!msg.es_entrante && msg.usuario_nombre && msg.tipo !== 'nota'">
                         <div class="msg-sender" x-text="msg.usuario_nombre"></div>
                     </template>
 
-                    <div class="msg-bubble" :class="msg.es_entrante ? 'msg-entrante' : 'msg-saliente'">
+                    <div class="msg-bubble" :class="msg.tipo === 'nota' ? 'msg-nota' : (msg.es_entrante ? 'msg-entrante' : 'msg-saliente')">
+
+                        <!-- Nota interna (no le llegó al cliente) -->
+                        <template x-if="msg.tipo === 'nota'">
+                            <div><span x-html="formatearContenido(msg.contenido)"></span>
+                                <template x-if="msg.usuario_nombre"><span style="opacity:.75"> — <span x-text="msg.usuario_nombre"></span></span></template>
+                            </div>
+                        </template>
 
                         <!-- Texto y plantilla -->
                         <template x-if="msg.tipo === 'text' || msg.tipo === 'template'">
@@ -456,6 +494,58 @@
         </div>
     </div>
 </div>
+
+{{-- Atendido por otro medio: nota interna, no se le envía nada al cliente --}}
+<div class="modal-overlay" x-show="modalAtendida" x-cloak @click.self="modalAtendida = false">
+    <div class="modal-box">
+        <div class="modal-title">✔ Atendido por otro medio</div>
+        <p style="font-size:.8rem;color:#64748b;margin-bottom:.75rem">
+            Queda una nota interna en el chat (el cliente no recibe nada) y la conversación sale de «Esperando».
+        </p>
+        <div class="form-group">
+            <label class="form-label">¿Por dónde se atendió?</label>
+            <select x-model="atendidaMedio" class="form-control">
+                @foreach(\App\Http\Controllers\Admin\WhatsappChatController::MEDIOS_ATENCION as $clave => $etiqueta)
+                    <option value="{{ $clave }}">{{ $etiqueta }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Nota (opcional)</label>
+            <textarea x-model="atendidaNota" class="form-control" rows="2" maxlength="500" placeholder="Ej.: le confirmé el pago desde mi celular"></textarea>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+            <button class="btn-sm btn-outline" @click="modalAtendida = false">Cancelar</button>
+            <button class="btn-sm btn-primary" :disabled="atendiendo" @click="marcarAtendida()">✔ Marcar atendida</button>
+        </div>
+    </div>
+</div>
+
+@if($aliadosMover->isNotEmpty())
+{{-- Bandeja del número compartido: BryNex pasa la conversación al aliado que corresponde --}}
+<div class="modal-overlay" x-show="modalMover" x-cloak @click.self="modalMover = false">
+    <div class="modal-box">
+        <div class="modal-title">🔀 Mover conversación a otro aliado</div>
+        <p style="font-size:.8rem;color:#64748b;margin-bottom:.75rem">
+            Los mensajes se pasan al aliado elegido y la conversación desaparece de este inbox.
+            Si el aliado ya tenía chat con este número, se juntan en uno solo.
+        </p>
+        <div class="form-group">
+            <label class="form-label">Aliado destino</label>
+            <select x-model="aliadoMover" class="form-control">
+                <option value="">— Elegir aliado —</option>
+                @foreach($aliadosMover as $a)
+                    <option value="{{ $a->id }}">{{ $a->nombre }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+            <button class="btn-sm btn-outline" @click="modalMover = false">Cancelar</button>
+            <button class="btn-sm btn-primary" :disabled="!aliadoMover || moviendo" @click="moverAliado()">🔀 Mover</button>
+        </div>
+    </div>
+</div>
+@endif
 </div>
 </div>
 @endsection
@@ -486,6 +576,13 @@ function chatApp() {
         enviando: false,
         mensajeError: '',
         modalAsignar: false,
+        modalMover: false,
+        modalAtendida: false,
+        atendidaMedio: 'otro_whatsapp',
+        atendidaNota: '',
+        atendiendo: false,
+        aliadoMover: '',
+        moviendo: false,
         usuarioAsignar: '{{ $conversacion->asignado_a ?? '' }}',
         mensajes: @json($mensajesData),
         conversacion: @json($conversacionData),
@@ -494,6 +591,7 @@ function chatApp() {
         listaConversaciones: @json($conversacionesData),
         tipoFiltro: @json($tipo),
         totalNoLeidos: {{ (int) $totalNoLeidos }},
+        totalEsperando: {{ (int) $totalEsperando }},
 
         init() {
             this.scrollBottom();
@@ -559,6 +657,118 @@ function chatApp() {
             }
         },
 
+        // ── Chip «esperando»: lo que lleva y cuánto queda de la ventana de 24 h ──
+        // Se calcula en el navegador a partir de los timestamps, así la cuenta sigue
+        // corriendo sin recargar y los eventos de Reverb solo tienen que mover las fechas.
+        minutosVentana(c) {
+            if (!c.ventana_activa || !c.ventana_minutos) return 0;
+            const cargado = c._cargado_en || (c._cargado_en = Date.now());
+            return Math.max(0, c.ventana_minutos - Math.floor((Date.now() - cargado) / 60000));
+        },
+        haceDesde(iso) {
+            const min = Math.max(0, Math.floor((Date.now() - new Date(iso)) / 60000));
+            if (min < 60) return min + ' min';
+            if (min < 1440) return Math.floor(min / 60) + ' h';
+            return Math.floor(min / 1440) + ' d';
+        },
+        claseEspera(c) {
+            const v = this.minutosVentana(c);
+            return v <= 0 ? 'vencida' : (v <= 180 ? 'urgente' : '');
+        },
+        textoVentana(c) {
+            const v = this.minutosVentana(c);
+            if (v <= 0) return 'ventana vencida';
+            return v < 60 ? `vence en ${v} min` : `vence en ${Math.floor(v / 60)} h`;
+        },
+        textoEspera(c) {
+            const v = this.minutosVentana(c);
+            const base = '⏳ ' + this.haceDesde(c.esperando_desde);
+            return v <= 0 ? base + ' · ⛔' : (v <= 180 ? base + ' · ' + this.textoVentana(c) : base);
+        },
+        tituloEspera(c) {
+            return 'Esperando respuesta desde hace ' + this.haceDesde(c.esperando_desde) + ' · ' + this.textoVentana(c);
+        },
+        // Alguien nuestro le escribió: deja de estar esperando, salvo que siga marcada
+        // como pendiente (el acuse automático responde pero la persona sigue sin atender).
+        marcarRespondida(conv) {
+            if (!conv) return;
+            if (conv.esperando && !conv.pendiente_atencion) this.totalEsperando = Math.max(0, this.totalEsperando - 1);
+            conv.esperando = !!conv.pendiente_atencion;
+        },
+        marcarEsperando(conv) {
+            if (!conv) return;
+            if (!conv.esperando) this.totalEsperando++;
+            conv.esperando = true;
+            conv.esperando_desde = new Date().toISOString();
+            conv.ventana_activa = true;
+            conv.ventana_minutos = 1440;
+            conv._cargado_en = Date.now();
+        },
+
+        async marcarAtendida() {
+            if (this.atendiendo) return;
+            this.atendiendo = true;
+            try {
+                const resp = await fetch(`/admin/whatsapp/chat/${this.convId}/atendida`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ medio: this.atendidaMedio, nota: this.atendidaNota })
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    this.modalAtendida = false;
+                    this.atendidaNota = '';
+                    this.mensajes.push(data.mensaje);
+                    this.conversacion.pendiente_atencion = false;
+                    this.conversacion.estado = 'asignada';
+                    this.conversacion.asignado_a = data.asignado_a;
+                    this.conversacion.asignado_nombre = data.asignado_nombre;
+                    this.usuarioAsignar = data.asignado_a || '';
+                    const conv = this.listaConversaciones.find(c => c.id == this.convId);
+                    if (conv) {
+                        conv.preview = data.mensaje.contenido;
+                        conv.pendiente_atencion = false;
+                        conv.asignado_a = data.asignado_a;
+                        conv.asignado_nombre = data.asignado_nombre;
+                        conv.ultimo_mensaje_at = new Date().toISOString();
+                        this.marcarRespondida(conv);
+                        this.ordenarConversaciones();
+                    }
+                    this.scrollBottom();
+                } else {
+                    alert(data.error || 'No se pudo marcar');
+                }
+            } catch (e) { alert('Error de conexión'); }
+            this.atendiendo = false;
+        },
+
+        async moverAliado() {
+            if (!this.aliadoMover || this.moviendo) return;
+            this.moviendo = true;
+            try {
+                const resp = await fetch(`/admin/whatsapp/chat/${this.convId}/mover-aliado`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({ aliado_id: this.aliadoMover })
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.error || 'No se pudo mover la conversación');
+                }
+            } catch (e) { alert('Error de conexión'); }
+            this.moviendo = false;
+        },
+
         ordenarConversaciones() {
             this.listaConversaciones.sort((a, b) => {
                 if (!a.ultimo_mensaje_at) return 1;
@@ -609,6 +819,10 @@ function chatApp() {
                         conv.ultimo_mensaje_at = ahora.toISOString();
                         conv.hora_display = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
                         this.ordenarConversaciones();
+                        // Un humano respondió: el backend quita el pendiente y ya no está esperando.
+                        conv.pendiente_atencion = false;
+                        this.conversacion.pendiente_atencion = false;
+                        this.marcarRespondida(conv);
                     }
 
                     this.textoMensaje = '';
@@ -673,6 +887,10 @@ function chatApp() {
                         conv.ultimo_mensaje_at = ahora.toISOString();
                         conv.hora_display = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
                         this.ordenarConversaciones();
+                        // Un humano respondió: el backend quita el pendiente y ya no está esperando.
+                        conv.pendiente_atencion = false;
+                        this.conversacion.pendiente_atencion = false;
+                        this.marcarRespondida(conv);
                     }
 
                     this.plantillaSeleccionada = '';
@@ -735,6 +953,10 @@ function chatApp() {
                         conv.ultimo_mensaje_at = ahora.toISOString();
                         conv.hora_display = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
                         this.ordenarConversaciones();
+                        // Un humano respondió: el backend quita el pendiente y ya no está esperando.
+                        conv.pendiente_atencion = false;
+                        this.conversacion.pendiente_atencion = false;
+                        this.marcarRespondida(conv);
                     }
 
                     this.scrollBottom();
@@ -906,6 +1128,11 @@ function chatApp() {
                             this.totalNoLeidos++;
                         }
 
+                        // El cliente escribió: queda esperando y se le abren 24 h de ventana.
+                        // Si lo que llegó es nuestro (bot o acuse), deja de esperar.
+                        if (e.direccion === 'entrante') this.marcarEsperando(conv);
+                        else this.marcarRespondida(conv);
+
                         this.ordenarConversaciones();
 
                     } else {
@@ -919,6 +1146,7 @@ function chatApp() {
                                 // sigue contando todo el inbox, pero la fila solo entra a
                                 // la lista si pertenece al tipo que se está mirando.
                                 this.totalNoLeidos += sidebarData.conversacion.total_mensajes_no_leidos;
+                                if (sidebarData.conversacion.esperando) this.totalEsperando++;
                                 if (!this.tipoFiltro || sidebarData.conversacion.tipo_contacto === this.tipoFiltro) {
                                     this.listaConversaciones.unshift(sidebarData.conversacion);
                                     this.ordenarConversaciones();
@@ -941,6 +1169,11 @@ function chatApp() {
                         convItem.bot_activo         = e.bot_activo;
                         convItem.pendiente_atencion = e.pendiente_atencion;
                         convItem.atendida_por_ia    = e.atendida_por_ia;
+                        if (e.pendiente_atencion && !convItem.esperando) {
+                            convItem.esperando = true;
+                            convItem.esperando_desde = convItem.esperando_desde || e.ultimo_mensaje || new Date().toISOString();
+                            this.totalEsperando++;
+                        }
                     }
 
                     if (e.conversacion_id == this.convId) {

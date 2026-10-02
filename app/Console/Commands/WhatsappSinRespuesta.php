@@ -2,16 +2,18 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Aliado;
 use App\Models\Publicacion;
+use App\Models\WhatsappConfig;
 use App\Models\WhatsappConversacion;
-use App\Models\WhatsappMensaje;
 use App\Services\AlertaOperativaService;
-use App\Services\Finanzas\TelefonosDeudores;
 use App\Services\Ia\AsistenteIaService;
+use App\Services\WhatsappEsperandoRespuesta;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /**
- * Aviso diario de la gente que escribió por WhatsApp y está esperando que una persona le conteste.
+ * Aviso de la gente que escribió por WhatsApp y está esperando que una persona le conteste.
  *
  * Existe porque ahí es donde se estaban perdiendo las ventas, no en los anuncios. Al revisar las
  * 48 conversaciones de clientes que llegaron por pauta (sep-2026) había gente lista para
@@ -20,146 +22,188 @@ use Illuminate\Console\Command;
  * lo llamó. Ninguno se perdió por el anuncio ni por el bot: se perdieron porque nadie les volvió
  * a escribir, y en el panel no había nada que lo hiciera evidente.
  *
- * Cuenta como "esperando":
- *  - el último mensaje de la conversación es del cliente y ya pasaron unas horas, o
- *  - el bot la pasó a un asesor (pendiente_atencion) y sigue sin atenderse.
- * No cuenta un "ok" o un "gracias" de despedida: eso no pide respuesta, y un aviso lleno de
- * despedidas se deja de leer.
+ * Al medir los demás aliados (oct-2026) fue peor: en Fecop el 81 % de lo que escribían los
+ * clientes no tenía ninguna respuesta, y el aviso solo existía para Brygar y una vez al día, a
+ * una hora en la que a casi todos ya se les había vencido la ventana de 24 h. Ahora corre para
+ * todos los aliados con WhatsApp, varias veces al día, y marca a quién se le está venciendo la
+ * ventana (después toca con plantilla).
  *
- * Si no hay nadie esperando, no se manda nada: un aviso que siempre llega diciendo "todo bien"
- * termina ignorándose el día que sí importa.
+ * Qué cuenta como «esperando» lo decide WhatsappEsperandoRespuesta, la misma regla del inbox.
+ *
+ * Para no cansar: la primera corrida del día manda la lista completa; las siguientes solo si
+ * hay alguien nuevo desde el aviso anterior, o alguien a quien se le vence la ventana en menos de
+ * HORAS_URGENTE y aún no se avisó como urgente. Si no hay nadie esperando no manda nada: un
+ * aviso que siempre llega diciendo "todo bien" termina ignorándose el día que sí importa.
  *
  * Ejecución manual: php artisan whatsapp:sin-respuesta --no-enviar
  */
 class WhatsappSinRespuesta extends Command
 {
     protected $signature = 'whatsapp:sin-respuesta
-        {--aliado=2 : Aliado a revisar}
+        {--aliado= : Aliado a revisar (por defecto, todos los que tienen WhatsApp activo)}
         {--horas=2 : Horas sin respuesta para que cuente como esperando}
         {--dias=14 : No mirar conversaciones más viejas que esto}
+        {--forzar : Enviar aunque no haya nada nuevo desde el aviso anterior}
         {--no-enviar : Solo mostrarlo en pantalla}';
 
     protected $description = 'Avisa por WhatsApp quién escribió y lleva horas sin que una persona le responda';
 
-    /**
-     * Lo que se contesta para despedirse: no pide respuesta.
-     *
-     * Tiene que haber una palabra de despedida ("gracias", "igualmente") o un "ok" solo; y nunca
-     * cuenta si trae una pregunta o habla de plata: "ok, ¿cuánto vale?" o "soporte de pago,
-     * gracias" sí piden que alguien haga algo.
-     */
-    private const DESPEDIDA = '/^(?!.*(\?|cu[aá]nt|c[oó]mo|qu[eé]\b|d[oó]nde|cu[aá]ndo|precio|valor|pag|soporte|comprobante|planilla|necesit|quiero|ayuda))\s*((ok+|okey|oki|vale|listo|bueno|dale|perfecto|entendido)[\s,.!]*)?(((muchas|mil)\s+)?(gracia[s]?|igualmente|bendiciones)(\s+\p{L}+){0,4})?[\s\p{So}\p{Sk}\p{P}]*$/iu';
-
     /** El tope de la plantilla es 600 caracteres; lo que no quepa se resume en "y N más". */
     private const MAX_CARACTERES = 560;
 
+    /** Con menos de esto de ventana, la persona se marca como urgente. */
+    private const HORAS_URGENTE = 3;
+
+    public function __construct(private WhatsappEsperandoRespuesta $esperando)
+    {
+        parent::__construct();
+    }
+
     public function handle(AlertaOperativaService $alertas): int
     {
-        $aliadoId = (int) $this->option('aliado');
-        $horas = (int) $this->option('horas');
-        $numeroDueno = preg_replace('/\D/', '', (string) config('finanzas.whatsapp_personal_dueno'));
+        $aliados = $this->option('aliado')
+            ? [(int) $this->option('aliado')]
+            : WhatsappConfig::where('activo', true)->pluck('aliado_id')->map(fn ($id) => (int) $id)->all();
 
-        // Los que el bot pasó a un asesor se miran con el doble de margen: son justo los casos que
-        // alguien prometió atender. Un asesor con empresa propia llevaba 14 días así y, con la
-        // ventana normal, ya no habría salido en el aviso.
-        $dias = (int) $this->option('dias');
-        $conversaciones = WhatsappConversacion::where('aliado_id', $aliadoId)
-            ->where(fn ($q) => $q->where('ultimo_mensaje_at', '>=', now()->subDays($dias))
-                ->orWhere(fn ($q2) => $q2->where('pendiente_atencion', true)
-                    ->where('ultimo_mensaje_at', '>=', now()->subDays($dias * 2))))
-            ->get();
-
-        $esperando = [];
-        foreach ($conversaciones as $cv) {
-            $tel = preg_replace('/\D/', '', (string) $cv->wa_contact_id);
-
-            // El número del dueño y los deudores de sus préstamos personales no son clientes: los
-            // del préstamo ya le llegan reenviados uno por uno.
-            if ($tel === $numeroDueno || TelefonosDeudores::esDeudor($cv->wa_contact_id)) {
-                continue;
-            }
-
-            $ultimo = WhatsappMensaje::where('conversacion_id', $cv->id)->orderByDesc('id')->first();
-            if (! $ultimo) {
-                continue;
-            }
-
-            $escribioUltimo = $ultimo->direccion === 'entrante';
-            $pasadoAAsesor = (bool) $cv->pendiente_atencion;
-            if (! $escribioUltimo && ! $pasadoAAsesor) {
-                continue;
-            }
-            if ($ultimo->created_at->gt(now()->subHours($horas))) {
-                continue; // todavía está fresco: el bot o alguien del equipo lo está atendiendo
-            }
-
-            $texto = $this->textoDe($ultimo);
-            if ($escribioUltimo && ! $pasadoAAsesor && preg_match(self::DESPEDIDA, $texto)) {
-                continue;
-            }
-
-            $pieza = $cv->origen_publicacion_id ? Publicacion::find($cv->origen_publicacion_id) : null;
-
-            $esperando[] = [
-                'nombre' => $this->nombreCorto($cv),
-                'telefono' => $tel,
-                'desde' => $ultimo->created_at,
-                // Si el último mensaje fue nuestro pero el caso quedó en manos de un asesor, lo que
-                // importa es por qué se pasó, no lo último que dijo el bot.
-                'dijo' => $escribioUltimo ? $texto : ($cv->pendiente_motivo ?: 'pasado a un asesor'),
-                // Primero los asesores (traen cartera), después los que el bot ya pasó a una
-                // persona, después el resto. Dentro de cada grupo, lo más reciente primero: es lo
-                // que todavía se puede recuperar.
-                'prioridad' => ($pieza && AsistenteIaService::esPiezaDeAsesores($pieza)) ? 0 : ($pasadoAAsesor ? 1 : 2),
-                'asesor' => $pieza && AsistenteIaService::esPiezaDeAsesores($pieza),
-            ];
-        }
-
-        usort($esperando, fn ($a, $b) => [$a['prioridad'], -$a['desde']->timestamp] <=> [$b['prioridad'], -$b['desde']->timestamp]);
-
-        $this->mostrar($esperando);
-
-        if (empty($esperando)) {
-            $this->info('Nadie esperando respuesta. No se envía nada.');
-
-            return self::SUCCESS;
-        }
-
-        if (! $this->option('no-enviar')) {
-            $texto = $this->resumen($esperando);
-            foreach ($this->destinatarios() as $numero) {
-                $ok = $alertas->enviarA($numero, 'Esperando respuesta', $texto);
-                $this->line($ok ? "  → enviado a {$numero}" : "  → no se pudo enviar a {$numero} (ver el log).");
-            }
+        foreach ($aliados as $aliadoId) {
+            $this->revisarAliado($aliadoId, $alertas);
         }
 
         return self::SUCCESS;
     }
 
-    /** @return string[] */
-    private function destinatarios(): array
+    private function revisarAliado(int $aliadoId, AlertaOperativaService $alertas): void
     {
-        $crudos = explode(',', (string) config('services.whatsapp.pendientes_numeros'));
-        $numeros = array_filter(array_map(fn ($n) => preg_replace('/\D/', '', $n), $crudos));
+        $nombreAliado = Aliado::find($aliadoId)?->nombre ?: "aliado {$aliadoId}";
+        $this->line("\n<info>{$nombreAliado}</info>");
 
-        return array_values(array_unique($numeros));
-    }
+        $lista = $this->esperando->paraAviso($aliadoId, (int) $this->option('horas'), (int) $this->option('dias'))
+            ->map(fn (WhatsappConversacion $cv) => $this->item($cv));
 
-    private function textoDe(WhatsappMensaje $m): string
-    {
-        $t = trim(preg_replace('/\s+/', ' ', (string) $m->contenido));
+        // Primero los asesores (traen cartera), después los que se les vence la ventana, después
+        // los que el bot ya pasó a una persona, después el resto. Dentro de cada grupo, lo más
+        // reciente primero: es lo que todavía se puede recuperar.
+        $lista = $lista->sortBy(fn ($e) => [$e['prioridad'], -$e['desde']->timestamp])->values();
 
-        if ($t === '' || str_starts_with($t, '[Tipo de mensaje no soportado')) {
-            return match ($m->tipo) {
-                'audio' => '[nota de voz]',
-                'image' => '[foto]',
-                'document' => '[documento]',
-                'video' => '[video]',
-                default => '[mensaje sin texto]',
-            };
+        $this->mostrar($lista->all());
+
+        if ($lista->isEmpty()) {
+            $this->info('Nadie esperando respuesta. No se envía nada.');
+
+            return;
         }
 
-        return $t;
+        if ($this->option('no-enviar')) {
+            return;
+        }
+
+        if (! $this->option('forzar') && ! $this->hayNovedad($aliadoId, $lista)) {
+            $this->info('Nada nuevo desde el aviso anterior. No se envía nada.');
+
+            return;
+        }
+
+        $texto = $this->resumen($lista->all());
+        $destinatarios = $this->destinatarios($aliadoId);
+
+        if (empty($destinatarios)) {
+            $this->warn('Sin números a quién avisar: ponga el WhatsApp del aliado en su ficha o en services.whatsapp.pendientes_por_aliado.');
+
+            return;
+        }
+
+        foreach ($destinatarios as $numero) {
+            $ok = $alertas->enviarA($numero, "Esperando respuesta · {$nombreAliado}", $texto);
+            $this->line($ok ? "  → enviado a {$numero}" : "  → no se pudo enviar a {$numero} (ver el log).");
+        }
+
+        $this->recordarAvisado($aliadoId, $lista);
+    }
+
+    private function item(WhatsappConversacion $cv): array
+    {
+        $pieza = $cv->origen_publicacion_id ? Publicacion::find($cv->origen_publicacion_id) : null;
+        $esAsesor = $pieza && AsistenteIaService::esPiezaDeAsesores($pieza);
+        $ventanaMin = $cv->minutosVentanaRestante();
+        $urgente = $cv->ventanaActiva() && $ventanaMin <= self::HORAS_URGENTE * 60;
+
+        return [
+            'id' => $cv->id,
+            // Si desde el aviso anterior volvió a escribir, cuenta como novedad.
+            'marca' => $cv->mensajes->first()?->id ?? 0,
+            'nombre' => $this->nombreCorto($cv),
+            'telefono' => preg_replace('/\D/', '', (string) $cv->wa_contact_id),
+            'desde' => $cv->esperando_desde,
+            'dijo' => (string) $cv->esperando_dijo,
+            'asesor' => $esAsesor,
+            'urgente' => $urgente,
+            'ventana' => $cv->ventanaActiva() ? $this->ventanaCorta($ventanaMin) : 'vencida',
+            'prioridad' => $esAsesor ? 0 : ($urgente ? 1 : ($cv->pendiente_atencion ? 2 : 3)),
+            'pendiente' => (bool) $cv->pendiente_atencion,
+        ];
+    }
+
+    /**
+     * ¿Hay alguien que no estaba en el aviso anterior de hoy, o alguien que pasó a urgente?
+     * Lo avisado se guarda en caché hasta medianoche: al día siguiente se arranca de cero y
+     * la primera corrida vuelve a mandar la lista completa.
+     */
+    private function hayNovedad(int $aliadoId, \Illuminate\Support\Collection $lista): bool
+    {
+        $avisado = Cache::get($this->claveCache($aliadoId));
+        if (! is_array($avisado)) {
+            return true;
+        }
+
+        foreach ($lista as $e) {
+            $previo = $avisado[$e['id']] ?? null;
+            if ($previo === null || $previo['marca'] !== $e['marca']) {
+                return true;
+            }
+            if ($e['urgente'] && ! $previo['urgente']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function recordarAvisado(int $aliadoId, \Illuminate\Support\Collection $lista): void
+    {
+        $avisado = Cache::get($this->claveCache($aliadoId));
+        $avisado = is_array($avisado) ? $avisado : [];
+
+        foreach ($lista as $e) {
+            $avisado[$e['id']] = ['marca' => $e['marca'], 'urgente' => $e['urgente']];
+        }
+
+        Cache::put($this->claveCache($aliadoId), $avisado, now()->endOfDay());
+    }
+
+    private function claveCache(int $aliadoId): string
+    {
+        return 'wa_sin_respuesta_avisado:'.$aliadoId.':'.now()->toDateString();
+    }
+
+    /** @return string[] */
+    private function destinatarios(int $aliadoId): array
+    {
+        $porAliado = config('services.whatsapp.pendientes_por_aliado', []);
+        $crudo = $porAliado[$aliadoId] ?? null;
+
+        if ($crudo === null || trim((string) $crudo) === '') {
+            $aliado = Aliado::find($aliadoId);
+            $crudo = $aliado?->whatsapp ?: $aliado?->celular;
+        }
+
+        $crudos = array_merge(
+            explode(',', (string) $crudo),
+            explode(',', (string) config('services.whatsapp.pendientes_copia'))
+        );
+
+        $numeros = array_filter(array_map(fn ($n) => preg_replace('/\D/', '', $n), $crudos), fn ($n) => strlen($n) >= 10);
+
+        return array_values(array_unique($numeros));
     }
 
     private function nombreCorto(WhatsappConversacion $cv): string
@@ -179,17 +223,26 @@ class WhatsappSinRespuesta extends Command
         return $h < 24 ? "{$h}h" : intdiv($h, 24).'d';
     }
 
+    private function ventanaCorta(int $minutos): string
+    {
+        return $minutos < 60 ? "{$minutos}min" : intdiv($minutos, 60).'h';
+    }
+
     /** Una sola tira: la plantilla aplana los saltos de línea. */
     private function resumen(array $esperando): string
     {
         $total = count($esperando);
-        $cabeza = $total === 1 ? '1 persona espera respuesta: ' : "{$total} personas esperan respuesta: ";
+        $urgentes = count(array_filter($esperando, fn ($e) => $e['urgente']));
+        $cabeza = ($total === 1 ? '1 persona espera respuesta' : "{$total} personas esperan respuesta")
+            .($urgentes > 0 ? " ({$urgentes} con la ventana por vencer)" : '').': ';
 
         $partes = [];
         $largo = mb_strlen($cabeza);
         foreach ($esperando as $i => $e) {
-            $item = ($i + 1).') '.($e['asesor'] ? 'ASESOR ' : '').$e['nombre'].' '.$e['telefono'].' '.$this->hace($e['desde'])
-                .' «'.mb_substr($e['dijo'], 0, 38).'»';
+            $item = ($i + 1).') '.($e['asesor'] ? 'ASESOR ' : '').($e['urgente'] ? '⏳ ' : '')
+                .$e['nombre'].' '.$e['telefono'].' '.$this->hace($e['desde'])
+                .' «'.mb_substr($e['dijo'], 0, 38).'»'
+                .($e['ventana'] === 'vencida' ? ' [ventana vencida]' : ($e['urgente'] ? ' [vence en '.$e['ventana'].']' : ''));
             // Se reserva sitio para el "y N más" del final.
             if ($largo + mb_strlen($item) + 20 > self::MAX_CARACTERES) {
                 break;
@@ -206,13 +259,14 @@ class WhatsappSinRespuesta extends Command
     private function mostrar(array $esperando): void
     {
         $this->table(
-            ['', 'Quién', 'Teléfono', 'Hace', 'Lo último'],
+            ['', 'Quién', 'Teléfono', 'Hace', 'Ventana', 'Lo último'],
             array_map(fn ($e) => [
-                $e['asesor'] ? 'ASESOR' : ($e['prioridad'] === 1 ? 'pasado' : ''),
+                $e['asesor'] ? 'ASESOR' : ($e['urgente'] ? 'URGENTE' : ($e['pendiente'] ? 'pendiente' : '')),
                 $e['nombre'],
                 $e['telefono'],
                 $this->hace($e['desde']),
-                mb_substr($e['dijo'], 0, 70),
+                $e['ventana'],
+                mb_substr($e['dijo'], 0, 60),
             ], $esperando)
         );
 

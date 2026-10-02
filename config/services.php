@@ -70,7 +70,23 @@ return [
         // A quién le llega el aviso de conversaciones esperando respuesta. Es lista aparte
         // porque no lo atiende quien recibe las alertas de infraestructura: aquí van los
         // números de quienes de verdad contestan. Separados por coma.
+        //
+        // Por aliado: `pendientes_por_aliado` manda; si el aliado no está, se usa el
+        // WhatsApp (o celular) guardado en su ficha. `pendientes_numeros` queda para Brygar
+        // (aliado 2), que es donde arrancó el aviso. `pendientes_copia` recibe el aviso de
+        // TODOS los aliados, para que BryNex vea que a nadie lo dejan colgado.
         'pendientes_numeros' => env('WHATSAPP_PENDIENTES_NUMEROS', '3117762689'),
+        'pendientes_por_aliado' => [
+            2 => env('WHATSAPP_PENDIENTES_NUMEROS', '3117762689'),
+            1 => env('WHATSAPP_PENDIENTES_NUMEROS', '3117762689'),
+        ],
+        'pendientes_copia' => env('WHATSAPP_PENDIENTES_COPIA', ''),
+
+        // Acuse automático ("recibimos tu mensaje, ya te atendemos") en los aliados que no
+        // tienen IA en WhatsApp, cuando pasan unos minutos sin que nadie conteste.
+        // `acuse_sin_bot_excluir`: ids de aliado separados por coma que no lo quieren.
+        'acuse_sin_bot' => env('WHATSAPP_ACUSE_SIN_BOT', true),
+        'acuse_sin_bot_excluir' => env('WHATSAPP_ACUSE_SIN_BOT_EXCLUIR', ''),
         // Rechazar los payloads cuya firma no valide. Arranca en false a
         // propósito: si algún número llega firmado por otra app de Meta (un
         // aliado con su propia cuenta), su firma no cuadra con este App Secret

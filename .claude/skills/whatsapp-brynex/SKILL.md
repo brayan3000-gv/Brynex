@@ -82,6 +82,31 @@ resources/views/admin/whatsapp/
 └── plantillas/       ← CRUD de plantillas Meta
 ```
 
+## Quién está esperando respuesta (oct-2026)
+
+- `WhatsappEsperandoRespuesta` decide quién espera (último mensaje del cliente que no
+  sea despedida, o `pendiente_atencion`), tope `DIAS_MAX_ESPERA` = 30. La usan la
+  pestaña **⏳ Esperando** del inbox (chip con lo que lleva y cuánto queda de ventana)
+  y el comando `whatsapp:sin-respuesta`, que corre 8/11/14/17 L-S para todos los
+  aliados con WhatsApp y avisa a `services.whatsapp.pendientes_por_aliado` o, si no,
+  al `whatsapp`/`celular` de la ficha del aliado. Solo repite en el día si hay alguien
+  nuevo o a punto de vencerse la ventana.
+- `ultimosMensajes()` trae el último mensaje por conversación en UNA consulta y con
+  `contenido` recortado a 300 caracteres: `nvarchar(max)` se baja fila por fila.
+  El `with(['mensajes' => limit(1)])` NO sirve en Laravel 10 (el límite es global).
+- `WhatsappAcuseRecepcionJob`: en aliados sin IA de WhatsApp, 5 min después de un
+  mensaje sin respuesta manda «🤖 Respuesta automática: recibimos tu mensaje…» y marca
+  pendiente (`marcarPendiente`, sin tocar `bot_activo`). Se apaga con
+  `WHATSAPP_ACUSE_SIN_BOT=false` o por aliado con `WHATSAPP_ACUSE_SIN_BOT_EXCLUIR`.
+- **✔ Atendido por otro medio** (`chat.atendida`): el asesor contestó desde su celular,
+  por llamada o en persona. Crea un `WhatsappMensaje` tipo `nota` (saliente, sin
+  `wa_message_id`, no se envía a Meta) y la conversación sale de «Esperando». Se pinta
+  como nota amarilla centrada en el chat.
+- Número compartido: un mensaje sin conversación se resuelve por el celular en
+  clientes/empresas (`WhatsappBandejaCompartida::resolverAliado`); si no se sabe, cae
+  al inbox del aliado BryNex (id 1) como pendiente y se mueve con **🔀 Mover a aliado**
+  (solo `es_brynex`, ruta `chat.mover_aliado`). Ya no se bota ningún mensaje.
+
 ## Notas Importantes
 
 - Las plantillas deben estar **aprobadas por Meta** antes de usarse

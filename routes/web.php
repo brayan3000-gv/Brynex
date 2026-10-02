@@ -1275,8 +1275,11 @@ Route::middleware('auth')->group(function () {
             Route::patch('chat/{id}/toggle-bot', [$chat, 'toggleBot'])->name('chat.toggle_bot')->whereNumber('id');
             Route::patch('chat/{id}/cerrar', [$chat, 'cerrar'])->name('chat.cerrar')->whereNumber('id');
             Route::patch('chat/{id}/no-contactar', [$chat, 'noContactar'])->name('chat.no_contactar')->whereNumber('id');
+            Route::post('chat/{id}/atendida', [$chat, 'marcarAtendida'])->name('chat.atendida')->whereNumber('id');
         });
         Route::patch('chat/{id}/asignar', [$chat, 'asignar'])->name('chat.asignar')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
+        // Bandeja del número compartido: BryNex pasa la conversación al aliado dueño del contacto.
+        Route::patch('chat/{id}/mover-aliado', [$chat, 'moverAliado'])->name('chat.mover_aliado')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
 
         // ── Plantillas (admin del aliado) ─────────────────────────────────────
         Route::get('api/plantillas-aprobadas', [$plantilla, 'apiListarAprobadas'])->name('api.plantillas')->middleware('permiso:whatsapp.ver');

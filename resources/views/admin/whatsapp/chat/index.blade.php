@@ -184,6 +184,21 @@
     flex-shrink: 0;
 }
 .conv-time { font-size: .68rem; color: #cbd5e1; }
+
+/* ── Chip de espera: lleva X esperando, y cuánto queda de ventana ── */
+.conv-espera {
+    font-size: .58rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: .18rem .35rem;
+    border-radius: 4px;
+    white-space: nowrap;
+    background: #f1f5f9;
+    color: #475569;
+}
+.conv-espera.urgente { background: #fef3c7; color: #b45309; }
+.conv-espera.vencida { background: #fee2e2; color: #b91c1c; }
+
 .conv-unread {
     background: #ef4444;
     color: #fff;
@@ -248,8 +263,13 @@
             <div class="sidebar-tabs">
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'general', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'general' ? 'active' : '' }}">📥 General</a>
+                <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'esperando', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
+                   class="sidebar-tab {{ $tab === 'esperando' ? 'active' : '' }}"
+                   title="Escribieron y nadie les ha respondido">⏳ Esperando
+                    @if($totalEsperando > 0)<span class="sidebar-badge" style="margin-left:.25rem;background:#d97706">{{ $totalEsperando }}</span>@endif
+                </a>
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'mias', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
-                   class="sidebar-tab {{ $tab === 'mias' ? 'active' : '' }}">👤 Mis chats</a>
+                   class="sidebar-tab {{ $tab === 'mias' ? 'active' : '' }}">👤 Míos</a>
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'ia', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'ia' ? 'active' : '' }}">🤖 IA
                     @if($totalIa > 0)<span class="sidebar-badge" style="margin-left:.25rem;">{{ $totalIa }}</span>@endif
@@ -296,6 +316,8 @@
                         <div class="conv-preview">
                             @if($conv->pendiente_atencion)
                                 <span style="color:#d97706;font-weight:600">⚠️ Pendiente por atender</span>
+                            @elseif($conv->esperando)
+                                <span style="color:#b45309">⏳ «{{ \Illuminate\Support\Str::limit($conv->esperando_dijo, 50) }}»</span>
                             @elseif($conv->atendida_por_ia)
                                 <span style="color:#2563eb">🤖 Atendiendo la IA</span>
                             @elseif($conv->estado === 'asignada' && $conv->asignado)
@@ -310,6 +332,18 @@
                         @if($conv->total_mensajes_no_leidos > 0)
                             <span class="conv-unread">{{ $conv->total_mensajes_no_leidos }}</span>
                         @endif
+                        @if($conv->esperando && $conv->esperando_desde)
+                            @php
+                                $ventanaMin = $conv->minutosVentanaRestante();
+                                $claseEspera = !$conv->ventanaActiva() ? 'vencida' : ($ventanaMin <= 180 ? 'urgente' : '');
+                                $textoVentana = !$conv->ventanaActiva() ? 'ventana vencida'
+                                    : ($ventanaMin < 60 ? "vence en {$ventanaMin} min" : 'vence en ' . intdiv($ventanaMin, 60) . ' h');
+                            @endphp
+                            <span class="conv-espera {{ $claseEspera }}"
+                                  title="Esperando respuesta desde hace {{ \App\Services\WhatsappEsperandoRespuesta::hace($conv->esperando_desde) }} · {{ $textoVentana }}">
+                                ⏳ {{ \App\Services\WhatsappEsperandoRespuesta::hace($conv->esperando_desde) }}{{ !$conv->ventanaActiva() ? ' · ⛔' : ($ventanaMin <= 180 ? ' · ' . $textoVentana : '') }}
+                            </span>
+                        @endif
                     </div>
                 </a>
             @empty
@@ -318,6 +352,8 @@
                         No hay conversaciones de tipo «{{ \App\Services\WhatsappTipoContacto::ETIQUETAS[$tipo] ?? $tipo }}» en esta pestaña.
                     @elseif($tab === 'mias')
                         No hay conversaciones asignadas a ti.
+                    @elseif($tab === 'esperando')
+                        Nadie está esperando respuesta. 🎉
                     @elseif($tab === 'ia')
                         No hay conversaciones que la IA esté atendiendo ahora mismo.
                     @else

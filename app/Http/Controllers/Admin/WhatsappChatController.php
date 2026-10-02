@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\{IaConfiguracionAliado, MarketingBloqueado, User, WhatsappConfig, WhatsappConversacion, WhatsappMensaje};
 use App\Services\Finanzas\TelefonosDeudores;
 use App\Services\WhatsappApiService;
+use App\Services\WhatsappEsperandoRespuesta;
 use App\Services\WhatsappTipoContacto;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB, Storage};
@@ -17,9 +18,19 @@ use Illuminate\Support\Facades\{Auth, DB, Storage};
  */
 class WhatsappChatController extends Controller
 {
+    /** Por dónde se atendió a alguien fuera de esta línea. */
+    public const MEDIOS_ATENCION = [
+        'otro_whatsapp' => 'Otro WhatsApp',
+        'llamada'       => 'Llamada',
+        'presencial'    => 'En la oficina / en persona',
+        'correo'        => 'Correo',
+        'otro'          => 'Otro medio',
+    ];
+
     public function __construct(
         protected WhatsappApiService $apiService,
         protected WhatsappTipoContacto $tipos,
+        protected WhatsappEsperandoRespuesta $esperando,
     ) {}
 
     /**
@@ -37,6 +48,7 @@ class WhatsappChatController extends Controller
             'conversaciones' => $conversaciones,
             'totalNoLeidos'  => $totalNoLeidos,
             'totalIa'        => $totalIa,
+            'totalEsperando' => $totalEsperando,
             'conteoTipos'    => $conteoTipos,
         ] = $this->cargarDatosSidebar($alidoId, $tab, $buscar, $tipo);
 
@@ -47,7 +59,7 @@ class WhatsappChatController extends Controller
             ->get(['id', 'nombre']);
 
         return view('admin.whatsapp.chat.index', compact(
-            'conversaciones', 'tab', 'buscar', 'tipo', 'totalNoLeidos', 'totalIa',
+            'conversaciones', 'tab', 'buscar', 'tipo', 'totalNoLeidos', 'totalIa', 'totalEsperando',
             'conteoTipos', 'usuarios'
         ));
     }
@@ -99,6 +111,7 @@ class WhatsappChatController extends Controller
             'conversaciones' => $conversaciones,
             'totalNoLeidos'  => $totalNoLeidos,
             'totalIa'        => $totalIa,
+            'totalEsperando' => $totalEsperando,
             'conteoTipos'    => $conteoTipos,
         ] = $this->cargarDatosSidebar($alidoId, $tab, $buscar, $tipo);
 
@@ -124,11 +137,21 @@ class WhatsappChatController extends Controller
             'ventana_minutos'    => $conversacion->minutosVentanaRestante(),
         ] + $this->identidadContacto($conversacion, $alidoId);
 
+        // Aliados a los que se puede mover esta conversación: solo tiene sentido en el
+        // número compartido de BryNex (la bandeja de «sin identificar») y solo para BryNex.
+        $aliadosMover = ($config->usa_cuenta_brynex && Auth::user()->es_brynex)
+            ? \App\Models\Aliado::whereIn('id', WhatsappConfig::where('usa_cuenta_brynex', true)->where('activo', true)->pluck('aliado_id'))
+                ->where('id', '<>', $alidoId)
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->get(['id', 'nombre'])
+            : collect();
+
         return view('admin.whatsapp.chat.show', compact(
             'conversacion', 'mensajes', 'usuarios', 'plantillas',
             'conversaciones', 'conversacionesData', 'tab', 'buscar', 'tipo',
-            'totalNoLeidos', 'totalIa', 'conteoTipos',
-            'mensajesData', 'conversacionData'
+            'totalNoLeidos', 'totalIa', 'totalEsperando', 'conteoTipos',
+            'mensajesData', 'conversacionData', 'aliadosMover'
         ));
     }
 
@@ -202,6 +225,55 @@ class WhatsappChatController extends Controller
     }
 
     /**
+     * El cliente ya fue atendido por fuera de esta línea (otro WhatsApp, llamada, en
+     * persona). Queda una nota interna en el chat —no se le envía nada a Meta— y, como
+     * el último mensaje pasa a ser nuestro, la conversación sale de «Esperando» y del
+     * aviso. Nació porque con la ventana vencida el asesor contestaba desde su celular
+     * y aquí seguía figurando como sin respuesta.
+     */
+    public function marcarAtendida(Request $request, int $id)
+    {
+        $alidoId      = session('aliado_id_activo');
+        $conversacion = $this->findConversacionProtected($alidoId, $id);
+
+        $validated = $request->validate([
+            'medio' => 'required|in:'.implode(',', array_keys(self::MEDIOS_ATENCION)),
+            'nota'  => 'nullable|string|max:500',
+        ]);
+
+        $contenido = '📝 Atendido por '.mb_strtolower(self::MEDIOS_ATENCION[$validated['medio']])
+            .(trim((string) ($validated['nota'] ?? '')) !== '' ? ': '.trim($validated['nota']) : '');
+
+        $mensaje = WhatsappMensaje::create([
+            'conversacion_id' => $conversacion->id,
+            'aliado_id'       => $conversacion->aliado_id,
+            'direccion'       => 'saliente',
+            'tipo'            => 'nota',
+            'contenido'       => $contenido,
+            'usuario_id'      => Auth::id(),
+        ]);
+
+        $conversacion->update([
+            'asignado_a'         => Auth::id(),
+            'estado'             => 'asignada',
+            'ultimo_mensaje_at'  => now(),
+            'pendiente_atencion' => false,
+            'pendiente_motivo'   => null,
+        ]);
+
+        $mensaje->setRelation('usuario', Auth::user());
+        broadcast(new \App\Events\WhatsappMensajeNuevo($mensaje, $conversacion))->toOthers();
+        broadcast(new WhatsappConversacionActualizada($conversacion))->toOthers();
+
+        return response()->json([
+            'ok'              => true,
+            'mensaje'         => $this->mapearMensajes(collect([$mensaje]))[0],
+            'asignado_a'      => Auth::id(),
+            'asignado_nombre' => Auth::user()->nombre,
+        ]);
+    }
+
+    /**
      * Asigna o reasigna una conversación a un usuario.
      */
     public function asignar(Request $request, int $id)
@@ -269,6 +341,41 @@ class WhatsappChatController extends Controller
             'asignado_nombre'    => $conversacion->asignado?->nombre,
             'estado'             => $conversacion->estado,
             'mensaje'            => $mensaje,
+        ]);
+    }
+
+    /**
+     * Mueve una conversación de la bandeja del número compartido al aliado que
+     * corresponde. Solo BryNex, que es quien ve esa bandeja y conoce a todos los aliados.
+     */
+    public function moverAliado(Request $request, int $id, \App\Services\WhatsappBandejaCompartida $bandeja)
+    {
+        abort_unless(Auth::user()->es_brynex, 403, 'Solo BryNex puede mover conversaciones entre aliados.');
+
+        $alidoId      = session('aliado_id_activo');
+        $conversacion = $this->findConversacionProtected($alidoId, $id);
+
+        $validated = $request->validate([
+            'aliado_id' => 'required|integer|exists:aliados,id|not_in:'.$alidoId,
+        ]);
+
+        try {
+            $destino = $bandeja->mover($conversacion, (int) $validated['aliado_id'], Auth::id());
+        } catch (\RuntimeException $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 422);
+        }
+
+        // La conversación ya no es de este aliado: en el canal de origen se avisa como
+        // cerrada para que desaparezca del sidebar de quien la esté mirando, y en el
+        // destino entra como nueva.
+        broadcast(new WhatsappConversacionActualizada($destino));
+
+        $nombre = \App\Models\Aliado::find($destino->aliado_id)?->nombre ?: 'el aliado';
+
+        return response()->json([
+            'ok'       => true,
+            'mensaje'  => "Conversación movida a {$nombre}",
+            'redirect' => route('admin.whatsapp.chat.index', ['tab' => 'esperando']),
         ]);
     }
 
@@ -414,7 +521,7 @@ class WhatsappChatController extends Controller
 
         $conversacion = WhatsappConversacion::delAliado($alidoId)
             ->activas()
-            ->with(['mensajes' => fn($q) => $q->reorder()->latest()->limit(1), 'asignado'])
+            ->with('asignado')
             ->select($this->columnasSidebar())
             ->find($id);
 
@@ -425,6 +532,7 @@ class WhatsappChatController extends Controller
         $this->verificarAccesoConversacion($conversacion);
 
         $this->tipos->clasificar(collect([$conversacion]), $alidoId);
+        $this->esperando->marcar(collect([$conversacion]));
 
         return response()->json([
             'ok'           => true,
@@ -480,9 +588,13 @@ class WhatsappChatController extends Controller
         $user    = Auth::user();
         $esAdmin = $user->es_brynex || $user->hasRole(['admin', 'superadmin']);
 
+        // Se trae el inbox completo y las pestañas se aplican en memoria: así los
+        // contadores (no leídos, IA, esperando) cuentan siempre todo el inbox, estén en la
+        // pestaña que estén, y «esperando» —que depende del último mensaje— no se puede
+        // filtrar en SQL sin otra consulta. Son ~450 filas por aliado como mucho.
         $query = WhatsappConversacion::delAliado($alidoId)
             ->activas()
-            ->with(['mensajes' => fn($q) => $q->reorder()->latest()->limit(1), 'asignado'])
+            ->with('asignado')
             ->select($this->columnasSidebar())
             ->orderByDesc('ultimo_mensaje_at');
 
@@ -494,27 +606,10 @@ class WhatsappChatController extends Controller
             });
         }
 
-        if ($tab === 'mias') {
-            $query->where('asignado_a', $userId);
-        } elseif ($tab === 'ia') {
-            $query->atendidasPorIa();
-        }
-
-        if ($buscar) {
-            $query->where(function ($q) use ($buscar) {
-                $q->whereSinTildes('nombre_contacto', $buscar)
-                  ->orWhere('wa_contact_id', 'like', "%{$buscar}%");
-            });
-        }
-
         $conversaciones = $query->get();
 
-        // Cliente / excliente / nuevo — una sola consulta para todo el sidebar.
-        $this->tipos->clasificar($conversaciones, $alidoId);
-
-        // Conteo por tipo ANTES de filtrar, para que los chips del filtro sigan
-        // mostrando cuántos hay en cada grupo aunque haya uno seleccionado.
-        $conteoTipos = $conversaciones->countBy('tipo_contacto')->all();
+        // Badge total no leídos — se calcula antes de la búsqueda, que no debe restarle.
+        $totalNoLeidos = $conversaciones->sum('total_mensajes_no_leidos');
 
         // "Atendida por IA" de verdad = permiso en la conversación (bot_activo) Y el
         // aliado tiene la IA de WhatsApp encendida. Sin esto, una conversación con
@@ -531,30 +626,44 @@ class WhatsappChatController extends Controller
             $c->atendida_por_ia = $iaActivaAliado && (bool) $c->bot_activo;
         }
 
-        // Badge total no leídos — reutiliza la misma colección, sin segunda query
-        $totalNoLeidos = $conversaciones->sum('total_mensajes_no_leidos');
+        // Cliente / excliente / nuevo, y quién está esperando respuesta — una sola
+        // consulta cada uno para todo el sidebar.
+        $this->tipos->clasificar($conversaciones, $alidoId);
+        $this->esperando->marcar($conversaciones);
 
-        // Si hay búsqueda activa, calcular el total sin filtro de búsqueda
+        $totalIa        = $conversaciones->where('atendida_por_ia', true)->count();
+        $totalEsperando = $conversaciones->where('esperando', true)->count();
+
         if ($buscar) {
-            $queryNoLeidos = WhatsappConversacion::delAliado($alidoId)->activas();
-            if (!$esAdmin) {
-                $queryNoLeidos->where(function ($q) use ($userId) {
-                    $q->where('asignado_a', $userId)->orWhereNull('asignado_a');
-                });
-            }
-            $totalNoLeidos = $queryNoLeidos->sum('total_mensajes_no_leidos');
+            $sinTildes = fn (?string $s) => \Illuminate\Support\Str::ascii(mb_strtolower((string) $s));
+            $aguja = $sinTildes($buscar);
+            $conversaciones = $conversaciones->filter(fn ($c) => str_contains($sinTildes($c->nombre_contacto), $aguja)
+                || str_contains((string) $c->wa_contact_id, $buscar))->values();
         }
 
-        // Contador para la pestaña "IA" (independiente del tab actual)
-        $totalIa = WhatsappConversacion::delAliado($alidoId)->activas()->atendidasPorIa()->count();
+        $conversaciones = match ($tab) {
+            'mias'      => $conversaciones->where('asignado_a', $userId)->values(),
+            'ia'        => $conversaciones->where('atendida_por_ia', true)->values(),
+            // Primero a quienes todavía se les puede escribir libre, con la ventana más
+            // corta arriba; después los de ventana vencida, el más reciente primero: es lo
+            // que todavía se puede recuperar.
+            'esperando' => $conversaciones->where('esperando', true)
+                ->sortBy(fn ($c) => $c->ventanaActiva()
+                    ? [0, $c->minutosVentanaRestante()]
+                    : [1, -($c->esperando_desde?->timestamp ?? 0)])
+                ->values(),
+            default     => $conversaciones,
+        };
 
-        // El filtro por tipo se aplica de último: los badges de no leídos y de IA
-        // cuentan el inbox completo, no el subconjunto que se está mirando.
+        // Conteo por tipo ANTES de filtrar por tipo, para que los chips del filtro sigan
+        // mostrando cuántos hay en cada grupo aunque haya uno seleccionado.
+        $conteoTipos = $conversaciones->countBy('tipo_contacto')->all();
+
         if ($tipo) {
             $conversaciones = $conversaciones->where('tipo_contacto', $tipo)->values();
         }
 
-        return compact('conversaciones', 'totalNoLeidos', 'totalIa', 'conteoTipos');
+        return compact('conversaciones', 'totalNoLeidos', 'totalIa', 'totalEsperando', 'conteoTipos');
     }
 
     /**
@@ -570,6 +679,9 @@ class WhatsappChatController extends Controller
             'asignado_a', 'estado', 'contrato_id', 'empresa_id',
             'origen_campana', 'origen_campana_categoria', 'origen_publicacion_id',
             'bot_activo', 'pendiente_atencion', 'pendiente_motivo',
+            // Sin esta, ventanaActiva() da siempre false y el chip de espera marca
+            // «vencida» a gente que escribió hace una hora.
+            'ventana_activa_hasta',
         ];
     }
 
@@ -615,6 +727,25 @@ class WhatsappChatController extends Controller
             'tipo_label'               => WhatsappTipoContacto::ETIQUETAS[$c->tipo_contacto] ?? null,
             'desde_marketing'          => $c->desde_marketing,
             'url_show'                 => route('admin.whatsapp.chat.show', $c->id),
+        ] + $this->esperaSidebar($c);
+    }
+
+    /**
+     * Lo que la fila del sidebar muestra de la espera: si hay alguien esperando, desde
+     * hace cuánto, y cuánto queda de la ventana de 24 h para contestarle sin plantilla.
+     * El chip lo pinta el JS con `ventana_minutos`, que así también sirve para que la
+     * cuenta siga corriendo sin recargar.
+     */
+    private function esperaSidebar(WhatsappConversacion $c): array
+    {
+        $desde = $c->esperando_desde;
+
+        return [
+            'esperando'       => (bool) $c->esperando,
+            'esperando_desde' => $desde?->toIso8601String(),
+            'esperando_hace'  => $desde ? WhatsappEsperandoRespuesta::hace($desde) : null,
+            'ventana_activa'  => $c->ventanaActiva(),
+            'ventana_minutos' => $c->minutosVentanaRestante(),
         ];
     }
 

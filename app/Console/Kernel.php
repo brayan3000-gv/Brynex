@@ -389,12 +389,14 @@ class Kernel extends ConsoleKernel
             ->appendOutputTo(storage_path('logs/marketing-pauta-sync.log'));
 
         // ── Gente esperando respuesta en WhatsApp ────────────────────────────
-        // A las 8:00, antes de que arranque la jornada: la lista de quién escribió y lleva horas
-        // sin que una persona le conteste. Ahí se perdían las ventas (sep-2026), no en la pauta.
-        // Si no hay nadie esperando no manda nada.
+        // Cuatro veces al día en jornada, lunes a sábado, para TODOS los aliados con WhatsApp:
+        // la lista de quién escribió y lleva horas sin que una persona le conteste, con aviso
+        // de a quién se le vence la ventana de 24 h. Ahí se perdían las ventas (sep-2026), no
+        // en la pauta. La primera corrida del día manda todo; las demás solo si hay alguien
+        // nuevo o alguien a punto de vencerse. Si no hay nadie esperando no manda nada.
         // Ejecución manual: php artisan whatsapp:sin-respuesta --no-enviar
         $schedule->command('whatsapp:sin-respuesta')
-            ->dailyAt('08:00')
+            ->cron('0 8,11,14,17 * * 1-6')
             ->timezone('America/Bogota')
             ->withoutOverlapping(15)
             ->runInBackground()

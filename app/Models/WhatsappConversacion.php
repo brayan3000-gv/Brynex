@@ -51,6 +51,16 @@ class WhatsappConversacion extends BaseModel
     /** Igual que las anteriores: se calcula en el controlador, no es columna. */
     public ?bool $atendida_por_ia = null;
 
+    /**
+     * ¿Hay alguien esperando que una persona le conteste? Desde cuándo y qué dijo.
+     * Los calcula WhatsappEsperandoRespuesta; tampoco son columnas.
+     */
+    public ?bool $esperando = null;
+
+    public ?\Carbon\Carbon $esperando_desde = null;
+
+    public ?string $esperando_dijo = null;
+
     protected $casts = [
         'ultimo_mensaje_at'         => 'datetime',
         'ventana_activa_hasta'      => 'datetime',
@@ -268,6 +278,19 @@ class WhatsappConversacion extends BaseModel
     }
 
     /**
+     * Deja la conversación pendiente por atender SIN tocar el bot. Es lo que hace el
+     * acuse automático en los aliados sin IA: si apagara bot_activo como escalarAHumano(),
+     * el día que el aliado encienda la IA esas conversaciones seguirían mudas.
+     */
+    public function marcarPendiente(string $motivo): void
+    {
+        $this->update([
+            'pendiente_atencion'  => true,
+            'pendiente_motivo'    => $motivo,
+        ]);
+    }
+
+    /**
      * Un usuario toma una conversación que estaba siendo atendida por la IA:
      * apaga el bot, se la asigna a sí mismo y resuelve el pendiente.
      */
@@ -301,6 +324,7 @@ class WhatsappConversacion extends BaseModel
             'document' => '📄 Documento',
             'video'    => '🎥 Video',
             'template' => '📋 Plantilla',
+            'nota'     => mb_substr($ultimo->contenido ?? '📝 Nota interna', 0, 60),
             default    => $ultimo->tipo,
         };
     }
