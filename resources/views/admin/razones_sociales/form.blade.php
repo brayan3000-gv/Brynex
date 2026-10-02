@@ -51,6 +51,8 @@
 @php
     $puedeVerClaves = $rs && auth()->user()->can('credenciales_rs.ver');
     $puedeGestionarClaves = $rs && auth()->user()->can('credenciales_rs.gestionar');
+    // Portales de EPS, ARL y caja: van con los permisos del módulo de claves.
+    $puedeVerPortales = $rs && auth()->user()->can('claves_acceso.ver');
 @endphp
 
 <div class="rs-wrap">
@@ -110,6 +112,9 @@
     @if($rs)
     <button type="button" class="rs-tab" data-tab="archivos"   onclick="cambiarTab('archivos')">📁 Archivos</button>
     <button type="button" class="rs-tab" data-tab="operadores" onclick="cambiarTab('operadores')">🔑 Operadores API</button>
+    @if($puedeVerPortales)
+    <button type="button" class="rs-tab" data-tab="portales" onclick="cambiarTab('portales')">🏥 Portales de entidades</button>
+    @endif
     @endif
 </div>
 
@@ -553,6 +558,21 @@
 </div>
 </div>
 
+@if($puedeVerPortales)
+{{-- ══ PESTAÑA: PORTALES DE ENTIDADES ══════════════════════════════════
+     Qué EPS, ARL y caja tienen clave o asesor, y cuáles faltan. La clave es
+     de la empresa (por NIT): lo que se llena aquí lo ven los demás aliados
+     que comparten esta razón social. Es lo mismo que muestra el panel 🔑 de
+     Afiliaciones. --}}
+<div class="rs-panel" data-panel="portales">
+<div class="card">
+    <div class="card-title">🏥 Portales de entidades</div>
+    <div id="rsPortales"></div>
+</div>
+</div>
+@include('admin.partials._portales_entidades')
+@endif
+
 {{-- Modal de credenciales de operador --}}
 <div id="modalCredencial"
      style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9999;align-items:center;justify-content:center;padding:1rem">
@@ -760,6 +780,12 @@ function cambiarTab(nombre) {
     if (acciones) acciones.style.display = (nombre === 'datos' || nombre === 'comercial') ? 'flex' : 'none';
 
     try { sessionStorage.setItem(RS_TAB_KEY, nombre); } catch (e) {}
+
+    // Los portales se cargan la primera vez que se abre la pestaña.
+    if (nombre === 'portales' && window.Portales && !cambiarTab.portales) {
+        cambiarTab.portales = true;
+        Portales.montar('rsPortales', {{ $rs->id ?? 0 }});
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

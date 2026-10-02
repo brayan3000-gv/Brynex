@@ -295,10 +295,14 @@ Route::middleware('auth')->group(function () {
             // Quién cambió una clave y qué había antes: importa desde que la
             // misma clave la pueden tocar varios aliados de la misma empresa.
             Route::get('clave-accesos/{id}/historial', [$cac, 'historial'])->name('clave_accesos.historial');
+            // Portales de entidades de una razón social (pestaña y panel 🔑 de Afiliaciones)
+            Route::get('clave-accesos/portales/{id}', [\App\Http\Controllers\Admin\PortalEntidadController::class, 'index'])->whereNumber('id')->name('clave_accesos.portales');
         });
         Route::middleware('permiso:claves_acceso.gestionar')->group(function () use ($cac) {
             Route::post('clave-accesos', [$cac, 'store'])->name('clave_accesos.store');
             Route::put('clave-accesos/{id}', [$cac, 'update'])->name('clave_accesos.update');
+            Route::post('clave-accesos/portales/{id}', [\App\Http\Controllers\Admin\PortalEntidadController::class, 'store'])->whereNumber('id')->name('clave_accesos.portales.store');
+            Route::post('clave-accesos/portales/{id}/asignar', [\App\Http\Controllers\Admin\PortalEntidadController::class, 'asignar'])->whereNumber('id')->name('clave_accesos.portales.asignar');
         });
         Route::delete('clave-accesos/{id}', [$cac, 'destroy'])->name('clave_accesos.destroy')->middleware('permiso:claves_acceso.eliminar');
 

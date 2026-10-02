@@ -424,17 +424,22 @@ class SosCorreoService
             ->where('rs.aliado_id', '<>', 1)
             ->orderByRaw('CASE WHEN rs.aliado_id = ? THEN 0 ELSE 1 END', [DatosAfiliacion::ALIADO_PRINCIPAL])
             ->orderByDesc('c.updated_at')
-            ->first(['c.correo_entidad', 'c.link_acceso']);
+            ->first(['c.correo_entidad', 'c.link_acceso', 'c.asesor_nombre', 'c.asesor_correo', 'c.asesor2_nombre', 'c.asesor2_correo']);
 
-        $correo = collect([$clave?->correo_entidad, $clave?->link_acceso])
+        // El asesor de la pestaña de portales manda; los campos viejos quedan de respaldo.
+        $correo = collect([$clave?->asesor_correo, $clave?->correo_entidad, $clave?->link_acceso])
             ->map(fn ($v) => trim((string) $v))
             ->first(fn ($v) => filter_var($v, FILTER_VALIDATE_EMAIL));
 
         $principal = $correo && strcasecmp($correo, $conf['principal']['correo']) !== 0
-            ? ['nombre' => 'Asesor S.O.S.', 'correo' => $correo]
+            ? ['nombre' => trim((string) $clave?->asesor_nombre) ?: 'Asesor S.O.S.', 'correo' => $correo]
             : $conf['principal'];
 
-        return [$principal, $conf['reemplazo'] ?? null];
+        $reemplazo = filter_var(trim((string) $clave?->asesor2_correo), FILTER_VALIDATE_EMAIL)
+            ? ['nombre' => trim((string) $clave->asesor2_nombre) ?: 'Asesor S.O.S.', 'correo' => trim($clave->asesor2_correo)]
+            : ($conf['reemplazo'] ?? null);
+
+        return [$principal, $reemplazo];
     }
 
     private function nombre($cliente): string

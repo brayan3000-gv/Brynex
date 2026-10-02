@@ -634,7 +634,7 @@ function sortClass($col, $currSort, $currDir) {
             @if($c->razonSocial)
             <span class="razon-badge razon-badge-link"
                   title="Ver claves de {{ $c->razonSocial->razon_social }}"
-                  onclick="abrirClavesRS({{ $c->razonSocial->id }}, '{{ addslashes($c->razonSocial->razon_social) }}')"
+                  onclick="abrirClavesRS({{ $c->razonSocial->id }}, '{{ addslashes($c->razonSocial->razon_social) }}', {eps: {{ (int) $c->eps_id }}, arl: {{ (int) $c->arl_id }}, caja: {{ (int) $c->caja_id }}})"
                   style="cursor:pointer;">
                 {{ $c->razonSocial->razon_social }}
             </span>
@@ -1446,6 +1446,12 @@ function sortClass($col, $currSort, $currDir) {
 
     {{-- Tabla --}}
     <div style="flex:1;overflow-y:auto;padding:1rem 1.25rem;" id="rs-claves-body">
+        {{-- Portales de EPS, ARL y caja de la empresa, con la del contrato
+             resaltada: lo mismo que la pestaña de la razón social. --}}
+        <div style="font-size:0.85rem;font-weight:800;color:#1c1917;margin-bottom:0.5rem;">🏥 Portales de entidades</div>
+        <div id="rs-portales" style="margin-bottom:1.4rem;"></div>
+
+        <div style="font-size:0.85rem;font-weight:800;color:#1c1917;margin-bottom:0.5rem;">🗂️ Todas las claves de esta razón social</div>
         <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
             <thead>
                 <tr style="background:#fef9c3;border-bottom:2px solid #fde68a;">
@@ -1466,6 +1472,8 @@ function sortClass($col, $currSort, $currDir) {
         </table>
     </div>
 </div>
+
+@include('admin.partials._portales_entidades')
 
 {{-- ═══ MODAL: Crear / Editar Clave Razón Social ═══════════════════════════════ --}}
 <div id="rs-ca-modal-overlay"
@@ -2680,8 +2688,13 @@ let rsIdActivo = null;
 let rsNombreActivo = null;
 let clavesCargadas = [];
 
-function abrirClavesRS(rsId, rsNombre) {
+let rsContratoActivo = {};
+
+function abrirClavesRS(rsId, rsNombre, delContrato) {
+    // Al reabrir tras guardar una clave se conserva el contrato de antes.
+    rsContratoActivo = delContrato || (rsId === rsIdActivo ? rsContratoActivo : {});
     rsIdActivo = rsId;
+    if (window.Portales) Portales.montar('rs-portales', rsId, rsContratoActivo);
     rsNombreActivo = rsNombre;
     var panel   = document.getElementById('rs-claves-panel');
     var overlay = document.getElementById('rs-claves-overlay');

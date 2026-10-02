@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\BaseModel;
+use App\Services\Afiliaciones\PortalesEntidades;
 
 class ClaveAcceso extends BaseModel
 {
@@ -21,11 +22,24 @@ class ClaveAcceso extends BaseModel
         'correo_entidad',
         'observacion',
         'activo',
+        // Portales de entidades (ver PortalesEntidades)
+        'entidad_tipo',
+        'entidad_id',
+        'sin_portal',
+        'no_aplica',
+        'asesor_nombre',
+        'asesor_correo',
+        'asesor_telefono',
+        'asesor2_nombre',
+        'asesor2_correo',
+        'asesor2_telefono',
     ];
 
     protected $casts = [
-        'activo'   => 'boolean',
-        'cedula'   => 'integer',
+        'activo'     => 'boolean',
+        'cedula'     => 'integer',
+        'sin_portal' => 'boolean',
+        'no_aplica'  => 'boolean',
     ];
 
     /**
@@ -38,8 +52,28 @@ class ClaveAcceso extends BaseModel
      * tocar cualquier aliado que la comparta, sin esto no habría a quién
      * preguntarle.
      */
+    /** La entidad la dijo quien guarda (la pestaña de portales): no se deduce del nombre. */
+    public bool $entidadFijada = false;
+
     protected static function booted(): void
     {
+        // Las claves de empresa que se escriben a mano (módulo de claves, panel
+        // de Afiliaciones) quedan ligadas al catálogo por el nombre, para que la
+        // pestaña de portales las encuentre. Si quien guarda ya dijo la entidad
+        // (la pestaña misma), se respeta.
+        static::saving(function (self $clave) {
+            if (! $clave->razon_social_id || $clave->entidadFijada || $clave->isDirty('entidad_id')) {
+                return;
+            }
+            if ($clave->exists && ! $clave->isDirty(['entidad', 'tipo'])) {
+                return;
+            }
+
+            [$tipo, $id] = PortalesEntidades::clasificar($clave, $clave->razonSocial);
+            $clave->entidad_tipo = $tipo;
+            $clave->entidad_id = $id;
+        });
+
         static::updating(function (self $clave) {
             $cambios = collect($clave->getDirty())
                 ->except(['updated_at'])
