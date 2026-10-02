@@ -102,43 +102,47 @@
                         <input class="pe-inp" name="link_acceso" maxlength="350" placeholder="https://…">
                     </div>
                 </div>
-                <label class="pe-check">
-                    <input type="checkbox" name="sin_portal" value="1">
-                    <span>Esta entidad <strong>no tiene portal</strong> para la empresa: se afilia por correo con el asesor.</span>
-                </label>
+                {{-- El asesor no aplica a portales como el SAT: ahí no hay a quién escribir. --}}
+                <div id="peAsesor">
+                    <label class="pe-check">
+                        <input type="checkbox" name="sin_portal" value="1">
+                        <span>Esta entidad <strong>no tiene portal</strong> para la empresa: se afilia por correo con el asesor.</span>
+                    </label>
 
-                <div class="pe-sec">✉️ Asesor <span style="font-weight:500;color:#94a3b8">— si el portal falla, la afiliación va por correo</span></div>
-                <div class="pe-grid">
-                    <div class="pe-full">
-                        <label class="pe-lbl">Nombre</label>
-                        <input class="pe-inp" name="asesor_nombre" maxlength="150">
-                    </div>
-                    <div>
-                        <label class="pe-lbl">Correo</label>
-                        <input class="pe-inp" name="asesor_correo" type="email" maxlength="150">
-                    </div>
-                    <div>
-                        <label class="pe-lbl">Teléfono</label>
-                        <input class="pe-inp" name="asesor_telefono" maxlength="50">
-                    </div>
-                </div>
-                <details id="peReemplazo" style="margin-top:.55rem">
-                    <summary style="font-size:.72rem;font-weight:700;color:#475569;cursor:pointer">Asesor de reemplazo (vacaciones)</summary>
-                    <div class="pe-grid" style="margin-top:.45rem">
+                    <div class="pe-sec">✉️ Asesor <span style="font-weight:500;color:#94a3b8">— si el portal falla, la afiliación va por correo</span></div>
+                    <div class="pe-grid">
                         <div class="pe-full">
                             <label class="pe-lbl">Nombre</label>
-                            <input class="pe-inp" name="asesor2_nombre" maxlength="150">
+                            <input class="pe-inp" name="asesor_nombre" maxlength="150">
                         </div>
                         <div>
                             <label class="pe-lbl">Correo</label>
-                            <input class="pe-inp" name="asesor2_correo" type="email" maxlength="150">
+                            <input class="pe-inp" name="asesor_correo" type="email" maxlength="150">
                         </div>
                         <div>
                             <label class="pe-lbl">Teléfono</label>
-                            <input class="pe-inp" name="asesor2_telefono" maxlength="50">
+                            <input class="pe-inp" name="asesor_telefono" maxlength="50">
                         </div>
                     </div>
-                </details>
+                    <details id="peReemplazo" style="margin-top:.55rem">
+                        <summary style="font-size:.72rem;font-weight:700;color:#475569;cursor:pointer">Asesor de reemplazo (vacaciones)</summary>
+                        <div class="pe-grid" style="margin-top:.45rem">
+                            <div class="pe-full">
+                                <label class="pe-lbl">Nombre</label>
+                                <input class="pe-inp" name="asesor2_nombre" maxlength="150">
+                            </div>
+                            <div>
+                                <label class="pe-lbl">Correo</label>
+                                <input class="pe-inp" name="asesor2_correo" type="email" maxlength="150">
+                            </div>
+                            <div>
+                                <label class="pe-lbl">Teléfono</label>
+                                <input class="pe-inp" name="asesor2_telefono" maxlength="50">
+                            </div>
+                        </div>
+                    </details>
+
+                </div>
 
                 <div class="pe-sec">📝 Otros</div>
                 <label class="pe-lbl">Observación</label>
@@ -368,6 +372,7 @@ window.Portales = (function () {
         form.elements.sin_portal.checked = !!c.sin_portal;
         form.elements.no_aplica.checked = !!c.no_aplica;
         document.getElementById('peReemplazo').open = !!(c.asesor2_nombre || c.asesor2_correo);
+        document.getElementById('peAsesor').style.display = tipo === 'OTRO' ? 'none' : '';
 
         const sura = document.getElementById('peSura');
         sura.style.display = f.sura || (tipo === 'ARL' && id === 3) ? 'block' : 'none';
