@@ -169,7 +169,9 @@ window.Portales = (function () {
         falta:         '🔴 Falta',
         no_aplica:     '⚪ No aplica',
     };
-    const GRUPOS = { ARL: '🛡️ ARL', CAJA: '🏠 Caja de compensación', EPS: '🏥 EPS' };
+    const GRUPOS = { ARL: '🛡️ ARL', CAJA: '🏠 Caja de compensación', OTRO: '🏛️ SAT (MinSalud)', EPS: '🏥 EPS' };
+    const ORDEN = ['ARL', 'CAJA', 'OTRO', 'EPS'];
+    const CORTO = { OTRO: 'SAT' };
 
     let el = null, rsId = null, contrato = {}, datos = null, editando = null, soloConDatos = false;
     // Filtros: tipo (''/ARL/CAJA/EPS), texto, solo las que faltan, solo las que la empresa usa.
@@ -205,7 +207,7 @@ window.Portales = (function () {
     // La barra se pinta una sola vez: si se rehiciera con cada letra, el
     // buscador perdería el foco mientras se escribe.
     function esqueleto() {
-        const tipos = [['', 'Todas'], ['ARL', 'ARL'], ['CAJA', 'Caja'], ['EPS', 'EPS']];
+        const tipos = [['', 'Todas'], ['ARL', 'ARL'], ['CAJA', 'Caja'], ['OTRO', 'SAT'], ['EPS', 'EPS']];
         el.innerHTML = `<div class="pe-resumen" data-pe="resumen"></div>
             <div class="pe-barra">
                 <input type="search" class="pe-buscar" placeholder="Buscar entidad…" data-pe="buscar" autocomplete="off">
@@ -230,12 +232,13 @@ window.Portales = (function () {
     }
 
     function pasaFiltro(f) {
-        if (soloConDatos && ['falta', 'no_aplica'].includes(f.estado) && !f.del_contrato) return false;
+        // El SAT se muestra siempre, también en el panel de Afiliaciones.
+        if (soloConDatos && ['falta', 'no_aplica'].includes(f.estado) && !f.del_contrato && f.tipo !== 'OTRO') return false;
         if (filtro.tipo && f.tipo !== filtro.tipo) return false;
         if (filtro.faltan && f.estado !== 'falta') return false;
         if (filtro.usadas && !(f.tipo !== 'EPS' || f.afiliados > 0 || f.del_contrato)) return false;
         const q = plano(filtro.texto).trim();
-        return !q || plano(f.nombre).includes(q);
+        return !q || plano(f.nombre + ' ' + (CORTO[f.tipo] || '')).includes(q);
     }
 
     function pintar() {
@@ -251,7 +254,7 @@ window.Portales = (function () {
 
         let h = '';
         let hay = 0;
-        ['ARL', 'CAJA', 'EPS'].forEach(tipo => {
+        ORDEN.forEach(tipo => {
             if (filtro.tipo && filtro.tipo !== tipo) return;
             const filas = datos.filas.filter(f => f.tipo === tipo && pasaFiltro(f));
             const aviso = tipo === 'ARL' && datos.sin_arl ? 'La empresa no tiene ARL configurada (pestaña Datos generales).'
@@ -301,6 +304,7 @@ window.Portales = (function () {
         const sub = [];
         if (f.tipo === 'EPS') sub.push(f.afiliados ? `${f.afiliados} afiliado${f.afiliados === 1 ? '' : 's'} activo${f.afiliados === 1 ? '' : 's'}` : 'sin afiliados');
         if (f.tipo !== 'EPS' && !f.configurada) sub.push('no es la configurada en la empresa');
+        if (f.tipo === 'OTRO' && !c.usuario) sub.push('entra el representante legal o un delegado, con su cédula');
         if (c.sin_portal) sub.push('sin portal');
         if (f.sura && !c.usuario) sub.push('usuario del portal de Sura');
         if (f.sura?.error) sub.push('⚠️ ' + f.sura.error);
@@ -315,7 +319,7 @@ window.Portales = (function () {
         return `<div class="pe-fila ${llenar ? 'falta' : ''} ${f.del_contrato ? 'contrato' : ''}">
             <span class="pe-estado ${f.estado}">${ESTADOS[f.estado]}</span>
             <div style="min-width:0">
-                <div class="pe-nombre"><span class="pe-tipo">${f.tipo}</span>${esc(f.nombre)}${f.del_contrato ? '<span class="pe-chip" style="background:#2563eb;color:#fff">DEL CONTRATO</span>' : ''}</div>
+                <div class="pe-nombre"><span class="pe-tipo">${CORTO[f.tipo] || f.tipo}</span>${esc(f.nombre)}${f.del_contrato ? '<span class="pe-chip" style="background:#2563eb;color:#fff">DEL CONTRATO</span>' : ''}</div>
                 ${sub.length ? `<div class="pe-sub">${sub.map(esc).join(' · ')}</div>` : ''}
             </div>
             <div class="pe-mono" title="${esc(usuario || '')}">${usuario ? esc(usuario) : '<span class="pe-vacio">—</span>'}</div>
@@ -329,7 +333,7 @@ window.Portales = (function () {
     function sinClasificar(c) {
         const opciones = ['EPS', 'ARL', 'CAJA'].map(t =>
             `<optgroup label="${t}">${(datos.catalogo[t] || []).map(e => `<option value="${t}|${e.id}">${esc(e.nombre)}</option>`).join('')}</optgroup>`
-        ).join('') + '<option value="OTRO|">Otro portal (no es EPS, ARL ni caja)</option>';
+        ).join('') + '<option value="OTRO|1">SAT (Sistema de Afiliación Transaccional)</option><option value="OTRO|">Otro portal (no es EPS, ARL ni caja)</option>';
 
         return `<div class="pe-fila">
             <span class="pe-chip" style="background:#f1f5f9;color:#475569;margin:0;justify-self:start">${esc(c.tipo)}</span>

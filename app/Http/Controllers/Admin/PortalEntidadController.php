@@ -45,7 +45,7 @@ class PortalEntidadController extends Controller
         $rs = $this->razonSocial($id);
 
         $data = $request->validate([
-            'tipo' => ['required', Rule::in(PortalesEntidades::TIPOS)],
+            'tipo' => ['required', Rule::in([...PortalesEntidades::TIPOS, 'OTRO'])],
             'entidad_id' => 'required|integer',
             'usuario' => 'nullable|string|max:150',
             'contrasena' => 'nullable|string|max:200',

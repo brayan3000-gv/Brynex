@@ -101,6 +101,16 @@ class PortalesEntidades
     private const OTROS = ['SAT'];
 
     /**
+     * Portales que no son de una entidad del catálogo y que toda empresa tiene:
+     * entidad_tipo 'OTRO' + este id. El SAT es el Sistema de Afiliación
+     * Transaccional del MinSalud, donde se vincula la razón social; entra el
+     * representante legal (o un delegado) con su cédula.
+     */
+    public const OTROS_PORTALES = [
+        1 => ['nombre' => 'SAT', 'titulo' => 'Sistema de Afiliación Transaccional'],
+    ];
+
+    /**
      * Portal de los robots (la `entidad` de EpsPortalEmpresa, las llaves de
      * config/boxalud.php) → entidad del catálogo: código de EPS, o NIT de la
      * ARL o la caja.
@@ -186,6 +196,11 @@ class PortalesEntidades
             if (($c = $cajas->get($id)) && (string) $c->nit !== '0') {
                 $filas[] = self::fila('CAJA', (int) $c->id, $c->nombre, null, (int) $c->id === (int) $cajaConfigurada?->id);
             }
+        }
+
+        // Portales de toda empresa (el SAT): siempre, tenga o no datos.
+        foreach (self::OTROS_PORTALES as $id => $portal) {
+            $filas[] = self::fila('OTRO', $id, $portal['titulo'], null, true);
         }
 
         // EPS: las vigentes, más cualquiera con afiliados o con clave guardada
@@ -398,7 +413,7 @@ class PortalesEntidades
         $clave->entidad_tipo = $tipo;
         $clave->entidad_id = $entidadId;
         $clave->entidadFijada = true;
-        $clave->tipo = $tipo;
+        $clave->tipo = $tipo === 'OTRO' ? 'Portal' : $tipo;
 
         // El texto que buscan los robots, salvo que el que ya tiene la
         // traduzca a esta misma entidad («Sura ARL» se queda como está).
@@ -432,7 +447,9 @@ class PortalesEntidades
         $clave->entidadFijada = true;
 
         if ($tipo === 'OTRO') {
-            $clave->update(['entidad_tipo' => 'OTRO', 'entidad_id' => null]);
+            // Con id es un portal conocido (el SAT); sin id, otro cualquiera.
+            abort_if($entidadId && ! isset(self::OTROS_PORTALES[$entidadId]), 422, 'Portal desconocido.');
+            $clave->update(['entidad_tipo' => 'OTRO', 'entidad_id' => $entidadId ?: null]);
 
             return $clave;
         }
@@ -566,6 +583,7 @@ class PortalesEntidades
                 : null,
             'ARL' => DB::table('arls')->where('id', $id)->value('nombre_arl'),
             'CAJA' => DB::table('cajas')->where('id', $id)->value('nombre'),
+            'OTRO' => self::OTROS_PORTALES[$id]['nombre'] ?? null,
             default => null,
         };
     }
@@ -595,6 +613,7 @@ class PortalesEntidades
                 : null,
             'ARL' => self::ALIAS_ARL[$llave] ?? null,
             'CAJA' => self::ALIAS_CAJA[$llave] ?? null,
+            'OTRO' => collect(self::OTROS_PORTALES)->search(fn ($p) => self::llave($p['nombre']) === $llave) ?: null,
             default => null,
         };
     }
@@ -614,7 +633,7 @@ class PortalesEntidades
         $llave = self::llave((string) $c->entidad);
 
         if (in_array($llave, self::OTROS, true)) {
-            return ['OTRO', null, 'portal que no es de una EPS'];
+            return ['OTRO', self::clasificarTexto('OTRO', (string) $c->entidad), 'portal que no es de una EPS'];
         }
 
         if (in_array($tipo, self::TIPOS, true)) {
