@@ -377,7 +377,7 @@
                                 <option value="">— Caja —</option>
                                 <template x-for="c in ordenadas(f.departamento_id)" :key="c.id">
                                     <option :value="c.id" :selected="c.id == f.caja_id"
-                                            x-text="(c.id_dept == f.departamento_id ? '★ ' : '') + c.nombre"></option>
+                                            x-text="(c.id_dept == eq(f.departamento_id) ? '★ ' : '') + c.nombre"></option>
                                 </template>
                             </select>
                         </div>
@@ -393,6 +393,24 @@
                     + Agregar caja en otro departamento
                 </button>
             </div>
+            @endif
+
+            @if(($contratosOtraCaja ?? collect())->isNotEmpty())
+            <details style="margin-top:.9rem;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:.5rem .7rem">
+                <summary style="cursor:pointer;font-size:.76rem;font-weight:700;color:#b45309">
+                    ⚠️ {{ $contratosOtraCaja->count() }} contrato{{ $contratosOtraCaja->count() === 1 ? '' : 's' }} vigente{{ $contratosOtraCaja->count() === 1 ? '' : 's' }} con una caja que no está configurada
+                </summary>
+                <table style="width:100%;font-size:.74rem;margin-top:.45rem;border-collapse:collapse">
+                    @foreach($contratosOtraCaja as $k)
+                    <tr style="border-top:1px solid #fde68a">
+                        <td style="padding:.25rem 0"><a href="{{ route('admin.contratos.edit', $k->id) }}" target="_blank" style="color:#1d4ed8">{{ $k->cedula }}</a></td>
+                        <td>{{ $k->nombre }}</td>
+                        <td style="color:#64748b">{{ $k->ciudad ?? '—' }}</td>
+                        <td style="font-weight:700">{{ $k->caja }}</td>
+                    </tr>
+                    @endforeach
+                </table>
+            </details>
             @endif
         </div>
 
@@ -1356,8 +1374,10 @@ function cajasDpto() {
     return {
         filas: @json(collect(old('cajas_dpto', $cajasDpto ?? []))->values())
             .map((f, i) => ({ k: i + 1, departamento_id: String(f.departamento_id ?? ''), caja_id: String(f.caja_id ?? '') })),
-        cajasDe(d) { return d ? cajas.filter(c => c.id_dept == d) : []; },
-        ordenadas(d) { return [...this.cajasDe(d), ...cajas.filter(c => !d || c.id_dept != d)]; },
+        // Cundinamarca usa las cajas de Bogotá (ver RazonSocialCaja::DEPARTAMENTO_EQUIVALENTE).
+        eq(d) { return ({{ Js::from((object) \App\Models\RazonSocialCaja::DEPARTAMENTO_EQUIVALENTE) }})[d] ?? d; },
+        cajasDe(d) { return d ? cajas.filter(c => c.id_dept == this.eq(d)) : []; },
+        ordenadas(d) { return [...this.cajasDe(d), ...cajas.filter(c => !d || c.id_dept != this.eq(d))]; },
         // Si el departamento tiene una sola caja se pone sola; si tiene varias, se escoge.
         alCambiarDpto(f) {
             const l = this.cajasDe(f.departamento_id);

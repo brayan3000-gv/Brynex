@@ -1469,6 +1469,11 @@ class ContratoController extends Controller
             // otros departamentos): el formulario sugiere la del cliente.
             'cajasRazonSocial' => \App\Models\RazonSocialCaja::porRazonSocial($razonesSociales),
             'deptCliente' => $this->departamentoCliente($cliente),
+            // Quien puede configurar la razón social puede agregarle una caja
+            // desde la advertencia de «caja no configurada».
+            'puedeConfigurarCajas' => (bool) auth()->user()?->can('razones_sociales.gestionar'),
+            'cajaSugeridaIndependiente' => $this->cajaSugeridaIndependiente($cliente, $alidoId),
+            'departamentosNombres' => DB::table('departamentos')->pluck('nombre', 'id'),
             'asesores' => Asesor::where('aliado_id', $alidoId)->where('activo', true)->orderBy('nombre')->get(),
             'epsList' => Eps::seleccionables()->orderBy('nombre')->get(),
             'pensiones' => Pension::orderBy('razon_social')->get(),
@@ -1639,6 +1644,8 @@ class ContratoController extends Controller
         }
 
         // Separar cajas del departamento del cliente y el resto
+        // (Cundinamarca usa las de Bogotá: RazonSocialCaja::DEPARTAMENTO_EQUIVALENTE)
+        $deptCliente = \App\Models\RazonSocialCaja::dptoDeCajas($deptCliente);
         $locales = $cajas->where('id_dept', $deptCliente)->values();
         $resto = $cajas->where('id_dept', '!=', $deptCliente)
             ->whereNotNull('id_dept')
@@ -1650,6 +1657,37 @@ class ContratoController extends Controller
         $resto->each(fn ($c) => $c->es_local = false);
 
         return $locales->merge($resto);
+    }
+
+    /**
+     * Caja que se le sugiere a un independiente: en las razones sociales de
+     * independientes la caja es de cada persona, así que primero la de su
+     * último contrato y, si no tiene, la más usada en su departamento entre
+     * los contratos vigentes del aliado.
+     */
+    private function cajaSugeridaIndependiente(?object $cliente, $alidoId): ?int
+    {
+        if (! $cliente) {
+            return null;
+        }
+
+        $suya = DB::table('contratos as c')->join('cajas as ca', 'ca.id', '=', 'c.caja_id')
+            ->where('c.aliado_id', $alidoId)->where('c.cedula', $cliente->cedula)->where('ca.nit', '<>', 0)
+            ->orderByDesc('c.id')->value('c.caja_id');
+        if ($suya) {
+            return (int) $suya;
+        }
+
+        $dpto = \App\Models\RazonSocialCaja::dptoDeCajas($this->departamentoCliente($cliente));
+        if (! $dpto) {
+            return null;
+        }
+
+        $masUsada = DB::table('contratos as c')->join('cajas as ca', 'ca.id', '=', 'c.caja_id')
+            ->where('c.aliado_id', $alidoId)->where('c.estado', 'vigente')->where('ca.id_dept', $dpto)
+            ->groupBy('c.caja_id')->orderByRaw('COUNT(*) DESC')->value('c.caja_id');
+
+        return $masUsada ? (int) $masUsada : null;
     }
 
     /** El departamento del cliente según su municipio (ciudades.departamento_id). */

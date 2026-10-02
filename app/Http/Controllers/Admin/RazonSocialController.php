@@ -38,7 +38,9 @@ class RazonSocialController extends Controller
                 'rs.fecha_constitucion',
                 'arls.nombre_arl  as arl_nombre',
                 'cajas.nombre     as caja_nombre',
-                DB::raw('(SELECT COUNT(*) FROM contratos WHERE contratos.razon_social_id = rs.id AND contratos.estado = \'vigente\') as personas_activas')
+                DB::raw('(SELECT COUNT(*) FROM contratos WHERE contratos.razon_social_id = rs.id AND contratos.estado = \'vigente\') as personas_activas'),
+                // Cajas de otros departamentos (las de la original, si es copia)
+                DB::raw('(SELECT COUNT(*) FROM razon_social_cajas x WHERE x.razon_social_id = ISNULL(rs.origen_id, rs.id)) as cajas_extra')
             );
 
         if ($buscar) {
@@ -124,6 +126,8 @@ class RazonSocialController extends Controller
         $departamentos = $this->departamentos();
         // Una copia muestra las de su original (no se editan aquí).
         $cajasDpto = RazonSocialCaja::deFicha($rs);
+        // Contratos vigentes con una caja que la razón social no tiene configurada.
+        $contratosOtraCaja = $rs->es_independiente ? collect() : RazonSocialCaja::contratosConOtraCaja($rs);
 
         // Estado de las credenciales de API por operador (sin exponer secretos)
         $operadoresCred = OperadorCredencialController::estadoPorOperador($aliadoId, $id);
@@ -140,7 +144,7 @@ class RazonSocialController extends Controller
 
         return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs', 'operadoresCred',
             'original', 'origenAliado', 'copias', 'puedeHabilitar', 'camposEmpresa', 'clavesVedadas',
-            'departamentos', 'cajasDpto'));
+            'departamentos', 'cajasDpto', 'contratosOtraCaja'));
     }
 
     // ─── Actualizar ───────────────────────────────────────────────
@@ -434,6 +438,32 @@ class RazonSocialController extends Controller
     }
 
     // ─── Cajas por departamento ───────────────────────────────────
+
+    /**
+     * Agrega una caja de otro departamento desde el formulario del contrato
+     * (la advertencia de «caja no configurada»). Responde las cajas de la
+     * razón social como quedaron, para refrescar el selector.
+     */
+    public function agregarCaja(Request $request, int $id)
+    {
+        $rs = DB::table('razones_sociales')->where('id', $id)
+            ->where('aliado_id', session('aliado_id_activo'))->first();
+        abort_if(! $rs, 404);
+
+        $data = $request->validate([
+            'departamento_id' => 'required|integer|exists:departamentos,id',
+            'caja_id'         => 'required|integer|exists:cajas,id',
+        ]);
+
+        if ($error = RazonSocialCaja::agregar($rs, (int) $data['departamento_id'], (int) $data['caja_id'])) {
+            return response()->json(['ok' => false, 'message' => $error], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'cajas' => RazonSocialCaja::porRazonSocial(collect([$rs]))[(int) $rs->id] ?? [],
+        ]);
+    }
 
     /** Las cajas con su departamento, para agruparlas en los selectores. */
     private function cajasCatalogo()

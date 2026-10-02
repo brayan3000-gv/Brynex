@@ -20,6 +20,19 @@ class RazonSocialCaja extends BaseModel
     protected $fillable = ['razon_social_id', 'departamento_id', 'caja_id'];
 
     /**
+     * Departamentos sin cajas propias en el catálogo que usan las de otro:
+     * Cundinamarca (25) usa las de Bogotá (11) — Compensar, Colsubsidio,
+     * Cafam y Comfacundi están cargadas como de Bogotá.
+     */
+    public const DEPARTAMENTO_EQUIVALENTE = [25 => 11];
+
+    /** El departamento cuyas cajas le sirven a ese departamento. */
+    public static function dptoDeCajas(?int $dpto): ?int
+    {
+        return $dpto ? (self::DEPARTAMENTO_EQUIVALENTE[$dpto] ?? $dpto) : null;
+    }
+
+    /**
      * Las cajas de varias razones sociales a la vez, para el formulario del
      * contrato: [rs_id => [['departamento_id', 'departamento', 'caja_id',
      * 'caja', 'principal'], …]], la principal primero.
@@ -86,6 +99,55 @@ class RazonSocialCaja extends BaseModel
         }
 
         return $resultado;
+    }
+
+    /**
+     * Agrega la caja de un departamento a la razón social (a su original).
+     * Devuelve null si quedó, o el motivo por el que no se pudo: la copia de
+     * otro aliado no se configura aquí, y el departamento ya puede tener caja.
+     */
+    public static function agregar(object $rs, int $dpto, int $cajaId): ?string
+    {
+        if ($rs->origen_id) {
+            return 'Esta razón social es prestada: sus cajas se configuran en la original.';
+        }
+
+        $actual = collect(self::porRazonSocial(collect([$rs]))[(int) $rs->id] ?? [])
+            ->first(fn ($c) => self::dptoDeCajas($c['departamento_id']) === self::dptoDeCajas($dpto));
+        if ($actual) {
+            return "La razón social ya tiene {$actual['caja']} en {$actual['departamento']}.";
+        }
+
+        self::create(['razon_social_id' => (int) $rs->id, 'departamento_id' => $dpto, 'caja_id' => $cajaId]);
+
+        return null;
+    }
+
+    /**
+     * Contratos vigentes de esta fila (solo del aliado dueño de la fila) cuya
+     * caja no es ninguna de las configuradas en la razón social.
+     */
+    public static function contratosConOtraCaja(object $rs): Collection
+    {
+        $configuradas = collect(self::porRazonSocial(collect([$rs]))[(int) $rs->id] ?? [])->pluck('caja_id')->all();
+        if (! $configuradas) {
+            return collect();
+        }
+
+        return DB::table('contratos as c')
+            ->join('cajas as ca', 'ca.id', '=', 'c.caja_id')
+            ->leftJoin('clientes as cl', fn ($j) => $j->on('cl.cedula', '=', 'c.cedula')->on('cl.aliado_id', '=', 'c.aliado_id'))
+            ->leftJoin('ciudades as ci', 'ci.id', '=', 'cl.municipio_id')
+            ->where('c.razon_social_id', $rs->id)
+            ->where('c.aliado_id', $rs->aliado_id)
+            ->where('c.estado', 'vigente')
+            ->where('ca.nit', '<>', 0)
+            ->whereNotIn('c.caja_id', $configuradas)
+            ->orderBy('ca.nombre')
+            ->get([
+                'c.id', 'c.cedula', 'ca.nombre as caja', 'ci.nombre as ciudad',
+                DB::raw("LTRIM(RTRIM(CONCAT(cl.primer_nombre, ' ', cl.primer_apellido, ' ', cl.segundo_apellido))) as nombre"),
+            ]);
     }
 
     /** Las de la ficha de la razón social: [['departamento_id', 'caja_id'], …]. */

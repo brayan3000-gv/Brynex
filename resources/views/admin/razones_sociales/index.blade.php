@@ -154,7 +154,13 @@
                 <td class="nit-col">{{ $nitFormateado ?? '—' }}</td>
                 <td style="font-weight:600;color:#1e293b">{{ $rs->razon_social }}</td>
                 <td style="font-size:.75rem;color:#475569">{{ $rs->arl_nombre ?? '—' }}</td>
-                <td style="font-size:.75rem;color:#475569">{{ $rs->caja_nombre ?? '—' }}</td>
+                <td style="font-size:.75rem;color:#475569">
+                    {{ $rs->caja_nombre ?? '—' }}
+                    @if($rs->cajas_extra > 0)
+                    <span title="Tiene caja en {{ $rs->cajas_extra }} departamento{{ $rs->cajas_extra == 1 ? '' : 's' }} más"
+                          style="font-size:.62rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border-radius:6px;padding:.05rem .35rem;white-space:nowrap">+{{ $rs->cajas_extra }} dpto{{ $rs->cajas_extra == 1 ? '' : 's' }}</span>
+                    @endif
+                </td>
                 <td>
                     @can('razones_sociales.gestionar')
                     <form method="POST" action="{{ route('admin.configuracion.razones.estado', $rs->id) }}" style="display:inline">

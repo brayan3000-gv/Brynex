@@ -221,12 +221,16 @@ class PortalesEntidades
             }
         }
 
-        // Caja: igual.
+        // Caja: igual, más las de otros departamentos de la razón social
+        // (razon_social_cajas, de la original), que también salen configuradas.
         $cajas = DB::table('cajas')->get(['id', 'nit', 'nombre'])->keyBy('id');
         $cajaConfigurada = $cajas->first(fn ($c) => (string) $c->nit !== '0' && (string) $c->nit === (string) $rs->caja_nit);
-        foreach (array_unique(array_filter([$cajaConfigurada?->id, $delContrato['caja'] ?? null, ...$conClaveDe('CAJA')])) as $id) {
+        $cajasDpto = \App\Models\RazonSocialCaja::where('razon_social_id', (int) ($rs->origen_id ?: $rs->id))
+            ->pluck('caja_id')->map(fn ($v) => (int) $v)->all();
+        foreach (array_unique(array_filter([$cajaConfigurada?->id, ...$cajasDpto, $delContrato['caja'] ?? null, ...$conClaveDe('CAJA')])) as $id) {
             if (($c = $cajas->get($id)) && (string) $c->nit !== '0') {
-                $filas[] = self::fila('CAJA', (int) $c->id, $c->nombre, null, (int) $c->id === (int) $cajaConfigurada?->id);
+                $filas[] = self::fila('CAJA', (int) $c->id, $c->nombre, null,
+                    (int) $c->id === (int) $cajaConfigurada?->id || in_array((int) $c->id, $cajasDpto, true));
             }
         }
 

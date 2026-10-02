@@ -2120,6 +2120,14 @@ const ARL_ID_RS             = {{ $arlIdRazonSocial ?? 'null' }};
 // departamento, caja_id, caja, principal}]}, la principal primero.
 const CAJAS_RS      = @json((object) ($cajasRazonSocial ?? []));
 const DEPT_CLIENTE  = {{ $deptCliente ?? 'null' }};
+// Cundinamarca usa las cajas de Bogotá (RazonSocialCaja::DEPARTAMENTO_EQUIVALENTE).
+const DPTO_EQUIVALENTE = @json((object) \App\Models\RazonSocialCaja::DEPARTAMENTO_EQUIVALENTE);
+const eqDpto = d => d ? (DPTO_EQUIVALENTE[d] ?? d) : d;
+const DPTOS_NOMBRE  = @json((object) ($departamentosNombres ?? []));
+const CAJA_DPTO     = @json((object) collect($cajas)->mapWithKeys(fn ($c) => [$c->id => $c->id_dept])->all());
+const PUEDE_CONFIGURAR_CAJAS = @json((bool) ($puedeConfigurarCajas ?? false));
+const CAJA_SUGERIDA_INDEP    = {{ $cajaSugeridaIndependiente ?? 'null' }};
+const URL_AGREGAR_CAJA_RS    = @json(route('admin.configuracion.razones.cajas.agregar', '__ID__'));
 const SALARIO_MINIMO        = {{ $salarioMinimo ?? 0 }};
 const PLAN_DATA             = {};
 // URLs generadas por Laravel (incluyen subdirectorio correcto)
@@ -2324,6 +2332,10 @@ function sugerirCajaRazonSocial(rsId) {
 
     const valorAntes = sel.value || sel.dataset.valorPrevio || '';
     const lista = CAJAS_RS[rsId] || [];
+    // La del departamento del cliente: exacta, o por equivalencia (Cundinamarca → Bogotá).
+    const delDpto = DEPT_CLIENTE
+        ? (lista.find(c => c.departamento_id === DEPT_CLIENTE) || lista.find(c => eqDpto(c.departamento_id) === eqDpto(DEPT_CLIENTE)) || null)
+        : null;
 
     // Todas las cajas, sacadas de la lista que pintó el servidor.
     const tmp = document.createElement('select');
@@ -2334,6 +2346,18 @@ function sugerirCajaRazonSocial(rsId) {
     if (!lista.length) {
         sel.innerHTML = CAJA_OPCIONES_ORIGINALES;
         sel.value = sel.disabled ? '' : valorAntes;
+        // Independientes: la caja es de la persona. Se sugiere la de su último
+        // contrato o la más usada en su departamento, sin advertir nada.
+        const esIndep = document.querySelector(`#sel_rs option[value="${rsId}"]`)?.dataset.independiente === '1';
+        if (esIndep && CAJA_SUGERIDA_INDEP && (!valorAntes || sel.dataset.cajaSugerida === '1')) {
+            if (sel.disabled) {
+                sel.dataset.valorPrevio = String(CAJA_SUGERIDA_INDEP);
+            } else {
+                sel.value = String(CAJA_SUGERIDA_INDEP);
+                sel.style.cssText = STYLE_COMPLETO;
+            }
+            sel.dataset.cajaSugerida = '1';
+        }
         avisarCajaFueraDeRazonSocial();
         return;
     }
@@ -2343,7 +2367,7 @@ function sugerirCajaRazonSocial(rsId) {
     grupo.label = '🏢 De la razón social';
     lista.forEach(c => {
         const o = new Option(c.caja + (c.departamento ? ' — ' + c.departamento : '') + (c.principal ? ' (principal)' : ''), c.caja_id);
-        if (DEPT_CLIENTE && c.departamento_id === DEPT_CLIENTE) o.textContent = '★ ' + o.textContent;
+        if (c === delDpto) o.textContent = '★ ' + o.textContent;
         grupo.appendChild(o);
     });
     sel.appendChild(grupo);
@@ -2357,7 +2381,6 @@ function sugerirCajaRazonSocial(rsId) {
     sel.appendChild(otras);
     sel.value = sel.disabled ? '' : valorAntes;   // deshabilitada (plan sin caja) sigue vacía
 
-    const delDpto   = DEPT_CLIENTE ? lista.find(c => c.departamento_id === DEPT_CLIENTE) : null;
     const sugerida  = delDpto || lista.find(c => c.principal) || null;
 
     if (sugerida && (!valorAntes || sel.dataset.cajaSugerida === '1')) {
@@ -2373,17 +2396,59 @@ function sugerirCajaRazonSocial(rsId) {
 }
 
 // Advierte si la caja escogida no es ninguna de las configuradas en la razón
-// social. No bloquea: solo avisa. Sin cajas configuradas no hay contra qué comparar.
+// social. No bloquea: solo avisa. Sin cajas configuradas no hay contra qué
+// comparar. Si el departamento (el del cliente, o el de la caja si no se sabe)
+// está libre y el usuario puede configurar razones sociales, ofrece agregarla.
 function avisarCajaFueraDeRazonSocial() {
     const sel   = document.getElementById('sel_caja');
     const aviso = document.getElementById('aviso-caja-rs');
     if (!sel || !aviso) return;
-    const lista = CAJAS_RS[document.getElementById('sel_rs')?.value] || [];
+    const rsId  = document.getElementById('sel_rs')?.value;
+    const lista = CAJAS_RS[rsId] || [];
     const fuera = lista.length && sel.value && !sel.disabled && !lista.some(c => String(c.caja_id) === sel.value);
-    aviso.textContent = fuera
-        ? '⚠️ Esta caja no está configurada en la razón social (' + lista.map(c => c.caja).join(', ') + ').'
-        : '';
+    aviso.innerHTML = '';
     aviso.style.display = fuera ? 'block' : 'none';
+    if (!fuera) return;
+
+    const dpto    = DEPT_CLIENTE || Number(CAJA_DPTO[sel.value]) || null;
+    const ocupada = dpto ? lista.find(c => eqDpto(c.departamento_id) === eqDpto(dpto)) : null;
+    const nombreCaja = sel.options[sel.selectedIndex].text.replace('★', '').trim();
+    const txt = document.createElement('div');
+    txt.textContent = ocupada
+        ? `⚠️ Esta caja no está configurada en la razón social: en ${ocupada.departamento} tiene ${ocupada.caja}.`
+        : '⚠️ Esta caja no está configurada en la razón social (' + lista.map(c => c.caja).join(', ') + ').';
+    aviso.appendChild(txt);
+
+    if (!ocupada && dpto && PUEDE_CONFIGURAR_CAJAS) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = `+ Agregar ${nombreCaja} para ${DPTOS_NOMBRE[dpto] || 'este departamento'}`;
+        btn.style.cssText = 'margin-top:0.25rem;padding:0.15rem 0.5rem;font-size:0.66rem;font-weight:700;color:#1d4ed8;background:#eff6ff;border:1px solid #93c5fd;border-radius:5px;cursor:pointer;';
+        btn.onclick = () => agregarCajaARazonSocial(rsId, dpto, sel.value, btn);
+        aviso.appendChild(btn);
+    }
+}
+
+async function agregarCajaARazonSocial(rsId, dpto, cajaId, btn) {
+    btn.disabled = true;
+    btn.textContent = 'Agregando…';
+    try {
+        const r = await fetch(URL_AGREGAR_CAJA_RS.replace('__ID__', rsId), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                       'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+            body: JSON.stringify({ departamento_id: dpto, caja_id: cajaId }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.ok) throw new Error(d.message || 'No se pudo agregar la caja.');
+        CAJAS_RS[rsId] = d.cajas;
+        const sel = document.getElementById('sel_caja');
+        sel.dataset.cajaSugerida = '0';           // la escogida se queda
+        sugerirCajaRazonSocial(rsId);
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = e.message;
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
