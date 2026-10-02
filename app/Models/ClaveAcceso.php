@@ -119,8 +119,28 @@ class ClaveAcceso extends BaseModel
      * Se comparte por NIT, que es lo que identifica a la empresa ante la
      * entidad. Las claves de persona (por cédula) no entran aquí.
      */
-    public function scopeVisiblesPara($query, int $aliadoId)
+    public function scopeVisiblesPara($query, int $aliadoId, bool $todas = false)
     {
+        // Empresas prestadas sin permiso de claves (`ve_claves` en la copia):
+        // a ese aliado las afiliaciones se las hace BryNex, así que no las ve.
+        // Los usuarios de BryNex sí ($todas).
+        if (! $todas) {
+            $query->where(fn ($q) => $q->whereNull('razon_social_id')
+                ->orWhereNotIn('razon_social_id', function ($sub) use ($aliadoId) {
+                    $sub->select('ocultas.id')
+                        ->from('razones_sociales as ocultas')
+                        ->whereIn('ocultas.nit', function ($nits) use ($aliadoId) {
+                            $nits->select('nit')
+                                ->from('razones_sociales')
+                                ->where('aliado_id', $aliadoId)
+                                ->whereNotNull('origen_id')
+                                ->where('ve_claves', false)
+                                ->whereNotNull('nit')
+                                ->where('nit', '<>', '');
+                        });
+                }));
+        }
+
         return $query->where(function ($q) use ($aliadoId) {
             $q->where('aliado_id', $aliadoId)
                 ->orWhereIn('razon_social_id', function ($sub) use ($aliadoId) {

@@ -74,7 +74,7 @@ class RazonSocialCompartida
         $filas = strlen($nit) >= 6
             ? DB::table('razones_sociales')
                 ->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(nit,''),'-',''),'.',''),' ','') = ?", [$nit])
-                ->get(['id', 'aliado_id', 'origen_id', 'estado', 'codigo_sucursal'])
+                ->get(['id', 'aliado_id', 'origen_id', 'estado', 'codigo_sucursal', 've_claves'])
                 ->groupBy('aliado_id')
             : collect();
 
@@ -96,6 +96,7 @@ class RazonSocialCompartida
                         default => 'sin_vincular',
                     },
                     'sucursal' => $fila?->codigo_sucursal,
+                    've_claves' => (bool) ($fila?->ve_claves ?? false),
                 ];
             });
     }
@@ -151,10 +152,22 @@ class RazonSocialCompartida
         $fila['datos_operador'] = null;
         $fila['datos_operador_at'] = null;
         $fila['observacion'] = trim($nota) ?: null;
+        // Por defecto no ve las claves: se le prestan las empresas a quien
+        // BryNex le hace las afiliaciones. Se cambia en «Habilitar en aliado».
+        $fila['ve_claves'] = false;
 
         DB::table('razones_sociales')->insert($fila);
 
         return $fila['id'];
+    }
+
+    /** Deja que el aliado vea (o no) las claves de portales de la empresa prestada. */
+    public static function permitirClaves(object $rs, int $aliadoId, bool $ve): int
+    {
+        return DB::table('razones_sociales')
+            ->where('origen_id', self::original($rs)->id)
+            ->where('aliado_id', $aliadoId)
+            ->update(['ve_claves' => $ve]);
     }
 
     /** Pasa los datos de la empresa de la original a sus copias. Devuelve cuántas. */
@@ -178,7 +191,7 @@ class RazonSocialCompartida
             ->join('aliados as a', 'a.id', '=', 'rs.aliado_id')
             ->where('rs.origen_id', $originalId)
             ->orderBy('a.nombre')
-            ->get(['rs.id', 'a.nombre as aliado', 'rs.codigo_sucursal', 'rs.estado']);
+            ->get(['rs.id', 'a.nombre as aliado', 'rs.codigo_sucursal', 'rs.estado', 'rs.ve_claves']);
     }
 
     /**

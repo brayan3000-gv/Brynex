@@ -123,6 +123,8 @@ class PortalEntidadController extends Controller
     {
         $rs = PortalesEntidades::razonSocialVisible($id, $this->aliadoActivo(), auth()->user());
         abort_if(! $rs, 404);
+        abort_if(PortalesEntidades::clavesVedadas($rs, $this->aliadoActivo(), auth()->user()), 403,
+            'Las claves de esta empresa las maneja BryNex.');
 
         return $rs;
     }

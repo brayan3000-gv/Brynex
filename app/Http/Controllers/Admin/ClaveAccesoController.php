@@ -22,7 +22,7 @@ class ClaveAccesoController extends Controller
 
         // Se ven también las de las empresas compartidas con otro aliado: es la
         // misma clave ante la entidad y es la que usan los procesos.
-        $query = ClaveAcceso::visiblesPara($aliadoId)
+        $query = ClaveAcceso::visiblesPara($aliadoId, $this->verTodas())
             ->with(['razonSocial', 'cliente', 'empresa', 'aliado']);
 
         // Filtro por Razón Social
@@ -116,7 +116,7 @@ class ClaveAccesoController extends Controller
     {
         $aliadoId = session('aliado_id_activo');
 
-        $claves = ClaveAcceso::visiblesPara($aliadoId)
+        $claves = ClaveAcceso::visiblesPara($aliadoId, $this->verTodas())
             ->where('razon_social_id', $razonSocialId)
             ->orderBy('tipo')
             ->orderBy('entidad')
@@ -130,7 +130,7 @@ class ClaveAccesoController extends Controller
     {
         $aliadoId = session('aliado_id_activo');
 
-        $claves = ClaveAcceso::visiblesPara($aliadoId)
+        $claves = ClaveAcceso::visiblesPara($aliadoId, $this->verTodas())
             ->where('empresa_id', $empresaId)
             ->orderBy('tipo')
             ->orderBy('entidad')
@@ -151,7 +151,7 @@ class ClaveAccesoController extends Controller
     {
         $aliadoId = (int) session('aliado_id_activo');
 
-        $clave = ClaveAcceso::visiblesPara($aliadoId)->where('id', $id)->firstOrFail();
+        $clave = ClaveAcceso::visiblesPara($aliadoId, $this->verTodas())->where('id', $id)->firstOrFail();
 
         $puedeVer = auth()->user()->can('claves_acceso.ver_contrasena');
 
@@ -198,7 +198,7 @@ class ClaveAccesoController extends Controller
         // Se puede editar lo que se ve: si la empresa es compartida, la clave
         // es la misma ante la entidad y quien la tenga a mano debe poder
         // corregirla. Quién lo hizo queda en la bitácora (ClaveAcceso::booted).
-        $clave    = ClaveAcceso::visiblesPara($aliadoId)
+        $clave    = ClaveAcceso::visiblesPara($aliadoId, $this->verTodas())
             ->where('id', $id)
             ->firstOrFail();
 
@@ -236,6 +236,12 @@ class ClaveAccesoController extends Controller
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────
+
+    /** Los usuarios de BryNex ven también las claves de las empresas prestadas. */
+    private function verTodas(): bool
+    {
+        return (bool) auth()->user()?->es_brynex;
+    }
 
     /**
      * Deja esa contraseña como la única del grupo: las demás entradas del mismo

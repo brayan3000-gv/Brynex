@@ -126,9 +126,12 @@ class RazonSocialController extends Controller
         $copias = $rs->origen_id ? collect() : RazonSocialCompartida::copias((int) $rs->id);
         $puedeHabilitar = RazonSocialCompartida::puedeHabilitar(auth()->user());
         $camposEmpresa = RazonSocialCompartida::EMPRESA;
+        // Prestada sin permiso de claves: la pestaña de portales no se muestra.
+        $clavesVedadas = \App\Services\Afiliaciones\PortalesEntidades::clavesVedadas(
+            RazonSocial::find($id), (int) $aliadoId, auth()->user());
 
         return view('admin.razones_sociales.form', compact('arls', 'cajas', 'rs', 'operadoresCred',
-            'original', 'origenAliado', 'copias', 'puedeHabilitar', 'camposEmpresa'));
+            'original', 'origenAliado', 'copias', 'puedeHabilitar', 'camposEmpresa', 'clavesVedadas'));
     }
 
     // ─── Actualizar ───────────────────────────────────────────────
@@ -208,23 +211,38 @@ class RazonSocialController extends Controller
         abort_if(! $rs, 404);
 
         $data = $request->validate([
-            'aliados' => 'required|array|min:1',
+            'aliados' => 'nullable|array',
             'aliados.*' => 'integer|exists:aliados,id',
-        ], ['aliados.required' => 'Elige al menos un aliado.']);
+            // aliado_id => true/false: si ve las claves de portales de la empresa
+            've_claves' => 'nullable|array',
+        ]);
 
-        $nombres = DB::table('aliados')->whereIn('id', $data['aliados'])->pluck('nombre', 'id');
+        $aliados = array_map('intval', $data['aliados'] ?? []);
+        $veClaves = collect($data['ve_claves'] ?? [])->mapWithKeys(fn ($v, $k) => [(int) $k => filter_var($v, FILTER_VALIDATE_BOOLEAN)]);
+        abort_if(! $aliados && $veClaves->isEmpty(), 422, 'Elige al menos un aliado.');
+
+        $nombres = DB::table('aliados')->pluck('nombre', 'id');
         $quien = auth()->user()->nombre;
         $hechos = [];
 
-        foreach ($data['aliados'] as $aliadoId) {
-            $r = RazonSocialCompartida::habilitar($rs, (int) $aliadoId,
+        foreach ($aliados as $aliadoId) {
+            $r = RazonSocialCompartida::habilitar($rs, $aliadoId,
                 "Habilitada desde {$rs->razon_social} por {$quien} el ".now()->format('d/m/Y').'.');
             $hechos[] = ($nombres[$aliadoId] ?? "aliado {$aliadoId}").' ('.($r['accion'] === 'creada' ? 'creada' : 'ya la tenía: vinculada').')';
         }
 
+        // Después de habilitar: el permiso de claves es de la copia.
+        $claves = [];
+        foreach ($veClaves as $aliadoId => $ve) {
+            if (RazonSocialCompartida::permitirClaves($rs, $aliadoId, $ve)) {
+                $claves[] = ($nombres[$aliadoId] ?? "aliado {$aliadoId}").($ve ? ' ve las claves' : ' no ve las claves');
+            }
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Habilitada en: '.implode(', ', $hechos).'. Falta crearle la sucursal en el operador a cada uno.',
+            'message' => trim(($hechos ? 'Habilitada en: '.implode(', ', $hechos).'. Falta crearle la sucursal en el operador a cada uno. ' : '')
+                .($claves ? 'Claves: '.implode(', ', $claves).'.' : '')),
         ]);
     }
 

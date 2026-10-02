@@ -222,9 +222,9 @@ window.Portales = (function () {
         const q = new URLSearchParams();
         ['eps', 'arl', 'caja'].forEach(k => contrato[k] && q.set(k, contrato[k]));
         return fetch(`${URL_BASE}/${rsId}?${q}`, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } })
-            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(async r => r.ok ? r.json() : Promise.reject(r.status === 403 ? ((await r.json().catch(() => ({}))).message || 'Sin acceso.') : `No se pudieron cargar los portales (${r.status}).`))
             .then(d => { const primera = !datos; datos = d; if (primera) esqueleto(); pintar(); })
-            .catch(e => { el.innerHTML = `<div class="pe-msg">No se pudieron cargar los portales (${esc(e)}).</div>`; datos = null; });
+            .catch(e => { el.innerHTML = `<div class="pe-msg">🔒 ${esc(e)}</div>`; datos = null; });
     }
 
     // La barra se pinta una sola vez: si se rehiciera con cada letra, el

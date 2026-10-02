@@ -172,6 +172,26 @@ class PortalesEntidades
         return $comparte ? $rs : null;
     }
 
+    /**
+     * ¿Ese usuario, desde ese aliado, tiene vedadas las claves de la empresa?
+     * Pasa cuando la empresa le fue prestada sin permiso de claves
+     * (`ve_claves` = 0 en su copia) y no es de BryNex.
+     */
+    public static function clavesVedadas(RazonSocial $rs, int $aliadoActivo, ?User $user): bool
+    {
+        if ($user?->es_brynex) {
+            return false;
+        }
+
+        $nit = self::nit($rs->nit);
+
+        return strlen($nit) >= 6 && RazonSocial::where('aliado_id', $aliadoActivo)
+            ->whereRaw("REPLACE(REPLACE(REPLACE(ISNULL(nit,''),'-',''),'.',''),' ','') = ?", [$nit])
+            ->whereNotNull('origen_id')
+            ->where('ve_claves', false)
+            ->exists();
+    }
+
     // ─── Lectura ───────────────────────────────────────────────────────
 
     /**

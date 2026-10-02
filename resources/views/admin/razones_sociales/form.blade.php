@@ -52,7 +52,7 @@
     $puedeVerClaves = $rs && auth()->user()->can('credenciales_rs.ver');
     $puedeGestionarClaves = $rs && auth()->user()->can('credenciales_rs.gestionar');
     // Portales de EPS, ARL y caja: van con los permisos del módulo de claves.
-    $puedeVerPortales = $rs && auth()->user()->can('claves_acceso.ver');
+    $puedeVerPortales = $rs && auth()->user()->can('claves_acceso.ver') && ! ($clavesVedadas ?? false);
 @endphp
 
 <div class="rs-wrap">
@@ -116,9 +116,10 @@
     @foreach($copias as $c)
     <span style="display:inline-block;background:#fff;border:1px solid #bbf7d0;border-radius:20px;padding:.05rem .55rem;margin:0 .15rem;font-weight:700">
         {{ $c->aliado }}{{ $c->codigo_sucursal ? ' · suc. '.$c->codigo_sucursal : ' · sin sucursal' }}{{ $c->estado !== 'Activa' ? ' · '.$c->estado : '' }}
+        <span title="{{ $c->ve_claves ? 'Ve las claves de portales' : 'No ve las claves: se las maneja BryNex' }}">{{ $c->ve_claves ? '🔑' : '🚫🔑' }}</span>
     </span>
     @endforeach
-    <div style="font-size:.7rem;color:#166534">Al guardar los datos de la empresa aquí, se actualizan también en esos aliados (menos su sucursal).</div>
+    <div style="font-size:.7rem;color:#166534">Al guardar los datos de la empresa aquí, se actualizan también en esos aliados (menos su sucursal). 🚫🔑 = no ve las claves de portales.</div>
 </div>
 @endif
 
@@ -1184,7 +1185,8 @@ function cancelarClave() {}
         <div style="padding:1rem 1.1rem">
             <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:9px;padding:.55rem .8rem;margin-bottom:.8rem;font-size:.72rem;color:#475569;line-height:1.5">
                 Se crea la razón social en el aliado con los datos de la empresa, y queda ligada a esta:
-                lo que cambies aquí le llega solo. Las <strong>claves de portales</strong> las ve de inmediato (van por NIT).
+                lo que cambies aquí le llega solo. Las <strong>claves de portales</strong> solo las ve si marcas «Ve claves»
+                (BryNex las ve siempre: es quien afilia).
                 La <strong>sucursal</strong> es de cada aliado: hay que crearla en el operador y ponerla en su ficha.
             </div>
             <div id="habLista" style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
@@ -1194,7 +1196,7 @@ function cancelarClave() {}
         </div>
         <div style="display:flex;justify-content:flex-end;gap:.5rem;padding:.75rem 1.1rem;border-top:1px solid #f1f5f9;background:#f8fafc">
             <button type="button" class="btn-cancel" onclick="cerrarHabilitar()">Cerrar</button>
-            <button type="button" id="habBtn" class="btn-save" style="padding:.45rem 1.2rem;font-size:.82rem" onclick="habilitarAliados()">Habilitar</button>
+            <button type="button" id="habBtn" class="btn-save" style="padding:.45rem 1.2rem;font-size:.82rem" onclick="habilitarAliados()">Guardar</button>
         </div>
     </div>
 </div>
@@ -1218,12 +1220,15 @@ function abrirHabilitar() {
             lista.innerHTML = aliados.map(a => {
                 const [txt, bg, fg] = HAB_ESTADOS[a.estado];
                 const elegible = a.estado === 'no_la_tiene' || a.estado === 'sin_vincular';
-                return `<label style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;border-bottom:1px solid #f1f5f9;font-size:.8rem;${elegible ? 'cursor:pointer' : 'opacity:.75'}">
-                    <input type="checkbox" value="${a.aliado_id}" ${elegible ? '' : 'disabled'}>
+                const conClaves = elegible || a.estado === 'copia';
+                return `<div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;border-bottom:1px solid #f1f5f9;font-size:.8rem;${conClaves ? '' : 'opacity:.75'}">
+                    <input type="checkbox" class="hab-aliado" value="${a.aliado_id}" ${elegible ? '' : 'disabled'} title="Habilitar en este aliado">
                     <span style="flex:1;font-weight:700;color:#0f172a">${a.aliado.replace(/</g, '&lt;')}</span>
                     ${a.sucursal ? `<span style="font-size:.66rem;color:#64748b">suc. ${a.sucursal}</span>` : ''}
                     <span style="background:${bg};color:${fg};border-radius:20px;padding:.08rem .5rem;font-size:.64rem;font-weight:800">${txt}</span>
-                </label>`;
+                    ${conClaves ? `<label style="display:flex;align-items:center;gap:.25rem;font-size:.68rem;color:#475569;cursor:pointer;white-space:nowrap" title="Si el aliado puede ver las claves de portales de esta empresa">
+                        <input type="checkbox" class="hab-claves" data-aliado="${a.aliado_id}" data-antes="${a.ve_claves ? 1 : 0}" ${a.ve_claves ? 'checked' : ''}> Ve claves</label>` : ''}
+                </div>`;
             }).join('');
         })
         .catch(e => { lista.innerHTML = `<div style="padding:1rem;color:#b91c1c;font-size:.8rem">No se pudo cargar (${e}).</div>`; });
@@ -1234,9 +1239,15 @@ function cerrarHabilitar() {
 }
 
 function habilitarAliados() {
-    const ids = [...document.querySelectorAll('#habLista input:checked')].map(i => i.value);
+    const ids = [...document.querySelectorAll('#habLista .hab-aliado:checked')].map(i => i.value);
+    // El permiso de claves va para los que se habilitan y para los que cambiaron.
+    const veClaves = {};
+    document.querySelectorAll('#habLista .hab-claves').forEach(c => {
+        const habilita = ids.includes(c.dataset.aliado);
+        if (habilita || (c.checked ? 1 : 0) !== +c.dataset.antes) veClaves[c.dataset.aliado] = c.checked;
+    });
     const msg = document.getElementById('habMsg');
-    if (!ids.length) {
+    if (!ids.length && !Object.keys(veClaves).length) {
         msg.style.cssText = 'display:block;margin-top:.7rem;border-radius:8px;padding:.5rem .7rem;font-size:.76rem;background:#fee2e2;color:#b91c1c';
         msg.textContent = 'Elige al menos un aliado.';
         return;
@@ -1246,7 +1257,7 @@ function habilitarAliados() {
     fetch(@json(route('admin.configuracion.razones.habilitar', $rs->id)), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
-        body: JSON.stringify({ aliados: ids }),
+        body: JSON.stringify({ aliados: ids, ve_claves: veClaves }),
     })
         .then(async r => { const d = await r.json().catch(() => ({})); if (!r.ok) throw (d.message || `Error ${r.status}`); return d; })
         .then(d => {
@@ -1258,7 +1269,7 @@ function habilitarAliados() {
             msg.style.cssText = 'display:block;margin-top:.7rem;border-radius:8px;padding:.5rem .7rem;font-size:.76rem;background:#fee2e2;color:#b91c1c';
             msg.textContent = e;
         })
-        .finally(() => { btn.disabled = false; btn.textContent = 'Habilitar'; });
+        .finally(() => { btn.disabled = false; btn.textContent = 'Guardar'; });
 }
 </script>
 @endif
