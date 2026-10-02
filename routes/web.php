@@ -108,6 +108,19 @@ Route::post('/aliado/{slug}/metrica', [\App\Http\Controllers\Publico\PaginaAliad
 
 Route::get('/sitemap.xml', [\App\Http\Controllers\Publico\PaginaAliadoController::class, 'sitemap'])->name('publico.sitemap');
 
+// Presentación pública del servicio de afiliaciones para aliados (brynex.co/aliados/afiliaciones).
+// El WhatsApp es el de BryNex (aliado 1); las imágenes salen de scripts/imagenes-aliados.sh.
+Route::get('/aliados/afiliaciones', function () {
+    $brynex = \App\Models\Aliado::find(1);
+    $numero = preg_replace('/\D+/', '', $brynex->whatsapp ?: ($brynex->celular ?: ''));
+    $numero = $numero && ! str_starts_with($numero, '57') ? '57'.$numero : $numero;
+    $texto = rawurlencode('Hola, quiero saber más de las afiliaciones automáticas de BryNex para aliados.');
+
+    return view('publico.aliados-afiliaciones', [
+        'urlWhatsapp' => $numero ? "https://wa.me/{$numero}?text={$texto}" : 'https://brynex.co',
+    ]);
+})->name('publico.aliados.afiliaciones');
+
 // Link corto que redirige al wa.me rastreado. YA NO se usa al publicar (ver
 // PublicacionPublisher::linkWhatsappRastreado: se volvió al wa.me directo porque Meta exime
 // del castigo de alcance a los enlaces hacia sus propias tecnologías, y un dominio propio no).

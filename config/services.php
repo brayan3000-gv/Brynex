@@ -175,4 +175,10 @@ return [
         'tunel_auth' => env('COMFENALCO_TUNEL_AUTH'),
     ],
 
+    // Llave global de Gemini para material gráfico (brynex:imagen-gemini);
+    // el asistente de IA sigue usando la llave por aliado.
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+    ],
+
 ];

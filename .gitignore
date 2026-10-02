@@ -66,3 +66,6 @@ yarn-error.log
 * 3.*
 *\ 2
 *\ 3
+
+# Originales PNG de Gemini (pesan 2 MB c/u); al repo van los .jpg
+public/img/aliados/*.png
