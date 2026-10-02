@@ -613,6 +613,7 @@
         @if($esEdicion && $contrato->caja_id && collect($cajas)->contains('id', (int)$contrato->caja_id))
         {!! $badgeEstado($rPT->get('caja')) !!}
         @endif
+        <div id="aviso-caja-rs" style="display:none;font-size:0.66rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:0.2rem 0.4rem;margin-top:0.25rem;line-height:1.3;"></div>
       </div>
     </div>
     <div x-show="mostrarModoArl" id="panel-modo-arl" style="display:none;margin-top:0.5rem;">
@@ -2345,12 +2346,27 @@ function sugerirCajaRazonSocial(rsId) {
     } else if (valorAntes) {
         sel.value = valorAntes;   // la misma caja, ahora desde el grupo de arriba
     }
+    avisarCajaFueraDeRazonSocial();
+}
+
+// Advierte si la caja escogida no es ninguna de las configuradas en la razón
+// social. No bloquea: solo avisa. Sin cajas configuradas no hay contra qué comparar.
+function avisarCajaFueraDeRazonSocial() {
+    const sel   = document.getElementById('sel_caja');
+    const aviso = document.getElementById('aviso-caja-rs');
+    if (!sel || !aviso) return;
+    const lista = CAJAS_RS[document.getElementById('sel_rs')?.value] || [];
+    const fuera = lista.length && sel.value && !sel.disabled && !lista.some(c => String(c.caja_id) === sel.value);
+    aviso.textContent = fuera
+        ? '⚠️ Esta caja no está configurada en la razón social (' + lista.map(c => c.caja).join(', ') + ').'
+        : '';
+    aviso.style.display = fuera ? 'block' : 'none';
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     const sel = document.getElementById('sel_caja');
     // Escoger la caja a mano apaga la sugerencia para esta razón social.
-    sel?.addEventListener('change', () => { sel.dataset.cajaSugerida = '0'; });
+    sel?.addEventListener('change', () => { sel.dataset.cajaSugerida = '0'; avisarCajaFueraDeRazonSocial(); });
     const rs = document.getElementById('sel_rs');
     if (rs && rs.value) sugerirCajaRazonSocial(rs.value);
 });
@@ -3033,6 +3049,7 @@ function bloquearEntidadesPorPlan(planId) {
     aplicarEstadoEntidad(epsSel, d.eps);
     aplicarEstadoEntidad(penSel, d.pen);
     aplicarEstadoEntidad(cajSel, d.caja);
+    avisarCajaFueraDeRazonSocial();
 
     // ARL especial
     if (!d.arl) {
