@@ -118,40 +118,53 @@ class EpsSuraConciliacionService
             $cuantos = collect($grupo['empresas'])->sum(fn ($e) => $e['radicados']->count());
             $avisar("{$nombres}: consultando {$cuantos} en el portal…", $detalle);
 
-            // Todas las empresas del usuario van en la misma corrida; el límite
-            // por proceso se reparte entre ellas para no eternizar un Chrome.
-            foreach ($this->repartir($grupo['empresas']) as $tanda) {
-                $salida = $this->consultarPortal($credencial, $tanda);
-                $porCedula = collect($salida['resultados'] ?? [])->keyBy(fn ($x) => ($x['nit'] ?? '').':'.($x['numero'] ?? ''));
+            // Se lee el listado de afiliados de cada empresa, no una consulta por
+            // cédula: el listado trae a todos de una vez —incluidos los que la
+            // consulta individual niega con «no existe como cotizante», que el
+            // 2-oct-2026 eran 35 de LALA GROUP con el reingreso ya aplicado— y
+            // además dice la cobertura, que es lo que decide si está vigente.
+            $salida = $this->listadoPortal($credencial, array_keys($grupo['empresas']));
 
-                if (($salida['paso'] ?? null) === 'login') {
-                    $credencial->update(['ultimo_error' => mb_substr((string) ($salida['error'] ?? ''), 0, 300)]);
+            if (! ($salida['ok'] ?? false)) {
+                $credencial->update(['ultimo_error' => mb_substr((string) ($salida['error'] ?? ''), 0, 300)]);
 
-                    // Con el login caído, lo que falte de este usuario fallaría
-                    // igual y sumaría intentos fallidos contra él.
-                    foreach ($tanda as $nitEmpresa => $radicados) {
-                        foreach ($radicados as $r) {
-                            $detalle[] = $this->fila($r, 'error', 'No se pudo entrar al portal: '.($salida['error'] ?? 'login fallido'));
-                        }
+                foreach ($grupo['empresas'] as $empresa) {
+                    foreach ($empresa['radicados'] as $r) {
+                        $detalle[] = $this->fila($r, 'error', 'No se pudo leer el listado del portal: '.($salida['error'] ?? 'sin detalle'));
                     }
-                    $avisar("{$nombres}: falló el login.", $detalle);
+                }
+                $avisar("{$nombres}: no se pudo leer el listado.", $detalle);
 
-                    continue 2;
+                continue;
+            }
+
+            foreach ($grupo['empresas'] as $nitEmpresa => $empresa) {
+                $informe = $salida['por_nit'][$nitEmpresa] ?? null;
+
+                if (! $informe) {
+                    foreach ($empresa['radicados'] as $r) {
+                        $detalle[] = $this->fila($r, 'error', 'El portal no devolvió el listado de esta empresa.');
+                    }
+
+                    continue;
                 }
 
-                foreach ($tanda as $nitEmpresa => $radicados) {
-                    foreach ($radicados as $r) {
-                        $cedula = preg_replace('/\D/', '', (string) $r->contrato->cedula);
-                        $res = $porCedula->get($nitEmpresa.':'.$cedula);
-
-                        if (! $res) {
-                            $detalle[] = $this->fila($r, 'error', $salida['error'] ?? 'El portal no devolvió respuesta para esta cédula.');
-
-                            continue;
-                        }
-
-                        $detalle[] = $this->resolver($r, $res, $simular, $usuarioId);
+                // Un listado corto haría pasar por «no radicado» a quien sí está:
+                // mejor no decidir nada que decidir mal.
+                if ($informe['incompleto'] ?? false) {
+                    foreach ($empresa['radicados'] as $r) {
+                        $detalle[] = $this->fila($r, 'error', 'El listado del portal salió incompleto; se revisa en la próxima corrida.');
                     }
+
+                    continue;
+                }
+
+                $porCedula = collect($informe['afiliados'] ?? [])
+                    ->keyBy(fn ($a) => preg_replace('/\D/', '', (string) ($a['numero'] ?? '')));
+
+                foreach ($empresa['radicados'] as $r) {
+                    $cedula = preg_replace('/\D/', '', (string) $r->contrato->cedula);
+                    $detalle[] = $this->resolver($r, $porCedula->get($cedula), $simular, $usuarioId);
                 }
             }
 
@@ -174,36 +187,40 @@ class EpsSuraConciliacionService
     /**
      * Decide qué hacer con un radicado según lo que respondió el portal.
      */
-    private function resolver(Radicado $r, array $res, bool $simular, ?int $usuarioId): array
+    private function resolver(Radicado $r, ?array $res, bool $simular, ?int $usuarioId): array
     {
-        if (! ($res['encontrado'] ?? false)) {
-            // "No existe como cotizante de la empresa" es la única respuesta
-            // que prueba que falta el trámite; cualquier otra cosa es un error.
-            return str_contains((string) ($res['mensaje'] ?? ''), 'no existe como cotizante')
-                ? $this->fila($r, 'falta', 'No es cotizante de la empresa en EPS SURA: falta el trámite.')
-                : $this->fila($r, 'error', $res['mensaje'] ?? 'Respuesta no reconocida del portal.');
+        // Quien no sale en el listado de la empresa no quedó radicado.
+        if (! $res) {
+            return $this->fila($r, 'falta', 'No aparece en el listado de afiliados de la empresa en EPS SURA: no quedó radicado.');
         }
 
+        $cobertura = self::normalizar((string) ($res['cobertura'] ?? ''));
         $estado = trim((string) ($res['estado'] ?? ''));
 
-        // "NO TIENE DERECHO POR FIN DE VIGENCIA" también contiene "TIENE DERECHO".
-        if (! preg_match('/^TIENE DERECHO/i', $estado) || ($res['cotiza'] ?? null) === 'N') {
-            return $this->fila($r, 'revisar', "En Sura figura, pero: {$estado}".(($res['cotiza'] ?? null) === 'N' ? ' (no cotiza)' : ''), $res);
+        // Solo la cobertura integral es estar vigente. «Protección laboral»
+        // —que el portal cuenta como «tiene derecho»— y «sin empleador
+        // vigente» son trámite: la novedad está puesta y falta que el aporte
+        // la active.
+        if (! str_contains($cobertura, 'COBERTURA INTEGRAL')) {
+            return $this->fila($r, 'revisar', 'En el listado de EPS SURA aparece como «'
+                .Str::lower(trim((string) ($res['cobertura'] ?? $estado ?: 'sin cobertura')))
+                .'»: el trámite está hecho pero todavía no está vigente.', $res);
         }
 
         if (self::normalizar((string) $r->contrato->cliente?->primer_apellido) === '') {
-            return $this->fila($r, 'revisar', "Vigente en Sura como {$res['nombre']}, pero el contrato no tiene cliente en BryNex con qué comparar el nombre.", $res);
+            return $this->fila($r, 'revisar', 'Vigente en Sura, pero el contrato no tiene cliente en BryNex con qué comparar el nombre.', $res);
         }
 
-        if (! $this->mismoApellido($r, (string) ($res['nombre'] ?? ''))) {
-            return $this->fila($r, 'revisar', "El nombre en Sura ({$res['nombre']}) no coincide con BryNex.", $res);
+        $nombreSura = trim(implode(' ', array_filter([$res['nombres'] ?? null, $res['apellido1'] ?? null, $res['apellido2'] ?? null])));
+
+        if (! $this->mismoApellido($r, $nombreSura)) {
+            return $this->fila($r, 'revisar', "El nombre en Sura ({$nombreSura}) no coincide con BryNex.", $res);
         }
 
         $observacion = sprintf(
-            'Ya vigente en EPS SURA con %s al %s (conciliación automática: %s%s).',
+            'Ya vigente en EPS SURA con %s al %s (conciliación automática: cobertura integral%s).',
             $r->contrato->razonSocial->razon_social,
             now()->format('d/m/Y'),
-            Str::lower($estado),
             ! empty($res['parentesco']) && Str::upper($res['parentesco']) !== 'TITULAR' ? ', en Sura figura como '.Str::lower($res['parentesco']) : ''
         );
 
@@ -253,86 +270,49 @@ class EpsSuraConciliacionService
      * @return array{ok:bool, empresa?:string, resultados?:array, error?:string}
      */
     /**
-     * Parte las empresas de un usuario en tandas que quepan en un Chrome.
+     * El listado de afiliados de cada empresa de un usuario, en una sola sesión.
      *
-     * El login cuesta, así que conviene meter cuantas más cédulas mejor en cada
-     * proceso; pero un proceso eterno se cae y se pierde todo, por eso el tope.
-     * Una empresa nunca se parte entre tandas: cambiar de empresa y volver
-     * costaría más que lo que se ahorra.
-     *
-     * @param  array<string, array{nombre:string, radicados:Collection}>  $empresas
-     * @return array<int, array<string, Collection>>
+     * @param  array<int, string>  $nits
+     * @return array{ok:bool, por_nit?:array<string, array>, error?:string}
      */
-    private function repartir(array $empresas): array
+    private function listadoPortal($credencial, array $nits): array
     {
-        $tandas = [];
-        $actual = [];
-        $cuenta = 0;
-
-        foreach ($empresas as $nit => $empresa) {
-            foreach ($empresa['radicados']->chunk(self::POR_LOTE) as $trozo) {
-                if ($cuenta && $cuenta + $trozo->count() > self::POR_LOTE) {
-                    $tandas[] = $actual;
-                    $actual = [];
-                    $cuenta = 0;
-                }
-
-                $actual[(string) $nit] = isset($actual[(string) $nit])
-                    ? $actual[(string) $nit]->concat($trozo)
-                    : $trozo;
-                $cuenta += $trozo->count();
-            }
-        }
-
-        if ($actual) {
-            $tandas[] = $actual;
-        }
-
-        return $tandas;
-    }
-
-    /**
-     * Una corrida del robot: un login y todas las empresas de esa tanda.
-     *
-     * @param  array<string, Collection>  $tanda  NIT => radicados
-     */
-    private function consultarPortal($credencial, array $tanda): array
-    {
-        $cuantos = collect($tanda)->sum(fn (Collection $c) => $c->count());
-
         $entrada = json_encode([
             'tipoDocumento' => $credencial->tipo_documento,
             'usuario'       => $credencial->usuario,
             'contrasena'    => $credencial->contrasena,
-            'empresas'      => collect($tanda)->map(fn (Collection $radicados, $nit) => [
-                'nit'        => (string) $nit,
-                'documentos' => $radicados->map(fn (Radicado $r) => [
-                    'tipo'   => $r->contrato->cliente?->tipo_doc ?: 'CC',
-                    'numero' => (string) $r->contrato->cedula,
-                ])->values()->all(),
-            ])->values()->all(),
+            'empresas'      => array_values($nits),
         ], JSON_UNESCAPED_UNICODE);
 
         $resultado = Process::path(base_path())
-            // Login ~40 s, unos 12 s por cédula y el cambio de empresa; con holgura.
-            ->timeout(180 + 25 * $cuantos + 30 * count($tanda))
+            // El informe pagina de a 10 por ajax: una empresa grande son varios
+            // minutos, y cambiar de empresa cuesta otro tanto.
+            ->timeout(240 + 240 * count($nits))
             ->input($entrada)
-            ->run(ArlSuraSesionService::binarioNode().' scripts/eps-sura-consultar.mjs');
+            ->run(ArlSuraSesionService::binarioNode().' scripts/eps-sura-afiliados.mjs');
 
         $salida = json_decode(trim($resultado->output()), true) ?: [];
 
         if (! ($salida['ok'] ?? false)) {
             // El mensaje nunca trae la clave: el script no la imprime.
-            Log::warning('EPS SURA: la consulta del portal falló', [
-                'nit'   => implode(',', array_keys($tanda)),
+            Log::warning('EPS SURA: no se pudo leer el listado de afiliados', [
+                'nits'  => $nits,
                 'paso'  => $salida['paso'] ?? null,
                 'error' => $salida['error'] ?? trim($resultado->errorOutput()),
             ]);
 
-            $salida['error'] ??= trim($resultado->errorOutput()) ?: 'El proceso del portal no devolvió respuesta.';
+            return ['ok' => false, 'error' => $salida['error'] ?? (trim($resultado->errorOutput()) ?: 'El proceso del portal no devolvió respuesta.')];
         }
 
-        return $salida;
+        // Una empresa sola responde en la raíz; varias, en «empresas».
+        $informes = $salida['empresas'] ?? [['nit' => (string) reset($nits)] + $salida];
+
+        return [
+            'ok' => true,
+            'por_nit' => collect($informes)
+                ->keyBy(fn ($i) => preg_replace('/\D/', '', (string) ($i['nit'] ?? '')))
+                ->all(),
+        ];
     }
 
     /** Protección contra cruzar la cédula con otra persona: el primer apellido de BryNex debe estar en el nombre de Sura. */

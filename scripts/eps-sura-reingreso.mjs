@@ -108,7 +108,16 @@ const TIPOS = { CC: '1', CE: '2', NI: '4', NUIP: '5', PA: '6', PP: '6', RC: '7',
 // código de cotizante de la PILA (4 = doméstico, 51 = veterano…).
 const COTIZANTE_DEPENDIENTE = '2';
 
-const salir = (d) => { console.log(JSON.stringify(d)); process.exit(d.ok ? 0 : 1); };
+// `process.exit()` corta el proceso sin pasar por el `finally`, así que el
+// cierre de sesión del portal tiene que ocurrir ANTES: durante todo el 2-oct-2026
+// el logout estaba puesto en el `finally` y no se ejecutó nunca, y cada corrida
+// dejaba la sesión viva para estorbar a la siguiente.
+let paginaAbierta = null;
+const salir = async (d) => {
+  try { if (paginaAbierta) await salirDelPortal(paginaAbierta); } catch { /* la sesión caduca sola */ }
+  console.log(JSON.stringify(d));
+  process.exit(d.ok ? 0 : 1);
+};
 
 const leerStdin = async () => {
   let datos = '';
@@ -118,24 +127,24 @@ const leerStdin = async () => {
 
 let entrada;
 try { entrada = JSON.parse(await leerStdin() || '{}'); }
-catch { salir({ ok: false, error: 'Entrada JSON inválida.' }); }
+catch { await salir({ ok: false, error: 'Entrada JSON inválida.' }); }
 
 const { usuario, contrasena, nitEmpresa, persona = {}, ibc, fechaIngreso } = entrada;
 const modo = ['explorar', 'consultar', 'registrar', 'certificado', 'lote'].includes(entrada.modo) ? entrada.modo : 'explorar';
 const asesor = String(entrada.asesor ?? '0');
 const tipoCotizante = String(entrada.tipoCotizante ?? COTIZANTE_DEPENDIENTE);
 
-if (!usuario || !contrasena || !nitEmpresa) salir({ ok: false, error: 'Faltan credenciales o NIT de la empresa.' });
+if (!usuario || !contrasena || !nitEmpresa) await salir({ ok: false, error: 'Faltan credenciales o NIT de la empresa.' });
 
 if (modo === 'lote') {
   // En un lote los datos de cada quien van en la lista, no sueltos.
   const gente = Array.isArray(entrada.personas) ? entrada.personas : [];
-  if (!gente.length) salir({ ok: false, error: 'El lote llegó sin personas.' });
+  if (!gente.length) await salir({ ok: false, error: 'El lote llegó sin personas.' });
   const incompleta = gente.find((q) => !q?.persona?.numero || !q.ibc || !q.fechaIngreso);
-  if (incompleta) salir({ ok: false, error: 'Alguien del lote viene sin documento, IBC o fecha de ingreso.' });
+  if (incompleta) await salir({ ok: false, error: 'Alguien del lote viene sin documento, IBC o fecha de ingreso.' });
 } else if (modo !== 'explorar') {
-  if (!persona.numero) salir({ ok: false, error: 'Falta el documento de la persona.' });
-  if (modo === 'registrar' && (!ibc || !fechaIngreso)) salir({ ok: false, error: 'Faltan IBC o fecha de ingreso.' });
+  if (!persona.numero) await salir({ ok: false, error: 'Falta el documento de la persona.' });
+  if (modo === 'registrar' && (!ibc || !fechaIngreso)) await salir({ ok: false, error: 'Faltan IBC o fecha de ingreso.' });
 }
 
 const ejecutable = await (async () => {
@@ -143,7 +152,7 @@ const ejecutable = await (async () => {
   for (const r of rutaChrome()) { try { await access(r); return r; } catch {} }
   return null;
 })();
-if (!ejecutable) salir({ ok: false, error: 'No se encontró Chrome. Define CHROME_PATH.' });
+if (!ejecutable) await salir({ ok: false, error: 'No se encontró Chrome. Define CHROME_PATH.' });
 
 const navegador = await puppeteer.launch({
   executablePath: ejecutable,
@@ -225,6 +234,7 @@ const escribir = async (marco, sufijo, valor, { conBlur = true } = {}) => {
 
 try {
   pagina = await navegador.newPage();
+  paginaAbierta = pagina;
 
   // El resultado de «Aplicar Novedad» llega en un alert inyectado por el
   // postback, no en la pantalla: hay que escucharlo.
@@ -312,7 +322,7 @@ try {
     const motivo = (pantalla.match(/((?:no |sin )(?:se |hay )?(?:encontr|est[aá]|existe|pertenece|tiene|aparece|registra|afiliad|result|informaci)[^.]{0,200}\.?)/i) || [])[1]?.trim()
       || (pantalla.length > 300 ? '…'.concat(pantalla.slice(-300)) : pantalla);
 
-    salir({
+    await salir({
       ok: !!soporte, modo, paso, soporte,
       texto: pantalla.slice(0, 600),
       error: soporte ? undefined : 'El portal no entregó el certificado: '.concat(motivo),
@@ -375,7 +385,7 @@ try {
       if (t.trim()) textos.push(t.replace(/\s+/g, ' ').trim().slice(0, 600));
     }
 
-    salir({ ok: true, modo, paso, url: pagina.url(), marcos: pagina.frames().length, campos, texto: textos.join(' ⏐ ').slice(0, 1500) });
+    await salir({ ok: true, modo, paso, url: pagina.url(), marcos: pagina.frames().length, campos, texto: textos.join(' ⏐ ').slice(0, 1500) });
   }
 
   // La pantalla trae el NIT del empleador con el que se entró. Se compara con el
@@ -708,10 +718,10 @@ try {
       try { process.stderr.write('@resultado '.concat(JSON.stringify(resultado), '\n')); } catch { /* da igual */ }
     }
 
-    salir({ ok: true, modo, total: resultados.length, resultados });
+    await salir({ ok: true, modo, total: resultados.length, resultados });
   }
 
-  salir(await tramitarPersona({ persona, ibc, fechaIngreso, tipoCotizante, asesor }));
+  await salir(await tramitarPersona({ persona, ibc, fechaIngreso, tipoCotizante, asesor }));
 
 } catch (e) {
   let captura = null;
@@ -721,10 +731,7 @@ try {
       await pagina.screenshot({ path: captura, fullPage: true });
     }
   } catch {}
-  salir({ ok: false, modo, paso, error: String(e.message || e).slice(0, 300), alertas, captura });
+  await salir({ ok: false, modo, paso, error: String(e.message || e).slice(0, 300), alertas, captura });
 } finally {
-  // Antes de soltar el navegador: la sesión del portal no se cierra sola
-  // y el siguiente trámite del mismo usuario se quedaría fuera.
-  await salirDelPortal(pagina);
   await navegador.close().catch(() => {});
 }

@@ -15,7 +15,16 @@ import puppeteer from 'puppeteer-core';
 import { rutaChrome } from './arl-sura-sesion-comun.mjs';
 import { entrarEmpresaEps, esperar, texto, salirDelPortal } from './eps-sura-sesion-comun.mjs';
 
-const salir = (d) => { console.log(JSON.stringify(d)); process.exit(d.ok ? 0 : 1); };
+// `process.exit()` corta el proceso sin pasar por el `finally`, así que el
+// cierre de sesión del portal tiene que ocurrir ANTES: durante todo el 2-oct-2026
+// el logout estaba puesto en el `finally` y no se ejecutó nunca, y cada corrida
+// dejaba la sesión viva para estorbar a la siguiente.
+let paginaAbierta = null;
+const salir = async (d) => {
+  try { if (paginaAbierta) await salirDelPortal(paginaAbierta); } catch { /* la sesión caduca sola */ }
+  console.log(JSON.stringify(d));
+  process.exit(d.ok ? 0 : 1);
+};
 
 const leerStdin = async () => {
   let datos = '';
@@ -45,7 +54,7 @@ const ejecutable = await (async () => {
   for (const r of rutaChrome()) { try { await access(r); return r; } catch {} }
   return null;
 })();
-if (!ejecutable) salir({ ok: false, error: 'No se encontró Chrome. Define CHROME_PATH.' });
+if (!ejecutable) await salir({ ok: false, error: 'No se encontró Chrome. Define CHROME_PATH.' });
 
 const navegador = await puppeteer.launch({
   executablePath: ejecutable,
@@ -72,6 +81,7 @@ let paso = 'inicio';
 
 try {
   const pagina = await navegador.newPage();
+  paginaAbierta = pagina;
   await pagina.setViewport({ width: 1400, height: 900 });
 
   paso = 'entrar';
@@ -141,7 +151,7 @@ try {
     }
 
     if (!archivo) {
-      salir({ ok: false, paso, error: 'El portal no entregó el archivo del estado de cuenta.', pantalla: (await texto(pagina)).replace(/\s+/g, ' ').slice(0, 600) });
+      await salir({ ok: false, paso, error: 'El portal no entregó el archivo del estado de cuenta.', pantalla: (await texto(pagina)).replace(/\s+/g, ' ').slice(0, 600) });
     }
 
     // El archivo se queda en disco y solo se devuelve su ruta: por stdout se
@@ -153,7 +163,7 @@ try {
     // El PDF no es un fallo: cuando la empresa no debe nada, el portal emite
     // un certificado de no deuda y eso siempre sale en PDF, se pida lo que se
     // pida. Quien llama lo comprueba leyéndolo, y borra el archivo.
-    salir({
+    await salir({
       ok: true, modo: 'estadoCuenta', archivo, ruta,
       formato: /\.pdf$/i.test(archivo) ? 'pdf' : 'csv',
       bytes: size,
@@ -184,7 +194,7 @@ try {
       }))
       .filter((t) => t.columnas.length));
 
-    salir({
+    await salir({
       ok: true, opcion: entrada.opcion, url: pagina.url(),
       campos, tablas, pantalla: (await texto(pagina)).replace(/\s+/g, ' ').slice(0, 1800),
     });
@@ -199,7 +209,7 @@ try {
     }))
     .filter((e) => e.texto && e.texto.length < 70));
 
-  salir({
+  await salir({
     ok: true,
     url: pagina.url(),
     titulo: await pagina.title().catch(() => null),
@@ -207,10 +217,7 @@ try {
     pantalla: (await texto(pagina)).replace(/\s+/g, ' ').slice(0, 1500),
   });
 } catch (e) {
-  salir({ ok: false, paso, error: String(e?.message || e).slice(0, 300) });
+  await salir({ ok: false, paso, error: String(e?.message || e).slice(0, 300) });
 } finally {
-  // Antes de soltar el navegador: la sesión del portal no se cierra sola
-  // y el siguiente trámite del mismo usuario se quedaría fuera.
-  await salirDelPortal(pagina);
   await navegador.close().catch(() => null);
 }

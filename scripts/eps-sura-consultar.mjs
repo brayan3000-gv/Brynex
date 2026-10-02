@@ -32,7 +32,16 @@ const URL_CONSULTA = 'https://epsapps.suramericana.com/Semp/faces/pos/afiliadosC
 // Tipos de documento de BryNex → valores del select de la consulta.
 const TIPOS = { CC: 'CC', CE: 'CE', PA: 'PA', PP: 'PA', TI: 'TI', RC: 'RC', PT: 'PT', PPT: 'PT', PE: 'PE', PEP: 'PE', SC: 'SC', CD: 'CD' };
 
-const salir = (d) => { console.log(JSON.stringify(d)); process.exit(d.ok ? 0 : 1); };
+// `process.exit()` corta el proceso sin pasar por el `finally`, así que el
+// cierre de sesión del portal tiene que ocurrir ANTES: durante todo el 2-oct-2026
+// el logout estaba puesto en el `finally` y no se ejecutó nunca, y cada corrida
+// dejaba la sesión viva para estorbar a la siguiente.
+let paginaAbierta = null;
+const salir = async (d) => {
+  try { if (paginaAbierta) await salirDelPortal(paginaAbierta); } catch { /* la sesión caduca sola */ }
+  console.log(JSON.stringify(d));
+  process.exit(d.ok ? 0 : 1);
+};
 
 const leerStdin = async () => {
   let datos = '';
@@ -42,7 +51,7 @@ const leerStdin = async () => {
 
 let entrada;
 try { entrada = JSON.parse(await leerStdin() || '{}'); }
-catch { salir({ ok: false, error: 'Entrada JSON inválida.' }); }
+catch { await salir({ ok: false, error: 'Entrada JSON inválida.' }); }
 
 const { usuario, contrasena, nitEmpresa, documentos = [] } = entrada;
 
@@ -51,14 +60,14 @@ const empresas = Array.isArray(entrada.empresas) && entrada.empresas.length
   ? entrada.empresas
   : (nitEmpresa ? [{ nit: nitEmpresa, documentos }] : []);
 
-if (!usuario || !contrasena || !empresas.length) salir({ ok: false, error: 'Faltan credenciales o empresas que consultar.' });
+if (!usuario || !contrasena || !empresas.length) await salir({ ok: false, error: 'Faltan credenciales o empresas que consultar.' });
 
 const ejecutable = await (async () => {
   const { access } = await import('node:fs/promises');
   for (const r of rutaChrome()) { try { await access(r); return r; } catch {} }
   return null;
 })();
-if (!ejecutable) salir({ ok: false, error: 'No se encontró Chrome. Define CHROME_PATH.' });
+if (!ejecutable) await salir({ ok: false, error: 'No se encontró Chrome. Define CHROME_PATH.' });
 
 const navegador = await puppeteer.launch({
   executablePath: ejecutable,
@@ -99,6 +108,7 @@ const vaPorEmpresa = (nit) => process.stderr.write(`@paso cambiando a la empresa
 
 try {
   pagina = await navegador.newPage();
+  paginaAbierta = pagina;
 
   // El paso se distingue: si falla el login, quien llama no debe insistir
   // (Sura bloquea al usuario tras varios intentos fallidos).
@@ -188,7 +198,7 @@ try {
   }
   }
 
-  salir({ ok: true, empresa, resultados });
+  await salir({ ok: true, empresa, resultados });
 } catch (e) {
   let captura = null;
   try {
@@ -197,10 +207,7 @@ try {
       await pagina.screenshot({ path: captura, fullPage: true });
     }
   } catch {}
-  salir({ ok: false, paso, error: String(e.message || e).slice(0, 300), resultados, captura });
+  await salir({ ok: false, paso, error: String(e.message || e).slice(0, 300), resultados, captura });
 } finally {
-  // Antes de soltar el navegador: la sesión del portal no se cierra sola
-  // y el siguiente trámite del mismo usuario se quedaría fuera.
-  await salirDelPortal(pagina);
   await navegador.close().catch(() => {});
 }
