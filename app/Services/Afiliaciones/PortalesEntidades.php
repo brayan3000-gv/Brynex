@@ -107,8 +107,16 @@ class PortalesEntidades
      * representante legal (o un delegado) con su cédula.
      */
     public const OTROS_PORTALES = [
-        1 => ['nombre' => 'SAT', 'titulo' => 'Sistema de Afiliación Transaccional'],
+        // Oculto (2-oct-2026): el SAT no sirve para lo que se buscaba. Queda
+        // implementado; para volver a mostrarlo basta con poner 'visible' => true.
+        1 => ['nombre' => 'SAT', 'titulo' => 'Sistema de Afiliación Transaccional', 'visible' => false],
     ];
+
+    /** ¿Ese portal fijo sale como fila propia en la tabla? */
+    private static function otroVisible(?int $id): bool
+    {
+        return (bool) (self::OTROS_PORTALES[$id]['visible'] ?? false);
+    }
 
     /**
      * Portal de los robots (la `entidad` de EpsPortalEmpresa, las llaves de
@@ -204,7 +212,9 @@ class PortalesEntidades
 
         // Portales de toda empresa (el SAT): siempre, tenga o no datos.
         foreach (self::OTROS_PORTALES as $id => $portal) {
-            $filas[] = self::fila('OTRO', $id, $portal['titulo'], null, true);
+            if ($portal['visible'] ?? false) {
+                $filas[] = self::fila('OTRO', $id, $portal['titulo'], null, true);
+            }
         }
 
         // EPS: las vigentes, más cualquiera con afiliados o con clave guardada
@@ -258,7 +268,9 @@ class PortalesEntidades
         // Lo que no es de una entidad del catálogo (correos, operadores,
         // portales sueltos): va en la misma tabla, en sus propios grupos.
         $otras = $claves
-            ->filter(fn ($c) => ! $c->entidad_id && ! in_array(strtoupper((string) $c->tipo), self::TIPOS, true))
+            // Las de un portal fijo oculto (el SAT) también: así no se pierden de vista.
+            ->filter(fn ($c) => (! $c->entidad_id || ($c->entidad_tipo === 'OTRO' && ! self::otroVisible((int) $c->entidad_id)))
+                && ! in_array(strtoupper((string) $c->tipo), self::TIPOS, true))
             ->sortBy(fn ($c) => mb_strtoupper((string) $c->entidad))
             ->map(fn ($c) => self::claveJson($c, $verContrasena, $aliadoActivo) + ['grupo' => self::grupoOtra($c)])
             ->values()->all();

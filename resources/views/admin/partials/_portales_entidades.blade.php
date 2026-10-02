@@ -230,7 +230,9 @@ window.Portales = (function () {
     // La barra se pinta una sola vez: si se rehiciera con cada letra, el
     // buscador perdería el foco mientras se escribe.
     function esqueleto() {
-        const tipos = [['', 'Todas'], ['ARL', 'ARL'], ['CAJA', 'Caja'], ['OTRO', 'SAT'], ['EPS', 'EPS'], ['CORREO', 'Correos'], ['OTRAS', 'Operadores']];
+        // El chip del SAT solo si el servidor lo manda como fila (hoy está oculto).
+        const hayOtro = datos.filas.some(f => f.tipo === 'OTRO');
+        const tipos = [['', 'Todas'], ['ARL', 'ARL'], ['CAJA', 'Caja'], ...(hayOtro ? [['OTRO', 'SAT']] : []), ['EPS', 'EPS'], ['CORREO', 'Correos'], ['OTRAS', 'Operadores']];
         el.innerHTML = `<div class="pe-resumen" data-pe="resumen"></div>
             <div class="pe-barra">
                 <input type="search" class="pe-buscar" placeholder="Buscar entidad…" data-pe="buscar" autocomplete="off">
@@ -297,7 +299,8 @@ window.Portales = (function () {
             ['CORREO', 'OTRAS'].forEach(grupo => {
                 if (filtro.tipo && filtro.tipo !== grupo) return;
                 const otras = (datos.otras || []).filter(c => c.grupo === grupo && (!q || plano(c.entidad + ' ' + c.tipo + ' ' + (c.usuario || '')).includes(q)));
-                if (!otras.length && (q || filtro.tipo !== grupo)) return;
+                // Vacío, el grupo sale igual (con su botón de agregar) para quien puede gestionar.
+                if (!otras.length && (q || (filtro.tipo && filtro.tipo !== grupo) || !datos.puede_gestionar)) return;
                 hay += otras.length;
                 h += `<div class="pe-grupo">${GRUPOS[grupo]}${otras.length ? ` · ${otras.length}` : ''}</div>`;
                 if (otras.length) h += '<div class="pe-tabla">' + otras.map(otra).join('') + '</div>';
@@ -390,7 +393,8 @@ window.Portales = (function () {
     function sinClasificar(c) {
         const opciones = ['EPS', 'ARL', 'CAJA'].map(t =>
             `<optgroup label="${t}">${(datos.catalogo[t] || []).map(e => `<option value="${t}|${e.id}">${esc(e.nombre)}</option>`).join('')}</optgroup>`
-        ).join('') + '<option value="OTRO|1">SAT (Sistema de Afiliación Transaccional)</option><option value="OTRO|">Otro portal (no es EPS, ARL ni caja)</option>';
+        ).join('') + (datos.filas.some(f => f.tipo === 'OTRO' && f.id === 1) ? '<option value="OTRO|1">SAT (Sistema de Afiliación Transaccional)</option>' : '')
+            + '<option value="OTRO|">Otro portal (no es EPS, ARL ni caja)</option>';
 
         return `<div class="pe-fila">
             <span class="pe-chip" style="background:#f1f5f9;color:#475569;margin:0;justify-self:start">${esc(c.tipo)}</span>
