@@ -2708,8 +2708,10 @@ function abrirClavesRS(rsId, rsNombre, delContrato) {
     var loading = document.getElementById('rs-claves-loading');
     var body    = document.getElementById('rs-claves-body');
     var tbody   = document.getElementById('rs-claves-tbody');
-    loading.style.display = 'block';
-    body.style.display    = 'none';
+    // El cuerpo queda a la vista: los portales cargan por su cuenta y no
+    // tienen por qué esperar a la lista de claves.
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:1.2rem;color:#94a3b8;font-size:0.8rem;">⏳ Cargando claves...</td></tr>';
+    body.style.display = 'block';
 
     fetch('/admin/clave-accesos/razon-social/' + rsId, {
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': CSRF }
