@@ -366,7 +366,15 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                                 : (str_contains(mb_strtoupper($nombreOp), 'MI PLANILLA') ? 'Descargar la planilla real de Mi Planilla'
                                 : ($aliadoConSoporteOperador ? 'Descargar la planilla del operador (si no está, se genera la de BryNex)' : 'Descargar PDF Planilla'));
                         @endphp
-                        @if($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConPlanilla, true))
+                        @if($numeroPlanillaOp && (int) $operadorId === $miPlanillaId && !$tieneClaveMiPlanilla)
+                        {{-- Mi Planilla sin la clave de la persona: se pide, se prueba y se guarda --}}
+                        <button type="button" class="btn-act-sm btn-planilla-mp" style="background:#0f172a;color:#fff;border-color:#0f172a;"
+                                data-url="{{ route('admin.planos.certificado_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}&forzar_operador_id={{ $operadorId }}"
+                                onclick="pedirClaveMiPlanilla(this.dataset.url)"
+                                title="Falta la clave de Mi Planilla de esta persona: se pide una vez y queda guardada">
+                            ⬇️ Planilla
+                        </button>
+                        @elseif($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConPlanilla, true))
                         <a href="{{ route('admin.planos.certificado_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}{{ $operadorId ? '&forzar_operador_id=' . $operadorId : '' }}"
                            onclick="this.href = this.href.split('&t=')[0] + '&t=' + new Date().getTime()"
                            target="_blank" class="btn-act-sm" style="background:#0f172a;color:#fff;border-color:#0f172a;" title="{{ $tituloPlanilla }}">
@@ -764,6 +772,63 @@ async function confirmarAnular(conf = {}) {
         btn.disabled = false; btn.textContent = '⛔ Confirmar Anulación';
     }
 }
+// ── Clave de Mi Planilla ───────────────────────────────
+// La planilla real de Mi Planilla se baja con la cuenta de la persona. Si no
+// está guardada se pide aquí; el servidor la prueba en el portal antes de
+// guardarla, y desde ahí los botones descargan directo.
+const MP_CLAVE_URL = '{{ route('admin.planos.miplanilla_clave') }}';
+let _mpUrl = null;
+function pedirClaveMiPlanilla(url) {
+    _mpUrl = url;
+    document.getElementById('mp-error').style.display = 'none';
+    document.getElementById('mp-descargar').style.display = 'none';
+    document.getElementById('mp-form').style.display = 'block';
+    document.getElementById('mp-contrasena').value = '';
+    document.getElementById('modal-mp-ov').style.display = 'flex';
+    setTimeout(() => document.getElementById('mp-contrasena').focus(), 50);
+}
+function cerrarClaveMiPlanilla() {
+    document.getElementById('modal-mp-ov').style.display = 'none';
+}
+async function guardarClaveMiPlanilla(ev) {
+    ev.preventDefault();
+    const btn = document.getElementById('mp-guardar');
+    const err = document.getElementById('mp-error');
+    err.style.display = 'none';
+    btn.disabled = true; btn.textContent = '⏳ Probando en Mi Planilla...';
+    try {
+        const resp = await fetch(MP_CLAVE_URL, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({
+                cedula: {{ (int) $cedula }},
+                usuario: document.getElementById('mp-usuario').value.trim(),
+                contrasena: document.getElementById('mp-contrasena').value,
+            }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+            const errores = data.errors ? Object.values(data.errors).flat().join(' ') : '';
+            throw new Error(data.message && !errores ? data.message : (errores || 'No se pudo guardar la clave.'));
+        }
+        // Ya hay clave: todos los botones de Mi Planilla pasan a descargar directo.
+        document.querySelectorAll('.btn-planilla-mp').forEach(b => {
+            b.onclick = () => window.open(b.dataset.url + '&t=' + Date.now(), '_blank');
+            b.title = 'Descargar la planilla real de Mi Planilla';
+        });
+        document.getElementById('mp-form').style.display = 'none';
+        const link = document.getElementById('mp-descargar');
+        link.href = _mpUrl + '&t=' + Date.now();
+        link.style.display = 'block';
+    } catch (e) {
+        err.textContent = '❌ ' + e.message;
+        err.style.display = 'block';
+    } finally {
+        btn.disabled = false; btn.textContent = '💾 Guardar y descargar';
+    }
+}
+
 // ── Modal Soporte Planilla ─────────────────────────────
 function verSoportePlanilla(url, nroPlanilla, operador) {
     document.getElementById('sp-numero').textContent   = '#' + nroPlanilla;
@@ -809,6 +874,39 @@ function cerrarSoportePlanilla() {
         </div>
         <div style="flex:1;background:#e8edf2;padding:.35rem 0 0;overflow:hidden;">
             <iframe id="recibo-frame" src="" style="width:100%;height:100%;border:none;display:block;"></iframe>
+        </div>
+    </div>
+</div>
+
+{{-- Modal Clave de Mi Planilla --}}
+<div id="modal-mp-ov"
+     onclick="if(event.target.id==='modal-mp-ov')cerrarClaveMiPlanilla()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);z-index:99998;align-items:center;justify-content:center;padding:.75rem">
+    <div style="background:#fff;border-radius:14px;width:min(420px,97vw);box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:.75rem 1.1rem;display:flex;justify-content:space-between;align-items:center">
+            <div>
+                <div style="color:#fff;font-size:.9rem;font-weight:800">🔑 Clave de Mi Planilla</div>
+                <div style="color:rgba(255,255,255,.7);font-size:.68rem;margin-top:.1rem">Para bajar la planilla real. Se guarda una sola vez.</div>
+            </div>
+            <button onclick="cerrarClaveMiPlanilla()" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;width:28px;height:28px;font-size:1rem;cursor:pointer;font-weight:700">&#x2715;</button>
+        </div>
+        <div style="padding:1rem 1.1rem">
+            <form id="mp-form" onsubmit="guardarClaveMiPlanilla(event)">
+                <label style="display:block;font-size:.72rem;font-weight:700;color:#475569;margin-bottom:.2rem">Usuario</label>
+                <input id="mp-usuario" type="text" value="CC{{ (int) $cedula }}" autocomplete="off"
+                       style="width:100%;padding:.45rem .6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;margin-bottom:.15rem">
+                <div style="font-size:.65rem;color:#94a3b8;margin-bottom:.7rem">Tipo y número de documento pegados, como se entra al portal.</div>
+                <label style="display:block;font-size:.72rem;font-weight:700;color:#475569;margin-bottom:.2rem">Contraseña</label>
+                <input id="mp-contrasena" type="password" required autocomplete="new-password"
+                       style="width:100%;padding:.45rem .6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;margin-bottom:.8rem">
+                <div id="mp-error" style="display:none;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:.45rem .6rem;font-size:.75rem;margin-bottom:.7rem"></div>
+                <button id="mp-guardar" type="submit"
+                        style="width:100%;background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.55rem;font-size:.82rem;font-weight:700;cursor:pointer">💾 Guardar y descargar</button>
+            </form>
+            <a id="mp-descargar" href="#" target="_blank" onclick="setTimeout(cerrarClaveMiPlanilla, 300)"
+               style="display:none;text-align:center;background:#15803d;color:#fff;border-radius:8px;padding:.6rem;font-size:.85rem;font-weight:700;text-decoration:none">
+                ✅ Clave guardada · ⬇️ Descargar planilla
+            </a>
         </div>
     </div>
 </div>

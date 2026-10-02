@@ -1464,6 +1464,51 @@ class PlanoPagoController extends Controller
             ->header('Expires', 'Sat, 26 Jul 1997 05:00:00 GMT');
     }
 
+    /**
+     * Guarda la clave de Mi Planilla de una persona desde el botón «Planilla»
+     * del historial, para bajar su planilla real. Antes de guardarla se prueba
+     * entrando al portal: una clave mala no se guarda.
+     */
+    public function guardarClaveMiPlanilla(Request $request)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $data = $request->validate([
+            'cedula'     => 'required|integer',
+            'usuario'    => 'nullable|string|max:150',
+            'contrasena' => 'required|string|max:200',
+        ], ['contrasena.required' => 'Escribe la contraseña de Mi Planilla.']);
+
+        $cedula = (string) $data['cedula'];
+        abort_unless(\App\Models\Cliente::where('aliado_id', $aliadoId)->where('cedula', $cedula)->exists(), 404);
+
+        // El usuario del portal es tipo y número de documento pegados (CC15817622).
+        $usuario = strtoupper(preg_replace('/\s+/', '', (string) ($data['usuario'] ?? ''))) ?: 'CC'.$cedula;
+
+        $robot = new \App\Services\MiPlanilla\MiPlanillaPortalService($usuario, $data['contrasena']);
+        try {
+            $robot->login();
+            rescue(fn () => $robot->logout(), report: false);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'message' => $e->getMessage()], 422);
+        }
+
+        // Si ya había una (vieja o desactivada) se corrige esa, para no dejar dos.
+        $clave = \App\Models\ClaveAcceso::where('aliado_id', $aliadoId)
+            ->where('cedula', $cedula)
+            ->where('entidad', 'like', '%PLANILLA%')
+            ->orderByDesc('activo')->orderByDesc('updated_at')
+            ->first() ?? new \App\Models\ClaveAcceso([
+                'aliado_id' => $aliadoId,
+                'cedula'    => $cedula,
+                'tipo'      => 'Operadores',
+                'entidad'   => 'MI PLANILLA',
+            ]);
+
+        $clave->fill(['usuario' => $usuario, 'contrasena' => $data['contrasena'], 'activo' => true])->save();
+
+        return response()->json(['ok' => true, 'message' => 'Clave de Mi Planilla guardada.']);
+    }
+
     // ── Módulo de Envíos de Planillas por WhatsApp ───────────────────
 
     public function enviosPlanillaIndex(Request $request)

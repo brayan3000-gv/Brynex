@@ -594,6 +594,7 @@ Route::middleware('auth')->group(function () {
             Route::get('/descargar-aportes-en-linea', [$pp, 'descargarAportesEnLinea'])->name('descargar_aportes_en_linea');
             Route::get('/descargar-aportes-en-linea-2', [$pp, 'descargarAportesEnLinea2'])->name('descargar_aportes_en_linea_2');
             Route::get('/certificado-pdf', [$pp, 'descargarCertificadoPdf'])->name('certificado_pdf');
+            Route::post('/miplanilla-clave', [$pp, 'guardarClaveMiPlanilla'])->name('miplanilla_clave');
             Route::patch('/n-plano', [$pp, 'actualizarNPlano'])->name('n_plano.update');
             Route::patch('/operador-cliente', [$pp, 'asignarOperadorCliente'])->name('operador_cliente.asignar');
             Route::patch('/mover-masivo', [$pp, 'moverPlanoMasivo'])->name('mover_masivo');

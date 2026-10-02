@@ -4098,22 +4098,24 @@ class FacturacionController extends Controller
             ->exists();
 
         // Operadores de los que el botón «Planilla» entrega algo cierto: el PDF
-        // real (Enlace con credenciales del aliado, Mi Planilla con la clave de
-        // la persona) o la plantilla propia del operador. Los demás no lo muestran:
-        // antes una de Mi Planilla salía con el formato de ARUS (oct-2026).
+        // real (Enlace con las credenciales del aliado, Mi Planilla con la clave
+        // de la persona) o la plantilla propia del operador. Los demás no lo
+        // muestran: antes una de Mi Planilla salía con el formato de ARUS
+        // (oct-2026). A Mi Planilla sin clave el botón se la pide y la guarda.
         $conPlantilla = \DB::table('operador_planillas_templates')
             ->whereNotNull('formulario_pdf')->where('formulario_pdf', '<>', '')
             ->pluck('operador_planilla_id')->map(fn ($id) => (int) $id)->all();
         $tieneClaveMiPlanilla = \App\Services\MiPlanilla\MiPlanillaPortalService::tieneClave((int) $aliadoId, (string) $cedula);
         $operadoresConPlanilla = \DB::table('operadores_planilla')->get(['id', 'codigo'])
-            ->filter(function ($op) use ($conPlantilla, $aliadoConSoporteOperador, $tieneClaveMiPlanilla) {
+            ->filter(function ($op) use ($conPlantilla, $aliadoConSoporteOperador) {
                 $codigo = strtoupper(trim((string) $op->codigo));
 
                 return in_array((int) $op->id, $conPlantilla, true)
                     || ($aliadoConSoporteOperador && array_key_exists($codigo, \App\Services\SuaporteApiService::HOSTS))
-                    || ($tieneClaveMiPlanilla && $codigo === 'MIPLANI');
+                    || $codigo === 'MIPLANI';
             })
             ->map(fn ($op) => (int) $op->id)->values()->all();
+        $miPlanillaId = (int) \DB::table('operadores_planilla')->where('codigo', 'MIPLANI')->value('id');
 
         $feEstados = $this->estadosFacturaElectronica($facturas, $aliadoId);
 
@@ -4123,7 +4125,7 @@ class FacturacionController extends Controller
             'aniosDisp', 'rsSocDisp', 'meses', 'contratosporRS',
             'soportesPlanilla', 'operadoresPlanillaInfo', 'gastosPlanilla',
             'operadoresTodosMap', 'feEstados',
-            'verificacionPlanillas', 'pagosOperador', 'aliadoConSoporteOperador', 'operadoresConPlanilla'
+            'verificacionPlanillas', 'pagosOperador', 'aliadoConSoporteOperador', 'operadoresConPlanilla', 'miPlanillaId', 'tieneClaveMiPlanilla'
         ));
     }
 
