@@ -104,7 +104,7 @@ class WhatsappSinRespuesta extends Command
         }
 
         $texto = $this->resumen($lista->all());
-        $destinatarios = $this->destinatarios($aliadoId);
+        $destinatarios = WhatsappEsperandoRespuesta::destinatariosAviso($aliadoId);
 
         if (empty($destinatarios)) {
             $this->warn('Sin números a quién avisar: ponga el WhatsApp del aliado en su ficha o en services.whatsapp.pendientes_por_aliado.');
@@ -112,8 +112,15 @@ class WhatsappSinRespuesta extends Command
             return;
         }
 
+        // Sale por la cuenta con la que el aliado hace sus envíos (la suya o la compartida
+        // de BryNex), no por la de Brygar: el aviso es del aliado y lo recibe su gente.
+        if (! $alertas->plantillaDisponible($aliadoId)) {
+            $this->warn('  La cuenta de WhatsApp de este aliado no tiene aprobada la plantilla «'.AlertaOperativaService::NOMBRE_PLANTILLA
+                .'»: solo saldrá a quien tenga la ventana de 24 h abierta. Créela con: php artisan whatsapp:plantilla-aviso');
+        }
+
         foreach ($destinatarios as $numero) {
-            $ok = $alertas->enviarA($numero, "Esperando respuesta · {$nombreAliado}", $texto);
+            $ok = $alertas->enviarDesdeAliado($aliadoId, $numero, "Esperando respuesta · {$nombreAliado}", $texto);
             $this->line($ok ? "  → enviado a {$numero}" : "  → no se pudo enviar a {$numero} (ver el log).");
         }
 
@@ -183,27 +190,6 @@ class WhatsappSinRespuesta extends Command
     private function claveCache(int $aliadoId): string
     {
         return 'wa_sin_respuesta_avisado:'.$aliadoId.':'.now()->toDateString();
-    }
-
-    /** @return string[] */
-    private function destinatarios(int $aliadoId): array
-    {
-        $porAliado = config('services.whatsapp.pendientes_por_aliado', []);
-        $crudo = $porAliado[$aliadoId] ?? null;
-
-        if ($crudo === null || trim((string) $crudo) === '') {
-            $aliado = Aliado::find($aliadoId);
-            $crudo = $aliado?->whatsapp ?: $aliado?->celular;
-        }
-
-        $crudos = array_merge(
-            explode(',', (string) $crudo),
-            explode(',', (string) config('services.whatsapp.pendientes_copia'))
-        );
-
-        $numeros = array_filter(array_map(fn ($n) => preg_replace('/\D/', '', $n), $crudos), fn ($n) => strlen($n) >= 10);
-
-        return array_values(array_unique($numeros));
     }
 
     private function nombreCorto(WhatsappConversacion $cv): string

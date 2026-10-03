@@ -13,7 +13,8 @@ use Illuminate\Support\Str;
  * Avisos operativos a BryNex por WhatsApp: backups caídos, accesos raros,
  * usuarios creados por un aliado, despliegues.
  *
- * Sale por la cuenta de Brygar. Si el destinatario tiene abierta la ventana de
+ * Sale por la cuenta de Brygar (salvo enviarDesdeAliado(), que usa la del aliado que
+ * se le indique). Si el destinatario tiene abierta la ventana de
  * 24h (escribió o tocó «Mantener activo» hace menos de un día), va como texto
  * libre, que no gasta envíos de plantilla. Si no, va con la plantilla aprobada
  * `notificar_brynex` (dos variables: origen y mensaje), que sale aunque la
@@ -27,7 +28,7 @@ class AlertaOperativaService
 {
     private const ALIADO_ID = 2;                 // Brygar
 
-    private const NOMBRE_PLANTILLA = 'notificar_brynex';
+    public const NOMBRE_PLANTILLA = 'notificar_brynex';
 
     /** Tope de Meta por variable: 1024. Se recorta muy por debajo. */
     private const MAX_PARAM = 600;
@@ -60,16 +61,30 @@ class AlertaOperativaService
      */
     public function enviarA(string $numero, string $origen, string $mensaje): bool
     {
+        return $this->enviarDesdeAliado(self::ALIADO_ID, $numero, $origen, $mensaje);
+    }
+
+    /**
+     * Igual que enviarA(), pero sale por la cuenta de WhatsApp con la que ese aliado
+     * hace sus envíos: la suya si tiene número propio, o la compartida de BryNex.
+     *
+     * Lo usa el aviso de conversaciones esperando respuesta: es un mensaje del aliado
+     * para su propia gente, y llegarle desde la línea de Brygar —otro aliado— no tiene
+     * sentido. La plantilla tiene que existir aprobada en esa cuenta
+     * (`whatsapp:plantilla-aviso` la crea); si no, solo sale con la ventana abierta.
+     */
+    public function enviarDesdeAliado(int $aliadoId, string $numero, string $origen, string $mensaje): bool
+    {
         try {
-            $config = WhatsappConfig::paraAliado(self::ALIADO_ID);
+            $config = WhatsappConfig::paraAliado($aliadoId);
 
             if (! $config->credencialesCompletas()) {
-                Log::error('AlertaOperativa: credenciales de WhatsApp incompletas', ['aliado_id' => self::ALIADO_ID]);
+                Log::error('AlertaOperativa: credenciales de WhatsApp incompletas', ['aliado_id' => $aliadoId]);
 
                 return false;
             }
 
-            if ($this->ventanaAbierta($numero)) {
+            if ($this->ventanaAbierta($numero, $aliadoId, $config)) {
                 $envio = $this->whatsappApi->enviarTexto(
                     $numero,
                     '🔔 *'.$this->sanear($origen)."*\n".Str::limit(trim($mensaje), self::MAX_TEXTO, '…'),
@@ -87,13 +102,13 @@ class AlertaOperativaService
                 ]);
             }
 
-            $plantilla = WhatsappPlantilla::delAliado(self::ALIADO_ID)
-                ->aprobadas()
-                ->where('nombre', self::NOMBRE_PLANTILLA)
-                ->first();
+            $plantilla = $this->plantilla($aliadoId, $config);
 
             if (! $plantilla) {
-                Log::error('AlertaOperativa: plantilla no encontrada', ['plantilla' => self::NOMBRE_PLANTILLA]);
+                Log::error('AlertaOperativa: plantilla no encontrada', [
+                    'plantilla' => self::NOMBRE_PLANTILLA,
+                    'aliado_id' => $aliadoId,
+                ]);
 
                 return false;
             }
@@ -108,6 +123,7 @@ class AlertaOperativaService
             if (! ($envio['ok'] ?? false)) {
                 Log::error('AlertaOperativa: falló el envío', [
                     'origen' => $origen,
+                    'aliado_id' => $aliadoId,
                     'error' => $envio['error'] ?? null,
                 ]);
 
@@ -120,6 +136,26 @@ class AlertaOperativaService
 
             return false;
         }
+    }
+
+    /** ¿La cuenta con la que envía este aliado tiene aprobada la plantilla de avisos? */
+    public function plantillaDisponible(int $aliadoId): bool
+    {
+        return $this->plantilla($aliadoId, WhatsappConfig::paraAliado($aliadoId)) !== null;
+    }
+
+    /**
+     * La plantilla de avisos en la cuenta de este aliado. Las de la cuenta compartida
+     * están registradas a nombre del aliado BryNex, igual que en el chat.
+     */
+    private function plantilla(int $aliadoId, WhatsappConfig $config): ?WhatsappPlantilla
+    {
+        $duenoCuenta = $config->usa_cuenta_brynex ? WhatsappBandejaCompartida::aliadoBandeja() : $aliadoId;
+
+        return WhatsappPlantilla::delAliado($duenoCuenta)
+            ->aprobadas()
+            ->where('nombre', self::NOMBRE_PLANTILLA)
+            ->first();
     }
 
     /**
@@ -143,26 +179,32 @@ class AlertaOperativaService
     }
 
     /**
-     * Si el destinatario le escribió a la línea de Brygar en las últimas 24h.
+     * Si el destinatario le escribió a la línea de este aliado en las últimas 24h.
      *
-     * Se mira en dos sitios. La conversación guarda el número con el 57 adelante,
-     * igual que llega de Meta. Y los mensajes que se desvían a GARVIS no llegan a
-     * la conversación: por cada uno, GARVIS deja la clave `whatsapp_ventana:<número>`
-     * en caché con 24 horas de vida.
+     * En la línea de Brygar se mira en dos sitios. La conversación guarda el número con
+     * el 57 adelante, igual que llega de Meta. Y los mensajes que se desvían a GARVIS no
+     * llegan a la conversación: por cada uno, GARVIS deja la clave
+     * `whatsapp_ventana:<número>` en caché con 24 horas de vida.
+     *
+     * La ventana es del par número-línea, no del aliado: en la cuenta compartida sirve la
+     * conversación que ese número tenga con cualquiera de los aliados que la usan.
      */
-    private function ventanaAbierta(string $numero): bool
+    private function ventanaAbierta(string $numero, int $aliadoId, WhatsappConfig $config): bool
     {
         $numero = WhatsappApiService::normalizarNumero($numero);
 
-        if (Cache::has('whatsapp_ventana:'.$numero)) {
+        if ($aliadoId === self::ALIADO_ID && Cache::has('whatsapp_ventana:'.$numero)) {
             return true;
         }
 
-        $conversacion = WhatsappConversacion::where('aliado_id', self::ALIADO_ID)
-            ->where('wa_contact_id', $numero)
-            ->first();
+        $aliadosDeLaLinea = $config->usa_cuenta_brynex
+            ? WhatsappConfig::where('usa_cuenta_brynex', true)->pluck('aliado_id')->all()
+            : [$aliadoId];
 
-        return $conversacion !== null && $conversacion->ventanaActiva();
+        return WhatsappConversacion::whereIn('aliado_id', $aliadosDeLaLinea)
+            ->where('wa_contact_id', $numero)
+            ->where('ventana_activa_hasta', '>', now())
+            ->exists();
     }
 
     /**

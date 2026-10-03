@@ -91,6 +91,12 @@ resources/views/admin/whatsapp/
   aliados con WhatsApp y avisa a `services.whatsapp.pendientes_por_aliado` o, si no,
   al `whatsapp`/`celular` de la ficha del aliado. Solo repite en el día si hay alguien
   nuevo o a punto de vencerse la ventana.
+- El aviso sale por la cuenta con la que el aliado hace sus envíos
+  (`AlertaOperativaService::enviarDesdeAliado`): la suya o la compartida de BryNex,
+  nunca la de Brygar. Necesita la plantilla `notificar_brynex` aprobada en esa cuenta
+  (`php artisan whatsapp:plantilla-aviso`; con `--estado` solo consulta). Los números
+  del propio aliado (`numerosDelAliado`: ficha, línea y destinatarios del aviso) no
+  cuentan como esperando, no reciben acuse y en el número compartido caen a su aliado.
 - `ultimosMensajes()` trae el último mensaje por conversación en UNA consulta y con
   `contenido` recortado a 300 caracteres: `nvarchar(max)` se baja fila por fila.
   El `with(['mensajes' => limit(1)])` NO sirve en Laravel 10 (el límite es global).

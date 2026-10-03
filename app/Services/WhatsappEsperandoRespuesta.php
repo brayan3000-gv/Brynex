@@ -152,7 +152,14 @@ class WhatsappEsperandoRespuesta
             }
 
             // El dueño le escribe a su propia línea (alertas, «Mantener activo»): no espera a nadie.
-            if ($numeroDueno !== '' && preg_replace('/\D/', '', (string) $c->wa_contact_id) === $numeroDueno) {
+            $tel = preg_replace('/\D/', '', (string) $c->wa_contact_id);
+            if ($numeroDueno !== '' && $tel === $numeroDueno) {
+                continue;
+            }
+
+            // Lo mismo la gente del propio aliado: quien recibe el aviso y toca «Mantener
+            // activo», o el saludo automático de su WhatsApp Business.
+            if (in_array(substr($tel, -10), self::numerosDelAliado((int) $c->aliado_id), true)) {
                 continue;
             }
 
@@ -178,7 +185,6 @@ class WhatsappEsperandoRespuesta
     public function paraAviso(int $aliadoId, int $horas = 2, int $dias = 14): Collection
     {
         $numeroDueno = preg_replace('/\D/', '', (string) config('finanzas.whatsapp_personal_dueno'));
-        $propios = $this->numerosPropios($aliadoId);
 
         // Los que quedaron pendientes se miran con el doble de margen: son justo los casos
         // que alguien prometió atender. Un asesor con empresa propia llevaba 14 días así y,
@@ -192,18 +198,13 @@ class WhatsappEsperandoRespuesta
         $this->marcar($conversaciones);
 
         return $conversaciones
-            ->filter(function (WhatsappConversacion $c) use ($numeroDueno, $horas, $propios) {
+            ->filter(function (WhatsappConversacion $c) use ($numeroDueno, $horas) {
                 if (! $c->esperando || ! $c->esperando_desde) {
                     return false;
                 }
 
                 $tel = preg_replace('/\D/', '', (string) $c->wa_contact_id);
                 if ($tel === $numeroDueno || TelefonosDeudores::esDeudor($c->wa_contact_id)) {
-                    return false;
-                }
-                // El propio número del aliado escribiéndole a la línea (su saludo automático
-                // de la app de WhatsApp Business, por ejemplo) no es un cliente esperando.
-                if (in_array(substr($tel, -10), $propios, true)) {
                     return false;
                 }
 
@@ -213,18 +214,59 @@ class WhatsappEsperandoRespuesta
             ->values();
     }
 
-    /** Últimos 10 dígitos de los números del propio aliado (ficha y configuración de WhatsApp). */
-    private function numerosPropios(int $aliadoId): array
+    /**
+     * A quién se le manda el aviso de conversaciones esperando de un aliado: lo que diga
+     * `services.whatsapp.pendientes_por_aliado`; si el aliado no está ahí, el WhatsApp (o
+     * celular) de su ficha; y siempre la copia de BryNex si está configurada.
+     *
+     * @return string[] números con solo dígitos
+     */
+    public static function destinatariosAviso(int $aliadoId): array
     {
-        $aliado = \App\Models\Aliado::find($aliadoId);
-        $config = \App\Models\WhatsappConfig::where('aliado_id', $aliadoId)->first();
+        $porAliado = config('services.whatsapp.pendientes_por_aliado', []);
+        $crudo = $porAliado[$aliadoId] ?? null;
 
-        return collect([$aliado?->whatsapp, $aliado?->celular, $aliado?->telefono, $config?->numero_telefono])
-            ->map(fn ($n) => substr(preg_replace('/\D/', '', (string) $n), -10))
-            ->filter(fn ($n) => strlen($n) === 10)
-            ->unique()
-            ->values()
-            ->all();
+        if ($crudo === null || trim((string) $crudo) === '') {
+            $aliado = \App\Models\Aliado::find($aliadoId);
+            $crudo = $aliado?->whatsapp ?: $aliado?->celular;
+        }
+
+        $crudos = array_merge(
+            explode(',', (string) $crudo),
+            explode(',', (string) config('services.whatsapp.pendientes_copia'))
+        );
+
+        $numeros = array_filter(array_map(fn ($n) => preg_replace('/\D/', '', $n), $crudos), fn ($n) => strlen($n) >= 10);
+
+        return array_values(array_unique($numeros));
+    }
+
+    /**
+     * Últimos 10 dígitos de los números del propio aliado: los de su ficha, el de su
+     * línea de WhatsApp y los de quienes reciben el aviso.
+     *
+     * Esa gente le escribe a la línea (el saludo automático de su WhatsApp Business, el
+     * botón «Mantener activo» del aviso) y no es un cliente: no cuenta como esperando,
+     * no recibe acuse, y en el número compartido su conversación va al inbox de su aliado.
+     *
+     * @return string[]
+     */
+    public static function numerosDelAliado(int $aliadoId): array
+    {
+        static $cache = [];
+
+        return $cache[$aliadoId] ??= (function () use ($aliadoId) {
+            $aliado = \App\Models\Aliado::find($aliadoId);
+            $config = \App\Models\WhatsappConfig::where('aliado_id', $aliadoId)->first();
+
+            return collect([$aliado?->whatsapp, $aliado?->celular, $aliado?->telefono, $config?->numero_telefono])
+                ->merge(self::destinatariosAviso($aliadoId))
+                ->map(fn ($n) => substr(preg_replace('/\D/', '', (string) $n), -10))
+                ->filter(fn ($n) => strlen($n) === 10)
+                ->unique()
+                ->values()
+                ->all();
+        })();
     }
 
     private function ultimoEntranteAt(WhatsappConversacion $c, WhatsappMensaje $ultimo): ?\Carbon\Carbon

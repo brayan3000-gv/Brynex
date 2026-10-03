@@ -38,6 +38,16 @@ class WhatsappBandejaCompartida
             return ['aliado_id' => null, 'motivo' => 'Escribió al número compartido de BryNex y no se pudo identificar de qué aliado es.'];
         }
 
+        // La gente del propio aliado (quien recibe el aviso de pendientes y toca «Mantener
+        // activo») va al inbox de su aliado: ahí queda abierta la ventana de 24 h con la que
+        // el siguiente aviso sale como texto libre. Si el número es de varios, sigue de largo.
+        $porNumeroPropio = collect($aliadoIds)
+            ->filter(fn ($id) => in_array($tel10, WhatsappEsperandoRespuesta::numerosDelAliado((int) $id), true))
+            ->values();
+        if ($porNumeroPropio->count() === 1) {
+            return ['aliado_id' => (int) $porNumeroPropio->first(), 'motivo' => 'Es un número del propio aliado.'];
+        }
+
         $clientes = Cliente::whereIn('aliado_id', $aliadoIds)
             ->where('celular', 'like', '%'.$tel10)
             ->distinct()

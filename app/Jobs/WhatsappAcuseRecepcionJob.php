@@ -9,6 +9,7 @@ use App\Models\WhatsappConversacion;
 use App\Models\WhatsappMensaje;
 use App\Services\Finanzas\TelefonosDeudores;
 use App\Services\WhatsappApiService;
+use App\Services\WhatsappEsperandoRespuesta;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -79,6 +80,11 @@ class WhatsappAcuseRecepcionJob implements ShouldQueue
 
         $tel = preg_replace('/\D/', '', $waFrom);
         $dueno = preg_replace('/\D/', '', (string) config('finanzas.whatsapp_personal_dueno'));
+
+        // Tampoco a la gente del propio aliado (quien recibe el aviso y toca «Mantener activo»).
+        if (in_array(substr($tel, -10), WhatsappEsperandoRespuesta::numerosDelAliado($aliadoId), true)) {
+            return false;
+        }
 
         return $tel !== $dueno && ! TelefonosDeudores::esDeudor($waFrom);
     }
