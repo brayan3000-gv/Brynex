@@ -63,6 +63,7 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            'tap' => [App\Logging\OcultarSecretos::class],
         ],
 
         'daily' => [
@@ -71,6 +72,8 @@ return [
             'level' => env('LOG_LEVEL', 'debug'),
             'days' => 14,
             'replace_placeholders' => true,
+            // Tacha los tokens de Meta que vienen en las URLs de las excepciones
+            'tap' => [App\Logging\OcultarSecretos::class],
         ],
 
         'slack' => [
