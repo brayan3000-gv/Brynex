@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Models\Aliado;
 use App\Models\User;
 use App\Services\CompresorLogoService;
+use App\Services\RazonSocialCompartida;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AlidoController extends Controller
 {
@@ -226,5 +228,113 @@ class AlidoController extends Controller
         $aliado->restore();
         return redirect()->route('admin.aliados.index')
             ->with('success', "Aliado '{$aliado->nombre}' restaurado.");
+    }
+
+    // ─── Razones sociales prestadas ──────────────────────────────
+
+    /**
+     * Las razones sociales que el aliado tiene prestadas y las que se le
+     * pueden prestar. Es la misma operación de «Habilitar en aliado» de la
+     * ficha de la razón social, vista desde el aliado (ver RazonSocialCompartida).
+     */
+    public function razonesPrestadas(Aliado $aliado)
+    {
+        abort_unless(RazonSocialCompartida::puedeHabilitar(auth()->user()), 403);
+
+        $vigentes = DB::table('contratos')->where('estado', 'vigente')
+            ->groupBy('razon_social_id')->selectRaw('razon_social_id, COUNT(*) AS n')
+            ->pluck('n', 'razon_social_id');
+
+        $prestadas = DB::table('razones_sociales as c')
+            ->join('razones_sociales as o', 'o.id', '=', 'c.origen_id')
+            ->join('aliados as d', 'd.id', '=', 'o.aliado_id')
+            ->where('c.aliado_id', $aliado->id)
+            ->orderBy('c.razon_social')
+            ->get(['c.id', 'c.razon_social', 'c.nit', 'c.estado', 'c.codigo_sucursal', 'c.ve_claves', 'd.nombre as dueno'])
+            ->map(fn ($r) => [
+                'id' => (int) $r->id,
+                'razon_social' => $r->razon_social,
+                'nit' => $r->nit,
+                'estado' => $r->estado,
+                'sucursal' => $r->codigo_sucursal,
+                've_claves' => (bool) $r->ve_claves,
+                'dueno' => $r->dueno,
+                'vigentes' => (int) ($vigentes[$r->id] ?? 0),
+            ]);
+
+        // NIT de lo que el aliado ya tiene: si ya está la empresa sin ligar,
+        // prestarla la liga en vez de crear otra fila.
+        $nit = fn ($v) => preg_replace('/\D/', '', (string) $v);
+        $propias = DB::table('razones_sociales')->where('aliado_id', $aliado->id)
+            ->get(['nit', 'origen_id'])
+            ->mapWithKeys(fn ($r) => [$nit($r->nit) => $r->origen_id ? 'copia' : 'sin_vincular']);
+
+        // El aliado 1 (BryNex) es de pruebas: sus empresas no se prestan.
+        $candidatas = DB::table('razones_sociales as o')
+            ->join('aliados as d', 'd.id', '=', 'o.aliado_id')
+            ->whereNull('o.origen_id')
+            ->where('o.estado', 'Activa')
+            ->where('o.aliado_id', '<>', $aliado->id)
+            ->when((int) $aliado->id !== 1, fn ($q) => $q->where('o.aliado_id', '<>', 1))
+            ->orderBy('o.razon_social')
+            ->get(['o.id', 'o.razon_social', 'o.nit', 'o.aliado_id', 'd.nombre as dueno'])
+            ->filter(fn ($r) => strlen($nit($r->nit)) >= 6 && ($propias[$nit($r->nit)] ?? null) !== 'copia')
+            ->map(fn ($r) => [
+                'id' => (int) $r->id,
+                'razon_social' => $r->razon_social,
+                'nit' => $r->nit,
+                'dueno_id' => (int) $r->aliado_id,
+                'dueno' => $r->dueno,
+                'vigentes' => (int) ($vigentes[$r->id] ?? 0),
+                'ya_la_tiene' => isset($propias[$nit($r->nit)]),
+            ])
+            ->values();
+
+        return response()->json(['prestadas' => $prestadas, 'candidatas' => $candidatas]);
+    }
+
+    /** Presta al aliado las razones sociales elegidas (crea su copia o liga la que ya tenía). */
+    public function prestarRazones(Request $request, Aliado $aliado)
+    {
+        abort_unless(RazonSocialCompartida::puedeHabilitar(auth()->user()), 403);
+
+        $data = $request->validate([
+            'razones' => 'required|array|min:1',
+            'razones.*' => 'integer',
+            've_claves' => 'boolean',
+        ]);
+
+        $quien = auth()->user()->nombre;
+        $hechos = [];
+
+        foreach (array_unique(array_map('intval', $data['razones'])) as $id) {
+            $rs = DB::table('razones_sociales')->where('id', $id)->whereNull('origen_id')->first();
+            abort_if(! $rs, 404, 'Una de las razones sociales ya no existe o es una copia.');
+
+            $r = RazonSocialCompartida::habilitar($rs, $aliado->id,
+                "Habilitada desde la ficha del aliado por {$quien} el ".now()->format('d/m/Y').'.');
+            RazonSocialCompartida::permitirClaves($rs, $aliado->id, $request->boolean('ve_claves'));
+            $hechos[] = $rs->razon_social.($r['accion'] === 'creada' ? '' : ' (ya la tenía: vinculada)');
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Prestadas: '.implode(', ', $hechos).'. Falta crearle la sucursal en el operador a cada una.',
+        ]);
+    }
+
+    /** Cambia si el aliado ve las claves de portales de una razón social prestada. */
+    public function clavesRazonPrestada(Request $request, Aliado $aliado, int $rs)
+    {
+        abort_unless(RazonSocialCompartida::puedeHabilitar(auth()->user()), 403);
+
+        $copia = DB::table('razones_sociales')->where('id', $rs)
+            ->where('aliado_id', $aliado->id)->whereNotNull('origen_id')->first();
+        abort_if(! $copia, 404);
+
+        $ve = $request->boolean('ve_claves');
+        RazonSocialCompartida::permitirClaves($copia, $aliado->id, $ve);
+
+        return response()->json(['success' => true, 've_claves' => $ve]);
     }
 }

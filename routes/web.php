@@ -203,6 +203,13 @@ Route::middleware('auth')->group(function () {
                 ->except(['show', 'index']);
             Route::patch('aliados/{id}/restore', [\App\Http\Controllers\Admin\AlidoController::class, 'restore'])
                 ->name('aliados.restore');
+            // Razones sociales prestadas al aliado (solo superadmin BryNex, ver RazonSocialCompartida)
+            Route::get('aliados/{aliado}/razones-prestadas', [\App\Http\Controllers\Admin\AlidoController::class, 'razonesPrestadas'])
+                ->name('aliados.razones-prestadas');
+            Route::post('aliados/{aliado}/razones-prestadas', [\App\Http\Controllers\Admin\AlidoController::class, 'prestarRazones'])
+                ->name('aliados.razones-prestadas.prestar');
+            Route::patch('aliados/{aliado}/razones-prestadas/{rs}/claves', [\App\Http\Controllers\Admin\AlidoController::class, 'clavesRazonPrestada'])
+                ->whereNumber('rs')->name('aliados.razones-prestadas.claves');
         });
 
         // Usuarios — ver: admin | crear/editar y permisos: solo superadmin

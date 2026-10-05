@@ -335,6 +335,108 @@
     </form>
 
 </div>
+
+{{-- ── Razones sociales prestadas: lo mismo que «Habilitar en aliado» de la ficha de la razón social, visto desde el aliado ── --}}
+@if(isset($aliado->id) && \App\Services\RazonSocialCompartida::puedeHabilitar(auth()->user()))
+<div x-data="razonesPrestadas()" x-init="cargar()"
+     style="background:#fff;border-radius:14px;padding:1.5rem 2rem;box-shadow:0 1px 8px rgba(0,0,0,0.06);margin-top:1.25rem;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:0.9rem;">
+        <div>
+            <div style="font-size:0.95rem;font-weight:800;color:#0f172a;">🤝 Razones sociales prestadas</div>
+            <div style="font-size:0.72rem;color:#64748b;margin-top:0.2rem;max-width:480px;">
+                Empresas de otro aliado que {{ $aliado->nombre }} usa para afiliar. Los datos de la empresa se cambian en la original y pasan solos; la sucursal, la planilla y el estado son de este aliado.
+            </div>
+        </div>
+        <button type="button" x-show="!agregando" @click="agregando = true"
+            style="padding:0.5rem 1rem;background:#2563eb;border:none;border-radius:8px;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;">
+            ➕ Prestar razones sociales
+        </button>
+    </div>
+
+    <div x-show="cargando" style="font-size:0.8rem;color:#64748b;padding:0.5rem 0;">Cargando…</div>
+    <div x-show="error" x-text="error" x-cloak
+         style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;color:#991b1b;padding:0.6rem 0.9rem;font-size:0.8rem;margin-bottom:0.75rem;"></div>
+    <div x-show="mensaje" x-text="mensaje" x-cloak
+         style="background:#dcfce7;border:1px solid #86efac;border-radius:8px;color:#166534;padding:0.6rem 0.9rem;font-size:0.8rem;margin-bottom:0.75rem;"></div>
+
+    {{-- Las que ya tiene --}}
+    <template x-if="!cargando && !prestadas.length">
+        <div style="font-size:0.8rem;color:#94a3b8;padding:0.75rem;border:1px dashed #cbd5e1;border-radius:8px;text-align:center;">
+            Todavía no tiene ninguna razón social prestada.
+        </div>
+    </template>
+    <div style="display:flex;flex-direction:column;gap:0.4rem;">
+        <template x-for="r in prestadas" :key="r.id">
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;padding:0.55rem 0.75rem;border:1px solid #e2e8f0;border-radius:8px;"
+                 :style="{ opacity: r.estado !== 'Activa' ? .55 : 1 }">
+                <div style="flex:1;min-width:200px;">
+                    <div style="font-size:0.83rem;font-weight:700;color:#1e293b;" x-text="r.razon_social"></div>
+                    <div style="font-size:0.7rem;color:#64748b;">
+                        NIT <span x-text="r.nit"></span> · de <span x-text="r.dueno"></span>
+                        · <span x-text="r.vigentes + (r.vigentes === 1 ? ' afiliado vigente' : ' afiliados vigentes')"></span>
+                        <span x-show="r.estado !== 'Activa'" x-text="' · ' + r.estado"></span>
+                    </div>
+                </div>
+                <span x-show="r.sucursal" x-text="'Sucursal ' + r.sucursal"
+                      style="font-size:0.7rem;font-weight:600;color:#1e40af;background:#dbeafe;border-radius:999px;padding:0.15rem 0.55rem;"></span>
+                <span x-show="!r.sucursal" title="Falta crearle la sucursal en el operador"
+                      style="font-size:0.7rem;font-weight:600;color:#92400e;background:#fef3c7;border-radius:999px;padding:0.15rem 0.55rem;">⚠️ Sin sucursal</span>
+                <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:#475569;cursor:pointer;"
+                       :title="r.ve_claves ? 'Ve las claves de portales' : 'No ve las claves: se las maneja BryNex'">
+                    <input type="checkbox" :checked="r.ve_claves" @change="cambiarClaves(r, $event.target.checked)"> Ve claves
+                </label>
+            </div>
+        </template>
+    </div>
+
+    {{-- Elegir cuáles prestarle --}}
+    <div x-show="agregando" x-cloak style="margin-top:1rem;padding:1rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+        <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+            <select x-model.number="dueno"
+                style="padding:0.45rem 0.6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;background:#fff;">
+                <template x-for="d in duenos" :key="d.id">
+                    <option :value="d.id" x-text="'Empresas de ' + d.nombre + ' (' + d.n + ')'" :selected="d.id === dueno"></option>
+                </template>
+            </select>
+            <input type="search" x-model="buscar" placeholder="Buscar por nombre o NIT…"
+                style="flex:1;min-width:180px;padding:0.45rem 0.7rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;">
+        </div>
+
+        <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:0.3rem;">
+            <template x-for="c in visibles" :key="c.id">
+                <label style="display:flex;align-items:center;gap:0.6rem;padding:0.45rem 0.6rem;background:#fff;border:1px solid #e2e8f0;border-radius:7px;cursor:pointer;"
+                       :style="elegidas.includes(c.id) ? { borderColor: '#2563eb', background: '#eff6ff' } : {}">
+                    <input type="checkbox" :value="c.id" x-model.number="elegidas" style="width:16px;height:16px;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:0.8rem;font-weight:600;color:#1e293b;" x-text="c.razon_social"></div>
+                        <div style="font-size:0.68rem;color:#64748b;">
+                            NIT <span x-text="c.nit"></span> · <span x-text="c.vigentes + (c.vigentes === 1 ? ' afiliado vigente' : ' afiliados vigentes')"></span>
+                        </div>
+                    </div>
+                    <span x-show="c.ya_la_tiene" title="Este aliado ya tiene una razón social con ese NIT: se liga a la original en vez de crear otra"
+                          style="font-size:0.66rem;font-weight:600;color:#6b21a8;background:#f3e8ff;border-radius:999px;padding:0.1rem 0.5rem;white-space:nowrap;">Ya la tiene: se liga</span>
+                </label>
+            </template>
+            <div x-show="!visibles.length" style="font-size:0.78rem;color:#94a3b8;text-align:center;padding:0.75rem;">No hay más empresas para prestar.</div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;flex-wrap:wrap;margin-top:0.85rem;">
+            <label style="display:flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:#475569;cursor:pointer;">
+                <input type="checkbox" x-model="veClaves"> Que vea las claves de portales
+            </label>
+            <div style="display:flex;gap:0.5rem;">
+                <button type="button" @click="agregando = false; elegidas = []"
+                    style="padding:0.5rem 1rem;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#475569;font-size:0.8rem;cursor:pointer;">Cancelar</button>
+                <button type="button" @click="prestar()" :disabled="!elegidas.length || guardando"
+                    :style="(!elegidas.length || guardando) ? { opacity: .5, cursor: 'not-allowed' } : {}"
+                    style="padding:0.5rem 1.1rem;background:#16a34a;border:none;border-radius:8px;color:#fff;font-size:0.8rem;font-weight:700;cursor:pointer;"
+                    x-text="guardando ? 'Prestando…' : 'Prestar (' + elegidas.length + ')'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 </div>
 @endsection
 
@@ -345,5 +447,93 @@ function toggleEncargado(checked) {
     div.style.opacity = checked ? '1' : '0.4';
     div.style.pointerEvents = checked ? 'auto' : 'none';
 }
+
+@if(isset($aliado->id))
+function razonesPrestadas() {
+    const url = @json(route('admin.aliados.razones-prestadas', $aliado));
+    const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+    };
+    const BRYGAR = 2; // hoy todas las empresas prestadas salen de Brygar
+
+    return {
+        cargando: true, guardando: false, agregando: false,
+        error: '', mensaje: '',
+        prestadas: [], candidatas: [],
+        dueno: null, buscar: '', elegidas: [], veClaves: false,
+
+        get duenos() {
+            const m = new Map();
+            this.candidatas.forEach(c => {
+                const d = m.get(c.dueno_id) || { id: c.dueno_id, nombre: c.dueno, n: 0 };
+                d.n++; m.set(c.dueno_id, d);
+            });
+            return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+        },
+        get visibles() {
+            const q = this.buscar.trim().toLowerCase();
+            return this.candidatas.filter(c => c.dueno_id === this.dueno
+                && (!q || (c.razon_social || '').toLowerCase().includes(q) || (c.nit || '').includes(q)));
+        },
+
+        async cargar() {
+            this.cargando = true;
+            try {
+                const r = await fetch(url, { headers });
+                if (!r.ok) throw new Error('No se pudieron cargar las razones sociales (' + r.status + ').');
+                const d = await r.json();
+                this.prestadas = d.prestadas;
+                this.candidatas = d.candidatas;
+                if (!this.duenos.some(x => x.id === this.dueno)) {
+                    this.dueno = this.duenos.some(x => x.id === BRYGAR) ? BRYGAR : (this.duenos[0]?.id ?? null);
+                }
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.cargando = false;
+            }
+        },
+
+        async prestar() {
+            const nombres = this.candidatas.filter(c => this.elegidas.includes(c.id)).map(c => '• ' + c.razon_social).join('\n');
+            if (!confirm('¿Prestar estas razones sociales a ' + @json($aliado->nombre) + '?\n\n' + nombres)) return;
+
+            this.guardando = true; this.error = ''; this.mensaje = '';
+            try {
+                const r = await fetch(url, {
+                    method: 'POST', headers,
+                    body: JSON.stringify({ razones: this.elegidas, ve_claves: this.veClaves }),
+                });
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(d.message || 'No se pudo prestar (' + r.status + ').');
+                this.mensaje = d.message;
+                this.elegidas = []; this.agregando = false;
+                await this.cargar();
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.guardando = false;
+            }
+        },
+
+        async cambiarClaves(fila, ve) {
+            this.error = '';
+            try {
+                const r = await fetch(url + '/' + fila.id + '/claves', {
+                    method: 'PATCH', headers, body: JSON.stringify({ ve_claves: ve }),
+                });
+                if (!r.ok) throw new Error('No se pudo cambiar el permiso de claves (' + r.status + ').');
+                fila.ve_claves = ve;
+            } catch (e) {
+                this.error = e.message;
+                fila.ve_claves = !ve;
+                await this.cargar();
+            }
+        },
+    };
+}
+@endif
 </script>
 @endpush
