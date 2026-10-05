@@ -88,6 +88,9 @@
         .hero .fondo { position: absolute; inset: 0; z-index: 0; }
         .hero .fondo img { width: 100%; height: 100%; object-fit: cover; object-position: 65% 40%; transform: scale(1.08); animation: respirar 14s ease-in-out infinite alternate; }
         @keyframes respirar { to { transform: scale(1) translateX(-1%); } }
+        .hero .fondo video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 65% 40%; opacity: 0; transition: opacity .7s ease; }
+        .hero .fondo.con-video img { animation: none; transform: none; }
+        .hero .fondo.con-video video.visible { opacity: 1; }
         .hero .fondo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(7,17,31,.35) 0%, rgba(7,17,31,.15) 35%, rgba(7,17,31,.92) 75%, var(--noche) 100%); }
         .hero .wrap { position: relative; z-index: 1; }
         .hero h1 { max-width: 14ch; margin-bottom: 20px; text-shadow: 0 2px 30px rgba(0,0,0,.4); }
@@ -190,7 +193,8 @@
             .marca small { display: block; margin-left: 0; }
             .res { gap: 20px; }
             .hero { padding-top: 96px; }
-            .hero .fondo img { object-position: 60% 30%; }
+            /* En vertical se encuadra a la persona, no al monitor */
+            .hero .fondo img, .hero .fondo video { object-position: 10% 30%; }
             .btn-nav span { display: none; }
             .btn-nav { padding: 10px 14px; }
         }
@@ -210,6 +214,10 @@
 <section class="hero">
     <div class="fondo">
         <img src="/img/aliados/carga.jpg" alt="" onerror="this.style.display='none'">
+        {{-- El video arranca desde esta misma ilustración: si no puede reproducirse, queda la imagen. --}}
+        <video muted playsinline preload="auto" aria-hidden="true">
+            <source src="/img/aliados/carga.mp4" type="video/mp4">
+        </video>
     </div>
     <div class="wrap">
         <div class="hora reveal"><i></i> 7:40 PM · MARTES</div>
@@ -455,6 +463,26 @@
         });
     }, { threshold: 0.15, rootMargin: '0px 0px -8% 0px' });
     document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+    // Video del inicio: se disuelve sobre la ilustración (su primer cuadro es la misma imagen)
+    // y al terminar vuelve a ella antes de repetir, para que el corte no se note.
+    var video = document.querySelector('.hero video');
+    if (video && !reducido) {
+        var fondo = video.parentNode;
+        // La imagen se queda quieta desde el principio para que el video calce encima sin salto.
+        fondo.classList.add('con-video');
+        video.addEventListener('playing', function () { video.classList.add('visible'); });
+        video.addEventListener('timeupdate', function () {
+            if (video.duration && video.currentTime > video.duration - 0.8) video.classList.remove('visible');
+        });
+        video.addEventListener('ended', function () {
+            video.currentTime = 0;
+            setTimeout(function () { video.play().catch(function () {}); }, 900);
+        });
+        video.play().catch(function () { fondo.classList.remove('con-video'); });
+    } else if (video) {
+        video.remove();
+    }
+
     // El hero no espera al observador: aparece apenas carga la página.
     document.querySelectorAll('.hero .reveal').forEach(function (el) { el.classList.add('in'); });
 
