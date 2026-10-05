@@ -108,6 +108,15 @@ Route::post('/aliado/{slug}/metrica', [\App\Http\Controllers\Publico\PaginaAliad
 
 Route::get('/sitemap.xml', [\App\Http\Controllers\Publico\PaginaAliadoController::class, 'sitemap'])->name('publico.sitemap');
 
+// Planes de alianza de Brygar con cotizador (brynex.co/aliados). Los precios son los del
+// volante «Propuesta de Alianza Estratégica»; si cambian allá, cambian en la vista.
+Route::get('/aliados', function () {
+    return view('publico.aliados-planes', [
+        'urlWhatsappBase' => 'https://wa.me/573001563615',
+        'urlWhatsapp' => 'https://wa.me/573001563615?text='.rawurlencode('Hola, quiero saber más de las alianzas de Brygar.'),
+    ]);
+})->name('publico.aliados.planes');
+
 // Presentación pública del servicio de afiliaciones para aliados (brynex.co/aliados/afiliaciones).
 // La vende Brygar: el WhatsApp es su línea comercial (la del volante de alianzas);
 // las imágenes salen de scripts/imagenes-aliados.sh.

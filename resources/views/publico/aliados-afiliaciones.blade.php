@@ -427,6 +427,7 @@
             </div>
         </div>
         <p style="margin-top:18px;font-size:14px;color:var(--hueso-suave)">Valores antes de IVA. Empiece con un piloto de un mes, con una razón social, sin permanencia.</p>
+        <p style="margin-top:22px"><a class="btn" style="box-shadow:inset 0 0 0 2px rgba(255,255,255,.3)" href="{{ route('publico.aliados.planes') }}#cotizador">Ver los tres planes y cotizar mi alianza</a></p>
     </div>
 </section>
 
