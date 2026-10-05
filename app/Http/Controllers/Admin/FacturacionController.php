@@ -4116,6 +4116,11 @@ class FacturacionController extends Controller
             })
             ->map(fn ($op) => (int) $op->id)->values()->all();
         $miPlanillaId = (int) \DB::table('operadores_planilla')->where('codigo', 'MIPLANI')->value('id');
+        // El comprobante de pago PSE solo se baja de Enlace, con las credenciales del aliado.
+        $operadoresConComprobante = $aliadoConSoporteOperador
+            ? \DB::table('operadores_planilla')->whereIn('codigo', array_keys(\App\Services\SuaporteApiService::HOSTS))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all()
+            : [];
 
         $feEstados = $this->estadosFacturaElectronica($facturas, $aliadoId);
 
@@ -4125,7 +4130,7 @@ class FacturacionController extends Controller
             'aniosDisp', 'rsSocDisp', 'meses', 'contratosporRS',
             'soportesPlanilla', 'operadoresPlanillaInfo', 'gastosPlanilla',
             'operadoresTodosMap', 'feEstados',
-            'verificacionPlanillas', 'pagosOperador', 'aliadoConSoporteOperador', 'operadoresConPlanilla', 'miPlanillaId', 'tieneClaveMiPlanilla'
+            'verificacionPlanillas', 'pagosOperador', 'aliadoConSoporteOperador', 'operadoresConPlanilla', 'miPlanillaId', 'tieneClaveMiPlanilla', 'operadoresConComprobante'
         ));
     }
 

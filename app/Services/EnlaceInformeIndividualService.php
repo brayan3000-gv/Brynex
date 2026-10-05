@@ -51,6 +51,9 @@ class EnlaceInformeIndividualService
 {
     private const PAGINA = '/Web/faces/pages/comprobantes/individuales/individuales.xhtml';
 
+    /** Consultas postpago → Comprobante pago de planilla (el del PSE). */
+    private const PAGINA_COMPROBANTE = '/Web/faces/pages/comprobantes/despuesdepago/comprobantePagoPlanilla/comprobantePagoPlanilla.xhtml';
+
     /** Cuántas veces se pregunta si el reporte ya está, con un segundo entre cada una. */
     private const ESPERAS_MAXIMAS = 25;
 
@@ -575,13 +578,15 @@ class EnlaceInformeIndividualService
         };
     }
 
-    private function descargar(Plano $plano, string $codigoOperador, OperadorCredencial $cred): string
+    /**
+     * La sesión con el operador para el aportante del plano: la que ya estaba
+     * abierta en esta instancia o una nueva (login + aportante + autorización).
+     *
+     * @return array{0: Client, 1: bool, 2: string} cliente, si se reusó, llave
+     */
+    private function sesion(Plano $plano, string $codigoOperador, OperadorCredencial $cred): array
     {
         $host = SuaporteApiService::hostDeOperador($codigoOperador);
-        $pagina = $host.self::PAGINA;
-        $numero = self::numeroParaOperador($plano->numero_planilla)
-            ?? throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
-
         [$tipoAportante, $numeroAportante] = $this->aportanteDe($plano);
         $llave = "{$codigoOperador}|{$cred->id}|{$tipoAportante}{$numeroAportante}";
 
@@ -619,7 +624,17 @@ class EnlaceInformeIndividualService
             $this->sesiones[$llave] = $http;
         }
 
-        $http = $this->sesiones[$llave];
+        return [$this->sesiones[$llave], $reusada, $llave];
+    }
+
+    private function descargar(Plano $plano, string $codigoOperador, OperadorCredencial $cred): string
+    {
+        $host = SuaporteApiService::hostDeOperador($codigoOperador);
+        $pagina = $host.self::PAGINA;
+        $numero = self::numeroParaOperador($plano->numero_planilla)
+            ?? throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
+
+        [$http, $reusada, $llave] = $this->sesion($plano, $codigoOperador, $cred);
 
         // 2. La pantalla: de aquí salen el ViewState y los nombres que genera JSF.
         $html = (string) $http->get($pagina)->getBody();
@@ -765,6 +780,155 @@ class EnlaceInformeIndividualService
         }
 
         return $cuerpo;
+    }
+
+    /**
+     * Comprobante de pago de la planilla (PSE): banco, CUS, valor, estado y hora
+     * de la transacción, con el desglose por administradora. Es de la planilla
+     * entera, no de una persona, y sale de "Consultas postpago → Comprobante
+     * pago de planilla" del mismo portal JSF (mapeado 5-oct-2026 en Simple).
+     *
+     * A diferencia del informe individual, no hay cola: un POST normal del
+     * formulario con el número y el tipo «P» devuelve el PDF de una vez.
+     *
+     * @return array{pdf: string, origen: string}
+     *
+     * @throws RuntimeException con el motivo si el operador no lo entrega
+     */
+    public function comprobantePago(Plano $plano, ?int $operadorPlanillaId = null): array
+    {
+        $numero = self::numeroParaOperador($plano->numero_planilla)
+            ?? throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
+
+        $ruta = self::rutaComprobanteEnDisco($plano);
+        if (Storage::disk('local')->exists($ruta)) {
+            $this->paso('Ya estaba descargado: abriéndolo');
+
+            return ['pdf' => Storage::disk('local')->get($ruta), 'origen' => 'disco'];
+        }
+
+        $operadores = DB::table('operadores_planilla')
+            ->whereIn('codigo', array_keys(SuaporteApiService::HOSTS))
+            ->when($operadorPlanillaId, fn ($q) => $q->where('id', $operadorPlanillaId))
+            ->get(['id', 'codigo', 'nombre']);
+
+        if ($operadores->isEmpty()) {
+            throw new RuntimeException('el comprobante de pago solo se baja de los operadores de Enlace (Simple, ARUS).');
+        }
+
+        $mensajes = [];
+        foreach ($operadores as $operador) {
+            $cred = OperadorCredencial::paraOperador(
+                (int) $plano->aliado_id, (int) $operador->id, $plano->razon_social_id ? (int) $plano->razon_social_id : null
+            )->first();
+
+            if (! $cred) {
+                $mensajes[] = "{$operador->nombre}: sin credenciales.";
+                continue;
+            }
+
+            try {
+                $this->paso("Ingresando a {$operador->nombre}");
+                $pdf = $this->descargarComprobante($plano, $numero, $operador->codigo, $cred);
+                Storage::disk('local')->put($ruta, $pdf);
+
+                return ['pdf' => $pdf, 'origen' => 'operador'];
+            } catch (Throwable $e) {
+                $mensajes[] = "{$operador->nombre}: {$e->getMessage()}";
+            }
+        }
+
+        throw new RuntimeException(implode(' ', $mensajes));
+    }
+
+    /** Uno por planilla: el comprobante es del pago, no de cada cotizante. */
+    public static function rutaComprobanteEnDisco(object $plano): string
+    {
+        $limpiar = fn ($v) => preg_replace('/[^A-Za-z0-9]/', '', (string) $v);
+
+        return sprintf(
+            'planillas-operador/%d/%s/comprobante-pago.pdf',
+            (int) $plano->aliado_id,
+            $limpiar($plano->numero_planilla)
+        );
+    }
+
+    private function descargarComprobante(Plano $plano, string $numero, string $codigoOperador, OperadorCredencial $cred): string
+    {
+        $pagina = SuaporteApiService::hostDeOperador($codigoOperador).self::PAGINA_COMPROBANTE;
+        [$http, $reusada, $llave] = $this->sesion($plano, $codigoOperador, $cred);
+
+        $xpath = $this->xpath((string) $http->get($pagina)->getBody());
+
+        if (! $xpath->query('//form[@id="form"]//input[@name="generar"]')->length) {
+            if ($reusada) {
+                unset($this->sesiones[$llave]);
+
+                return $this->descargarComprobante($plano, $numero, $codigoOperador, $cred);
+            }
+
+            throw new RuntimeException('el portal no abrió el comprobante de pago (sesión no reconocida).');
+        }
+
+        // Lo mismo que manda el navegador al pulsar «Continuar» con «Número
+        // planilla» y «Comprobante pago planilla» marcados (los dos vienen así
+        // por defecto): el formulario tal cual, más el número y el botón.
+        $this->paso('Buscando el comprobante');
+        $campos = $this->camposComoNavegador($xpath, 'form');
+        $campos['tx_ntu:numeroPlanilla'] = $numero;
+        $campos['tipoComprobante'] = 'P';
+        $campos['selectReporte'] = 'P';
+        foreach ($xpath->query('//form[@id="form"]//input[contains(concat(" ", @class, " "), " token_download ")]') as $token) {
+            $campos[$token->getAttribute('name')] = (string) round(microtime(true) * 1000);
+        }
+        $campos['generar'] = '';
+
+        $this->paso('Descargando el PDF');
+        $cuerpo = (string) $http->post($pagina, ['form_params' => $campos])->getBody();
+
+        if (! str_starts_with($cuerpo, '%PDF')) {
+            throw new RuntimeException('el portal no entregó el comprobante'.$this->mensajePortal($cuerpo));
+        }
+
+        return $cuerpo;
+    }
+
+    /**
+     * Los campos de un formulario como los envía un navegador: sin los
+     * deshabilitados ni los botones, radios y casillas solo si están marcados,
+     * y de cada lista la opción seleccionada (o la primera).
+     */
+    private function camposComoNavegador(DOMXPath $xpath, string $formId): array
+    {
+        $campos = [];
+        $elementos = $xpath->query("//form[@id='{$formId}']//*[self::input or self::select or self::textarea]");
+
+        foreach ($elementos as $el) {
+            $nombre = $el->getAttribute('name');
+            if ($nombre === '' || $el->hasAttribute('disabled')) {
+                continue;
+            }
+
+            if ($el->nodeName === 'select') {
+                $opcion = $xpath->query('.//option[@selected]', $el)->item(0) ?? $xpath->query('.//option', $el)->item(0);
+                $campos[$nombre] = $opcion ? ($opcion->hasAttribute('value') ? $opcion->getAttribute('value') : trim($opcion->textContent)) : '';
+                continue;
+            }
+
+            $tipo = strtolower($el->getAttribute('type') ?: 'text');
+            if (in_array($tipo, ['submit', 'button', 'image', 'reset', 'file'], true)) {
+                continue;
+            }
+            if (in_array($tipo, ['radio', 'checkbox'], true) && ! $el->hasAttribute('checked')) {
+                continue;
+            }
+
+            $campos[$nombre] = $el->nodeName === 'textarea'
+                ? $el->textContent
+                : ($el->hasAttribute('value') ? $el->getAttribute('value') : (in_array($tipo, ['radio', 'checkbox'], true) ? 'on' : ''));
+        }
+
+        return $campos;
     }
 
     /** Login, aportante y autorización. El mismo jar de cookies sirve después para el portal. */

@@ -1490,6 +1490,51 @@ class PlanoPagoController extends Controller
             ->header('Expires', 'Sat, 26 Jul 1997 05:00:00 GMT');
     }
 
+    /**
+     * Comprobante de pago PSE de la planilla, bajado del operador (Simple o
+     * ARUS). No hay copia de BryNex: o sale el del operador, o se dice por qué.
+     */
+    public function descargarComprobantePagoPdf(Request $request)
+    {
+        $aliadoId = session('aliado_id_activo');
+
+        $plano = Plano::where('aliado_id', $aliadoId)
+            ->where('no_identifi', (string) $request->input('cedula'))
+            ->where('numero_planilla', (string) $request->input('numero_planilla'))
+            ->whereNull('deleted_at')
+            ->first();
+
+        if (! $plano) {
+            return $this->errorSoporte('No se encontró la planilla con esos datos.', 404);
+        }
+
+        $operadorId = (int) $request->input('forzar_operador_id') ?: null;
+        $llave = self::llaveProgreso($request->input('progreso'));
+
+        try {
+            $comprobante = app(\App\Services\EnlaceInformeIndividualService::class)
+                ->conTope(20)
+                ->alAvanzar(fn ($paso) => $llave && \Illuminate\Support\Facades\Cache::put($llave, [...\Illuminate\Support\Facades\Cache::get($llave, []), $paso], 300))
+                ->comprobantePago($plano, $operadorId);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Comprobante de pago: no se pudo bajar del operador', [
+                'plano_id' => $plano->id,
+                'planilla' => $plano->numero_planilla,
+                'error'    => $e->getMessage(),
+            ]);
+
+            return $this->errorSoporte('No se pudo bajar el comprobante de pago del operador: '.$e->getMessage(), 502);
+        }
+
+        $nombre = 'Comprobante_Pago_'.preg_replace('/[^A-Za-z0-9]/', '', (string) $plano->numero_planilla).'.pdf';
+
+        return response($comprobante['pdf'])
+            ->header('X-Soporte-Origen', $comprobante['origen'])
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', "inline; filename=\"{$nombre}\"")
+            ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    }
+
     /** En qué paso va la descarga que pidió el historial (ver descargarCertificadoPdf). */
     public function progresoCertificadoPdf(Request $request)
     {

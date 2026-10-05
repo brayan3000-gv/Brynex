@@ -381,6 +381,15 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                             ⬇️ Planilla
                         </a>
                         @endif
+                        @if($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConComprobante, true))
+                        {{-- Comprobante del pago PSE (banco, CUS, valor, hora), del operador --}}
+                        <a href="{{ route('admin.planos.comprobante_pago_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}&forzar_operador_id={{ $operadorId }}"
+                           onclick="return abrirPlanilla(event, this.href, 'comprobante')"
+                           target="_blank" class="btn-act-sm" style="background:#fff;color:#0f172a;border-color:#94a3b8;"
+                           title="Comprobante de pago PSE del operador: banco, CUS, valor y hora del pago">
+                            🧾 Pago
+                        </a>
+                        @endif
                         @if($verif && in_array($verif->estado, ['no_encontrada', 'invalida']))
                         <span class="btn-act-sm" style="background:#fef2f2;color:#b91c1c;border-color:#f87171;cursor:help"
                               title="{{ $verif->estado === 'invalida' ? 'No es un número de planilla: corrígelo en la confirmación del pago.' : 'La planilla '.$numeroPlanillaOp.' no aparece en el operador: revisa el número. '.$verif->mensaje }}">⚠️ No cruza</span>
@@ -834,7 +843,8 @@ async function guardarClaveMiPlanilla(ev) {
 // se ve en el mismo recuadro, con botones para abrirlo o guardarlo.
 const PL_PROGRESO_URL = '{{ route('admin.planos.certificado_pdf.progreso') }}';
 let _plCorrida = 0, _plBlob = null;
-function abrirPlanilla(ev, url) {
+function abrirPlanilla(ev, url, que = 'planilla') {
+    const esComprobante = que === 'comprobante';
     // Ctrl/Cmd + clic o clic del medio: se deja abrir directo en otra pestaña.
     if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1)) return true;
     if (ev) ev.preventDefault();
@@ -854,7 +864,7 @@ function abrirPlanilla(ev, url) {
     document.getElementById('pl-visor').style.display = 'none';
     document.getElementById('pl-visor').src = 'about:blank';
     document.getElementById('pl-acciones').style.display = 'none';
-    document.getElementById('pl-titulo').textContent = '⏳ Descargando planilla…';
+    document.getElementById('pl-titulo').textContent = esComprobante ? '⏳ Descargando comprobante de pago…' : '⏳ Descargando planilla…';
     document.getElementById('modal-pl-ov').style.display = 'flex';
 
     const cerrarPaso = (estado) => {
@@ -911,8 +921,8 @@ function abrirPlanilla(ev, url) {
             _plBlob = URL.createObjectURL(blob);
             const mostrarPdf = () => {
                 document.getElementById('pl-aviso').style.display = 'none';
-                document.getElementById('pl-titulo').textContent = esCopia
-                    ? '📄 Copia armada por BryNex (no es la real)' : '📄 Planilla real del operador';
+                document.getElementById('pl-titulo').textContent = esComprobante ? '🧾 Comprobante de pago del operador'
+                    : (esCopia ? '📄 Copia armada por BryNex (no es la real)' : '📄 Planilla real del operador');
                 const visor = document.getElementById('pl-visor');
                 visor.src = _plBlob; visor.style.display = 'block';
                 const abrir = document.getElementById('pl-abrir'), bajar = document.getElementById('pl-bajar');
@@ -939,14 +949,14 @@ function abrirPlanilla(ev, url) {
             document.getElementById('pl-aviso-solucion').textContent = SOLUCION[tipoMotivo] || SOLUCION.otro;
             document.getElementById('pl-aviso-config').style.display = (tipoMotivo === 'credenciales' || tipoMotivo === 'sin_credenciales') ? 'inline-block' : 'none';
             document.getElementById('pl-ver-copia').onclick = mostrarPdf;
-            document.getElementById('pl-reintentar').onclick = () => abrirPlanilla(null, url);
+            document.getElementById('pl-reintentar').onclick = () => abrirPlanilla(null, url, que);
             document.getElementById('pl-aviso').style.display = 'block';
         })
         .catch((e) => {
             if (corrida !== _plCorrida) return;
             terminar();
             cerrarPaso('error');
-            document.getElementById('pl-titulo').textContent = '⚠️ No se pudo descargar la planilla';
+            document.getElementById('pl-titulo').textContent = esComprobante ? '⚠️ No se pudo descargar el comprobante' : '⚠️ No se pudo descargar la planilla';
             const err = document.getElementById('pl-error');
             err.textContent = e.message || 'Error de conexión.';
             err.style.display = 'block';
