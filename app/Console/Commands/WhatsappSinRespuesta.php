@@ -116,7 +116,7 @@ class WhatsappSinRespuesta extends Command
         // de BryNex), no por la de Brygar: el aviso es del aliado y lo recibe su gente.
         if (! $alertas->plantillaDisponible($aliadoId)) {
             $this->warn('  La cuenta de WhatsApp de este aliado no tiene aprobada la plantilla «'.AlertaOperativaService::NOMBRE_PLANTILLA
-                .'»: solo saldrá a quien tenga la ventana de 24 h abierta. Créela con: php artisan whatsapp:plantilla-aviso');
+                .'»: solo saldrá a quien tenga la ventana de 24 h abierta. Créela con: php artisan whatsapp:plantillas-sistema');
         }
 
         foreach ($destinatarios as $numero) {

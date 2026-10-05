@@ -71,7 +71,7 @@ class AlertaOperativaService
      * Lo usa el aviso de conversaciones esperando respuesta: es un mensaje del aliado
      * para su propia gente, y llegarle desde la línea de Brygar —otro aliado— no tiene
      * sentido. La plantilla tiene que existir aprobada en esa cuenta
-     * (`whatsapp:plantilla-aviso` la crea); si no, solo sale con la ventana abierta.
+     * (`whatsapp:plantillas-sistema` la crea); si no, solo sale con la ventana abierta.
      */
     public function enviarDesdeAliado(int $aliadoId, string $numero, string $origen, string $mensaje): bool
     {

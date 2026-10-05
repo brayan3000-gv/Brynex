@@ -85,6 +85,10 @@ return [
         // Acuse automático ("recibimos tu mensaje, ya te atendemos") en los aliados que no
         // tienen IA en WhatsApp, cuando pasan unos minutos sin que nadie conteste.
         // `acuse_sin_bot_excluir`: ids de aliado separados por coma que no lo quieren.
+        // Horas que una conversación asignada puede tener al cliente esperando antes de
+        // volver sola al inbox general (whatsapp:liberar-sin-atender). 0 lo apaga.
+        'liberar_horas' => env('WHATSAPP_LIBERAR_HORAS', 4),
+
         'acuse_sin_bot' => env('WHATSAPP_ACUSE_SIN_BOT', true),
         'acuse_sin_bot_excluir' => env('WHATSAPP_ACUSE_SIN_BOT_EXCLUIR', ''),
         // Rechazar los payloads cuya firma no valide. Arranca en false a

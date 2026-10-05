@@ -25,6 +25,7 @@ class WhatsappConversacion extends BaseModel
         'origen_publicacion_id',
         'estado',
         'asignado_a',
+        'asignado_at',
         'bot_activo',
         'seguimiento_enviado_at',
         'pendiente_atencion',
@@ -63,6 +64,7 @@ class WhatsappConversacion extends BaseModel
 
     protected $casts = [
         'ultimo_mensaje_at'         => 'datetime',
+        'asignado_at'               => 'datetime',
         'ventana_activa_hasta'      => 'datetime',
         'total_mensajes_no_leidos'  => 'integer',
         'bot_activo'                => 'boolean',
@@ -218,6 +220,7 @@ class WhatsappConversacion extends BaseModel
     {
         $this->update([
             'asignado_a'          => $userId,
+            'asignado_at'         => now(),
             'estado'              => 'asignada',
             'pendiente_atencion'  => false,
             'pendiente_motivo'    => null,
@@ -230,8 +233,24 @@ class WhatsappConversacion extends BaseModel
     public function liberar(): void
     {
         $this->update([
-            'asignado_a' => null,
-            'estado'     => 'abierta',
+            'asignado_a'  => null,
+            'asignado_at' => null,
+            'estado'      => 'abierta',
+        ]);
+    }
+
+    /**
+     * El asesor asignado no contestó a tiempo: la conversación vuelve al inbox general,
+     * marcada como pendiente, para que la tome cualquiera. No toca el bot.
+     */
+    public function liberarPorInactividad(string $motivo): void
+    {
+        $this->update([
+            'asignado_a'         => null,
+            'asignado_at'        => null,
+            'estado'             => 'abierta',
+            'pendiente_atencion' => true,
+            'pendiente_motivo'   => $motivo,
         ]);
     }
 
@@ -299,6 +318,7 @@ class WhatsappConversacion extends BaseModel
         $this->update([
             'bot_activo'          => false,
             'asignado_a'          => $userId,
+            'asignado_at'         => now(),
             'estado'              => 'asignada',
             'pendiente_atencion'  => false,
             'pendiente_motivo'    => null,

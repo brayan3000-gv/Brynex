@@ -132,6 +132,7 @@ class WhatsappBandejaCompartida
                 'empresa_id' => $vinculo['empresa_id'],
                 'estado' => 'abierta',
                 'asignado_a' => null,
+                'asignado_at' => null,
                 'pendiente_atencion' => true,
                 'pendiente_motivo' => $motivo,
             ]);

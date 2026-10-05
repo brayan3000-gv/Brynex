@@ -215,6 +215,36 @@ class WhatsappEsperandoRespuesta
     }
 
     /**
+     * Conversaciones asignadas a un asesor donde el cliente lleva al menos `$horas`
+     * esperando y el asesor lleva ese mismo tiempo con ella asignada. Son las que
+     * `whatsapp:liberar-sin-atender` devuelve al inbox general.
+     *
+     * Las dos condiciones van juntas: a quien le asignaron hace diez minutos una
+     * conversación que ya llevaba un día esperando no se le quita de inmediato.
+     */
+    public function paraLiberar(int $aliadoId, int $horas): Collection
+    {
+        $limite = now()->subHours($horas);
+
+        $conversaciones = WhatsappConversacion::where('aliado_id', $aliadoId)
+            ->where('estado', 'asignada')
+            ->whereNotNull('asignado_a')
+            ->where('ultimo_mensaje_at', '>=', now()->subDays(self::DIAS_MAX_ESPERA))
+            ->where(fn ($q) => $q->whereNull('asignado_at')->orWhere('asignado_at', '<=', $limite))
+            ->with('asignado:id,nombre')
+            ->get();
+
+        $this->marcar($conversaciones);
+
+        return $conversaciones
+            ->filter(fn (WhatsappConversacion $c) => $c->esperando
+                && $c->esperando_desde
+                && $c->esperando_desde->lte($limite)
+                && ! TelefonosDeudores::esDeudor($c->wa_contact_id))
+            ->values();
+    }
+
+    /**
      * A quién se le manda el aviso de conversaciones esperando de un aliado: lo que diga
      * `services.whatsapp.pendientes_por_aliado`; si el aliado no está ahí, el WhatsApp (o
      * celular) de su ficha; y siempre la copia de BryNex si está configurada.

@@ -663,8 +663,9 @@ class WhatsappWebhookService
 
                 if ($ultimoMensajeSaliente) {
                     $conversacion->update([
-                        'estado'     => 'asignada',
-                        'asignado_a' => $ultimoMensajeSaliente->usuario_id,
+                        'estado'      => 'asignada',
+                        'asignado_a'  => $ultimoMensajeSaliente->usuario_id,
+                        'asignado_at' => now(),
                     ]);
                 } else {
                     $conversacion->update([

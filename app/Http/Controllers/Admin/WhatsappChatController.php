@@ -137,6 +137,9 @@ class WhatsappChatController extends Controller
             'ventana_minutos'    => $conversacion->minutosVentanaRestante(),
         ] + $this->identidadContacto($conversacion, $alidoId);
 
+        // El botón «Reabrir conversación» solo sale si Meta ya aprobó su plantilla aquí.
+        $reabrirDisponible = $plantillas->contains('nombre', \App\Models\WhatsappPlantilla::SISTEMA_REABRIR);
+
         // Aliados a los que se puede mover esta conversación: solo tiene sentido en el
         // número compartido de BryNex (la bandeja de «sin identificar») y solo para BryNex.
         $aliadosMover = ($config->usa_cuenta_brynex && Auth::user()->es_brynex)
@@ -151,7 +154,7 @@ class WhatsappChatController extends Controller
             'conversacion', 'mensajes', 'usuarios', 'plantillas',
             'conversaciones', 'conversacionesData', 'tab', 'buscar', 'tipo',
             'totalNoLeidos', 'totalIa', 'totalEsperando', 'conteoTipos',
-            'mensajesData', 'conversacionData', 'aliadosMover'
+            'mensajesData', 'conversacionData', 'aliadosMover', 'reabrirDisponible'
         ));
     }
 
@@ -204,17 +207,7 @@ class WhatsappChatController extends Controller
             return response()->json(['ok' => false, 'error' => $resultado['error']], 422);
         }
 
-        // Autoasignación al agente emisor actual. Si un humano escribe, el bot se silencia
-        // en esta conversación hasta que alguien lo reactive explícitamente, y se resuelve
-        // cualquier aviso de "pendiente por atender".
-        $conversacion->update([
-            'asignado_a'          => Auth::id(),
-            'estado'              => 'asignada',
-            'ultimo_mensaje_at'   => now(),
-            'bot_activo'          => false,
-            'pendiente_atencion'  => false,
-            'pendiente_motivo'    => null,
-        ]);
+        $this->trasEnvioHumano($conversacion);
 
         return response()->json([
             'ok'             => true,
@@ -222,6 +215,101 @@ class WhatsappChatController extends Controller
             'ventana_activa' => $conversacion->fresh()->ventanaActiva(),
             'ventana_minutos'=> $conversacion->fresh()->minutosVentanaRestante(),
         ]);
+    }
+
+    /**
+     * Autoasignación al agente emisor actual. Si un humano escribe, el bot se silencia
+     * en esta conversación hasta que alguien lo reactive explícitamente, y se resuelve
+     * cualquier aviso de "pendiente por atender".
+     */
+    private function trasEnvioHumano(WhatsappConversacion $conversacion): void
+    {
+        $conversacion->update([
+            'asignado_a'          => Auth::id(),
+            'asignado_at'         => now(),
+            'estado'              => 'asignada',
+            'ultimo_mensaje_at'   => now(),
+            'bot_activo'          => false,
+            'pendiente_atencion'  => false,
+            'pendiente_motivo'    => null,
+        ]);
+    }
+
+    /**
+     * Reabre una conversación con la ventana de 24 h vencida: le manda al cliente la
+     * plantilla `reabrir_conversacion`, con el botón «Continuar». Cuando lo toca, Meta
+     * abre otras 24 h de texto libre.
+     *
+     * Existe porque con la ventana vencida solo quedaban plantillas de cobro o de
+     * planilla, que no vienen al caso, y el asesor terminaba contestando desde su
+     * celular (donde el sistema ya no ve nada).
+     *
+     * Una sola invitación cada 24 h: insistir con la misma plantilla a quien no tocó
+     * el botón es justo lo que hace que la gente reporte el número.
+     */
+    public function reabrir(int $id)
+    {
+        $alidoId      = session('aliado_id_activo');
+        $conversacion = $this->findConversacionProtected($alidoId, $id);
+        $config       = WhatsappConfig::paraAliado($alidoId);
+
+        if (!$config->credencialesCompletas()) {
+            return response()->json(['ok' => false, 'error' => 'No hay credenciales de WhatsApp configuradas.'], 422);
+        }
+
+        if ($conversacion->ventanaActiva()) {
+            return response()->json(['ok' => false, 'error' => 'La ventana ya está abierta: puedes escribirle directamente.'], 422);
+        }
+
+        $plantilla = $this->plantillaReabrir($alidoId, $config);
+        if (!$plantilla) {
+            return response()->json(['ok' => false, 'error' => 'La plantilla para reabrir todavía no está aprobada por Meta en esta cuenta.'], 422);
+        }
+
+        $yaInvitado = WhatsappMensaje::where('conversacion_id', $conversacion->id)
+            ->where('plantilla_id', $plantilla->id)
+            ->where('created_at', '>=', now()->subHours(24))
+            ->exists();
+        if ($yaInvitado) {
+            return response()->json([
+                'ok'    => false,
+                'error' => 'Ya se le envió la invitación a continuar hace menos de 24 h. Cuando toque «Continuar» se abre la ventana.',
+            ], 422);
+        }
+
+        $nombreAliado = \App\Models\Aliado::find($alidoId)?->nombre ?: 'nuestro equipo';
+
+        $resultado = $this->enviarTemplate($conversacion, [
+            'plantilla_id' => $plantilla->id,
+            'parametros'   => [$nombreAliado],
+        ], $config, $alidoId);
+
+        if (!$resultado['ok']) {
+            return response()->json(['ok' => false, 'error' => $resultado['error']], 422);
+        }
+
+        $this->trasEnvioHumano($conversacion);
+
+        $resultado['mensaje']->load(['usuario:id,nombre', 'plantilla:id,nombre_display']);
+
+        return response()->json([
+            'ok'      => true,
+            'mensaje' => $this->mapearMensajes(collect([$resultado['mensaje']]))[0],
+        ]);
+    }
+
+    /**
+     * La plantilla de reapertura aprobada en la cuenta con la que envía este aliado.
+     * Las de la cuenta compartida están a nombre del aliado BryNex.
+     */
+    private function plantillaReabrir(int $alidoId, WhatsappConfig $config): ?\App\Models\WhatsappPlantilla
+    {
+        $duenoCuenta = $config->usa_cuenta_brynex ? \App\Services\WhatsappBandejaCompartida::aliadoBandeja() : $alidoId;
+
+        return \App\Models\WhatsappPlantilla::delAliado($duenoCuenta)
+            ->aprobadas()
+            ->where('nombre', \App\Models\WhatsappPlantilla::SISTEMA_REABRIR)
+            ->first();
     }
 
     /**
@@ -255,6 +343,7 @@ class WhatsappChatController extends Controller
 
         $conversacion->update([
             'asignado_a'         => Auth::id(),
+            'asignado_at'        => now(),
             'estado'             => 'asignada',
             'ultimo_mensaje_at'  => now(),
             'pendiente_atencion' => false,
@@ -816,6 +905,9 @@ class WhatsappChatController extends Controller
             'wa_message_id'        => $resultado['wa_message_id'],
             'direccion'            => 'saliente',
             'tipo'                 => 'template',
+            // El texto ya armado, para que en el chat se lea qué se le dijo y no solo
+            // el nombre de la plantilla.
+            'contenido'            => $plantilla->cuerpoRenderizado($params),
             'plantilla_id'         => $plantilla->id,
             'plantilla_parametros' => $params,
             'estado'               => 'enviado',

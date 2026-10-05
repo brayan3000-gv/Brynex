@@ -31,6 +31,12 @@ class WhatsappPlantilla extends BaseModel
         'variables_mapa',
     ];
 
+    /**
+     * Plantilla del botón «Reabrir conversación» del chat. La crea
+     * `whatsapp:plantillas-sistema` en cada cuenta.
+     */
+    public const SISTEMA_REABRIR = 'reabrir_conversacion';
+
     protected $casts = [
         'botones'       => 'array',
         'variables_mapa'=> 'array',

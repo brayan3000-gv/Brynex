@@ -94,7 +94,7 @@ resources/views/admin/whatsapp/
 - El aviso sale por la cuenta con la que el aliado hace sus envíos
   (`AlertaOperativaService::enviarDesdeAliado`): la suya o la compartida de BryNex,
   nunca la de Brygar. Necesita la plantilla `notificar_brynex` aprobada en esa cuenta
-  (`php artisan whatsapp:plantilla-aviso`; con `--estado` solo consulta). Los números
+  (`php artisan whatsapp:plantillas-sistema`; con `--estado` solo consulta). Los números
   del propio aliado (`numerosDelAliado`: ficha, línea y destinatarios del aviso) no
   cuentan como esperando, no reciben acuse y en el número compartido caen a su aliado.
 - `ultimosMensajes()` trae el último mensaje por conversación en UNA consulta y con
@@ -108,6 +108,13 @@ resources/views/admin/whatsapp/
   por llamada o en persona. Crea un `WhatsappMensaje` tipo `nota` (saliente, sin
   `wa_message_id`, no se envía a Meta) y la conversación sale de «Esperando». Se pinta
   como nota amarilla centrada en el chat.
+- `whatsapp:liberar-sin-atender` (cada 15 min): conversación asignada con el cliente
+  esperando ≥ `services.whatsapp.liberar_horas` (4) y asignada hace al menos eso
+  (`asignado_at`) vuelve al inbox general como pendiente. No reactiva el bot.
+- **🔓 Reabrir conversación** (`chat.reabrir`): con la ventana vencida envía la plantilla
+  `reabrir_conversacion` (botón «Continuar»); una sola cada 24 h por conversación. Las
+  plantillas del sistema se crean por cuenta con `whatsapp:plantillas-sistema` y su
+  estado se consulta cada hora (`--estado`); el botón solo sale con la plantilla aprobada.
 - Número compartido: un mensaje sin conversación se resuelve por el celular en
   clientes/empresas (`WhatsappBandejaCompartida::resolverAliado`); si no se sabe, cae
   al inbox del aliado BryNex (id 1) como pendiente y se mueve con **🔀 Mover a aliado**

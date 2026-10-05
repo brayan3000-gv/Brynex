@@ -437,9 +437,22 @@
             {{-- Ventana inactiva: solo plantillas --}}
             <template x-if="!conversacion.ventana_activa">
                 <div>
+                    @if($reabrirDisponible)
+                        {{-- Un clic: invita al cliente a tocar «Continuar», y eso abre otras 24 h --}}
+                        <div style="margin-bottom:.6rem">
+                            <button class="btn-sm btn-success" style="width:100%;justify-content:center"
+                                    @click="reabrirConversacion()" :disabled="enviando">
+                                <span x-show="!enviando">🔓 Reabrir conversación</span>
+                                <span x-show="enviando">⏳ Enviando...</span>
+                            </button>
+                            <div style="font-size:.7rem;color:#64748b;margin-top:.3rem;text-align:center">
+                                Le llega un mensaje con el botón «Continuar». Cuando lo toque, podrás escribirle libre por 24 h.
+                            </div>
+                        </div>
+                    @endif
                     <div class="template-selector">
                         <div style="font-size:.75rem;font-weight:600;color:#92400e;margin-bottom:.4rem">
-                            📋 Selecciona una plantilla para iniciar
+                            📋 {{ $reabrirDisponible ? 'O envía otra plantilla' : 'Selecciona una plantilla para iniciar' }}
                         </div>
                         <select x-model="plantillaSeleccionada" @change="cargarParamsPlantilla()" style="width:100%;border:none;background:transparent;font-size:.83rem;outline:none">
                             <option value="">— Elige una plantilla aprobada —</option>
@@ -835,6 +848,42 @@ function chatApp() {
             } finally {
                 this.enviando = false;
             }
+        },
+
+        async reabrirConversacion() {
+            if (this.enviando) return;
+            this.enviando = true;
+            this.mensajeError = '';
+            try {
+                const resp = await fetch(`/admin/whatsapp/chat/${this.convId}/reabrir`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    this.mensajes.push(data.mensaje);
+                    this.conversacion.pendiente_atencion = false;
+                    const ahora = new Date();
+                    const conv = this.listaConversaciones.find(c => c.id == this.convId);
+                    if (conv) {
+                        conv.preview = '🔓 Invitación a continuar enviada';
+                        conv.ultimo_mensaje_at = ahora.toISOString();
+                        conv.hora_display = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+                        conv.pendiente_atencion = false;
+                        this.marcarRespondida(conv);
+                        this.ordenarConversaciones();
+                    }
+                    this.scrollBottom();
+                } else {
+                    this.mensajeError = data.error || 'No se pudo reabrir la conversación.';
+                }
+            } catch (e) {
+                this.mensajeError = 'Error de conexión al reabrir la conversación.';
+            }
+            this.enviando = false;
         },
 
         async enviarTemplate() {
