@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <title>Afiliaciones para aliados — BryNex</title>
+    <title>Afiliaciones para aliados — Brygar</title>
     <meta name="description" content="BryNex entra a los portales de EPS, ARL y caja por usted. Su equipo deja de copiar la misma cédula cuatro veces y vuelve a atender clientes.">
-    <meta property="og:title" content="Afiliaciones para aliados — BryNex">
+    <meta property="og:title" content="Afiliaciones para aliados — Brygar">
     <meta property="og:description" content="Lo que entre antes de las 4 de la tarde, radicado hoy. Su equipo, libre para atender y vender.">
     <meta property="og:image" content="{{ asset('img/aliados/carga.jpg') }}">
     <link rel="icon" href="{{ asset('img/logo-brynex.png') }}">
@@ -76,6 +76,7 @@
         .claro nav { background: rgba(246, 248, 252, .75); }
         .marca { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; text-decoration: none; }
         .marca span { color: var(--acento); }
+        .marca small { font-family: var(--body); font-size: 12px; font-weight: 500; letter-spacing: 0; opacity: .75; margin-left: 6px; white-space: nowrap; }
         .btn { display: inline-flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: 999px; font-weight: 600; text-decoration: none; font-size: 15px; transition: transform .2s, box-shadow .2s; white-space: nowrap; }
         .btn:hover { transform: translateY(-2px); }
         .btn-wa { background: var(--wa); color: #06281a; box-shadow: 0 8px 24px rgba(37, 211, 102, .25); }
@@ -171,6 +172,11 @@
         .precio .v { font-family: var(--display); font-weight: 800; font-size: clamp(32px, 4vw, 44px); line-height: 1; margin: 10px 0 6px; font-variant-numeric: tabular-nums; }
         .precio .u { color: var(--hueso-suave); font-size: 14px; }
         .precio p { color: var(--hueso-suave); font-size: 15px; margin-top: 12px; }
+        .precios.dos-col { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 16px; }
+        .precios + .sub, h3.sub { margin-top: 44px; color: var(--hueso); }
+        h3.sub + .precios { margin-top: 16px; }
+        .chip { display: inline-block; margin-top: 14px; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--hueso-suave); }
+        .chip.ok { background: rgba(47,191,113,.16); color: var(--ok); }
         .final { text-align: center; padding-block: clamp(80px, 14vh, 160px); }
         .final h2 { max-width: 16ch; margin-inline: auto; }
         .final .lead { margin: 20px auto 36px; }
@@ -180,7 +186,8 @@
             .dos { grid-template-columns: 1fr; }
             .dos.invertir figure { order: -1; }
             figure.vertical { max-height: 60vh; width: min(100%, 320px); margin-inline: auto; }
-            .tarjetas, .precios, .res { grid-template-columns: 1fr; }
+            .tarjetas, .precios, .precios.dos-col, .res { grid-template-columns: 1fr; }
+            .marca small { display: block; margin-left: 0; }
             .res { gap: 20px; }
             .hero { padding-top: 96px; }
             .hero .fondo img { object-position: 60% 30%; }
@@ -192,7 +199,7 @@
 <body>
 
 <nav>
-    <a class="marca" href="{{ url('/') }}">Bry<span>Nex</span></a>
+    <a class="marca" href="{{ url('/') }}">Brygar <small>con tecnología Bry<span>Nex</span></small></a>
     <a class="btn btn-wa btn-nav" href="{{ $urlWhatsapp }}" target="_blank" rel="noopener">
         <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.6.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4 5.3 5.3 0 0 0 3.2.7 2.7 2.7 0 0 0 1.8-1.3 2.2 2.2 0 0 0 .2-1.3c-.1-.1-.3-.2-.5-.3Z"/></svg>
         <span>Hablemos</span>
@@ -268,11 +275,11 @@
         <div>
             <div class="eyebrow reveal">Lo nuevo para aliados</div>
             <h2 class="reveal" style="--i:1">Ahora BryNex entra a los portales por usted.</h2>
-            <p class="lead reveal" style="--i:2">Usted registra la persona una sola vez. De ahí en adelante, BryNex hace el trámite en cada entidad con sus razones sociales y le deja el comprobante.</p>
+            <p class="lead reveal" style="--i:2">Usted registra la persona una sola vez. De ahí en adelante, BryNex hace el trámite en cada entidad, con sus razones sociales o con las de Brygar, y le deja el comprobante.</p>
             <ol class="pasos">
                 <li class="reveal" style="--i:3"><div><h3>Registra la persona en BryNex</h3><p>Datos del contrato y documentos. Lo mismo que hoy captura, pero una sola vez.</p></div></li>
-                <li class="reveal" style="--i:4"><div><h3>BryNex entra a la EPS, la ARL y la caja</h3><p>Con sus claves y sus razones sociales. Lo que va por correo, BryNex lo envía y le hace seguimiento.</p></div></li>
-                <li class="reveal" style="--i:5"><div><h3>Si hace falta firma, BryNex habla con el trabajador</h3><p>Le escribe, le explica y consigue la firma. Su equipo no tiene que perseguir a nadie.</p></div></li>
+                <li class="reveal" style="--i:4"><div><h3>BryNex entra a la EPS, la ARL y la caja</h3><p>Con las razones sociales con las que usted afilia, propias o de Brygar. Lo que va por correo, BryNex lo envía y le hace seguimiento.</p></div></li>
+                <li class="reveal" style="--i:5"><div><h3>Si hace falta firma, nosotros hablamos con el trabajador</h3><p>Le escribimos, le explicamos y conseguimos la firma. Su equipo no tiene que perseguir a nadie.</p></div></li>
                 <li class="reveal" style="--i:6"><div><h3>El comprobante queda en el radicado</h3><p>Fecha, hora y soporte de cada entidad. Cuando confirman, el radicado pasa a OK solo.</p></div></li>
             </ol>
         </div>
@@ -377,25 +384,46 @@
     <div class="wrap">
         <div class="eyebrow reveal">Sin letra pequeña</div>
         <h2 class="reveal" style="--i:1">Lo que cuesta.</h2>
-        <p class="lead reveal" style="--i:2">El software sigue igual. La afiliación se paga una sola vez por contrato, nunca por mes.</p>
+        <p class="lead reveal" style="--i:2">Su plan mensual no cambia. La afiliación es un complemento que se paga una sola vez por contrato, nunca por mes.</p>
+
+        <h3 class="sub reveal">Su alianza con Brygar</h3>
         <div class="precios">
             <div class="precio reveal" style="--i:1">
-                <div class="eyebrow" style="margin:0">Software</div>
-                <div class="v">$600</div>
-                <div class="u">por cliente vigente al mes</div>
-                <p>Igual que hoy. No cambia.</p>
+                <div class="eyebrow" style="margin:0">Alianza Esencial</div>
+                <div class="v">$800</div>
+                <div class="u">por afiliado al mes</div>
+                <p>Acceso a la plataforma BryNex, con sus propias razones sociales.</p>
+                <span class="chip">Afiliaciones: opcional</span>
             </div>
-            <div class="precio destacado reveal" style="--i:2">
-                <div class="eyebrow" style="margin:0">BryNex afilia por usted</div>
-                <div class="v">$7.000</div>
-                <div class="u">por contrato, una sola vez</div>
-                <p>EPS, ARL y caja. Firma con el trabajador. Radicado el mismo día antes de las 4 pm. $6.000 desde 300 al mes.</p>
+            <div class="precio reveal" style="--i:2">
+                <div class="eyebrow" style="margin:0">Alianza Específica</div>
+                <div class="v">$5.500</div>
+                <div class="u">por afiliado al mes</div>
+                <p>Plataforma, automatización y las razones sociales de Brygar.</p>
+                <span class="chip">Afiliaciones: opcional</span>
             </div>
             <div class="precio reveal" style="--i:3">
-                <div class="eyebrow" style="margin:0">Su equipo con BryNex</div>
-                <div class="v">$3.500</div>
+                <div class="eyebrow" style="margin:0">Alianza Integral</div>
+                <div class="v">$15.000</div>
+                <div class="u">por afiliado al mes</div>
+                <p>Toda la operación gestionada por Brygar: afiliaciones, procesos, incapacidades y acompañamiento.</p>
+                <span class="chip ok">Afiliaciones: incluidas</span>
+            </div>
+        </div>
+
+        <h3 class="sub reveal">Afiliaciones, para Esencial y Específica</h3>
+        <div class="precios dos-col">
+            <div class="precio reveal" style="--i:1">
+                <div class="eyebrow" style="margin:0">Su equipo afilia con BryNex</div>
+                <div class="v">$3.000</div>
                 <div class="u">por contrato, una sola vez</div>
                 <p>Su gente marca «afiliar» y BryNex entra a los portales. Usted atiende lo que requiera una persona.</p>
+            </div>
+            <div class="precio destacado reveal" style="--i:2">
+                <div class="eyebrow" style="margin:0">Nosotros afiliamos por usted</div>
+                <div class="v">$6.000</div>
+                <div class="u">por contrato, una sola vez</div>
+                <p>EPS, ARL y caja. Firma con el trabajador. Radicado el mismo día antes de las 4 pm. Desde el contrato 301 del mes, $5.000.</p>
             </div>
         </div>
         <p style="margin-top:18px;font-size:14px;color:var(--hueso-suave)">Valores antes de IVA. Empiece con un piloto de un mes, con una razón social, sin permanencia.</p>
@@ -413,7 +441,7 @@
     </div>
 </section>
 
-<footer>BryNex · brynex.co · Afiliaciones para aliados</footer>
+<footer>Brygar · Asesores en Seguridad Social · 300 156 3615 · comercialbrygar@gmail.com · brynex.co</footer>
 
 <script>
 (function () {

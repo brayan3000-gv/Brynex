@@ -109,15 +109,13 @@ Route::post('/aliado/{slug}/metrica', [\App\Http\Controllers\Publico\PaginaAliad
 Route::get('/sitemap.xml', [\App\Http\Controllers\Publico\PaginaAliadoController::class, 'sitemap'])->name('publico.sitemap');
 
 // Presentación pública del servicio de afiliaciones para aliados (brynex.co/aliados/afiliaciones).
-// El WhatsApp es el de BryNex (aliado 1); las imágenes salen de scripts/imagenes-aliados.sh.
+// La vende Brygar: el WhatsApp es su línea comercial (la del volante de alianzas);
+// las imágenes salen de scripts/imagenes-aliados.sh.
 Route::get('/aliados/afiliaciones', function () {
-    $brynex = \App\Models\Aliado::find(1);
-    $numero = preg_replace('/\D+/', '', $brynex->whatsapp ?: ($brynex->celular ?: ''));
-    $numero = $numero && ! str_starts_with($numero, '57') ? '57'.$numero : $numero;
-    $texto = rawurlencode('Hola, quiero saber más de las afiliaciones automáticas de BryNex para aliados.');
+    $texto = rawurlencode('Hola, quiero saber más de las afiliaciones automáticas para aliados.');
 
     return view('publico.aliados-afiliaciones', [
-        'urlWhatsapp' => $numero ? "https://wa.me/{$numero}?text={$texto}" : 'https://brynex.co',
+        'urlWhatsapp' => "https://wa.me/573001563615?text={$texto}",
     ]);
 })->name('publico.aliados.afiliaciones');
 
@@ -1292,6 +1290,8 @@ Route::middleware('auth')->group(function () {
             Route::post('chat/{id}/reabrir', [$chat, 'reabrir'])->name('chat.reabrir')->whereNumber('id');
         });
         Route::patch('chat/{id}/asignar', [$chat, 'asignar'])->name('chat.asignar')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
+        // Manual: devuelve al inbox general las asignadas con el cliente esperando hace horas.
+        Route::post('chat/liberar-sin-atender', [$chat, 'liberarSinAtender'])->name('chat.liberar_sin_atender')->middleware('permiso:whatsapp.asignar');
         // Bandeja del número compartido: BryNex pasa la conversación al aliado dueño del contacto.
         Route::patch('chat/{id}/mover-aliado', [$chat, 'moverAliado'])->name('chat.mover_aliado')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
 
