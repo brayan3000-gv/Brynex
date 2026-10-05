@@ -12,6 +12,13 @@ use Illuminate\Support\Facades\DB;
 
 class AlidoController extends Controller
 {
+    /**
+     * Las razones sociales que se prestan desde la ficha del aliado son solo
+     * de Brygar: GiMave, Formalizate y SS Faga son aliados independientes con
+     * empresas de sus propios clientes (decisión del 5-oct-2026).
+     */
+    private const DUENO_PRESTADAS = 2;
+
     public function __construct()
     {
         $this->middleware(['auth', 'role:superadmin']);
@@ -269,13 +276,12 @@ class AlidoController extends Controller
             ->get(['nit', 'origen_id'])
             ->mapWithKeys(fn ($r) => [$nit($r->nit) => $r->origen_id ? 'copia' : 'sin_vincular']);
 
-        // El aliado 1 (BryNex) es de pruebas: sus empresas no se prestan.
         $candidatas = DB::table('razones_sociales as o')
             ->join('aliados as d', 'd.id', '=', 'o.aliado_id')
             ->whereNull('o.origen_id')
             ->where('o.estado', 'Activa')
+            ->where('o.aliado_id', self::DUENO_PRESTADAS)
             ->where('o.aliado_id', '<>', $aliado->id)
-            ->when((int) $aliado->id !== 1, fn ($q) => $q->where('o.aliado_id', '<>', 1))
             ->orderBy('o.razon_social')
             ->get(['o.id', 'o.razon_social', 'o.nit', 'o.aliado_id', 'd.nombre as dueno'])
             ->filter(fn ($r) => strlen($nit($r->nit)) >= 6 && ($propias[$nit($r->nit)] ?? null) !== 'copia')
@@ -308,8 +314,9 @@ class AlidoController extends Controller
         $hechos = [];
 
         foreach (array_unique(array_map('intval', $data['razones'])) as $id) {
-            $rs = DB::table('razones_sociales')->where('id', $id)->whereNull('origen_id')->first();
-            abort_if(! $rs, 404, 'Una de las razones sociales ya no existe o es una copia.');
+            $rs = DB::table('razones_sociales')->where('id', $id)->whereNull('origen_id')
+                ->where('aliado_id', self::DUENO_PRESTADAS)->first();
+            abort_if(! $rs, 404, 'Una de las razones sociales ya no existe, es una copia o no es de Brygar.');
 
             $r = RazonSocialCompartida::habilitar($rs, $aliado->id,
                 "Habilitada desde la ficha del aliado por {$quien} el ".now()->format('d/m/Y').'.');

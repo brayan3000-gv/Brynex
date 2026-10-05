@@ -344,7 +344,7 @@
         <div>
             <div style="font-size:0.95rem;font-weight:800;color:#0f172a;">🤝 Razones sociales prestadas</div>
             <div style="font-size:0.72rem;color:#64748b;margin-top:0.2rem;max-width:480px;">
-                Empresas de otro aliado que {{ $aliado->nombre }} usa para afiliar. Los datos de la empresa se cambian en la original y pasan solos; la sucursal, la planilla y el estado son de este aliado.
+                Empresas de Brygar que {{ $aliado->nombre }} usa para afiliar. Los datos de la empresa se cambian en la original y pasan solos; la sucursal, la planilla y el estado son de este aliado.
             </div>
         </div>
         <button type="button" x-show="!agregando" @click="agregando = true"
@@ -392,7 +392,7 @@
     {{-- Elegir cuáles prestarle --}}
     <div x-show="agregando" x-cloak style="margin-top:1rem;padding:1rem;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
         <div style="display:flex;gap:0.6rem;flex-wrap:wrap;margin-bottom:0.75rem;">
-            <select x-model.number="dueno"
+            <select x-model.number="dueno" x-show="duenos.length > 1"
                 style="padding:0.45rem 0.6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;background:#fff;">
                 <template x-for="d in duenos" :key="d.id">
                     <option :value="d.id" x-text="'Empresas de ' + d.nombre + ' (' + d.n + ')'" :selected="d.id === dueno"></option>
@@ -456,7 +456,7 @@ function razonesPrestadas() {
         'Accept': 'application/json',
         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
     };
-    const BRYGAR = 2; // hoy todas las empresas prestadas salen de Brygar
+    const BRYGAR = 2; // las empresas que se prestan son de Brygar (ver AlidoController::DUENO_PRESTADAS)
 
     return {
         cargando: true, guardando: false, agregando: false,
