@@ -50,7 +50,7 @@
 
         .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); transition-delay: calc(var(--i, 0) * 100ms); }
         .reveal.in { opacity: 1; transform: none; }
-        @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } }
+        @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } .puntos i, .conmutador .pastilla { transition: none; } .puntos.lleno i, .res.cambia { animation: none; } }
 
         nav { position: sticky; top: 0; z-index: 10; padding: calc(12px + env(safe-area-inset-top, 0px)) 20px 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; backdrop-filter: blur(12px); background: rgba(244, 248, 253, .85); border-bottom: 1px solid var(--linea); }
         .marca { font-family: var(--display); font-weight: 800; font-size: 22px; letter-spacing: -0.02em; text-decoration: none; color: var(--marino); }
@@ -69,6 +69,60 @@
         .dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(28px, 5vw, 64px); align-items: center; }
         .dos > * { min-width: 0; }
         .hero h1 span { color: var(--azul); }
+        .selector { margin-top: 32px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 44px); align-items: stretch; }
+        .selector > * { min-width: 0; }
+        .sel-entrada { background: var(--blanco); border: 1px solid var(--linea); border-radius: 24px; padding: clamp(20px, 3vw, 32px); box-shadow: 0 24px 60px rgba(13, 42, 92, .10); }
+        .sel-numero { display: flex; align-items: baseline; gap: 12px; }
+        .sel-numero input { font-family: var(--display); font-weight: 800; font-size: clamp(56px, 9vw, 96px); line-height: 1; color: var(--marino); border: 0; background: transparent; width: 3.4ch; min-width: 0; padding: 0; font-variant-numeric: tabular-nums; -moz-appearance: textfield; }
+        .sel-numero input::-webkit-outer-spin-button, .sel-numero input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .sel-numero span { font-size: 18px; font-weight: 600; color: var(--tinta-suave); }
+        .sel-entrada input[type=range] { width: 100%; accent-color: var(--azul); margin-top: 10px; }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .chips button { font: inherit; font-size: 14px; font-weight: 600; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--linea); background: var(--fondo); color: var(--tinta-suave); cursor: pointer; transition: background .2s, color .2s, transform .2s; }
+        .chips button:hover { transform: translateY(-1px); }
+        .chips button.on { background: var(--marino); color: #fff; border-color: var(--marino); }
+        .puntos { display: grid; grid-template-columns: repeat(20, minmax(0, 1fr)); gap: 5px; margin-top: 22px; }
+        .puntos i { aspect-ratio: 1; border-radius: 50%; background: var(--azul-suave); transform: scale(.7); transition: background .35s, transform .35s cubic-bezier(.3, 1.6, .5, 1); }
+        .puntos i.on { background: var(--azul); transform: scale(1); }
+        .puntos.empresa i.on { background: var(--marino); }
+        .puntos i.hito { box-shadow: 0 0 0 2px var(--blanco), 0 0 0 4px var(--cielo); }
+        .puntos.lleno i { animation: latido 2.4s ease-in-out infinite; animation-delay: calc(var(--d) * 12ms); }
+        @keyframes latido { 50% { transform: scale(.82); } }
+        .puntos-pie { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--tinta-suave); margin-top: 10px; min-height: 20px; }
+        .puntos-pie #s-mas { font-weight: 700; color: var(--marino); }
+
+        .sel-resultado { display: flex; flex-direction: column; gap: 16px; }
+        .conmutador { position: relative; display: grid; grid-template-columns: 1fr 1fr; background: var(--blanco); border: 1px solid var(--linea); border-radius: 999px; padding: 5px; }
+        .conmutador button { position: relative; z-index: 1; font: inherit; font-weight: 700; font-size: 15px; padding: 11px 8px; border: 0; background: transparent; color: var(--tinta-suave); cursor: pointer; border-radius: 999px; transition: color .3s; }
+        .conmutador button[aria-pressed=true] { color: #fff; }
+        .conmutador .pastilla { position: absolute; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px); border-radius: 999px; background: var(--azul); transition: transform .45s cubic-bezier(.3, 1.3, .5, 1), background .3s; }
+        .conmutador[data-p=empresa] .pastilla { transform: translateX(100%); background: var(--marino); }
+        .res { flex: 1; background: var(--marino); color: #e8eef8; border-radius: 24px; padding: clamp(20px, 3vw, 30px); display: flex; flex-direction: column; gap: 12px; }
+        .res.cambia { animation: entra .45s cubic-bezier(.2, .7, .2, 1); }
+        @keyframes entra { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+        .res .eyebrow { color: var(--cielo); margin: 0; }
+        .res h2 { color: #fff; font-size: clamp(22px, 2.8vw, 30px); }
+        .res p { color: #b9c7de; font-size: 16px; max-width: none; }
+        .res .cifra { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4.4vw, 44px); color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+        .res .cifra small { font-family: var(--body); font-size: 14px; font-weight: 500; color: #b9c7de; display: block; margin-top: 6px; }
+        .mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; align-items: end; height: 54px; }
+        .mini i { border-radius: 6px 6px 0 0; background: rgba(255,255,255,.14); font-style: normal; font-size: 11px; font-weight: 700; color: #b9c7de; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; transition: background .3s, height .4s; }
+        .mini i.on { background: var(--cielo); color: var(--marino); }
+        .modos { display: grid; gap: 8px; }
+        .modos button { font: inherit; text-align: left; display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.05); color: #e8eef8; cursor: pointer; transition: background .2s, border-color .2s; min-width: 0; }
+        .modos button b { font-weight: 600; font-size: 15px; }
+        .modos button small { grid-column: 1; font-size: 12.5px; color: #b9c7de; }
+        .modos button span { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-family: var(--display); font-weight: 800; font-size: 18px; white-space: nowrap; }
+        .modos button[aria-pressed=true] { background: rgba(74,168,232,.22); border-color: var(--cielo); }
+        .res .btn { margin-top: auto; background: #fff; color: var(--marino); }
+        .res .otra { font-size: 13.5px; color: #b9c7de; text-align: center; }
+        .res .otra button { font: inherit; color: #fff; font-weight: 600; background: none; border: 0; text-decoration: underline; cursor: pointer; padding: 0; }
+
+        body[data-perfil=asesor] .para-empresa, body[data-perfil=empresa] .para-asesor { display: none; }
+        .cruce { display: none; padding-block: 0 clamp(40px, 6vh, 64px); }
+        body[data-perfil=asesor] .cruce-empresa, body[data-perfil=empresa] .cruce-asesor { display: block; }
+        .cruce-caja { border: 1px dashed var(--azul); border-radius: 18px; padding: 18px 22px; display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap; font-weight: 500; color: var(--marino); }
+        .cruce-botones { display: flex; gap: 8px; flex-wrap: wrap; }
         .hero .lead { margin-top: 18px; }
         .acciones { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 28px; }
         figure { border-radius: 22px; overflow: hidden; aspect-ratio: 16 / 10; background: linear-gradient(135deg, var(--azul-suave), var(--lila-suave)); box-shadow: 0 24px 60px rgba(13, 42, 92, .16); }
@@ -181,7 +235,8 @@
         footer { padding: 26px 20px calc(26px + env(safe-area-inset-bottom, 0px)); text-align: center; font-size: 13px; color: var(--tinta-suave); border-top: 1px solid var(--linea); }
 
         @media (max-width: 900px) {
-            .dos, .cot { grid-template-columns: 1fr; }
+            .dos, .cot, .selector { grid-template-columns: 1fr; }
+            .puntos { gap: 4px; }
             .pilares, .planes, .opciones, .mitades, .reglas, .gradual, .meses { grid-template-columns: 1fr; }
             .escalera { height: 200px; gap: 6px; }
             .peldano { padding: 10px 4px; }
@@ -211,27 +266,57 @@
 </nav>
 
 <section class="hero">
-    <div class="wrap dos">
-        <div>
-            <div class="eyebrow reveal in">Propuesta de alianza estratégica</div>
-            <h1 class="reveal in">Transformemos juntos la gestión de la <span>seguridad social.</span></h1>
-            <p class="lead reveal in">Experiencia, tecnología propia y automatización para que su operación sea más simple, eficiente y segura. Más que un proveedor, un aliado.</p>
-            <div class="acciones reveal in">
-                <a class="btn btn-azul btn-grande" href="#cotizador">Cotizar mi alianza</a>
-                <a class="btn btn-linea btn-grande" href="#planes">Ver los tres planes</a>
+    <div class="wrap">
+        <div class="eyebrow reveal in">Trabaje con Brygar</div>
+        <h1 class="reveal in">¿Cuántas personas <span>maneja hoy?</span></h1>
+        <p class="lead reveal in">Mueva el número y le mostramos el camino que le conviene: como asesor, con la empresa de Brygar, o como empresa aliada, con su propia marca.</p>
+
+        <div class="selector reveal in">
+            <div class="sel-entrada">
+                <label class="sel-numero" for="s-n">
+                    <input type="number" id="s-n" min="1" max="20000" step="1" value="20" inputmode="numeric" aria-label="Personas que maneja">
+                    <span>personas</span>
+                </label>
+                <input type="range" id="s-n-r" min="1" max="400" step="1" value="20" aria-label="Personas que maneja">
+                <div class="chips" id="s-chips">
+                    <button type="button" data-n="5">5</button>
+                    <button type="button" data-n="20">20</button>
+                    <button type="button" data-n="50">50</button>
+                    <button type="button" data-n="100">100</button>
+                    <button type="button" data-n="300">300</button>
+                    <button type="button" data-n="1000">1.000+</button>
+                </div>
+                <div class="puntos" id="s-puntos" aria-hidden="true"></div>
+                <div class="puntos-pie" aria-hidden="true">
+                    <span>Cada punto es una persona</span>
+                    <span id="s-mas"></span>
+                </div>
             </div>
-            <p class="reveal in" style="margin-top:16px;font-size:15px;color:var(--tinta-suave)">¿Es asesor independiente? <a href="#asesor" style="color:var(--azul);font-weight:600">Trabaje con la empresa de Brygar</a>.</p>
+
+            <div class="sel-resultado" aria-live="polite">
+                <div class="conmutador" id="s-conm" role="group" aria-label="Cómo trabaja">
+                    <i class="pastilla"></i>
+                    <button type="button" data-p="asesor" aria-pressed="true">Soy asesor</button>
+                    <button type="button" data-p="empresa" aria-pressed="false">Tengo empresa</button>
+                </div>
+                <div class="res" id="s-res"></div>
+            </div>
         </div>
-        <figure class="reveal in">
-            <img src="/img/aliados/atencion.jpg" alt="Asesora de Brygar atendiendo a una pareja de clientes">
-        </figure>
     </div>
 </section>
 
 <section>
     <div class="wrap">
-        <div class="eyebrow reveal">¿Por qué Brygar?</div>
-        <h2 class="reveal" style="--i:1">Tres cosas que juntas hacen la diferencia.</h2>
+        <div class="dos">
+            <div>
+                <div class="eyebrow reveal">¿Por qué Brygar?</div>
+                <h2 class="reveal" style="--i:1">Tres cosas que juntas hacen la diferencia.</h2>
+                <p class="lead reveal" style="--i:2;margin-top:14px">Experiencia, tecnología propia y automatización para que su operación sea más simple, eficiente y segura. Más que un proveedor, un aliado.</p>
+            </div>
+            <figure class="reveal">
+                <img src="/img/aliados/atencion.jpg" alt="Asesora de Brygar atendiendo a una pareja de clientes" loading="lazy">
+            </figure>
+        </div>
         <div class="pilares">
             <div class="pilar reveal" style="--i:1">
                 <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17.5" cy="9" r="2.5"/><path d="M17 14.2a5 5 0 0 1 4.5 5"/></svg></div>
@@ -264,7 +349,7 @@
     </div>
 </section>
 
-<section id="planes" style="background:var(--blanco)">
+<section id="planes" class="para-empresa" style="background:var(--blanco)">
     <div class="wrap">
         <div class="eyebrow reveal">Alianzas para empresas</div>
         <h2 class="reveal" style="--i:1">Elija la que mejor se adapte a su operación.</h2>
@@ -320,7 +405,7 @@
     </div>
 </section>
 
-<section>
+<section class="para-empresa">
     <div class="wrap">
         <div class="anexo reveal">
             <div class="eyebrow">Servicio de afiliaciones</div>
@@ -347,7 +432,7 @@
     </div>
 </section>
 
-<section id="cotizador" style="padding-top:0">
+<section id="cotizador" class="para-empresa" style="padding-top:0">
     <div class="wrap">
         <div class="eyebrow reveal">Cotizador</div>
         <h2 class="reveal" style="--i:1">¿Cuánto vale y cuánto se ahorra?</h2>
@@ -417,7 +502,7 @@
     </div>
 </section>
 
-<section id="asesor">
+<section id="asesor" class="para-asesor">
     <div class="wrap">
         <div class="eyebrow reveal">Plan Asesor</div>
         <h2 class="reveal" style="--i:1">¿Todavía no tiene empresa? Trabaje con la de Brygar.</h2>
@@ -494,6 +579,19 @@
             </div>
         </div>
     </div>
+</section>
+
+<section class="cruce cruce-empresa">
+    <div class="wrap"><div class="cruce-caja">
+        <span>¿Tiene empresa con 100 afiliados o más, o quiere trabajar con su propia marca?</span>
+        <span class="cruce-botones"><button type="button" class="btn btn-linea" data-perfil="empresa">Ver las alianzas para empresas</button><button type="button" class="btn btn-linea" data-perfil="todos">Ver todo</button></span>
+    </div></div>
+</section>
+<section class="cruce cruce-asesor">
+    <div class="wrap"><div class="cruce-caja">
+        <span>¿Trabaja por su cuenta o maneja menos de 100 personas?</span>
+        <span class="cruce-botones"><button type="button" class="btn btn-linea" data-perfil="asesor">Ver el Plan Asesor</button><button type="button" class="btn btn-linea" data-perfil="todos">Ver todo</button></span>
+    </div></div>
 </section>
 
 <section class="final" style="background:var(--blanco)">
@@ -690,6 +788,123 @@
         $('a-o-wa').href = WA + '?text=' + encodeURIComponent(texto);
     }
     asesor();
+
+    // ── Selector de entrada: ¿asesor o empresa? ──
+    var UMBRAL = 100, ADMON_LISTA = 46000;
+    var sel = { n: 20, forzado: null, modo: 'esencial' };
+    var puntos = $('s-puntos');
+    for (var i = 0; i < 100; i++) {
+        var pt = document.createElement('i');
+        pt.style.setProperty('--d', i);
+        if (i === 19 || i === 99) pt.className = 'hito';
+        puntos.appendChild(pt);
+    }
+    function perfilDe() { return sel.forzado || (sel.n >= UMBRAL ? 'empresa' : 'asesor'); }
+    function fijarPerfil(p) {
+        if (p === 'todos') delete document.body.dataset.perfil; else document.body.dataset.perfil = p;
+    }
+    function irA(id) {
+        requestAnimationFrame(function () {
+            var el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    }
+    function poner(numId, rangoId, v) {
+        $(numId).value = v; $(rangoId).value = Math.min(v, +$(rangoId).max);
+    }
+
+    var perfilPintado = null;
+    function pintarSelector() {
+        var n = sel.n, p = perfilDe();
+        $('s-n').style.width = (String(n).length + 0.25) + 'ch';
+        puntos.querySelectorAll('i').forEach(function (pt, i) { pt.classList.toggle('on', i < n); });
+        puntos.classList.toggle('empresa', p === 'empresa');
+        puntos.classList.toggle('lleno', n >= 100);
+        $('s-mas').textContent = n > 100 ? '+ ' + (n - 100).toLocaleString('es-CO') + ' más' : '';
+        $('s-chips').querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', +b.dataset.n === n); });
+        $('s-conm').dataset.p = p;
+        $('s-conm').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.p === p ? 'true' : 'false'); });
+
+        var res = $('s-res'), html;
+        if (p === 'asesor') {
+            var k = nivelDe(n), pct = NIVELES[k][1], gana = n * ADMON_LISTA * pct;
+            var barras = NIVELES.map(function (x, i) { return '<i class="' + (i === k ? 'on' : '') + '" style="height:' + (40 + i * 20) + '%">' + Math.round(x[1] * 100) + ' %</i>'; }).join('');
+            var sigue = k < 3
+                ? 'Con ' + NIVELES[k + 1][0] + ' sube al ' + Math.round(NIVELES[k + 1][1] * 100) + ' %.'
+                : 'Ya está en el nivel más alto.';
+            html = '<div class="eyebrow">Su camino: Plan Asesor</div>' +
+                '<h2>' + (n >= UMBRAL ? 'Con ' + n.toLocaleString('es-CO') + ' ya le alcanza para su propia marca' : 'Trabaje con la empresa de Brygar') + '</h2>' +
+                '<div class="cifra">' + cop(gana) + '<small>al mes de administración, con el ' + Math.round(pct * 100) + ' % de ' + cop(ADMON_LISTA) + ' por persona. Sin pagar plataforma.</small></div>' +
+                '<div class="mini">' + barras + '</div>' +
+                '<p>' + sigue + ' Además gana la mitad de cada afiliación que traiga.</p>' +
+                '<button type="button" class="btn btn-grande" data-ir="asesor">Ver cuánto ganaría →</button>' +
+                '<div class="otra">' + (n >= UMBRAL ? 'Le conviene más una alianza: ' : '¿Ya tiene su propia empresa? ') + '<button type="button" data-forzar="empresa">Ver las alianzas</button></div>';
+        } else {
+            var precio = function (v) { return cop(Math.max(n * v, MIN_PLATAFORMA)); };
+            var fila = function (modo, titulo, sub, v) {
+                return '<button type="button" data-modo="' + modo + '" aria-pressed="' + (sel.modo === modo) + '"><b>' + titulo + '</b><small>' + sub + '</small><span>' + precio(v) + '</span></button>';
+            };
+            html = '<div class="eyebrow">Su camino: alianza para empresas</div>' +
+                '<h2>Con su propio logo y todo a su nombre</h2>' +
+                '<p>¿Cómo quiere trabajar con sus ' + n.toLocaleString('es-CO') + ' afiliados? Valor al mes:</p>' +
+                '<div class="modos">' +
+                    fila('esencial', 'Con mis propias empresas', 'Alianza Esencial · la plataforma', 800) +
+                    fila('especifica', 'Con las empresas de Brygar', 'Alianza Específica · plataforma y automatización', 5500) +
+                    fila('integral', 'Que Brygar lo opere todo', 'Alianza Integral · gestión completa', 15000) +
+                '</div>' +
+                (n < UMBRAL ? '<p>Las alianzas son para 100 o más. Puede empezar con ' + n + ' y pasar el resto en tres meses.</p>' : '') +
+                '<button type="button" class="btn btn-grande" data-ir="cotizador">Cotizar mi alianza →</button>' +
+                '<div class="otra">' + (n < UMBRAL ? 'Con ' + n + ' le conviene más: ' : '¿Prefiere trabajar con la empresa de Brygar? ') + '<button type="button" data-forzar="asesor">Ver el Plan Asesor</button></div>';
+        }
+        res.innerHTML = html;
+        if (p !== perfilPintado) {
+            res.classList.remove('cambia'); void res.offsetWidth; res.classList.add('cambia');
+            perfilPintado = p;
+        }
+    }
+
+    function cambiarN(v) {
+        sel.n = Math.max(1, Math.min(20000, Math.round(+v || 1)));
+        sel.forzado = null;
+        pintarSelector();
+    }
+    $('s-n').addEventListener('input', function () { $('s-n-r').value = Math.min(+this.value || 1, 400); cambiarN(this.value); });
+    $('s-n-r').addEventListener('input', function () { $('s-n').value = this.value; cambiarN(this.value); });
+    $('s-chips').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        poner('s-n', 's-n-r', +b.dataset.n); cambiarN(b.dataset.n);
+    });
+    $('s-conm').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        sel.forzado = b.dataset.p; pintarSelector();
+    });
+    $('s-res').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.forzar) { sel.forzado = b.dataset.forzar; pintarSelector(); return; }
+        if (b.dataset.modo) { sel.modo = b.dataset.modo; pintarSelector(); return; }
+        if (b.dataset.ir === 'asesor') {
+            poner('a-clientes', 'a-clientes-r', sel.n); asesor();
+            fijarPerfil('asesor'); irA('asesor');
+        } else if (b.dataset.ir === 'cotizador') {
+            poner('q-afiliados', 'q-afiliados-r', sel.n); estado.plan = sel.modo; calcular();
+            fijarPerfil('empresa'); irA('planes');
+        }
+    });
+    // «Ver también»: cambia lo que muestra la página
+    document.querySelectorAll('.cruce [data-perfil]').forEach(function (b) {
+        b.addEventListener('click', function () {
+            fijarPerfil(b.dataset.perfil);
+            irA(b.dataset.perfil === 'asesor' ? 'asesor' : 'planes');
+        });
+    });
+    // Un enlace interno a una sección oculta la vuelve a mostrar
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest('a[href^="#"]'); if (!a) return;
+        var destino = document.querySelector(a.getAttribute('href'));
+        var seccion = destino && destino.closest('section');
+        if (seccion && getComputedStyle(seccion).display === 'none') fijarPerfil('todos');
+    });
+    pintarSelector();
 })();
 </script>
 </body>
