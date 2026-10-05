@@ -189,6 +189,8 @@
         .seg { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .seg button { font: inherit; font-size: 14px; font-weight: 600; padding: 10px 8px; border-radius: 12px; border: 1px solid var(--linea); background: var(--fondo); color: var(--tinta-suave); cursor: pointer; line-height: 1.25; min-width: 0; }
         .seg button small { display: block; font-weight: 500; font-size: 12px; opacity: .85; }
+        .seg.dos-col { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .seg.cinco { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .seg button[aria-pressed=true] { background: var(--marino); color: #fff; border-color: var(--marino); }
         .seg button:disabled { opacity: .45; cursor: not-allowed; }
         details.sup { font-size: 14px; color: var(--tinta-suave); }
@@ -251,6 +253,7 @@
             .recibe { grid-template-columns: 1fr; }
             .ahorro .tres { grid-template-columns: 1fr; gap: 14px; }
             .seg { grid-template-columns: 1fr; }
+            .seg.cinco { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         }
     </style>
 </head>
@@ -512,7 +515,7 @@
             <div class="mitad reveal" style="--i:1">
                 <div class="eyebrow" style="margin:0">Afiliación</div>
                 <div class="v num">50 %</div>
-                <p>La mitad de cada afiliación que traiga, siempre, tenga 2 clientes o 200. El valor depende del plan: una afiliación de $125.000 le deja $62.500, y una de $250.000, $125.000.</p>
+                <p>La mitad de cada afiliación que traiga, siempre, tenga 2 clientes o 200. El valor depende del plan del cliente: desde $125.400 (usted gana $62.700) hasta $308.100 (usted gana $154.050).</p>
             </div>
             <div class="mitad reveal" style="--i:2">
                 <div class="eyebrow" style="margin:0">Administración mensual</div>
@@ -555,13 +558,24 @@
                     <input type="range" id="a-nuevos-r" min="0" max="60" step="1" value="4" aria-label="Afiliaciones nuevas al mes">
                 </div>
                 <div class="campo">
-                    <label for="a-afil">Valor de cada afiliación <input type="number" id="a-afil" min="0" step="5000" value="125000" inputmode="numeric" style="width:140px"></label>
-                    <div class="seg" id="a-afil-chips" role="group" aria-label="Valor de la afiliación según el plan">
-                        <button type="button" data-v="55000" aria-pressed="false">Plan básico<small>$55.000</small></button>
-                        <button type="button" data-v="125000" aria-pressed="true">Plan completo<small>$125.000</small></button>
-                        <button type="button" data-v="250000" aria-pressed="false">Plan alto<small>$250.000</small></button>
+                    <div class="etq">Plan que más afilia</div>
+                    <div class="seg dos-col" id="a-cobertura" role="group" aria-label="Cobertura del plan">
+                        <button type="button" data-v="eps_arl" aria-pressed="true">EPS + ARL</button>
+                        <button type="button" data-v="ccf" aria-pressed="false">EPS + ARL + Caja</button>
+                        <button type="button" data-v="afp" aria-pressed="false">EPS + ARL + Pensión</button>
+                        <button type="button" data-v="afp_ccf" aria-pressed="false">EPS + ARL + Pensión + Caja</button>
                     </div>
-                    <div class="ayuda">La afiliación vale más o menos según el plan del cliente. Usted gana la mitad.</div>
+                </div>
+                <div class="campo">
+                    <div class="etq">Nivel de riesgo <span id="a-riesgo-nombre" style="font-weight:500;color:var(--tinta-suave)"></span></div>
+                    <div class="seg cinco" id="a-riesgo" role="group" aria-label="Nivel de riesgo ARL">
+                        <button type="button" data-v="1" aria-pressed="true">1</button>
+                        <button type="button" data-v="2" aria-pressed="false">2</button>
+                        <button type="button" data-v="3" aria-pressed="false">3</button>
+                        <button type="button" data-v="4" aria-pressed="false">4</button>
+                        <button type="button" data-v="5" aria-pressed="false">5</button>
+                    </div>
+                    <div class="ayuda" id="a-plan-nota"></div>
                 </div>
                 <label class="casilla"><input type="checkbox" id="a-arranque"> Estoy en mis tres primeros meses</label>
                 <details class="sup" style="margin-top:20px">
@@ -750,7 +764,19 @@
     function nivelDe(n) { var i = 0; NIVELES.forEach(function (x, k) { if (n >= x[0]) i = k; }); return i; }
     enlazar2('a-clientes', 'a-clientes-r');
     enlazar2('a-nuevos', 'a-nuevos-r');
-    ['a-admon', 'a-afil', 'a-arranque'].forEach(function (id) { $(id).addEventListener('input', asesor); });
+    ['a-admon', 'a-arranque'].forEach(function (id) { $(id).addEventListener('input', asesor); });
+    // Valores del volante de planes de Brygar, por cobertura y nivel de riesgo ARL (1 a 5)
+    var PLANES_AFIL = {
+        eps_arl: [125400, 134500, 158900, 192400, 238100],
+        ccf: [195400, 204500, 228900, 262400, 308100],
+        afp: [405600, 414700, 439100, 472600, 518300],
+        afp_ccf: [475600, 484700, 509100, 542600, 588300]
+    };
+    var APORTE_PENSION = 280200;
+    var RIESGOS = ['· bajo: oficinas, docentes, ventas', '· moderado: meseros, asesores, cocina', '· medio: médicos, enfermeras, ebanistas', '· alto: conductores, soldadores, mensajeros', '· muy alto: construcción, obras civiles, minería'];
+    var plan = { cobertura: 'eps_arl', riesgo: 1 };
+    $('a-cobertura').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { plan.cobertura = b.dataset.v; asesor(); } });
+    $('a-riesgo').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { plan.riesgo = +b.dataset.v; asesor(); } });
     function enlazar2(numId, rangoId) {
         var n = $(numId), r = $(rangoId);
         n.addEventListener('input', function () { r.value = n.value; asesor(); });
@@ -758,7 +784,18 @@
     }
     function asesor() {
         var c = Math.max(+$('a-clientes').value || 0, 0), nuevos = Math.max(+$('a-nuevos').value || 0, 0);
-        var admon = Math.max(+$('a-admon').value || 0, 0), afil = Math.max(+$('a-afil').value || 0, 0);
+        var admon = Math.max(+$('a-admon').value || 0, 0);
+        // La afiliación depende del plan y del riesgo. En los planes con pensión, el aporte al
+        // fondo no entra en el reparto: se toma el valor del mismo plan sin pensión.
+        var valorPlan = PLANES_AFIL[plan.cobertura][plan.riesgo - 1];
+        var conPension = plan.cobertura.indexOf('afp') === 0;
+        var afil = conPension ? valorPlan - APORTE_PENSION : valorPlan;
+        $('a-cobertura').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === plan.cobertura ? 'true' : 'false'); });
+        $('a-riesgo').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', +b.dataset.v === plan.riesgo ? 'true' : 'false'); });
+        $('a-riesgo-nombre').textContent = RIESGOS[plan.riesgo - 1];
+        $('a-plan-nota').textContent = 'Plan de ' + cop(valorPlan) + '. ' + (conPension
+            ? 'De ahí, ' + cop(APORTE_PENSION) + ' son el aporte de pensión, que va al fondo: la afiliación que se reparte es de ' + cop(afil) + '.'
+            : 'La afiliación vale lo mismo, y usted gana la mitad.');
         var arranque = $('a-arranque').checked;
         var k = nivelDe(c), pct = arranque ? 0.5 : NIVELES[k][1];
         var gAdmon = c * admon * pct, gAfil = nuevos * afil * 0.5, total = gAdmon + gAfil;
@@ -769,7 +806,7 @@
         $('a-o-admon-etq').textContent = c + ' clientes × ' + cop(admon * pct) + ' (' + Math.round(pct * 100) + ' % de ' + cop(admon) + ')';
         $('a-o-admon').textContent = cop(gAdmon);
         $('a-o-afil-etq').textContent = nuevos + ' afiliaciones × ' + cop(afil * 0.5) + ' (la mitad de ' + cop(afil) + ')';
-        $('a-afil-chips').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', +b.dataset.v === afil ? 'true' : 'false'); });
+
         $('a-o-afil').textContent = cop(gAfil);
         $('a-o-total').textContent = cop(total);
         $('a-o-nivel').textContent = arranque ? 'Meses de arranque: 50 % completo' : 'Nivel del ' + Math.round(pct * 100) + ' % de administración';
@@ -796,10 +833,6 @@
             '• Según la calculadora ganaría: ' + cop(total) + ' al mes';
         $('a-o-wa').href = WA + '?text=' + encodeURIComponent(texto);
     }
-    $('a-afil-chips').addEventListener('click', function (e) {
-        var b = e.target.closest('button'); if (!b) return;
-        $('a-afil').value = b.dataset.v; asesor();
-    });
     asesor();
 
     // ── Selector de entrada: ¿asesor o empresa? ──
@@ -849,7 +882,7 @@
                 '<h2>' + (n >= UMBRAL ? 'Con ' + n.toLocaleString('es-CO') + ' ya le alcanza para su propia marca' : 'Trabaje con la empresa de Brygar') + '</h2>' +
                 '<div class="cifra">' + cop(gana) + '<small>al mes de administración, con el ' + Math.round(pct * 100) + ' % de ' + cop(ADMON_LISTA) + ' por persona. Sin pagar plataforma.</small></div>' +
                 '<div class="mini">' + barras + '</div>' +
-                '<p>' + sigue + ' Además gana la mitad de cada afiliación: si el plan del cliente tiene afiliación de $250.000, $125.000 son suyos.</p>' +
+                '<p>' + sigue + ' Además gana la mitad de cada afiliación: de un plan de $238.100, $119.050 son suyos.</p>' +
                 '<button type="button" class="btn btn-grande" data-ir="asesor">Ver cuánto ganaría →</button>' +
                 '<div class="otra">' + (n >= UMBRAL ? 'Le conviene más una alianza: ' : '¿Ya tiene su propia empresa? ') + '<button type="button" data-forzar="empresa">Ver las alianzas</button></div>';
         } else if (n < CERCA) {
