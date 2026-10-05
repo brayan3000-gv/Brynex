@@ -58,7 +58,13 @@ class NivelAsesorMitad extends Command
                     number_format($publico, 0, ',', '.'),
                     number_format($asesor, 0, ',', '.'),
                     number_format($publico - $asesor, 0, ',', '.'),
-                    $asesor * 2 >= $publico - 100 ? 'mitad' : ($asesor > 0 ? 'tope del mínimo' : 'no alcanza'),
+                    match (true) {
+                        $asesor * 2 >= $publico - 100 => 'mitad',
+                        // El plan deja repartir menos que la mitad: el retiro y los «otros» pesan más
+                        $publico - (int) $c['retiro'] - (int) $c['otros'] < min(intdiv($publico, 2), $publico - $minimo) => $asesor > 0 ? 'lo que deja el retiro' : 'el retiro se lleva todo',
+                        $asesor > 0 => 'tope del mínimo',
+                        default => 'no alcanza',
+                    },
                 ];
             }
         }
