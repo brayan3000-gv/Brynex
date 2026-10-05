@@ -52,7 +52,13 @@
                 <div class="usr-rol">{{ $usr->getRoleNames()->first() ?? 'sin rol' }}</div>
             </div>
 
-            {{-- Grid de aliados --}}
+            {{-- Grid de aliados. El superadmin entra a todos (User::puedeAccederAliado):
+                 sus casillas no se tocan y el servidor tampoco deja cambiarlas. --}}
+            @if($usr->hasRole('superadmin'))
+            <div style="padding:.85rem 1.25rem;font-size:.8rem;color:#14532d;background:#f0fdf4;border-top:1px solid #dcfce7">
+                ✅ <strong>Acceso total:</strong> por ser superadmin entra a todos los aliados activos. No hace falta habilitarle ninguno.
+            </div>
+            @else
             <div class="aliados-grid">
                 @foreach($aliados as $al)
                 @php $tieneAcceso = in_array($al->id, $accesosActivos); @endphp
@@ -65,6 +71,7 @@
                 </div>
                 @endforeach
             </div>
+            @endif
         </div>
         @endforeach
     </div>
