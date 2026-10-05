@@ -51,13 +51,49 @@ class ArlCentroTrabajo extends BaseModel
      * Devuelve null a propósito cuando no hay uno: preferimos que la afiliación
      * se detenga con un mensaje claro antes que mandar a Sura un centro que no
      * corresponde al riesgo real del trabajador.
+     *
+     * Los centros son de la póliza, no de la fila: si la razón social no tiene
+     * los suyos —una copia prestada a otro aliado después de la última
+     * sincronización—, sirven los de cualquier otra con la misma póliza.
      */
     public static function paraRiesgo(int $razonSocialId, int $nivelRiesgo): ?self
     {
-        return static::where('razon_social_id', $razonSocialId)
+        $centro = static::where('razon_social_id', $razonSocialId)
             ->where('nivel_riesgo', $nivelRiesgo)
             ->where('activo', true)
             ->orderBy('codigo_centro')
             ->first();
+
+        if ($centro) {
+            return $centro;
+        }
+
+        $poliza = RazonSocial::where('id', $razonSocialId)->value('arl_poliza');
+
+        if (! $poliza) {
+            return null;
+        }
+
+        return static::whereIn('razon_social_id', RazonSocial::where('arl_poliza', $poliza)->select('id'))
+            ->where('nivel_riesgo', $nivelRiesgo)
+            ->where('activo', true)
+            ->orderBy('codigo_centro')
+            ->first();
+    }
+
+    /** Los niveles de riesgo que tienen centro activo en una póliza. */
+    public static function nivelesDePoliza(string $poliza): array
+    {
+        if ($poliza === '') {
+            return [];
+        }
+
+        return static::whereIn('razon_social_id', RazonSocial::where('arl_poliza', $poliza)->select('id'))
+            ->where('activo', true)
+            ->distinct()
+            ->orderBy('nivel_riesgo')
+            ->pluck('nivel_riesgo')
+            ->map(fn ($n) => (int) $n)
+            ->all();
     }
 }

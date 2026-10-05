@@ -155,7 +155,10 @@ class ArlSuraPayloadBuilder
         if (! (int) $contrato->n_arl) {
             $problemas[] = 'El contrato no tiene nivel de riesgo (n_arl).';
         } elseif (! ArlCentroTrabajo::paraRiesgo((int) $contrato->razon_social_id, (int) $contrato->n_arl)) {
-            $problemas[] = "No hay centro de trabajo de riesgo {$contrato->n_arl} para esta razón social (corre arl:sincronizar-centros).";
+            $niveles = ArlCentroTrabajo::nivelesDePoliza((string) $rs?->arl_poliza);
+            $problemas[] = $niveles
+                ? "La póliza {$rs->arl_poliza} no tiene centro de trabajo de riesgo {$contrato->n_arl} en Sura: solo de riesgo ".implode(', ', $niveles).'. Hay que crearlo en el portal (y luego correr arl:sincronizar-centros) o revisar el riesgo del contrato.'
+                : "No hay centro de trabajo de riesgo {$contrato->n_arl} para esta razón social (corre arl:sincronizar-centros).";
         }
 
         try {
