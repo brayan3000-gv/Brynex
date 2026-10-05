@@ -1420,7 +1420,9 @@ class CuadreDiarioController extends Controller
     private function datosFacturasDia(Request $request): array
     {
         $aliadoId = session('aliado_id_activo');
-        $fecha    = $request->input('fecha', today()->toDateString());
+        // El default de input() no aplica a `?fecha=` (llega como null por
+        // ConvertEmptyStringsToNull): pasa al borrar el día en el selector.
+        $fecha    = $this->fechaValida($request->input('fecha'));
 
         $fTipo     = $request->input('tipo');
         $fForma    = $request->input('forma_pago');

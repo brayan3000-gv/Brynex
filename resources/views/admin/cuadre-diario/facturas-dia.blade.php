@@ -107,7 +107,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
                 @foreach(request()->except(['fecha','page']) as $k => $v)
                     <input type="hidden" name="{{ $k }}" value="{{ $v }}">
                 @endforeach
-                <input type="date" name="fecha" value="{{ $fecha }}" onchange="this.form.submit()"
+                <input type="date" name="fecha" value="{{ $fecha }}" onchange="this.value && this.form.submit()"
                        class="fd-fecha" title="Cambiar de día">
             </form>
             @if($hayFiltro)
