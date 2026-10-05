@@ -1464,14 +1464,13 @@ class CobrosController extends Controller
         $contratos = $contratos->filter(fn($c) => !($c->fact_pagada ?? false))->values();
         $cantClientes = $contratos->count();
 
-        $normalizarCelular = function (?string $raw): string {
-            $raw = preg_replace('/\D/', '', $raw ?? '');
-            if (empty($raw)) return '';
-            if (strlen($raw) === 12) return $raw;
-            if (strlen($raw) === 10) return '57' . $raw;
-            if (str_starts_with($raw, '57') && strlen($raw) === 12) return $raw;
-            return $raw;
-        };
+        // Solo un celular colombiano de verdad. Lo demás («3», un fijo, dos
+        // números en el mismo campo) cuenta como sin número: antes se mandaba
+        // igual y Meta lo rechazaba (#100 Invalid parameter, 5-oct-2026).
+        $normalizarCelular = fn (?string $raw): string =>
+            \App\Services\WhatsappApiService::esCelularColombiano($raw)
+                ? \App\Services\WhatsappApiService::normalizarNumero($raw)
+                : '';
 
         // ── Encontrar contratos que ya fueron enviados hoy ──
         $lotesHoyIds = WhatsappEnvioMasivo::where('aliado_id', $aliadoId)
@@ -1856,14 +1855,13 @@ class CobrosController extends Controller
         $celularSoporte = $config->numero_telefono ?: '3001234567';
 
         // ── Normalizar número de celular ─────────────────────────────────
-        $normalizarCelular = function (?string $raw): string {
-            $raw = preg_replace('/\D/', '', $raw ?? '');
-            if (empty($raw)) return '';
-            if (strlen($raw) === 12) return $raw;
-            if (strlen($raw) === 10) return '57' . $raw;
-            if (str_starts_with($raw, '57') && strlen($raw) === 12) return $raw;
-            return $raw;
-        };
+        // Solo un celular colombiano de verdad. Lo demás («3», un fijo, dos
+        // números en el mismo campo) cuenta como sin número: antes se mandaba
+        // igual y Meta lo rechazaba (#100 Invalid parameter, 5-oct-2026).
+        $normalizarCelular = fn (?string $raw): string =>
+            \App\Services\WhatsappApiService::esCelularColombiano($raw)
+                ? \App\Services\WhatsappApiService::normalizarNumero($raw)
+                : '';
 
         // ── Separar contratos en AFILIACIÓN vs PLANILLA ──────────────────
         $contratosAfil     = $contratos->filter(fn($c) => ($c->es_afil ?? false))->values();
@@ -2467,14 +2465,13 @@ class CobrosController extends Controller
         // Filtrar solo empresas con pendientes
         $empresas = $empresas->filter(fn($e) => $e->total_pend > 0)->values();
 
-        $normalizarCelular = function (?string $raw): string {
-            $raw = preg_replace('/\D/', '', $raw ?? '');
-            if (empty($raw)) return '';
-            if (strlen($raw) === 12) return $raw;
-            if (strlen($raw) === 10) return '57' . $raw;
-            if (str_starts_with($raw, '57') && strlen($raw) === 12) return $raw;
-            return $raw;
-        };
+        // Solo un celular colombiano de verdad. Lo demás («3», un fijo, dos
+        // números en el mismo campo) cuenta como sin número: antes se mandaba
+        // igual y Meta lo rechazaba (#100 Invalid parameter, 5-oct-2026).
+        $normalizarCelular = fn (?string $raw): string =>
+            \App\Services\WhatsappApiService::esCelularColombiano($raw)
+                ? \App\Services\WhatsappApiService::normalizarNumero($raw)
+                : '';
 
         $lotesHoyIds = WhatsappEnvioMasivo::where('aliado_id', $aliadoId)
             ->whereDate('created_at', today())
@@ -2497,7 +2494,7 @@ class CobrosController extends Controller
                 $cantYaEnviadosHoy++;
                 continue;
             }
-            $num = $normalizarCelular($e->telefono ?: $e->celular);
+            $num = ($normalizarCelular($e->telefono) ?: $normalizarCelular($e->celular));
             if (empty($num)) {
                 $cantSinCelular++;
             } else {
@@ -2510,7 +2507,7 @@ class CobrosController extends Controller
 
         $previsualizacionesReales = [];
         $empresasValidasPreview = $empresas
-            ->filter(fn($e) => !isset($empresaIdsEnviadosSet[$e->id]) && !empty($normalizarCelular($e->telefono ?: $e->celular)))
+            ->filter(fn($e) => !isset($empresaIdsEnviadosSet[$e->id]) && !empty(($normalizarCelular($e->telefono) ?: $normalizarCelular($e->celular))))
             ->take(30);
 
         // Día hábil configurado por el aliado: no depende de $e, se calcula una sola
@@ -2548,7 +2545,7 @@ class CobrosController extends Controller
 
             $previsualizacionesReales[] = [
                 'nombre' => $e->empresa,
-                'celular' => $normalizarCelular($e->telefono ?: $e->celular),
+                'celular' => ($normalizarCelular($e->telefono) ?: $normalizarCelular($e->celular)),
                 'cuerpo' => $cuerpoReal,
                 'valor'  => $valorFormateado
             ];
@@ -2665,14 +2662,13 @@ class CobrosController extends Controller
 
         $empresaIdsEnviadosSet = array_flip($detallesHoy);
 
-        $normalizarCelular = function (?string $raw): string {
-            $raw = preg_replace('/\D/', '', $raw ?? '');
-            if (empty($raw)) return '';
-            if (strlen($raw) === 12) return $raw;
-            if (strlen($raw) === 10) return '57' . $raw;
-            if (str_starts_with($raw, '57') && strlen($raw) === 12) return $raw;
-            return $raw;
-        };
+        // Solo un celular colombiano de verdad. Lo demás («3», un fijo, dos
+        // números en el mismo campo) cuenta como sin número: antes se mandaba
+        // igual y Meta lo rechazaba (#100 Invalid parameter, 5-oct-2026).
+        $normalizarCelular = fn (?string $raw): string =>
+            \App\Services\WhatsappApiService::esCelularColombiano($raw)
+                ? \App\Services\WhatsappApiService::normalizarNumero($raw)
+                : '';
 
         $envio = WhatsappEnvioMasivo::create([
             'aliado_id'           => $aliadoId,
@@ -2689,7 +2685,7 @@ class CobrosController extends Controller
         $destinatariosOmitidos = 0;
 
         foreach ($empresas as $e) {
-            $num = $normalizarCelular($e->telefono ?: $e->celular);
+            $num = ($normalizarCelular($e->telefono) ?: $normalizarCelular($e->celular));
             $sinNumero = empty($num);
             $valorCobro = $incluirValor ? $this->valorCobroEmpresa($e) : 0.0;
 
