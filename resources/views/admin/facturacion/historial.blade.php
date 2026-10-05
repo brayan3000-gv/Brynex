@@ -27,6 +27,14 @@ $esSuperBrynex = auth()->user()->es_brynex && auth()->user()->hasRole('superadmi
 .hi-sel:focus{border-color:#3b82f6}
 .hi-pill{padding:.25rem .75rem;border-radius:20px;font-size:.72rem;font-weight:700;border:1.5px solid #e2e8f0;background:#f8fafc;color:#64748b;cursor:pointer;transition:all .15s;text-decoration:none}
 .hi-pill.active,.hi-pill:hover{background:#eff6ff;border-color:#3b82f6;color:#1d4ed8}
+/* Filtros dentro de la tarjeta oscura del encabezado */
+.hi-filtros-card{background:transparent;border:none;border-top:1px solid rgba(255,255,255,.12);border-radius:0;padding:.7rem 0 0;margin:.8rem 0 0}
+.hi-filtros-card label{color:#94a3b8}
+.hi-filtros-card .hi-sel{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:#fff}
+.hi-filtros-card .hi-sel option{color:#0f172a}
+.hi-filtros-card .hi-sel:focus{border-color:#60a5fa}
+.hi-filtros-card .hi-pill{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#e2e8f0}
+.hi-filtros-card .hi-pill.active,.hi-filtros-card .hi-pill:hover{background:rgba(96,165,250,.2);border-color:#60a5fa;color:#fff}
 /* Grupos acordeón */
 .hi-group{background:#fff;border:1px solid #e2e8f0;border-radius:13px;overflow:hidden;margin-bottom:.75rem}
 .hi-group-hdr{display:flex;align-items:center;justify-content:space-between;padding:.65rem 1rem;cursor:pointer;user-select:none;transition:background .15s}
@@ -113,32 +121,32 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
             @endif
         </div>
     </div>
+    {{-- FILTROS, dentro de la tarjeta --}}
+    <form method="GET" class="hi-filtros hi-filtros-card" id="formFiltro">
+        <div style="display:flex;flex-direction:column;gap:.15rem">
+            <label>Año</label>
+            <select name="anio" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
+                <option value="0" {{ !$filtroAnio ? 'selected' : '' }}>Todos</option>
+                @foreach($aniosDisp as $a)
+                <option value="{{ $a }}" {{ $filtroAnio == $a ? 'selected' : '' }}>{{ $a }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.15rem">
+            <label>Razón Social</label>
+            <select name="razon_social_id" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
+                <option value="" {{ $filtroRs === '' ? 'selected' : '' }}>Todas</option>
+                @foreach($rsSocDisp as $rs)
+                <option value="{{ $rs['id'] }}" {{ $filtroRs == $rs['id'] ? 'selected' : '' }}>{{ $rs['label'] }}</option>
+                @endforeach
+            </select>
+        </div>
+        @if(!$sinFiltros)
+        <a href="{{ route('admin.facturacion.historial', $cedula) }}" class="hi-pill active" style="margin-top:1rem">✕ Limpiar filtros</a>
+        @endif
+    </form>
 </div>
 
-{{-- FILTROS --}}
-<form method="GET" class="hi-filtros" id="formFiltro">
-    <div style="display:flex;flex-direction:column;gap:.15rem">
-        <label>Año</label>
-        <select name="anio" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
-            <option value="0" {{ !$filtroAnio ? 'selected' : '' }}>Todos</option>
-            @foreach($aniosDisp as $a)
-            <option value="{{ $a }}" {{ $filtroAnio == $a ? 'selected' : '' }}>{{ $a }}</option>
-            @endforeach
-        </select>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:.15rem">
-        <label>Razón Social</label>
-        <select name="razon_social_id" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
-            <option value="" {{ $filtroRs === '' ? 'selected' : '' }}>Todas</option>
-            @foreach($rsSocDisp as $rs)
-            <option value="{{ $rs['id'] }}" {{ $filtroRs == $rs['id'] ? 'selected' : '' }}>{{ $rs['label'] }}</option>
-            @endforeach
-        </select>
-    </div>
-    @if(!$sinFiltros)
-    <a href="{{ route('admin.facturacion.historial', $cedula) }}" class="hi-pill active" style="margin-top:1rem">✕ Limpiar filtros</a>
-    @endif
-</form>
 
 {{-- CONTENIDO AGRUPADO POR CONTRATO Y AÑO --}}
 @forelse($agrupado as $grupoKey => $porAnio)
