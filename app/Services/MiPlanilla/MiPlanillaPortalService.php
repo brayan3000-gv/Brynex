@@ -160,24 +160,43 @@ class MiPlanillaPortalService
      */
     public function planillas(): array
     {
-        $principal = $this->get('/PrivadoIndependientes/Principal');
-
-        // Los nombres de los métodos están ofuscados en el script del tablero y
-        // pueden cambiar con cada versión: se leen de ahí en cada corrida.
-        $js = preg_match('~src="(/PrivadoIndependientes/Site/Vue/Dashboard[^"]*)"~', $principal, $m)
-            ? $this->get(html_entity_decode($m[1]))
-            : '';
-        $disponibles = preg_match('~sr\("(__\w+)","PlanillaAPI",\{pagina~', $js, $a) ? $a[1] : null;
-        $pagadas = preg_match('~sr\("(__\w+)","PlanillaAPI",\{bloque~', $js, $b) ? $b[1] : null;
-        if (! $disponibles || ! $pagadas) {
-            throw new \RuntimeException('No se encontraron las llamadas del tablero de Mi Planilla (¿cambió el portal?).');
-        }
+        [$principal, $disponibles, $pagadas] = $this->tablero(true);
 
         return [
             'disponibles' => $this->api($principal, $disponibles, ['pagina' => 1]),
             'pagadas' => $this->api($principal, $pagadas, ['bloque' => 1]),
         ];
     }
+
+    /**
+     * La página del tablero y los métodos (ofuscados) que listan las planillas.
+     * Los nombres pueden cambiar con cada versión del portal: se leen del script.
+     *
+     * @return array{0: string, 1: string, 2: string} página, disponibles, pagadas
+     */
+    private function tablero(bool $fresco = false): array
+    {
+        if ($fresco || $this->tablero === null) {
+            $principal = $this->get('/PrivadoIndependientes/Principal');
+            $js = preg_match('~src="(/PrivadoIndependientes/Site/Vue/Dashboard[^"]*)"~', $principal, $m)
+                ? $this->get(html_entity_decode($m[1]))
+                : '';
+            $disponibles = preg_match('~sr\("(__\w+)","PlanillaAPI",\{pagina~', $js, $a) ? $a[1] : null;
+            $pagadas = preg_match('~sr\("(__\w+)","PlanillaAPI",\{bloque~', $js, $b) ? $b[1] : null;
+            if (! $disponibles || ! $pagadas) {
+                throw new \RuntimeException('No se encontraron las llamadas del tablero de Mi Planilla (¿cambió el portal?).');
+            }
+            $this->tablero = [$principal, $disponibles, $pagadas];
+        }
+
+        return $this->tablero;
+    }
+
+    /** @var array{0: string, 1: string, 2: string}|null */
+    private ?array $tablero = null;
+
+    /** Bloques de pagadas ya leídos en esta sesión (el histórico pide doce meses). */
+    private array $bloquesPagadas = [];
 
     /**
      * Las personas que el portal pondría en una planilla del tipo y período
@@ -240,17 +259,34 @@ class MiPlanillaPortalService
     /** La planilla pagada con ese número, tal como la lista el tablero. */
     private function pagada(string $numero): array
     {
-        $pagadas = collect($this->planillas()['pagadas']);
-        $planilla = $pagadas->first(fn ($p) => (string) ($p['NumeroRadicado'] ?? '') === $numero);
-        if (! $planilla) {
-            // Con lo que sí trae se ve si es otra cuenta o una planilla vieja que
-            // no está en el primer bloque del tablero.
-            $vistas = $pagadas->pluck('NumeroRadicado')->filter()->take(6)->implode(', ');
-            throw new \RuntimeException("La planilla {$numero} no está entre las pagadas de la cuenta {$this->usuario} en Mi Planilla"
-                .($vistas !== '' ? " (aparecen: {$vistas})." : ' (la cuenta no muestra ninguna pagada).'));
+        // El tablero pagina las pagadas por `bloque`: el 1 trae las más recientes
+        // (~19) y cada uno siguiente unas 13 más viejas, repitiendo la última del
+        // anterior. Se recorre hasta encontrarla o hasta que no aparezcan nuevas
+        // (Omar Melo, 5-oct-2026: las de 2025 estaban en el bloque 2).
+        $vistas = [];
+        for ($bloque = 1; $bloque <= 40; $bloque++) {
+            if (! array_key_exists($bloque, $this->bloquesPagadas)) {
+                [$principal, , $metodo] = $this->tablero();
+                $this->bloquesPagadas[$bloque] = $this->api($principal, $metodo, ['bloque' => $bloque]);
+            }
+            $lista = $this->bloquesPagadas[$bloque];
+
+            foreach ($lista as $p) {
+                if ((string) ($p['NumeroRadicado'] ?? '') === $numero) {
+                    return $p;
+                }
+            }
+
+            $nuevas = array_diff(array_map(fn ($p) => (string) ($p['NumeroRadicado'] ?? ''), $lista), $vistas);
+            if (! $nuevas) {
+                break;
+            }
+            $vistas = array_merge($vistas, $nuevas);
         }
 
-        return $planilla;
+        // Con lo que sí trae se ve si es otra cuenta o un número mal digitado.
+        throw new \RuntimeException("La planilla {$numero} no está entre las ".count($vistas)." pagadas de la cuenta {$this->usuario} en Mi Planilla"
+            .($vistas ? ' (las más recientes: '.implode(', ', array_slice($vistas, 0, 4)).').' : ' (la cuenta no muestra ninguna pagada).'));
     }
 
     /**
