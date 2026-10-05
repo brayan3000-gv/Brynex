@@ -515,7 +515,7 @@
             <div class="mitad reveal" style="--i:1">
                 <div class="eyebrow" style="margin:0">Afiliación</div>
                 <div class="v num">50 %</div>
-                <p>La mitad de cada afiliación que traiga, siempre, tenga 2 clientes o 200. El valor depende del plan del cliente: desde $125.400 (usted gana $62.700) hasta $308.100 (usted gana $154.050).</p>
+                <p>La mitad de cada afiliación que traiga, tenga 2 clientes o 200. Depende del plan del cliente: desde $125.400 (usted gana $62.700) hasta $308.100 (usted gana $154.050).</p>
             </div>
             <div class="mitad reveal" style="--i:2">
                 <div class="eyebrow" style="margin:0">Administración mensual</div>
@@ -541,6 +541,7 @@
             <li class="reveal" style="--i:1"><strong>Con dos metas en el camino:</strong> 10 clientes al cierre del segundo mes y 20 al cierre del tercero. Si no llega a la del segundo, el tercero gana por su nivel real; si al tercero va en 15 o más, tiene un mes adicional. Lo ya ganado no se descuenta.</li>
             <li class="reveal" style="--i:2"><strong>Sube al mes siguiente.</strong> Apenas llega a un nivel, el mes que sigue ya gana ese porcentaje sobre todos sus clientes.</li>
             <li class="reveal" style="--i:3"><strong>Si baja, tiene un mes de aviso</strong> para recuperar el nivel antes de que cambie su porcentaje.</li>
+            <li class="reveal" style="--i:3"><strong>De cada afiliación, la mitad es suya.</strong> A Brygar le quedan mínimo $60.000 para asumir el retiro del cliente; en los planes desde $125.400 la mitad ya lo cubre.</li>
             <li class="reveal" style="--i:4"><strong>Cuenta el cliente al día.</strong> La comisión se paga sobre lo recaudado; un cliente en mora no suma ese mes.</li>
             <li class="reveal" style="--i:5"><strong>Con menos de 5 clientes</strong> los atiende el equipo de Brygar y usted gana el 20 % durante los primeros 6 meses de cada uno. Al llegar a 5 recibe su acceso y sube al 30 %.</li>
             <li class="reveal" style="--i:6"><strong>Al pasar de 100</strong> puede dar el salto a una alianza con su propio logo y su nombre.</li>
@@ -773,6 +774,8 @@
         afp_ccf: [475600, 484700, 509100, 542600, 588300]
     };
     var APORTE_PENSION = 280200;
+    // De cada afiliación a Brygar le quedan mínimo $60.000, para asumir el retiro
+    var MIN_ALIADO_AFIL = 60000;
     var RIESGOS = ['· bajo: oficinas, docentes, ventas', '· moderado: meseros, asesores, cocina', '· medio: médicos, enfermeras, ebanistas', '· alto: conductores, soldadores, mensajeros', '· muy alto: construcción, obras civiles, minería'];
     var plan = { cobertura: 'eps_arl', riesgo: 1 };
     $('a-cobertura').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) { plan.cobertura = b.dataset.v; asesor(); } });
@@ -790,6 +793,7 @@
         var valorPlan = PLANES_AFIL[plan.cobertura][plan.riesgo - 1];
         var conPension = plan.cobertura.indexOf('afp') === 0;
         var afil = conPension ? valorPlan - APORTE_PENSION : valorPlan;
+        var porAfil = Math.max(0, Math.min(afil / 2, afil - MIN_ALIADO_AFIL));
         $('a-cobertura').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.v === plan.cobertura ? 'true' : 'false'); });
         $('a-riesgo').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', +b.dataset.v === plan.riesgo ? 'true' : 'false'); });
         $('a-riesgo-nombre').textContent = RIESGOS[plan.riesgo - 1];
@@ -798,14 +802,14 @@
             : 'La afiliación vale lo mismo, y usted gana la mitad.');
         var arranque = $('a-arranque').checked;
         var k = nivelDe(c), pct = arranque ? 0.5 : NIVELES[k][1];
-        var gAdmon = c * admon * pct, gAfil = nuevos * afil * 0.5, total = gAdmon + gAfil;
+        var gAdmon = c * admon * pct, gAfil = nuevos * porAfil, total = gAdmon + gAfil;
 
         document.querySelectorAll('#escalera .peldano').forEach(function (p) {
             p.classList.toggle('activo', arranque ? +p.dataset.nivel === 3 : +p.dataset.nivel === k);
         });
         $('a-o-admon-etq').textContent = c + ' clientes × ' + cop(admon * pct) + ' (' + Math.round(pct * 100) + ' % de ' + cop(admon) + ')';
         $('a-o-admon').textContent = cop(gAdmon);
-        $('a-o-afil-etq').textContent = nuevos + ' afiliaciones × ' + cop(afil * 0.5) + ' (la mitad de ' + cop(afil) + ')';
+        $('a-o-afil-etq').textContent = nuevos + ' afiliaciones × ' + cop(porAfil) + (porAfil * 2 >= afil ? ' (la mitad de ' + cop(afil) + ')' : ' (de ' + cop(afil) + ', menos el mínimo de Brygar)');
 
         $('a-o-afil').textContent = cop(gAfil);
         $('a-o-total').textContent = cop(total);
@@ -825,7 +829,7 @@
         } else if (c >= 100) {
             sig.textContent = 'Con ' + c + ' clientes ya puede pasar a una alianza con su propio logo: en la Integral le quedarían ' + cop(c * Math.max(admon - 15000, 0)) + ' al mes de administración.';
         } else {
-            sig.textContent = 'Está en el nivel más alto. Cada cliente nuevo le suma ' + cop(admon * 0.5) + ' al mes, más ' + cop(afil * 0.5) + ' por afiliarlo.';
+            sig.textContent = 'Está en el nivel más alto. Cada cliente nuevo le suma ' + cop(admon * 0.5) + ' al mes, más ' + cop(porAfil) + ' por afiliarlo.';
         }
         var texto = 'Hola, quiero ser asesor de Brygar.\n' +
             '• Clientes que manejo: ' + c + '\n' +
