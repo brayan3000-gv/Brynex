@@ -279,6 +279,10 @@
     .card-promo { border: 1px solid var(--borde); border-radius: 18px; overflow: hidden; background: var(--fondo); }
     .card-promo img { width: 100%; aspect-ratio: 1/1; object-fit: cover; }
     .card-promo p { font-size: 0.85rem; color: var(--tinta-suave); padding: 0.9rem 1rem; margin: 0; }
+    .card-promo video { display: block; width: 100%; aspect-ratio: 9/16; object-fit: cover; background: #000; }
+    .acciones-video { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.8rem 1rem 0; }
+    .acciones-video:last-child { padding-bottom: 1rem; }
+    .acciones-video .btn { flex: 1 1 8rem; justify-content: center; padding: 0.55rem 0.8rem; font-size: 0.82rem; }
 
     .pasos { background: var(--fondo); }
     .grid-pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
@@ -617,7 +621,19 @@
             <div class="grid-promos">
                 @foreach($promos as $promo)
                     <div class="card-promo">
-                        <img src="{{ asset('storage/' . $promo->imagen_path) }}" alt="{{ $promo->titulo }}" loading="lazy">
+                        @if($promo->tipo_pieza === 'video' && $promo->video_path)
+                            <video controls playsinline preload="none" poster="{{ asset('storage/' . $promo->imagen_path) }}" aria-label="{{ $promo->titulo }}">
+                                <source src="{{ asset('storage/' . $promo->video_path) }}" type="video/mp4">
+                            </video>
+                            @php $urlDescarga = route('publico.aliado.video', ['slug' => $aliado->slug, 'publicacion' => $promo->id], false); @endphp
+                            <div class="acciones-video">
+                                <a href="{{ $urlDescarga }}" class="btn btn-ghost" download>⬇ Descargar</a>
+                                <button type="button" class="btn btn-brand btn-compartir-video" hidden
+                                        data-url="{{ $urlDescarga }}" data-titulo="{{ $promo->titulo }}">Compartir</button>
+                            </div>
+                        @else
+                            <img src="{{ asset('storage/' . $promo->imagen_path) }}" alt="{{ $promo->titulo }}" loading="lazy">
+                        @endif
                         @if($promo->copy)
                             <p>{{ Str::limit($promo->copy, 140) }}</p>
                         @endif
@@ -1176,6 +1192,51 @@
             elValor.innerHTML = prefijo + '$' + Math.round(valor).toLocaleString('es-CO') + '<small>/mes</small>';
         });
     });
+})();
+</script>
+<script>
+(function () {
+    // "Compartir" de los videos de Novedades: en el celular abre el menú del sistema con el
+    // ARCHIVO (no el enlace), para mandarlo directo por WhatsApp. Solo aparece donde el
+    // navegador sabe compartir archivos; en el computador queda "Descargar".
+    if (navigator.canShare && window.File) {
+        var prueba = new File([''], 'video.mp4', { type: 'video/mp4' });
+        if (navigator.canShare({ files: [prueba] })) {
+            document.querySelectorAll('.btn-compartir-video').forEach(function (btn) {
+                var textoOriginal = btn.textContent;
+                var archivo = null;
+                var compartir = function () {
+                    return navigator.share({ files: [archivo], title: btn.dataset.titulo })
+                        .then(function () { btn.textContent = textoOriginal; })
+                        .catch(function (e) {
+                            if (e && e.name === 'AbortError') { btn.textContent = textoOriginal; return; }
+                            // Safari solo abre el menú dentro del toque: si la descarga tardó, ya
+                            // venció. El archivo queda listo y el siguiente toque lo comparte.
+                            if (e && e.name === 'NotAllowedError') { btn.textContent = 'Toca para enviar'; return; }
+                            window.location.href = btn.dataset.url;
+                        });
+                };
+                btn.hidden = false;
+                btn.addEventListener('click', function () {
+                    if (archivo) { compartir(); return; }
+                    btn.disabled = true;
+                    btn.textContent = 'Preparando...';
+                    fetch(btn.dataset.url)
+                        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                        .then(function (blob) {
+                            archivo = new File([blob], 'video.mp4', { type: 'video/mp4' });
+                            btn.disabled = false;
+                            return compartir();
+                        })
+                        .catch(function () {
+                            btn.disabled = false;
+                            btn.textContent = textoOriginal;
+                            window.location.href = btn.dataset.url;
+                        });
+                });
+            });
+        }
+    }
 })();
 </script>
 @endsection

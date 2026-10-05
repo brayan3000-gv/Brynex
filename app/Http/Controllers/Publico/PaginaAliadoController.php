@@ -13,6 +13,8 @@ use App\Services\CotizacionPublicaService;
 use App\Services\MetricaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Página web pública de un aliado (/aliado/{slug}, o su propio dominio si tiene uno mapeado —
@@ -427,7 +429,35 @@ class PaginaAliadoController extends Controller
             ->whereJsonContains('destinos', 'web')
             ->orderByDesc('publicada_at')
             ->limit(6)
-            ->get(['id', 'titulo', 'copy', 'imagen_path', 'publicada_at']);
+            ->get(['id', 'titulo', 'copy', 'imagen_path', 'tipo_pieza', 'video_path', 'publicada_at']);
+    }
+
+    /**
+     * Descarga el MP4 de una pieza de "Novedades" con un nombre legible, para que los asesores
+     * lo compartan. Solo piezas que la página ya muestra (publicadas, destino web, del aliado
+     * del slug): nunca un borrador ni el video de otro aliado.
+     */
+    public function descargarVideo(string $slug, int $publicacion)
+    {
+        $aliado = Aliado::where('slug', $slug)->where('activo', true)->first();
+        if (!$aliado) {
+            abort(404);
+        }
+
+        $pieza = Publicacion::where('aliado_id', $aliado->id)
+            ->where('id', $publicacion)
+            ->where('estado', Publicacion::ESTADO_PUBLICADA)
+            ->whereJsonContains('destinos', 'web')
+            ->whereNotNull('video_path')
+            ->first(['id', 'titulo', 'video_path']);
+
+        if (!$pieza || !Storage::disk('public')->exists($pieza->video_path)) {
+            abort(404);
+        }
+
+        $nombre = Str::limit(Str::slug($aliado->nombre . ' ' . $pieza->titulo), 80, '') ?: "video-{$pieza->id}";
+
+        return Storage::disk('public')->download($pieza->video_path, $nombre . '.mp4');
     }
 
     /** Valida que sea un HEX de 6 dígitos; si no, usa el azul por defecto de la marca BryNex. */
