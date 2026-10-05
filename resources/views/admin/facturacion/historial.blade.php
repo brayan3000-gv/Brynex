@@ -366,28 +366,29 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                                 : (str_contains(mb_strtoupper($nombreOp), 'MI PLANILLA') ? 'Descargar la planilla real de Mi Planilla'
                                 : ($aliadoConSoporteOperador ? 'Descargar la planilla del operador (si no está, se genera la de BryNex)' : 'Descargar PDF Planilla'));
                         @endphp
+                        @php
+                            // El comprobante de pago PSE no tiene botón propio: se ofrece
+                            // dentro del recuadro de la planilla, y se baja solo si se pide.
+                            $urlComprobante = $numeroPlanillaOp
+                                && (in_array((int) $operadorId, $operadoresConComprobante, true) || (int) $operadorId === $miPlanillaId)
+                                ? route('admin.planos.comprobante_pago_pdf').'?cedula='.$f->cedula.'&numero_planilla='.urlencode($numeroPlanillaOp).'&forzar_operador_id='.$operadorId
+                                : '';
+                        @endphp
                         @if($numeroPlanillaOp && (int) $operadorId === $miPlanillaId && !$tieneClaveMiPlanilla)
                         {{-- Mi Planilla sin la clave de la persona: se pide, se prueba y se guarda --}}
                         <button type="button" class="btn-act-sm btn-planilla-mp" style="background:#0f172a;color:#fff;border-color:#0f172a;"
                                 data-url="{{ route('admin.planos.certificado_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}&forzar_operador_id={{ $operadorId }}"
-                                onclick="pedirClaveMiPlanilla(this.dataset.url)"
+                                data-comprobante="{{ $urlComprobante }}"
+                                onclick="pedirClaveMiPlanilla(this.dataset.url, this.dataset.comprobante)"
                                 title="Falta la clave de Mi Planilla de esta persona: se pide una vez y queda guardada">
                             ⬇️ Planilla
                         </button>
                         @elseif($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConPlanilla, true))
                         <a href="{{ route('admin.planos.certificado_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}{{ $operadorId ? '&forzar_operador_id=' . $operadorId : '' }}"
-                           onclick="return abrirPlanilla(event, this.href)"
+                           data-comprobante="{{ $urlComprobante }}"
+                           onclick="return abrirPlanilla(event, this.href, 'planilla', this.dataset.comprobante)"
                            target="_blank" class="btn-act-sm" style="background:#0f172a;color:#fff;border-color:#0f172a;" title="{{ $tituloPlanilla }}">
                             ⬇️ Planilla
-                        </a>
-                        @endif
-                        @if($numeroPlanillaOp && in_array((int) $operadorId, $operadoresConComprobante, true))
-                        {{-- Comprobante del pago PSE (banco, CUS, valor, hora), del operador --}}
-                        <a href="{{ route('admin.planos.comprobante_pago_pdf') }}?cedula={{ $f->cedula }}&numero_planilla={{ urlencode($numeroPlanillaOp) }}&forzar_operador_id={{ $operadorId }}"
-                           onclick="return abrirPlanilla(event, this.href, 'comprobante')"
-                           target="_blank" class="btn-act-sm" style="background:#fff;color:#0f172a;border-color:#94a3b8;"
-                           title="Comprobante de pago PSE del operador: banco, CUS, valor y hora del pago">
-                            🧾 Pago
                         </a>
                         @endif
                         @if($verif && in_array($verif->estado, ['no_encontrada', 'invalida']))
@@ -786,9 +787,9 @@ async function confirmarAnular(conf = {}) {
 // está guardada se pide aquí; el servidor la prueba en el portal antes de
 // guardarla, y desde ahí los botones descargan directo.
 const MP_CLAVE_URL = '{{ route('admin.planos.miplanilla_clave') }}';
-let _mpUrl = null;
-function pedirClaveMiPlanilla(url) {
-    _mpUrl = url;
+let _mpUrl = null, _mpComprobante = null;
+function pedirClaveMiPlanilla(url, comprobante) {
+    _mpUrl = url; _mpComprobante = comprobante || null;
     document.getElementById('mp-error').style.display = 'none';
     document.getElementById('mp-descargar').style.display = 'none';
     document.getElementById('mp-form').style.display = 'block';
@@ -823,12 +824,12 @@ async function guardarClaveMiPlanilla(ev) {
         }
         // Ya hay clave: todos los botones de Mi Planilla pasan a descargar directo.
         document.querySelectorAll('.btn-planilla-mp').forEach(b => {
-            b.onclick = (ev) => abrirPlanilla(ev, b.dataset.url);
+            b.onclick = (ev) => abrirPlanilla(ev, b.dataset.url, 'planilla', b.dataset.comprobante);
             b.title = 'Descargar la planilla real de Mi Planilla';
         });
         // Sigue de una vez con la descarga, mostrando los pasos.
         cerrarClaveMiPlanilla();
-        abrirPlanilla(null, _mpUrl);
+        abrirPlanilla(null, _mpUrl, 'planilla', _mpComprobante);
     } catch (e) {
         err.textContent = '❌ ' + e.message;
         err.style.display = 'block';
@@ -843,7 +844,10 @@ async function guardarClaveMiPlanilla(ev) {
 // se ve en el mismo recuadro, con botones para abrirlo o guardarlo.
 const PL_PROGRESO_URL = '{{ route('admin.planos.certificado_pdf.progreso') }}';
 let _plCorrida = 0, _plBlob = null;
-function abrirPlanilla(ev, url, que = 'planilla') {
+// `otra` es la URL del documento hermano: el comprobante de pago cuando se ve la
+// planilla, y la planilla cuando se ve el comprobante. Con ella aparece el botón
+// para pasar de uno al otro; sin ella, no.
+function abrirPlanilla(ev, url, que = 'planilla', otra = null) {
     const esComprobante = que === 'comprobante';
     // Ctrl/Cmd + clic o clic del medio: se deja abrir directo en otra pestaña.
     if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1)) return true;
@@ -928,6 +932,11 @@ function abrirPlanilla(ev, url, que = 'planilla') {
                 const abrir = document.getElementById('pl-abrir'), bajar = document.getElementById('pl-bajar');
                 abrir.href = _plBlob; bajar.href = _plBlob;
                 bajar.download = esCopia ? 'COPIA_BRYNEX_' + nombre : nombre;
+                const cambiar = document.getElementById('pl-otra');
+                cambiar.style.display = otra ? 'inline-block' : 'none';
+                cambiar.textContent = esComprobante ? '📄 Ver planilla' : '🧾 Comprobante de pago';
+                cambiar.title = esComprobante ? 'Volver a la planilla' : 'Bajar del operador el comprobante del pago PSE: banco, número de transacción, valor y hora';
+                cambiar.onclick = () => abrirPlanilla(null, otra, esComprobante ? 'planilla' : 'comprobante', url);
                 document.getElementById('pl-acciones').style.display = 'flex';
             };
             if (!esCopia) return mostrarPdf();
@@ -949,7 +958,7 @@ function abrirPlanilla(ev, url, que = 'planilla') {
             document.getElementById('pl-aviso-solucion').textContent = SOLUCION[tipoMotivo] || SOLUCION.otro;
             document.getElementById('pl-aviso-config').style.display = (tipoMotivo === 'credenciales' || tipoMotivo === 'sin_credenciales') ? 'inline-block' : 'none';
             document.getElementById('pl-ver-copia').onclick = mostrarPdf;
-            document.getElementById('pl-reintentar').onclick = () => abrirPlanilla(null, url, que);
+            document.getElementById('pl-reintentar').onclick = () => abrirPlanilla(null, url, que, otra);
             document.getElementById('pl-aviso').style.display = 'block';
         })
         .catch((e) => {
@@ -1049,6 +1058,7 @@ function cerrarSoportePlanilla() {
             <div id="pl-acciones" style="display:none;gap:.5rem;margin-top:.6rem">
                 <a id="pl-abrir" href="#" target="_blank" style="background:#1e3a8a;color:#fff;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">↗ Abrir en pestaña</a>
                 <a id="pl-bajar" href="#" style="background:#15803d;color:#fff;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;text-decoration:none">⬇️ Descargar</a>
+                <button type="button" id="pl-otra" style="display:none;background:#fff;color:#0f172a;border:1px solid #94a3b8;border-radius:8px;padding:.4rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">🧾 Comprobante de pago</button>
             </div>
         </div>
         <iframe id="pl-visor" title="Planilla" style="display:none;flex:1;min-height:60vh;border:0;border-top:1px solid #e2e8f0;background:#f1f5f9"></iframe>
