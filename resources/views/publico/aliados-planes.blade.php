@@ -102,6 +102,16 @@
         .plan .afil { margin: 0 22px 22px; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px; align-self: flex-start; background: var(--fondo); color: var(--tinta-suave); border: 1px solid var(--linea); }
         .plan .afil.ok { background: var(--ok-suave); color: var(--ok); border-color: transparent; }
 
+        .gradual { margin-top: 28px; padding: clamp(22px, 3.5vw, 34px); border-radius: 20px; background: var(--fondo); border: 1px dashed var(--azul); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: clamp(20px, 4vw, 48px); align-items: center; }
+        .gradual > * { min-width: 0; }
+        .gradual p { color: var(--tinta-suave); font-size: 16px; margin-top: 8px; }
+        .meses { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .meses li { background: var(--blanco); border: 1px solid var(--linea); border-radius: 14px; padding: 14px; min-width: 0; }
+        .meses b { display: block; font-family: var(--display); color: var(--azul); font-size: 16px; margin-bottom: 4px; }
+        .meses span { font-size: 14px; color: var(--tinta-suave); line-height: 1.35; display: block; }
+        .minimo { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--blanco); border: 1px dashed var(--azul); font-size: 14px; color: var(--tinta-suave); }
+        .minimo strong { color: var(--marino); }
+
         .anexo { background: var(--marino); color: #e8eef8; border-radius: 28px; padding: clamp(28px, 5vw, 56px); }
         .anexo h2, .anexo h3 { color: #fff; }
         .anexo .eyebrow { color: var(--cielo); }
@@ -172,7 +182,7 @@
 
         @media (max-width: 900px) {
             .dos, .cot { grid-template-columns: 1fr; }
-            .pilares, .planes, .opciones, .mitades, .reglas { grid-template-columns: 1fr; }
+            .pilares, .planes, .opciones, .mitades, .reglas, .gradual, .meses { grid-template-columns: 1fr; }
             .escalera { height: 200px; gap: 6px; }
             .peldano { padding: 10px 4px; }
             .peldano span { font-size: 11.5px; }
@@ -294,6 +304,18 @@
                 <span class="afil">Afiliaciones: opcional</span>
             </article>
         </div>
+
+        <div class="gradual reveal">
+            <div>
+                <h3>¿Tiene 100 afiliados pero quiere pasarlos poco a poco?</h3>
+                <p>Empiece con los que tenga. El valor por afiliado no cambia; lo que sube es el mínimo que se factura, para que la migración no se quede a medias.</p>
+            </div>
+            <ol class="meses">
+                <li><b>Mes 1</b><span>Paga los afiliados que ya estén en BryNex.</span></li>
+                <li><b>Mes 2</b><span>Mínimo 50 afiliados.</span></li>
+                <li><b>Mes 3 en adelante</b><span>Mínimo 100. Si ya va en 75 o más, tiene un mes adicional.</span></li>
+            </ol>
+        </div>
     </div>
 </section>
 
@@ -375,6 +397,8 @@
                     <b class="num" id="o-total">—</b>
                 </div>
 
+                <div class="minimo" id="o-minimo" hidden></div>
+
                 <div class="ahorro">
                     <h3>Lo que recupera su equipo</h3>
                     <div class="tres">
@@ -419,7 +443,8 @@
             <div class="peldano" data-nivel="3" style="--h:100%"><b class="num">50 %</b><span>20 clientes o más</span></div>
         </div>
         <ul class="reglas">
-            <li class="reveal" style="--i:1"><strong>Arranca con el 50 %.</strong> Sus tres primeros meses gana la mitad completa, tenga los clientes que tenga, para que construya su cartera.</li>
+            <li class="reveal" style="--i:1"><strong>Arranca con el 50 %.</strong> Si empieza con menos de 20, sus tres primeros meses gana la mitad completa mientras trae el resto de su cartera. Este arranque se usa una sola vez.</li>
+            <li class="reveal" style="--i:1"><strong>Con dos metas en el camino:</strong> 10 clientes al cierre del segundo mes y 20 al cierre del tercero. Si no llega a la del segundo, el tercero gana por su nivel real; si al tercero va en 15 o más, tiene un mes adicional. Lo ya ganado no se descuenta.</li>
             <li class="reveal" style="--i:2"><strong>Sube al mes siguiente.</strong> Apenas llega a un nivel, el mes que sigue ya gana ese porcentaje sobre todos sus clientes.</li>
             <li class="reveal" style="--i:3"><strong>Si baja, tiene un mes de aviso</strong> para recuperar el nivel antes de que cambie su porcentaje.</li>
             <li class="reveal" style="--i:4"><strong>Cuenta el cliente al día.</strong> La comisión se paga sobre lo recaudado; un cliente en mora no suma ese mes.</li>
@@ -491,6 +516,7 @@
     // Con BryNex el equipo todavía atiende lo que requiere una persona (firmas, rechazos): se libera 3/4 del tiempo.
     var LIBERA = { manual: 0, equipo: 0.75, brygar: 1 };
     var HORAS_PERSONA = 160;
+    var MIN_MES2 = 50, MIN_FINAL = 100;
     var WA = @json($urlWhatsappBase);
     var $ = function (id) { return document.getElementById(id); };
     var cop = function (n) { return '$' + Math.round(n).toLocaleString('es-CO'); };
@@ -552,6 +578,16 @@
         $('o-afil').textContent = integral ? 'Incluidas' : (afil === 'manual' ? '$0' : cop(vAfil));
         $('o-total').textContent = cop(total);
         $('o-por').textContent = afiliados ? cop(total / afiliados) + ' por afiliado' : '';
+
+        // Migración gradual: mes 1 lo real, mes 2 mínimo 50, mes 3 en adelante mínimo 100
+        var aviso = $('o-minimo');
+        aviso.hidden = afiliados >= MIN_FINAL;
+        if (!aviso.hidden) {
+            var mes2 = Math.max(afiliados, MIN_MES2) * plan[1] + vAfil, mes3 = MIN_FINAL * plan[1] + vAfil;
+            aviso.innerHTML = '<strong>Si está pasando sus afiliados de a poco:</strong> el primer mes paga ' + cop(total) +
+                (afiliados < MIN_MES2 ? ', el segundo ' + cop(mes2) + ' (mínimo ' + MIN_MES2 + ' afiliados)' : '') +
+                ' y desde el tercero ' + cop(mes3) + ' (mínimo ' + MIN_FINAL + '). El valor por afiliado no cambia.';
+        }
 
         var horasManual = nuevos * min / 60;
         var horas = horasManual * LIBERA[afil];
@@ -618,7 +654,7 @@
         if (arranque) {
             var real = NIVELES[k][1];
             sig.textContent = real < 0.5
-                ? 'Al terminar el arranque, con ' + c + ' clientes quedaría en el ' + Math.round(real * 100) + ' %. Le faltan ' + (20 - c) + ' para conservar el 50 %.'
+                ? 'Para conservar el 50 % necesita 10 clientes al cierre del segundo mes y 20 al cierre del tercero. Hoy le faltan ' + (c < 10 ? (10 - c) + ' para la primera meta y ' : '') + (20 - c) + ' para llegar a 20.'
                 : 'Ya tiene la cartera para conservar el 50 % cuando termine el arranque.';
         } else if (k < 3) {
             var meta = NIVELES[k + 1][0], pctSig = NIVELES[k + 1][1];
