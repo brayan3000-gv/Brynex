@@ -574,7 +574,7 @@ class PrestamosController extends Controller
     }
 
     // ─── Descargar el certificado de consignación de un abono ────────
-    public function descargarSoporteAbono(int $abonoId)
+    public function descargarSoporteAbono(Request $request, int $abonoId)
     {
         $aliadoId = session('aliado_id_activo');
 
@@ -584,10 +584,12 @@ class PrestamosController extends Controller
 
         abort_if(!$abono->soporte_path || !Storage::disk('local')->exists($abono->soporte_path), 404, 'El abono no tiene certificado adjunto.');
 
-        return Storage::disk('local')->download(
-            $abono->soporte_path,
-            $abono->soporte_nombre ?: basename($abono->soporte_path)
-        );
+        $nombre = $abono->soporte_nombre ?: basename($abono->soporte_path);
+
+        // Con `ver` se muestra dentro del recibo en vez de descargarse.
+        return $request->boolean('ver')
+            ? Storage::disk('local')->response($abono->soporte_path, $nombre, [], 'inline')
+            : Storage::disk('local')->download($abono->soporte_path, $nombre);
     }
 
     // ─── API ligera: cédulas con préstamo pendiente ──────────────────

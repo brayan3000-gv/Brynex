@@ -106,6 +106,12 @@ foreach ($filas as $f) {
     $totBanco2+= (int)($f->valor_banco2 ?? 0);
     $totAnticipo += (int)($f->anticipo_aplicado ?? 0);
 }
+// Abonos al préstamo del grupo: cuándo y cómo se pagó lo que se fió, con su
+// soporte. Sin esto el recibo de un préstamo ya saldado solo decía «Préstamo».
+$abonosPrestamo = \App\Models\Abono::whereIn('factura_id', collect($filas)->pluck('id')->filter()->all())
+    ->orderBy('fecha')->orderBy('id')->get();
+$bancosAbonos = DB::table('banco_cuentas')->whereIn('id', $abonosPrestamo->pluck('banco_cuenta_id')->filter()->unique()->all())->pluck('nombre', 'id');
+
 // Agrupar todas las consignaciones del lote/grupo para que se muestren unificadas sin importar con qué ID del lote se abrió el recibo
 $consignacionesGrupo = collect();
 foreach ($filas as $f) {

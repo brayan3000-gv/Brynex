@@ -1119,6 +1119,34 @@ $fpLabel = match($factura->forma_pago ?? '') {
         </div>
         @endif
 
+        {{-- Abonos al préstamo: cuándo y cómo se pagó, con su soporte --}}
+        @if(isset($abonosPrestamo) && $abonosPrestamo->isNotEmpty())
+        <div style="display:flex;flex-direction:column;gap:.3rem;width:100%;margin-top:.25rem;padding-top:.25rem;border-top:1.5px solid #ede9fe;">
+            <span style="font-size:.6rem;font-weight:800;color:#6d28d9;text-transform:uppercase;letter-spacing:.06em;">
+                {{ $factura->estado === 'prestamo' ? '💳 Abonos al préstamo' : '✅ Préstamo pagado' }}
+            </span>
+            @foreach($abonosPrestamo as $ab)
+            <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:7px;padding:.3rem .65rem;font-size:.75rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                <span style="color:#6d28d9;font-weight:700;">
+                    {{ match($ab->forma_pago) { 'efectivo' => '💵 Efectivo', 'consignacion' => '🏦 '.($bancosAbonos[$ab->banco_cuenta_id] ?? 'Consignación'), 'mixto' => '💰 Mixto', default => '💰 '.ucfirst((string) $ab->forma_pago) } }}
+                </span>
+                <span style="color:#475569;font-weight:800;">{{ $fmt($ab->valor) }}</span>
+                <span style="color:#94a3b8;font-size:.68rem;">
+                    {{ $ab->fecha ? sqldate($ab->fecha)->format('d/m/Y') : '' }}
+                    @if($ab->observacion) · {{ \Illuminate\Support\Str::limit($ab->observacion, 60) }} @endif
+                </span>
+                @if($ab->soporte_path)
+                <a href="#"
+                   onclick="verSoporte('{{ route('admin.prestamos.abono.soporte', $ab->id) }}?ver=1');return false;"
+                   style="background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe;border-radius:4px;padding:0 6px;font-size:.62rem;text-decoration:none;font-weight:700;">
+                    🖼️ Ver comprobante
+                </a>
+                @endif
+            </div>
+            @endforeach
+        </div>
+        @endif
+
         {{-- ─── ANTICIPOS APLICADOS (desglose por anticipo) ─── --}}
         @if(isset($anticiposAplicados) && $anticiposAplicados->isNotEmpty())
         <div style="display:flex;flex-direction:column;gap:.3rem;width:100%;margin-top:.25rem;padding-top:.25rem;border-top:1.5px solid #d1fae5;">
