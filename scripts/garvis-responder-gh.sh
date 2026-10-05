@@ -8,6 +8,9 @@
 #   responder  un texto (lo de siempre; también si no pide nada)
 #   imagen     una captura, JPEG o PNG
 #   voz        un texto corto que Gemini lee y sale como nota de voz
+#   gasto      gastos que Brayan confirmó, en JSON: se registran en Finanzas (garvis:gasto)
+#   catalogo   nombres de las categorías y cuentas de Finanzas, para que GARVIS proponga
+#              una que exista. Solo nombres: ni saldos ni montos.
 set -euo pipefail
 
 modo="${SSH_ORIGINAL_COMMAND:-responder}"
@@ -37,6 +40,22 @@ case "$modo" in
     fi
 
     printf '%s' "$texto" | sudo -u www-data php artisan garvis:voz
+    ;;
+
+  gasto)
+    # Lo que imprime el comando es lo que le llega a Brayan, así que sale por stdout.
+    entrada="$(head -c 20000)"
+
+    if [ -z "$entrada" ]; then
+      echo "Sin gastos." >&2
+      exit 1
+    fi
+
+    printf '%s' "$entrada" | sudo -u www-data php artisan garvis:gasto
+    ;;
+
+  catalogo)
+    sudo -u www-data php artisan garvis:gasto --catalogo
     ;;
 
   imagen)
