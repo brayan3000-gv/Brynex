@@ -113,7 +113,7 @@
                     <div>
                         <div style="font-size:0.66rem;color:#64748b;text-transform:uppercase;font-weight:600;">Por cartera</div>
                         <div style="font-weight:600;color:#0f172a;">
-                            @if($f->asesor->tipo_cobro === 'interno' || ! $f->nivel) —
+                            @if(! $f->nivel) —
                             @else {{ $f->nivel['pct'] }} % (desde {{ $f->nivel['desde'] }})
                             @endif
                         </div>

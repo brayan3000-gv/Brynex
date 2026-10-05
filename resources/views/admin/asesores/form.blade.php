@@ -200,7 +200,7 @@
                         <option value="{{ $valor }}" {{ old('tipo_cobro', $asesor->tipo_cobro ?? 'comision') === $valor ? 'selected' : '' }}>{{ $etiqueta }}</option>
                     @endforeach
                 </select>
-                <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.3rem;">Comisión: su parte va en el contrato. Neta: paga un valor fijo y cobra lo suyo aparte.</div>
+                <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.3rem;">Comisión: su parte va en el contrato. Neta: paga un valor fijo y cobra lo suyo aparte. Solo refiere: gana por afiliación y no se mide por niveles.</div>
             </div>
             <div>
                 <label style="display:block;font-size:0.8rem;font-weight:600;color:#475569;margin-bottom:0.3rem;">Tarifa neta por persona ($)</label>

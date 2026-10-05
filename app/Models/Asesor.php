@@ -49,6 +49,7 @@ class Asesor extends BaseModel
     const TIPOS_COBRO = [
         'comision' => 'Comisión en el programa',
         'neta' => 'Tarifa neta (cobra lo suyo por fuera)',
+        'referido' => 'Solo refiere (gana por afiliación)',
         'interno' => 'Interno (oficina)',
     ];
 

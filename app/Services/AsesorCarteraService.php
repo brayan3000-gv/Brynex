@@ -54,9 +54,11 @@ class AsesorCarteraService
                 $personas = count($actual['cedulas']);
                 $d = $dinero[$a->id] ?? ['admon' => 0, 'com_admon' => 0, 'com_afil' => 0, 'afiliaciones' => 0];
 
-                $nivel = $escalera ? $this->nivelPorCartera($escalera['niveles'], $personas) : null;
-                $siguiente = $escalera ? $this->siguienteNivel($escalera['niveles'], $personas) : null;
-                $arranque = $escalera ? $this->arranque($escalera, $a, $periodo, $personas) : null;
+                // La oficina y los que solo refieren no se miden contra la escalera.
+                $mide = $escalera && ! in_array($a->tipo_cobro, ['interno', 'referido'], true);
+                $nivel = $mide ? $this->nivelPorCartera($escalera['niveles'], $personas) : null;
+                $siguiente = $mide ? $this->siguienteNivel($escalera['niveles'], $personas) : null;
+                $arranque = $mide ? $this->arranque($escalera, $a, $periodo, $personas) : null;
                 $pctActual = $a->comision_admon_tipo === 'porcentaje' ? (float) $a->comision_admon_valor : null;
 
                 return (object) [
@@ -240,6 +242,9 @@ class AsesorCarteraService
         if ($a->tipo_cobro === 'interno') {
             return 'Oficina';
         }
+        if ($a->tipo_cobro === 'referido') {
+            return $a->comisionAfiliacionLabel().' por afiliación';
+        }
         if ($a->tipo_cobro === 'neta') {
             return $a->tarifa_neta ? 'Paga '.$this->cop((float) $a->tarifa_neta).' por persona' : 'Tarifa neta sin valor registrado';
         }
@@ -257,6 +262,9 @@ class AsesorCarteraService
     {
         if ($a->tipo_cobro === 'interno') {
             return ['tono' => 'neutro', 'texto' => 'Es la oficina: no aplican niveles.'];
+        }
+        if ($a->tipo_cobro === 'referido') {
+            return ['tono' => 'neutro', 'texto' => 'Solo refiere: gana por cada afiliación que trae. No se mide contra la escalera ni tiene metas.'];
         }
         if (! $escalera) {
             return ['tono' => 'neutro', 'texto' => 'Este aliado no tiene escalera de niveles configurada.'];

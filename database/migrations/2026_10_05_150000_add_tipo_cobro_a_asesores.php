@@ -8,7 +8,8 @@ use Illuminate\Support\Facades\Schema;
  * Cómo trabaja cada asesor con el aliado:
  *  - tipo_cobro: 'comision' (su parte va en el contrato, en admon_asesor),
  *    'neta' (el aliado le cobra un valor fijo por persona y él cobra lo suyo
- *    por fuera) o 'interno' (la oficina; no aplican niveles).
+ *    por fuera), 'referido' (solo refiere: gana por afiliación y no se mide
+ *    contra la escalera) o 'interno' (la oficina; no aplican niveles).
  *  - tarifa_neta: lo que paga por persona cuando es 'neta'. Informativo.
  *  - forma_pago: cómo recibe su comisión (descuenta al cobrar, quincenal, mensual).
  *
