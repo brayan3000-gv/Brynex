@@ -106,11 +106,12 @@ Route::post('/aliado/{slug}/metrica', [\App\Http\Controllers\Publico\PaginaAliad
     ->name('publico.aliado.metrica')
     ->middleware('throttle:60,1');
 
-// Descarga del video de una pieza de "Novedades", para que los asesores lo compartan.
+// Descarga del video o la imagen de una pieza de "Novedades", para que los asesores la compartan.
 // Sin Route::domain(): también responde en el dominio propio (brygar.com/aliado/brygar/video/…).
-Route::get('/aliado/{slug}/video/{publicacion}/descargar', [\App\Http\Controllers\Publico\PaginaAliadoController::class, 'descargarVideo'])
+Route::get('/aliado/{slug}/{tipo}/{publicacion}/descargar', [\App\Http\Controllers\Publico\PaginaAliadoController::class, 'descargarPieza'])
+    ->whereIn('tipo', ['video', 'imagen'])
     ->whereNumber('publicacion')
-    ->name('publico.aliado.video')
+    ->name('publico.aliado.descargar')
     ->middleware('throttle:30,1');
 
 Route::get('/sitemap.xml', [\App\Http\Controllers\Publico\PaginaAliadoController::class, 'sitemap'])->name('publico.sitemap');

@@ -280,9 +280,10 @@
     .card-promo img { width: 100%; aspect-ratio: 1/1; object-fit: cover; }
     .card-promo p { font-size: 0.85rem; color: var(--tinta-suave); padding: 0.9rem 1rem; margin: 0; }
     .card-promo video { display: block; width: 100%; aspect-ratio: 9/16; object-fit: cover; background: #000; }
-    .acciones-video { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.8rem 1rem 0; }
-    .acciones-video:last-child { padding-bottom: 1rem; }
-    .acciones-video .btn { flex: 1 1 8rem; justify-content: center; padding: 0.55rem 0.8rem; font-size: 0.82rem; }
+    .acciones-pieza { display: flex; flex-wrap: wrap; gap: 0.5rem; padding: 0.8rem 1rem 0; }
+    .acciones-pieza:last-child { padding-bottom: 1rem; }
+    .ver-mas-promos { text-align: center; margin-top: 1.75rem; }
+    .acciones-pieza .btn { flex: 1 1 8rem; justify-content: center; padding: 0.55rem 0.8rem; font-size: 0.82rem; }
 
     .pasos { background: var(--fondo); }
     .grid-pasos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
@@ -618,28 +619,42 @@
                 <h2>Novedades</h2>
                 <p>Lo último de {{ $aliado->nombre }}.</p>
             </div>
-            <div class="grid-promos">
+            {{-- Se muestran de a 6; el resto queda oculto hasta "Ver más". Las portadas ocultas van en
+                 data-poster (y las imágenes con loading="lazy") para no bajarlas sin que nadie las vea. --}}
+            @php $porTanda = 6; @endphp
+            <div class="grid-promos" id="gridPromos" data-por-tanda="{{ $porTanda }}">
                 @foreach($promos as $promo)
-                    <div class="card-promo">
-                        @if($promo->tipo_pieza === 'video' && $promo->video_path)
-                            <video controls playsinline preload="none" poster="{{ asset('storage/' . $promo->imagen_path) }}" aria-label="{{ $promo->titulo }}">
+                    @php
+                        $esVideo = $promo->tipo_pieza === 'video' && $promo->video_path;
+                        $oculta = $loop->index >= $porTanda;
+                        $urlDescarga = route('publico.aliado.descargar', ['slug' => $aliado->slug, 'tipo' => $esVideo ? 'video' : 'imagen', 'publicacion' => $promo->id], false);
+                        $portada = asset('storage/' . $promo->imagen_path);
+                    @endphp
+                    <div class="card-promo" @if($oculta) hidden @endif>
+                        @if($esVideo)
+                            <video controls playsinline preload="none" @if($oculta) data-poster="{{ $portada }}" @else poster="{{ $portada }}" @endif aria-label="{{ $promo->titulo }}">
                                 <source src="{{ asset('storage/' . $promo->video_path) }}" type="video/mp4">
                             </video>
-                            @php $urlDescarga = route('publico.aliado.video', ['slug' => $aliado->slug, 'publicacion' => $promo->id], false); @endphp
-                            <div class="acciones-video">
-                                <a href="{{ $urlDescarga }}" class="btn btn-ghost" download>⬇ Descargar</a>
-                                <button type="button" class="btn btn-brand btn-compartir-video" hidden
-                                        data-url="{{ $urlDescarga }}" data-titulo="{{ $promo->titulo }}">Compartir</button>
-                            </div>
                         @else
-                            <img src="{{ asset('storage/' . $promo->imagen_path) }}" alt="{{ $promo->titulo }}" loading="lazy">
+                            <img src="{{ $portada }}" alt="{{ $promo->titulo }}" loading="lazy">
                         @endif
+                        <div class="acciones-pieza">
+                            <a href="{{ $urlDescarga }}" class="btn btn-ghost" download>⬇ Descargar</a>
+                            <button type="button" class="btn btn-brand btn-compartir" hidden
+                                    data-url="{{ $urlDescarga }}" data-titulo="{{ $promo->titulo }}"
+                                    data-mime="{{ $esVideo ? 'video/mp4' : (str_ends_with(strtolower($promo->imagen_path), '.png') ? 'image/png' : 'image/jpeg') }}">Compartir</button>
+                        </div>
                         @if($promo->copy)
                             <p>{{ Str::limit($promo->copy, 140) }}</p>
                         @endif
                     </div>
                 @endforeach
             </div>
+            @if($promos->count() > $porTanda)
+                <div class="ver-mas-promos">
+                    <button type="button" class="btn btn-ghost" id="btnVerMasPromos">Ver más videos e imágenes</button>
+                </div>
+            @endif
         </div>
     </section>
     @endif
@@ -1196,47 +1211,66 @@
 </script>
 <script>
 (function () {
-    // "Compartir" de los videos de Novedades: en el celular abre el menú del sistema con el
-    // ARCHIVO (no el enlace), para mandarlo directo por WhatsApp. Solo aparece donde el
-    // navegador sabe compartir archivos; en el computador queda "Descargar".
-    if (navigator.canShare && window.File) {
-        var prueba = new File([''], 'video.mp4', { type: 'video/mp4' });
-        if (navigator.canShare({ files: [prueba] })) {
-            document.querySelectorAll('.btn-compartir-video').forEach(function (btn) {
-                var textoOriginal = btn.textContent;
-                var archivo = null;
-                var compartir = function () {
-                    return navigator.share({ files: [archivo], title: btn.dataset.titulo })
-                        .then(function () { btn.textContent = textoOriginal; })
-                        .catch(function (e) {
-                            if (e && e.name === 'AbortError') { btn.textContent = textoOriginal; return; }
-                            // Safari solo abre el menú dentro del toque: si la descarga tardó, ya
-                            // venció. El archivo queda listo y el siguiente toque lo comparte.
-                            if (e && e.name === 'NotAllowedError') { btn.textContent = 'Toca para enviar'; return; }
-                            window.location.href = btn.dataset.url;
-                        });
-                };
-                btn.hidden = false;
-                btn.addEventListener('click', function () {
-                    if (archivo) { compartir(); return; }
-                    btn.disabled = true;
-                    btn.textContent = 'Preparando...';
-                    fetch(btn.dataset.url)
-                        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
-                        .then(function (blob) {
-                            archivo = new File([blob], 'video.mp4', { type: 'video/mp4' });
-                            btn.disabled = false;
-                            return compartir();
-                        })
-                        .catch(function () {
-                            btn.disabled = false;
-                            btn.textContent = textoOriginal;
-                            window.location.href = btn.dataset.url;
-                        });
-                });
-            });
-        }
+    // "Ver más" de Novedades: destapa la siguiente tanda. Las portadas de los videos ocultos
+    // vienen en data-poster para no bajarlas antes de tiempo.
+    var grid = document.getElementById('gridPromos');
+    var btnVerMas = document.getElementById('btnVerMasPromos');
+    if (grid && btnVerMas) {
+        var porTanda = parseInt(grid.dataset.porTanda, 10) || 6;
+        btnVerMas.addEventListener('click', function () {
+            var ocultas = grid.querySelectorAll('.card-promo[hidden]');
+            for (var i = 0; i < ocultas.length && i < porTanda; i++) {
+                ocultas[i].hidden = false;
+                var video = ocultas[i].querySelector('video[data-poster]');
+                if (video) { video.poster = video.dataset.poster; video.removeAttribute('data-poster'); }
+            }
+            if (ocultas.length <= porTanda) btnVerMas.parentNode.remove();
+        });
     }
+
+    // "Compartir" de Novedades: en el celular abre el menú del sistema con el ARCHIVO (no el
+    // enlace), para mandarlo directo por WhatsApp. Solo aparece donde el navegador sabe
+    // compartir archivos de ese tipo; en el computador queda "Descargar".
+    if (!navigator.canShare || !window.File) return;
+    document.querySelectorAll('.btn-compartir').forEach(function (btn) {
+        var mime = btn.dataset.mime;
+        var nombreArchivo = mime === 'video/mp4' ? 'video.mp4' : (mime === 'image/png' ? 'imagen.png' : 'imagen.jpg');
+        try {
+            if (!navigator.canShare({ files: [new File([''], nombreArchivo, { type: mime })] })) return;
+        } catch (e) { return; }
+
+        var textoOriginal = btn.textContent;
+        var archivo = null;
+        var compartir = function () {
+            return navigator.share({ files: [archivo], title: btn.dataset.titulo })
+                .then(function () { btn.textContent = textoOriginal; })
+                .catch(function (e) {
+                    if (e && e.name === 'AbortError') { btn.textContent = textoOriginal; return; }
+                    // Safari solo abre el menú dentro del toque: si la descarga tardó, ya
+                    // venció. El archivo queda listo y el siguiente toque lo comparte.
+                    if (e && e.name === 'NotAllowedError') { btn.textContent = 'Toca para enviar'; return; }
+                    window.location.href = btn.dataset.url;
+                });
+        };
+        btn.hidden = false;
+        btn.addEventListener('click', function () {
+            if (archivo) { compartir(); return; }
+            btn.disabled = true;
+            btn.textContent = 'Preparando...';
+            fetch(btn.dataset.url)
+                .then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); })
+                .then(function (blob) {
+                    archivo = new File([blob], nombreArchivo, { type: mime });
+                    btn.disabled = false;
+                    return compartir();
+                })
+                .catch(function () {
+                    btn.disabled = false;
+                    btn.textContent = textoOriginal;
+                    window.location.href = btn.dataset.url;
+                });
+        });
+    });
 })();
 </script>
 @endsection

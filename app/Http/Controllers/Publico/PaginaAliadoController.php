@@ -421,23 +421,26 @@ class PaginaAliadoController extends Controller
         return CotizacionPublicaService::planesPublicosConPrecio($aliado->id, $config->mostrar_precios);
     }
 
-    /** Últimas piezas publicadas con destino "web" (Fase 4 — generador de publicidad). */
+    /**
+     * Piezas publicadas con destino "web" (Fase 4 — generador de publicidad). La página muestra
+     * las primeras y el resto aparece con "Ver más"; el tope evita una página interminable.
+     */
     private function promosPublicadas(Aliado $aliado): \Illuminate\Support\Collection
     {
         return Publicacion::where('aliado_id', $aliado->id)
             ->where('estado', Publicacion::ESTADO_PUBLICADA)
             ->whereJsonContains('destinos', 'web')
             ->orderByDesc('publicada_at')
-            ->limit(6)
+            ->limit(60)
             ->get(['id', 'titulo', 'copy', 'imagen_path', 'tipo_pieza', 'video_path', 'publicada_at']);
     }
 
     /**
-     * Descarga el MP4 de una pieza de "Novedades" con un nombre legible, para que los asesores
-     * lo compartan. Solo piezas que la página ya muestra (publicadas, destino web, del aliado
-     * del slug): nunca un borrador ni el video de otro aliado.
+     * Descarga el archivo de una pieza de "Novedades" (el MP4 de un video o la imagen) con un
+     * nombre legible, para que los asesores lo compartan. Solo piezas que la página muestra
+     * (publicadas, destino web, del aliado del slug): nunca un borrador ni la de otro aliado.
      */
-    public function descargarVideo(string $slug, int $publicacion)
+    public function descargarPieza(string $slug, string $tipo, int $publicacion)
     {
         $aliado = Aliado::where('slug', $slug)->where('activo', true)->first();
         if (!$aliado) {
@@ -448,16 +451,17 @@ class PaginaAliadoController extends Controller
             ->where('id', $publicacion)
             ->where('estado', Publicacion::ESTADO_PUBLICADA)
             ->whereJsonContains('destinos', 'web')
-            ->whereNotNull('video_path')
-            ->first(['id', 'titulo', 'video_path']);
+            ->first(['id', 'titulo', 'imagen_path', 'video_path']);
 
-        if (!$pieza || !Storage::disk('public')->exists($pieza->video_path)) {
+        $ruta = $tipo === 'video' ? $pieza?->video_path : $pieza?->imagen_path;
+        if (!$ruta || !Storage::disk('public')->exists($ruta)) {
             abort(404);
         }
 
-        $nombre = Str::limit(Str::slug($aliado->nombre . ' ' . $pieza->titulo), 80, '') ?: "video-{$pieza->id}";
+        $extension = strtolower(pathinfo($ruta, PATHINFO_EXTENSION)) ?: ($tipo === 'video' ? 'mp4' : 'jpg');
+        $nombre = Str::limit(Str::slug($aliado->nombre . ' ' . $pieza->titulo), 80, '') ?: "{$tipo}-{$pieza->id}";
 
-        return Storage::disk('public')->download($pieza->video_path, $nombre . '.mp4');
+        return Storage::disk('public')->download($ruta, "{$nombre}.{$extension}");
     }
 
     /** Valida que sea un HEX de 6 dígitos; si no, usa el azul por defecto de la marca BryNex. */
