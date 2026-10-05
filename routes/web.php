@@ -1290,8 +1290,6 @@ Route::middleware('auth')->group(function () {
             Route::post('chat/{id}/reabrir', [$chat, 'reabrir'])->name('chat.reabrir')->whereNumber('id');
         });
         Route::patch('chat/{id}/asignar', [$chat, 'asignar'])->name('chat.asignar')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
-        // Manual: devuelve al inbox general las asignadas con el cliente esperando hace horas.
-        Route::post('chat/liberar-sin-atender', [$chat, 'liberarSinAtender'])->name('chat.liberar_sin_atender')->middleware('permiso:whatsapp.asignar');
         // Bandeja del número compartido: BryNex pasa la conversación al aliado dueño del contacto.
         Route::patch('chat/{id}/mover-aliado', [$chat, 'moverAliado'])->name('chat.mover_aliado')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
 
