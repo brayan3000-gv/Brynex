@@ -158,7 +158,7 @@
         .salida .btn { width: 100%; margin-top: 20px; }
         .pie-cot { font-size: 13px; color: var(--tinta-suave); margin-top: 14px; }
 
-        .mitades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+        .mitades { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
         .mitad { background: var(--blanco); border: 1px solid var(--linea); border-radius: 18px; padding: 24px; min-width: 0; }
         .mitad .v { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 5vw, 52px); line-height: 1; color: var(--azul); margin: 10px 0 8px; }
         .mitad p { color: var(--tinta-suave); font-size: 16px; }
@@ -433,6 +433,11 @@
                 <div class="eyebrow" style="margin:0">Administración mensual</div>
                 <div class="v num">hasta 50 %</div>
                 <p>Si Brygar cobra $46.000 de administración, $23.000 son suyos cada mes por cada cliente al día.</p>
+            </div>
+            <div class="mitad reveal" style="--i:3">
+                <div class="eyebrow" style="margin:0">Plataforma</div>
+                <div class="v num">$0</div>
+                <p>Usa el programa de Brygar. No paga mensualidad por afiliado ni mínimo de plataforma.</p>
             </div>
         </div>
 
