@@ -287,6 +287,16 @@
                     </a>
                 @endforeach
             </div>
+            {{-- Manual: devolver al inbox general las asignadas que el asesor no contestó --}}
+            @if($tab === 'esperando' && $totalSinAtender > 0)
+                <div style="margin-top:.5rem;padding:.45rem .55rem;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:.7rem;color:#92400e">
+                    {{ $totalSinAtender }} asignada(s) llevan más de {{ \App\Http\Controllers\Admin\WhatsappChatController::horasSinAtender() }} h sin respuesta del asesor.
+                    <button type="button" onclick="liberarSinAtender(this)"
+                            style="display:block;width:100%;margin-top:.35rem;padding:.3rem;border:none;border-radius:6px;background:#d97706;color:#fff;font-weight:700;font-size:.7rem;cursor:pointer">
+                        ↩ Devolver al inbox general
+                    </button>
+                </div>
+            @endif
         </div>
 
         <div class="conv-list">
@@ -381,3 +391,26 @@
 </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+// Pestaña Esperando: devuelve al inbox general las asignadas sin respuesta. Manual y con
+// confirmación: quitarle conversaciones a un asesor lo decide una persona, no el sistema.
+async function liberarSinAtender(btn) {
+    if (!confirm('¿Devolver al inbox general las conversaciones asignadas que llevan horas sin respuesta? Quedan sin asesor asignado y marcadas como pendientes, para que las tome cualquiera.')) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Devolviendo...';
+    try {
+        const resp = await fetch('{{ route('admin.whatsapp.chat.liberar_sin_atender') }}', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'Accept': 'application/json' },
+        });
+        const data = await resp.json();
+        if (data.ok) { alert(data.mensaje); window.location.reload(); return; }
+        alert(data.error || data.message || 'No se pudo devolver');
+    } catch (e) { alert('Error de conexión'); }
+    btn.disabled = false;
+    btn.textContent = '↩ Devolver al inbox general';
+}
+</script>
+@endpush

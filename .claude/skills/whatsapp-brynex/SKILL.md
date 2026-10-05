@@ -108,9 +108,13 @@ resources/views/admin/whatsapp/
   por llamada o en persona. Crea un `WhatsappMensaje` tipo `nota` (saliente, sin
   `wa_message_id`, no se envía a Meta) y la conversación sale de «Esperando». Se pinta
   como nota amarilla centrada en el chat.
-- `whatsapp:liberar-sin-atender` (cada 15 min): conversación asignada con el cliente
-  esperando ≥ `services.whatsapp.liberar_horas` (4) y asignada hace al menos eso
-  (`asignado_at`) vuelve al inbox general como pendiente. No reactiva el bot.
+- Devolver al inbox general las asignadas sin atender es **MANUAL** (decisión del dueño,
+  5-oct-2026: nació automático y lo frenó antes de la primera corrida; NO volver a
+  programarlo). Botón «↩ Devolver al inbox general» en la pestaña Esperando
+  (`chat.liberar_sin_atender`, permiso `whatsapp.asignar`): asignadas con el cliente
+  esperando ≥ `services.whatsapp.liberar_horas` (4) y asignadas hace al menos eso
+  (`asignado_at`) quedan sin asesor y pendientes. Por consola:
+  `whatsapp:liberar-sin-atender --aliado=ID` (sin aliado no hace nada).
 - **🔓 Reabrir conversación** (`chat.reabrir`): con la ventana vencida envía la plantilla
   `reabrir_conversacion` (botón «Continuar»); una sola cada 24 h por conversación. Las
   plantillas del sistema se crean por cuenta con `whatsapp:plantillas-sistema` y su

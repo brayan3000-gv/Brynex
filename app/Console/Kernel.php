@@ -388,18 +388,6 @@ class Kernel extends ConsoleKernel
             ->runInBackground()
             ->appendOutputTo(storage_path('logs/marketing-pauta-sync.log'));
 
-        // ── Conversaciones asignadas que nadie contestó ──────────────────────
-        // Cada 15 min: si el cliente lleva 4 h esperando y el asesor asignado no respondió,
-        // la conversación vuelve al inbox general marcada como pendiente, para que la tome
-        // cualquiera. Antes solo la veía el asesor asignado, estuviera o no.
-        // Ejecución manual: php artisan whatsapp:liberar-sin-atender --simular
-        $schedule->command('whatsapp:liberar-sin-atender')
-            ->everyFifteenMinutes()
-            ->timezone('America/Bogota')
-            ->withoutOverlapping(10)
-            ->runInBackground()
-            ->appendOutputTo(storage_path('logs/whatsapp-liberar.log'));
-
         // ── Estado de las plantillas del sistema en Meta ─────────────────────
         // Meta aprueba (o rechaza) las plantillas a su ritmo y nadie le avisa al sistema:
         // el botón «Reabrir conversación» no aparece hasta que el registro diga `approved`.

@@ -49,6 +49,7 @@ class WhatsappChatController extends Controller
             'totalNoLeidos'  => $totalNoLeidos,
             'totalIa'        => $totalIa,
             'totalEsperando' => $totalEsperando,
+            'totalSinAtender' => $totalSinAtender,
             'conteoTipos'    => $conteoTipos,
         ] = $this->cargarDatosSidebar($alidoId, $tab, $buscar, $tipo);
 
@@ -60,7 +61,7 @@ class WhatsappChatController extends Controller
 
         return view('admin.whatsapp.chat.index', compact(
             'conversaciones', 'tab', 'buscar', 'tipo', 'totalNoLeidos', 'totalIa', 'totalEsperando',
-            'conteoTipos', 'usuarios'
+            'totalSinAtender', 'conteoTipos', 'usuarios'
         ));
     }
 
@@ -112,6 +113,7 @@ class WhatsappChatController extends Controller
             'totalNoLeidos'  => $totalNoLeidos,
             'totalIa'        => $totalIa,
             'totalEsperando' => $totalEsperando,
+            'totalSinAtender' => $totalSinAtender,
             'conteoTipos'    => $conteoTipos,
         ] = $this->cargarDatosSidebar($alidoId, $tab, $buscar, $tipo);
 
@@ -153,7 +155,7 @@ class WhatsappChatController extends Controller
         return view('admin.whatsapp.chat.show', compact(
             'conversacion', 'mensajes', 'usuarios', 'plantillas',
             'conversaciones', 'conversacionesData', 'tab', 'buscar', 'tipo',
-            'totalNoLeidos', 'totalIa', 'totalEsperando', 'conteoTipos',
+            'totalNoLeidos', 'totalIa', 'totalEsperando', 'totalSinAtender', 'conteoTipos',
             'mensajesData', 'conversacionData', 'aliadosMover', 'reabrirDisponible'
         ));
     }
@@ -360,6 +362,47 @@ class WhatsappChatController extends Controller
             'asignado_a'      => Auth::id(),
             'asignado_nombre' => Auth::user()->nombre,
         ]);
+    }
+
+    /**
+     * Devuelve al inbox general las conversaciones asignadas donde el cliente lleva
+     * horas esperando y el asesor no ha respondido. Es el botón de la pestaña Esperando.
+     *
+     * Manual a propósito: lo decide el aliado (quien tenga permiso de asignar), no el
+     * sistema. Antes de quedar así estuvo programado cada 15 minutos y el dueño lo frenó.
+     */
+    public function liberarSinAtender()
+    {
+        $alidoId = session('aliado_id_activo');
+        $horas   = self::horasSinAtender();
+        $quien   = Auth::user()->nombre;
+
+        $lista = $this->esperando->paraLiberar($alidoId, $horas);
+
+        foreach ($lista as $cv) {
+            $asesor = $cv->asignado?->nombre ?: 'El asesor asignado';
+            $cv->liberarPorInactividad("{$asesor} no respondió en {$horas} h: {$quien} la devolvió al inbox general.");
+
+            try {
+                broadcast(new WhatsappConversacionActualizada($cv))->toOthers();
+            } catch (\Throwable $e) {
+                // Sin Reverb el cambio igual queda hecho; los demás lo ven al recargar.
+            }
+        }
+
+        return response()->json([
+            'ok'      => true,
+            'total'   => $lista->count(),
+            'mensaje' => $lista->count() === 1
+                ? '1 conversación devuelta al inbox general'
+                : $lista->count().' conversaciones devueltas al inbox general',
+        ]);
+    }
+
+    /** Horas con el cliente esperando para que una asignada cuente como «sin atender». */
+    public static function horasSinAtender(): int
+    {
+        return max(1, (int) config('services.whatsapp.liberar_horas', 4));
     }
 
     /**
@@ -723,6 +766,17 @@ class WhatsappChatController extends Controller
         $totalIa        = $conversaciones->where('atendida_por_ia', true)->count();
         $totalEsperando = $conversaciones->where('esperando', true)->count();
 
+        // Asignadas con el cliente esperando hace horas: las que el botón «Devolver al
+        // inbox general» soltaría. Solo se le ofrece a quien puede asignar.
+        $limiteSinAtender = now()->subHours(self::horasSinAtender());
+        $totalSinAtender = $user->can('whatsapp.asignar')
+            ? $conversaciones->filter(fn ($c) => $c->estado === 'asignada' && $c->asignado_a
+                && $c->esperando && $c->esperando_desde?->lte($limiteSinAtender)
+                && (! $c->asignado_at || $c->asignado_at->lte($limiteSinAtender))
+                // Las de los deudores del dueño no se sueltan: las atiende él directo.
+                && ! TelefonosDeudores::esDeudor($c->wa_contact_id))->count()
+            : 0;
+
         if ($buscar) {
             $sinTildes = fn (?string $s) => \Illuminate\Support\Str::ascii(mb_strtolower((string) $s));
             $aguja = $sinTildes($buscar);
@@ -752,7 +806,7 @@ class WhatsappChatController extends Controller
             $conversaciones = $conversaciones->where('tipo_contacto', $tipo)->values();
         }
 
-        return compact('conversaciones', 'totalNoLeidos', 'totalIa', 'totalEsperando', 'conteoTipos');
+        return compact('conversaciones', 'totalNoLeidos', 'totalIa', 'totalEsperando', 'totalSinAtender', 'conteoTipos');
     }
 
     /**
@@ -770,7 +824,7 @@ class WhatsappChatController extends Controller
             'bot_activo', 'pendiente_atencion', 'pendiente_motivo',
             // Sin esta, ventanaActiva() da siempre false y el chip de espera marca
             // «vencida» a gente que escribió hace una hora.
-            'ventana_activa_hasta',
+            'ventana_activa_hasta', 'asignado_at',
         ];
     }
 

@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Events\WhatsappConversacionActualizada;
 use App\Models\Aliado;
-use App\Models\WhatsappConfig;
 use App\Services\WhatsappEsperandoRespuesta;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -17,17 +16,18 @@ use Illuminate\Support\Facades\Log;
  * (salió, está de vacaciones, tiene otra cosa encima), nadie más se entera: en Brygar
  * había 11 casos así en una semana, 7 con más de un día (oct-2026).
  *
- * A las HORAS sin respuesta —contadas desde el mensaje del cliente Y desde que se le
- * asignó— la conversación se libera: queda sin asignar, marcada como pendiente con el
- * nombre de quien la tenía, y entra a la pestaña «Esperando» de todos. No reactiva el
- * bot: así lo pidió el dueño, que la tome una persona.
+ * NO está programado, y es a propósito: nació automático (cada 15 min) y el dueño lo
+ * frenó antes de la primera corrida — quitarle conversaciones a un asesor es decisión
+ * del aliado, no del sistema. Lo normal es el botón «Devolver al inbox general» de la
+ * pestaña Esperando del chat, que hace lo mismo para el aliado activo; este comando
+ * queda para hacerlo por consola, y sin --aliado no toca nada.
  *
- * Ejecución manual: php artisan whatsapp:liberar-sin-atender --simular
+ * Ejecución manual: php artisan whatsapp:liberar-sin-atender --aliado=2 --simular
  */
 class WhatsappLiberarSinAtender extends Command
 {
     protected $signature = 'whatsapp:liberar-sin-atender
-        {--aliado= : Aliado a revisar (por defecto, todos los que tienen WhatsApp activo)}
+        {--aliado= : Aliado a revisar (obligatorio: nunca corre para todos a la vez)}
         {--horas= : Horas sin respuesta del asesor asignado (por defecto, services.whatsapp.liberar_horas)}
         {--simular : Solo mostrar qué se liberaría, sin tocar nada}';
 
@@ -35,16 +35,14 @@ class WhatsappLiberarSinAtender extends Command
 
     public function handle(WhatsappEsperandoRespuesta $esperando): int
     {
-        $horas = (int) ($this->option('horas') ?: config('services.whatsapp.liberar_horas', 4));
-        if ($horas < 1) {
-            $this->info('Liberación automática apagada (liberar_horas = 0).');
+        if (! $this->option('aliado')) {
+            $this->error('Indique el aliado con --aliado=ID. La liberación es manual y por aliado.');
 
-            return self::SUCCESS;
+            return self::FAILURE;
         }
 
-        $aliados = $this->option('aliado')
-            ? [(int) $this->option('aliado')]
-            : WhatsappConfig::where('activo', true)->pluck('aliado_id')->map(fn ($id) => (int) $id)->all();
+        $horas = max(1, (int) ($this->option('horas') ?: config('services.whatsapp.liberar_horas', 4)));
+        $aliados = [(int) $this->option('aliado')];
 
         $total = 0;
         foreach ($aliados as $aliadoId) {
