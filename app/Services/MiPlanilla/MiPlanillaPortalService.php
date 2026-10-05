@@ -215,15 +215,7 @@ class MiPlanillaPortalService
     {
         $paso ??= fn () => null;
         $paso('Buscando la planilla');
-        $pagadas = collect($this->planillas()['pagadas']);
-        $planilla = $pagadas->first(fn ($p) => (string) ($p['NumeroRadicado'] ?? '') === $numero);
-        if (! $planilla) {
-            // Con lo que sí trae se ve si es otra cuenta o una planilla vieja que
-            // no está en el primer bloque del tablero.
-            $vistas = $pagadas->pluck('NumeroRadicado')->filter()->take(6)->implode(', ');
-            throw new \RuntimeException("La planilla {$numero} no está entre las pagadas de la cuenta {$this->usuario} en Mi Planilla"
-                .($vistas !== '' ? " (aparecen: {$vistas})." : ' (la cuenta no muestra ninguna pagada).'));
-        }
+        $planilla = $this->pagada($numero);
 
         // La fecha va como la arma el portal (getDateTohref): MM/dd/yyyy H:m:s en hora de Colombia.
         $f = self::fecha($planilla['FechaPlanilla']);
@@ -240,6 +232,129 @@ class MiPlanillaPortalService
         $pdf = (string) $resp->getBody();
         if (! str_starts_with($pdf, '%PDF')) {
             throw new \RuntimeException("Mi Planilla no devolvió el PDF de la planilla {$numero}.");
+        }
+
+        return $pdf;
+    }
+
+    /** La planilla pagada con ese número, tal como la lista el tablero. */
+    private function pagada(string $numero): array
+    {
+        $pagadas = collect($this->planillas()['pagadas']);
+        $planilla = $pagadas->first(fn ($p) => (string) ($p['NumeroRadicado'] ?? '') === $numero);
+        if (! $planilla) {
+            // Con lo que sí trae se ve si es otra cuenta o una planilla vieja que
+            // no está en el primer bloque del tablero.
+            $vistas = $pagadas->pluck('NumeroRadicado')->filter()->take(6)->implode(', ');
+            throw new \RuntimeException("La planilla {$numero} no está entre las pagadas de la cuenta {$this->usuario} en Mi Planilla"
+                .($vistas !== '' ? " (aparecen: {$vistas})." : ' (la cuenta no muestra ninguna pagada).'));
+        }
+
+        return $planilla;
+    }
+
+    /**
+     * El «Reporte resumen de pago» de una planilla pagada: medio de pago (PSE),
+     * banco, número de autorización, estado de la transacción y total por
+     * administradora. Mapeado el 5-oct-2026 con la 95087579 de Casimiro.
+     *
+     * El portal no lo entrega de una: «Planillas Pagadas → Opciones → Resumen
+     * de pago → Guardar en PDF» llama GenerarReportePago, que responde "OK" y
+     * deja el archivo en Históricos como `Resumen_de_pago<n>.pdf.zip` (tardó
+     * menos de 8 s). De ahí se baja el ZIP y se saca el PDF. Si ya había uno
+     * disponible de antes, se usa ese sin pedir otro.
+     *
+     * @throws \RuntimeException con el motivo si no se pudo
+     */
+    public function resumenPagoPdf(string $numero, ?callable $paso = null): string
+    {
+        $paso ??= fn () => null;
+        $nombre = "Resumen_de_pago{$numero}.pdf";
+
+        $paso('Buscando el resumen de pago');
+        if ($url = $this->historicoDisponible($nombre)) {
+            $paso('Descargando el PDF');
+
+            return $this->pdfDelZip($this->get($url), $nombre);
+        }
+
+        $planilla = $this->pagada($numero);
+
+        // `fechaPlanilla` va en ticks de .NET, como GetDateTicks() del portal.
+        $ms = (int) preg_replace('~\D~', '', (string) $planilla['FechaPlanilla']);
+        [$tipoDoc, $documento] = preg_match('/^([A-Z]+)(\d+)$/', $this->usuario, $m) ? [$m[1], $m[2]] : ['CC', preg_replace('/\D/', '', $this->usuario)];
+        $resumen = $this->get('/PrivadoIndependientes/Pagos/ResumenPago?'.http_build_query([
+            'idPlanilla' => $planilla['IdPlanilla'],
+            'fechaPlanilla' => (string) ($ms * 10000 + 621355968000000000),
+            'ref1' => '',
+            'ref2' => $tipoDoc,
+            'ref3' => $documento,
+        ]));
+
+        if (! preg_match("~GenerarCertificado\('([^']+)','([^']+)','false'\)~", $resumen, $g)) {
+            throw new \RuntimeException("Mi Planilla no abrió el resumen de pago de la planilla {$numero}.");
+        }
+
+        $paso('Pidiéndole el PDF a Mi Planilla');
+        $ok = $this->get('/PrivadoIndependientes/Pagos/GenerarReportePago?'.http_build_query([
+            'idPlanilla' => $g[1], 'fechaPlanilla' => $g[2], 'esExcel' => 'false',
+        ]));
+        if (! str_contains($ok, 'OK')) {
+            throw new \RuntimeException('Mi Planilla no aceptó generar el resumen de pago.');
+        }
+
+        $paso('Esperando que Mi Planilla lo genere');
+        for ($i = 0; $i < 20; $i++) {
+            sleep(2);
+            if ($url = $this->historicoDisponible($nombre)) {
+                $paso('Descargando el PDF');
+
+                return $this->pdfDelZip($this->get($url), $nombre);
+            }
+        }
+
+        throw new \RuntimeException('Mi Planilla no terminó de generar el resumen de pago a tiempo: reintenta en un minuto.');
+    }
+
+    /** El enlace de descarga del primer archivo «Disponible» con ese nombre en Históricos. */
+    private function historicoDisponible(string $nombre): ?string
+    {
+        $html = $this->get('/PrivadoIndependientes/Certificados/HistoricoReporte');
+        preg_match_all(
+            '~Nombre Archivo\s*<strong[^>]*>([^<]+)</strong>.*?<label>([^<]+)</label>.*?href="(/PrivadoIndependientes/Certificados/AbrirArchivoHistorico\?[^"]+)"~s',
+            $html, $items, PREG_SET_ORDER
+        );
+
+        foreach ($items as [, $archivo, $estado, $url]) {
+            if (str_starts_with(trim($archivo), $nombre) && stripos($estado, 'Disponible') !== false) {
+                return html_entity_decode($url);
+            }
+        }
+
+        return null;
+    }
+
+    private function pdfDelZip(string $zip, string $nombre): string
+    {
+        if (str_starts_with($zip, '%PDF')) {
+            return $zip;
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'mpzip');
+        try {
+            file_put_contents($tmp, $zip);
+            $archivo = new \ZipArchive;
+            if ($archivo->open($tmp) !== true) {
+                throw new \RuntimeException("Mi Planilla no entregó un archivo válido para {$nombre}.");
+            }
+            $pdf = $archivo->getFromName($nombre) ?: $archivo->getFromIndex(0);
+            $archivo->close();
+        } finally {
+            @unlink($tmp);
+        }
+
+        if (! is_string($pdf) || ! str_starts_with($pdf, '%PDF')) {
+            throw new \RuntimeException("El archivo de Mi Planilla no trae el PDF {$nombre}.");
         }
 
         return $pdf;

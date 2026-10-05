@@ -4116,11 +4116,15 @@ class FacturacionController extends Controller
             })
             ->map(fn ($op) => (int) $op->id)->values()->all();
         $miPlanillaId = (int) \DB::table('operadores_planilla')->where('codigo', 'MIPLANI')->value('id');
-        // El comprobante de pago PSE solo se baja de Enlace, con las credenciales del aliado.
+        // El comprobante de pago PSE: de Enlace con las credenciales del aliado, y
+        // de Mi Planilla con la clave de la persona.
         $operadoresConComprobante = $aliadoConSoporteOperador
             ? \DB::table('operadores_planilla')->whereIn('codigo', array_keys(\App\Services\SuaporteApiService::HOSTS))
                 ->pluck('id')->map(fn ($id) => (int) $id)->all()
             : [];
+        if ($tieneClaveMiPlanilla && $miPlanillaId) {
+            $operadoresConComprobante[] = $miPlanillaId;
+        }
 
         $feEstados = $this->estadosFacturaElectronica($facturas, $aliadoId);
 

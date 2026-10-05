@@ -784,7 +784,8 @@ class EnlaceInformeIndividualService
 
     /**
      * Comprobante de pago de la planilla (PSE): banco, CUS, valor, estado y hora
-     * de la transacción, con el desglose por administradora. Es de la planilla
+     * de la transacción, con el desglose por administradora. En Mi Planilla es
+     * su «Reporte resumen de pago» (ver MiPlanillaPortalService::resumenPagoPdf). Es de la planilla
      * entera, no de una persona, y sale de "Consultas postpago → Comprobante
      * pago de planilla" del mismo portal JSF (mapeado 5-oct-2026 en Simple).
      *
@@ -805,6 +806,23 @@ class EnlaceInformeIndividualService
             $this->paso('Ya estaba descargado: abriéndolo');
 
             return ['pdf' => Storage::disk('local')->get($ruta), 'origen' => 'disco'];
+        }
+
+        // Mi Planilla: el «Reporte resumen de pago», con la clave de la persona.
+        if (self::esMiPlanilla($operadorPlanillaId)) {
+            $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi, $plano->tipo_doc);
+            $this->paso('Ingresando a Mi Planilla');
+            $robot->login();
+
+            try {
+                $pdf = $robot->resumenPagoPdf($numero, fn ($t) => $this->paso($t));
+            } finally {
+                rescue(fn () => $robot->logout(), report: false);
+            }
+
+            Storage::disk('local')->put($ruta, $pdf);
+
+            return ['pdf' => $pdf, 'origen' => 'operador'];
         }
 
         $operadores = DB::table('operadores_planilla')
