@@ -512,7 +512,7 @@
             <div class="mitad reveal" style="--i:1">
                 <div class="eyebrow" style="margin:0">Afiliación</div>
                 <div class="v num">50 %</div>
-                <p>La mitad de cada afiliación que traiga, siempre, tenga 2 clientes o 200.</p>
+                <p>La mitad de cada afiliación que traiga, siempre, tenga 2 clientes o 200. El valor depende del plan: una afiliación de $125.000 le deja $62.500, y una de $250.000, $125.000.</p>
             </div>
             <div class="mitad reveal" style="--i:2">
                 <div class="eyebrow" style="margin:0">Administración mensual</div>
@@ -554,12 +554,20 @@
                     <label for="a-nuevos">Afiliaciones nuevas al mes <input type="number" id="a-nuevos" min="0" max="500" step="1" value="4" inputmode="numeric"></label>
                     <input type="range" id="a-nuevos-r" min="0" max="60" step="1" value="4" aria-label="Afiliaciones nuevas al mes">
                 </div>
+                <div class="campo">
+                    <label for="a-afil">Valor de cada afiliación <input type="number" id="a-afil" min="0" step="5000" value="125000" inputmode="numeric" style="width:140px"></label>
+                    <div class="seg" id="a-afil-chips" role="group" aria-label="Valor de la afiliación según el plan">
+                        <button type="button" data-v="55000" aria-pressed="false">Plan básico<small>$55.000</small></button>
+                        <button type="button" data-v="125000" aria-pressed="true">Plan completo<small>$125.000</small></button>
+                        <button type="button" data-v="250000" aria-pressed="false">Plan alto<small>$250.000</small></button>
+                    </div>
+                    <div class="ayuda">La afiliación vale más o menos según el plan del cliente. Usted gana la mitad.</div>
+                </div>
                 <label class="casilla"><input type="checkbox" id="a-arranque"> Estoy en mis tres primeros meses</label>
                 <details class="sup" style="margin-top:20px">
-                    <summary>Cambiar lo que paga el cliente</summary>
+                    <summary>Cambiar la administración que paga el cliente</summary>
                     <div class="fila"><label for="a-admon">Administración mensual</label><input type="number" id="a-admon" min="0" step="1000" value="46000" inputmode="numeric"></div>
-                    <div class="fila"><label for="a-afil">Valor de la afiliación</label><input type="number" id="a-afil" min="0" step="1000" value="55000" inputmode="numeric"></div>
-                    <p style="margin-top:10px">Son los valores más comunes que cobra Brygar hoy. Cámbielos si sus clientes pagan otra tarifa.</p>
+                    <p style="margin-top:10px">$46.000 es lo más común que cobra Brygar hoy. Cámbielo si sus clientes pagan otra tarifa.</p>
                 </details>
             </div>
             <div class="salida" aria-live="polite">
@@ -760,7 +768,8 @@
         });
         $('a-o-admon-etq').textContent = c + ' clientes × ' + cop(admon * pct) + ' (' + Math.round(pct * 100) + ' % de ' + cop(admon) + ')';
         $('a-o-admon').textContent = cop(gAdmon);
-        $('a-o-afil-etq').textContent = nuevos + ' afiliaciones × ' + cop(afil * 0.5) + ' (50 %)';
+        $('a-o-afil-etq').textContent = nuevos + ' afiliaciones × ' + cop(afil * 0.5) + ' (la mitad de ' + cop(afil) + ')';
+        $('a-afil-chips').querySelectorAll('button').forEach(function (b) { b.setAttribute('aria-pressed', +b.dataset.v === afil ? 'true' : 'false'); });
         $('a-o-afil').textContent = cop(gAfil);
         $('a-o-total').textContent = cop(total);
         $('a-o-nivel').textContent = arranque ? 'Meses de arranque: 50 % completo' : 'Nivel del ' + Math.round(pct * 100) + ' % de administración';
@@ -787,10 +796,14 @@
             '• Según la calculadora ganaría: ' + cop(total) + ' al mes';
         $('a-o-wa').href = WA + '?text=' + encodeURIComponent(texto);
     }
+    $('a-afil-chips').addEventListener('click', function (e) {
+        var b = e.target.closest('button'); if (!b) return;
+        $('a-afil').value = b.dataset.v; asesor();
+    });
     asesor();
 
     // ── Selector de entrada: ¿asesor o empresa? ──
-    var UMBRAL = 100, ADMON_LISTA = 46000;
+    var UMBRAL = 100, CERCA = 75, ADMON_LISTA = 46000;
     var sel = { n: 20, forzado: null, modo: 'esencial' };
     var puntos = $('s-puntos');
     for (var i = 0; i < 100; i++) {
@@ -836,25 +849,38 @@
                 '<h2>' + (n >= UMBRAL ? 'Con ' + n.toLocaleString('es-CO') + ' ya le alcanza para su propia marca' : 'Trabaje con la empresa de Brygar') + '</h2>' +
                 '<div class="cifra">' + cop(gana) + '<small>al mes de administración, con el ' + Math.round(pct * 100) + ' % de ' + cop(ADMON_LISTA) + ' por persona. Sin pagar plataforma.</small></div>' +
                 '<div class="mini">' + barras + '</div>' +
-                '<p>' + sigue + ' Además gana la mitad de cada afiliación que traiga.</p>' +
+                '<p>' + sigue + ' Además gana la mitad de cada afiliación: si el plan del cliente tiene afiliación de $250.000, $125.000 son suyos.</p>' +
                 '<button type="button" class="btn btn-grande" data-ir="asesor">Ver cuánto ganaría →</button>' +
                 '<div class="otra">' + (n >= UMBRAL ? 'Le conviene más una alianza: ' : '¿Ya tiene su propia empresa? ') + '<button type="button" data-forzar="empresa">Ver las alianzas</button></div>';
+        } else if (n < CERCA) {
+            // Lejos del mínimo: la alianza no es su camino todavía, se recomienda el Plan Asesor
+            var kk = nivelDe(n), ganaria = n * ADMON_LISTA * NIVELES[kk][1];
+            html = '<div class="eyebrow">Alianza para empresas</div>' +
+                '<h2>Las alianzas empiezan en ' + UMBRAL + ' afiliados</h2>' +
+                '<p>Con ' + n + ' todavía no le conviene: la plataforma dedicada tiene un mínimo de ' + cop(MIN_PLATAFORMA) + ' al mes y desde el tercer mes se factura sobre ' + UMBRAL + ' afiliados.</p>' +
+                '<div class="cifra">' + cop(ganaria) + '<small>es lo que ganaría al mes como asesor, con la empresa de Brygar y sin pagar plataforma.</small></div>' +
+                '<p><strong style="color:#fff">Le recomendamos el Plan Asesor.</strong> Cuando llegue a ' + UMBRAL + ' da el salto a su propia marca.</p>' +
+                '<button type="button" class="btn btn-grande" data-ir="asesor">Ver el Plan Asesor →</button>' +
+                '<div class="otra">¿Va a llegar pronto a ' + UMBRAL + '? <button type="button" data-ir="cotizador">Ver las alianzas de todos modos</button></div>';
         } else {
-            var precio = function (v) { return cop(Math.max(n * v, MIN_PLATAFORMA)); };
+            var falta = Math.max(UMBRAL - n, 0);
+            var base = Math.max(n, UMBRAL);
+            var precio = function (v) { return cop(Math.max(base * v, MIN_PLATAFORMA)); };
             var fila = function (modo, titulo, sub, v) {
                 return '<button type="button" data-modo="' + modo + '" aria-pressed="' + (sel.modo === modo) + '"><b>' + titulo + '</b><small>' + sub + '</small><span>' + precio(v) + '</span></button>';
             };
             html = '<div class="eyebrow">Su camino: alianza para empresas</div>' +
-                '<h2>Con su propio logo y todo a su nombre</h2>' +
-                '<p>¿Cómo quiere trabajar con sus ' + n.toLocaleString('es-CO') + ' afiliados? Valor al mes:</p>' +
+                '<h2>' + (falta ? 'Le faltan ' + falta + ' para el mínimo de ' + UMBRAL : 'Con su propio logo y todo a su nombre') + '</h2>' +
+                (falta
+                    ? '<p>El mínimo de una alianza son ' + UMBRAL + ' afiliados. Puede empezar con ' + n + ', pero debe crecer: tiene tres meses para llegar a ' + UMBRAL + ', y desde el tercero se factura sobre ' + UMBRAL + '. Valor al mes ya con ese mínimo:</p>'
+                    : '<p>¿Cómo quiere trabajar con sus ' + n.toLocaleString('es-CO') + ' afiliados? Valor al mes:</p>') +
                 '<div class="modos">' +
                     fila('esencial', 'Con mis propias empresas', 'Alianza Esencial · la plataforma', 800) +
                     fila('especifica', 'Con las empresas de Brygar', 'Alianza Específica · plataforma y automatización', 5500) +
                     fila('integral', 'Que Brygar lo opere todo', 'Alianza Integral · gestión completa', 15000) +
                 '</div>' +
-                (n < UMBRAL ? '<p>Las alianzas son para 100 o más. Puede empezar con ' + n + ' y pasar el resto en tres meses.</p>' : '') +
                 '<button type="button" class="btn btn-grande" data-ir="cotizador">Cotizar mi alianza →</button>' +
-                '<div class="otra">' + (n < UMBRAL ? 'Con ' + n + ' le conviene más: ' : '¿Prefiere trabajar con la empresa de Brygar? ') + '<button type="button" data-forzar="asesor">Ver el Plan Asesor</button></div>';
+                '<div class="otra">' + (falta ? 'Mientras llega a ' + UMBRAL + ' también puede ser asesor: ' : '¿Prefiere trabajar con la empresa de Brygar? ') + '<button type="button" data-forzar="asesor">Ver el Plan Asesor</button></div>';
         }
         res.innerHTML = html;
         if (p !== perfilPintado) {
@@ -881,6 +907,10 @@
     $('s-res').addEventListener('click', function (e) {
         var b = e.target.closest('button'); if (!b) return;
         if (b.dataset.forzar) { sel.forzado = b.dataset.forzar; pintarSelector(); return; }
+        if (b.dataset.ir && b.closest('.otra') && b.dataset.ir === 'cotizador') {
+            poner('q-afiliados', 'q-afiliados-r', sel.n); calcular();
+            fijarPerfil('empresa'); irA('planes'); return;
+        }
         if (b.dataset.modo) { sel.modo = b.dataset.modo; pintarSelector(); return; }
         if (b.dataset.ir === 'asesor') {
             poner('a-clientes', 'a-clientes-r', sel.n); asesor();
