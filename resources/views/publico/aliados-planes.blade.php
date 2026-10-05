@@ -299,6 +299,7 @@
                 <header><h3>Alianza Esencial</h3><div class="precio"><b class="num">$800</b><small>por afiliado al mes</small></div></header>
                 <ul>
                     <li>Acceso a la plataforma BryNex, con sus propias razones sociales</li>
+                    <li>Plataforma dedicada, con su logo y a su nombre: mínimo $180.000 al mes</li>
                 </ul>
                 <div class="nota">Una puerta de entrada a la digitalización.</div>
                 <span class="afil">Afiliaciones: opcional</span>
@@ -308,7 +309,7 @@
         <div class="gradual reveal">
             <div>
                 <h3>¿Tiene 100 afiliados pero quiere pasarlos poco a poco?</h3>
-                <p>Empiece con los que tenga. El valor por afiliado no cambia; lo que sube es el mínimo que se factura, para que la migración no se quede a medias.</p>
+                <p>Empiece con los que tenga. El valor por afiliado no cambia; lo que sube es el mínimo que se factura, para que la migración no se quede a medias. La plataforma dedicada tiene un mínimo de $180.000 al mes en cualquier alianza.</p>
             </div>
             <ol class="meses">
                 <li><b>Mes 1</b><span>Paga los afiliados que ya estén en BryNex.</span></li>
@@ -517,6 +518,8 @@
     var LIBERA = { manual: 0, equipo: 0.75, brygar: 1 };
     var HORAS_PERSONA = 160;
     var MIN_MES2 = 50, MIN_FINAL = 100;
+    // Piso mensual de la plataforma dedicada, en cualquier alianza y desde el primer mes
+    var MIN_PLATAFORMA = 180000;
     var WA = @json($urlWhatsappBase);
     var $ = function (id) { return document.getElementById(id); };
     var cop = function (n) { return '$' + Math.round(n).toLocaleString('es-CO'); };
@@ -562,7 +565,9 @@
         $('q-afil-nota').textContent = integral ? 'En la Alianza Integral las afiliaciones ya van incluidas y las hace Brygar.' : '';
 
         var plan = PLANES[estado.plan];
-        var mensual = afiliados * plan[1];
+        var bruto = afiliados * plan[1];
+        var mensual = Math.max(bruto, MIN_PLATAFORMA);
+        var conPiso = mensual > bruto;
         var vAfil = 0, etq = 'Afiliaciones';
         if (integral) { etq = 'Afiliaciones (' + nuevos + ')'; }
         else if (afil === 'equipo') { vAfil = nuevos * P_EQUIPO; etq = nuevos + ' afiliaciones × ' + cop(P_EQUIPO); }
@@ -572,21 +577,29 @@
         } else { etq = 'Afiliaciones a mano, con su equipo'; }
         var total = mensual + vAfil;
 
-        $('o-plan-etq').textContent = plan[0] + ' · ' + afiliados.toLocaleString('es-CO') + ' × ' + cop(plan[1]);
+        $('o-plan-etq').textContent = plan[0] + ' · ' + afiliados.toLocaleString('es-CO') + ' × ' + cop(plan[1]) + (conPiso ? ' (aplica el mínimo)' : '');
         $('o-plan').textContent = cop(mensual);
         $('o-afil-etq').textContent = etq;
         $('o-afil').textContent = integral ? 'Incluidas' : (afil === 'manual' ? '$0' : cop(vAfil));
         $('o-total').textContent = cop(total);
         $('o-por').textContent = afiliados ? cop(total / afiliados) + ' por afiliado' : '';
 
-        // Migración gradual: mes 1 lo real, mes 2 mínimo 50, mes 3 en adelante mínimo 100
+        // Mínimos: piso de plataforma siempre; y si migra de a poco, mes 2 mínimo 50 y mes 3 mínimo 100
         var aviso = $('o-minimo');
-        aviso.hidden = afiliados >= MIN_FINAL;
+        var mesCon = function (nMin) { return Math.max(Math.max(afiliados, nMin) * plan[1], MIN_PLATAFORMA) + vAfil; };
+        var mes2 = mesCon(MIN_MES2), mes3 = mesCon(MIN_FINAL);
+        aviso.hidden = !conPiso && afiliados >= MIN_FINAL;
         if (!aviso.hidden) {
-            var mes2 = Math.max(afiliados, MIN_MES2) * plan[1] + vAfil, mes3 = MIN_FINAL * plan[1] + vAfil;
-            aviso.innerHTML = '<strong>Si está pasando sus afiliados de a poco:</strong> el primer mes paga ' + cop(total) +
-                (afiliados < MIN_MES2 ? ', el segundo ' + cop(mes2) + ' (mínimo ' + MIN_MES2 + ' afiliados)' : '') +
-                ' y desde el tercero ' + cop(mes3) + ' (mínimo ' + MIN_FINAL + '). El valor por afiliado no cambia.';
+            if (mes3 === total) {
+                aviso.innerHTML = '<strong>Mínimo de plataforma:</strong> la plataforma dedicada, con su logo y a su nombre, se factura desde ' + cop(MIN_PLATAFORMA) +
+                    ' al mes. Con ' + afiliados + ' afiliados equivale a ' + cop(MIN_PLATAFORMA / Math.max(afiliados, 1)) + ' por cada uno; desde ' +
+                    Math.ceil(MIN_PLATAFORMA / plan[1]) + ' afiliados paga ' + cop(plan[1]) + ' por afiliado.';
+            } else {
+                aviso.innerHTML = '<strong>Si está pasando sus afiliados de a poco:</strong> el primer mes paga ' + cop(total) +
+                    (conPiso ? ' (mínimo de plataforma)' : '') +
+                    (mes2 !== total && mes2 !== mes3 ? ', el segundo ' + cop(mes2) + ' (mínimo ' + MIN_MES2 + ' afiliados)' : '') +
+                    ' y desde el tercero ' + cop(mes3) + ' (mínimo ' + MIN_FINAL + '). El valor por afiliado no cambia.';
+            }
         }
 
         var horasManual = nuevos * min / 60;

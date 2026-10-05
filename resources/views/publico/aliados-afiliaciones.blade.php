@@ -392,7 +392,7 @@
                 <div class="eyebrow" style="margin:0">Alianza Esencial</div>
                 <div class="v">$800</div>
                 <div class="u">por afiliado al mes</div>
-                <p>Acceso a la plataforma BryNex, con sus propias razones sociales.</p>
+                <p>Acceso a la plataforma BryNex, con sus propias razones sociales. Mínimo $180.000 al mes.</p>
                 <span class="chip">Afiliaciones: opcional</span>
             </div>
             <div class="precio reveal" style="--i:2">
