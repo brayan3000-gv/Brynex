@@ -35,6 +35,7 @@ class Gasto extends BaseFinanzasModel
         'patrimonio_id',
         'cc_trabajo_id',
         'soporte_path',
+        'origen', // null = digitado en la pantalla; garvis:… = por WhatsApp
     ];
 
     protected $casts = [
