@@ -99,6 +99,7 @@
 .msg-wrap { display:flex; flex-direction:column; }
 .msg-wrap.saliente { align-items:flex-end; }
 .msg-sender { font-size:.68rem; color:#94a3b8; margin-bottom:.15rem; }
+.msg-error { margin-top:.3rem; padding:.2rem .45rem; border-radius:6px; background:#fee2e2; color:#b91c1c; font-size:.7rem; line-height:1.3; }
 /* Nota interna: no se envió al cliente, queda como registro (atendido por otro medio) */
 .msg-wrap.nota { align-items:center; }
 .msg-nota { background:#fef9c3; color:#713f12; border:1px dashed #facc15; border-radius:10px; font-size:.78rem; max-width:80%; }
@@ -360,7 +361,7 @@
                                     <div style="padding:.5rem;color:rgba(255,255,255,.6)">📷 Descargando imagen...</div>
                                 </template>
                                 <template x-if="msg.contenido">
-                                    <div style="margin-top:.3rem" x-text="msg.contenido"></div>
+                                    <div style="margin-top:.3rem" x-html="formatearContenido(msg.contenido)"></div>
                                 </template>
                             </div>
                         </template>
@@ -395,6 +396,9 @@
                                     <template x-if="!msg.tiene_media">
                                         <span style="font-size:.72rem;opacity:.6">Descargando...</span>
                                     </template>
+                                    <template x-if="msg.contenido">
+                                        <div style="margin-top:.3rem;font-size:.8rem" x-html="formatearContenido(msg.contenido)"></div>
+                                    </template>
                                 </div>
                             </div>
                         </template>
@@ -416,9 +420,14 @@
                         <div class="msg-meta">
                             <span x-text="msg.hora"></span>
                             <template x-if="!msg.es_entrante">
-                                <span x-text="msg.icono_estado"></span>
+                                <span x-text="msg.icono_estado" :title="msg.error || ''"></span>
                             </template>
                         </div>
+
+                        <!-- Meta no lo entregó: se dice por qué -->
+                        <template x-if="msg.error">
+                            <div class="msg-error">❌ No se entregó. <span x-text="msg.error"></span></div>
+                        </template>
                     </div>
                 </div>
             </template>
@@ -976,9 +985,14 @@ function chatApp() {
                 : file.type === 'application/pdf' ? 'document'
                 : file.type.startsWith('audio/') ? 'audio' : 'document';
 
+            // Lo que esté escrito en la caja viaja como texto del archivo (los audios no
+            // admiten texto: ahí se deja en la caja para enviarlo aparte).
+            const caption = tipo !== 'audio' ? this.textoMensaje.trim() : '';
+
             const formData = new FormData();
             formData.append('tipo', tipo);
             formData.append('archivo', file);
+            if (caption) formData.append('caption', caption);
             formData.append('_token', document.querySelector('meta[name="csrf-token"]').content);
 
             try {
@@ -990,25 +1004,13 @@ function chatApp() {
                 const data = await resp.json();
                 if (data.ok) {
                     const ahora = new Date();
-                    this.mensajes.push({
-                        id: Date.now(),
-                        tipo: tipo,
-                        contenido: '📎 ' + file.name,
-                        es_entrante: false,
-                        usuario_nombre: '{{ Auth::user()->nombre }}',
-                        plantilla_nombre: null,
-                        tiene_media: true,
-                        media_url: data.mensaje?.media_url || '',
-                        media_nombre: file.name,
-                        media_mime_type: file.type,
-                        hora: String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0'),
-                        icono_estado: '📤',
-                    });
+                    this.mensajes.push(data.mensaje_chat);
+                    if (caption) this.textoMensaje = '';
 
                     // Actualizar barra lateral
                     let conv = this.listaConversaciones.find(c => c.id == this.convId);
                     if (conv) {
-                        conv.preview = '📎 ' + file.name;
+                        conv.preview = caption || ('📎 ' + file.name);
                         conv.ultimo_mensaje_at = ahora.toISOString();
                         conv.hora_display = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
                         this.ordenarConversaciones();

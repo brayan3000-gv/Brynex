@@ -186,6 +186,7 @@ class WhatsappChatController extends Controller
             $rules['parametros']   = 'nullable|array';
         } else {
             $rules['archivo'] = 'required|file|max:25600'; // 25MB máx
+            $rules['caption'] = 'nullable|string|max:900'; // Meta admite 1024 con la firma
         }
 
         $validated = $request->validate($rules);
@@ -214,6 +215,9 @@ class WhatsappChatController extends Controller
         return response()->json([
             'ok'             => true,
             'mensaje'        => $resultado['mensaje'],
+            // El mismo mensaje en el formato del chat (URL del adjunto ya servible, texto
+            // firmado), para pintarlo tal cual sin recargar.
+            'mensaje_chat'   => $this->mapearMensajes(collect([$resultado['mensaje']]))[0],
             'ventana_activa' => $conversacion->fresh()->ventanaActiva(),
             'ventana_minutos'=> $conversacion->fresh()->minutosVentanaRestante(),
         ]);
@@ -911,6 +915,7 @@ class WhatsappChatController extends Controller
                 'media_mime_type' => $m->media_mime_type,
                 'hora'            => $m->created_at->format('H:i'),
                 'icono_estado'    => $m->iconoEstado(),
+                'error'           => $m->motivoFallo(),
             ];
         })->toArray();
     }
@@ -980,9 +985,16 @@ class WhatsappChatController extends Controller
         $directorio = 'whatsapp/' . now()->format('Y/m');
         $path = $archivo->store($directorio, 'local');
 
+        // El texto que acompaña al archivo. Se armaba y se guardaba en el chat, pero nunca
+        // se le pasaba a Meta: aquí se veía el texto bajo la foto y al cliente le llegaba
+        // la foto pelada. Los audios no admiten texto (Meta rechaza el mensaje entero).
         $nombreAgente    = Auth::user()->nombre;
-        $captionOriginal = $request->input('caption') ?? '';
-        $captionFirmado  = "*Atendido por {$nombreAgente}:*" . ($captionOriginal ? "\n\n" . $captionOriginal : '');
+        $captionOriginal = trim((string) $request->input('caption'));
+        $captionFirmado  = in_array($tipo, ['image', 'document', 'video'], true)
+            ? ($captionOriginal !== ''
+                ? "*Atendido por {$nombreAgente}:*\n\n" . $captionOriginal
+                : "*Atendido por {$nombreAgente}*")
+            : null;
 
         $resultado = $this->apiService->enviarMedia(
             $conv->wa_contact_id,
@@ -990,7 +1002,8 @@ class WhatsappChatController extends Controller
             $path,
             $mimeType,
             $nombre,
-            $config
+            $config,
+            $captionFirmado
         );
 
         if (!$resultado['ok']) return $resultado;

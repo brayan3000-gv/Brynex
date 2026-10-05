@@ -531,10 +531,16 @@ class WhatsappWebhookService
             ]);
         }
 
-        $mensaje->update([
-            'estado'    => $estadoLocal,
-            'estado_at' => now(),
-        ]);
+        // El motivo se guarda con el mensaje. Antes solo iba al log —que en producción
+        // casi nadie mira— y en el chat quedaba un ❌ sin explicación: los 26 fallidos de
+        // septiembre de 2026 están así, sin poder saber por qué no llegaron.
+        $mensaje->update(array_filter([
+            'estado'        => $estadoLocal,
+            'estado_at'     => now(),
+            'error_detalle' => $estadoLocal === 'fallido'
+                ? WhatsappMensaje::detalleDeErrorMeta($status['errors'] ?? null)
+                : null,
+        ], fn ($v) => $v !== null));
 
         // Actualizar el estado del detalle de envío masivo si existe
         if ($waMessageId) {
