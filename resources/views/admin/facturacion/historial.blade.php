@@ -28,7 +28,7 @@ $esSuperBrynex = auth()->user()->es_brynex && auth()->user()->hasRole('superadmi
 .hi-pill{padding:.25rem .75rem;border-radius:20px;font-size:.72rem;font-weight:700;border:1.5px solid #e2e8f0;background:#f8fafc;color:#64748b;cursor:pointer;transition:all .15s;text-decoration:none}
 .hi-pill.active,.hi-pill:hover{background:#eff6ff;border-color:#3b82f6;color:#1d4ed8}
 /* Filtros dentro de la tarjeta oscura del encabezado */
-.hi-filtros-card{background:transparent;border:none;border-top:1px solid rgba(255,255,255,.12);border-radius:0;padding:.7rem 0 0;margin:.8rem 0 0}
+.hi-filtros-card{background:transparent;border:none;border-radius:0;padding:0;margin:0;gap:.5rem;text-align:left}
 .hi-filtros-card label{color:#94a3b8}
 .hi-filtros-card .hi-sel{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.18);color:#fff}
 .hi-filtros-card .hi-sel option{color:#0f172a}
@@ -109,11 +109,37 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
             </div>
         </div>
         <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:.4rem">
-            <button type="button" onclick="pedirHistorico()"
-                    style="background:#fff;color:#0f172a;border:none;border-radius:8px;padding:.35rem .8rem;font-size:.75rem;font-weight:800;cursor:pointer"
-                    title="Descargar en un .zip la planilla original de cada mes del año, de cualquier operador">
-                📚 Histórico de planillas
-            </button>
+            <div style="display:flex;align-items:flex-end;gap:.6rem;flex-wrap:wrap;justify-content:flex-end">
+                {{-- FILTROS, al lado del histórico --}}
+                <form method="GET" class="hi-filtros hi-filtros-card" id="formFiltro">
+                    <div style="display:flex;flex-direction:column;gap:.15rem">
+                        <label>Año</label>
+                        <select name="anio" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
+                            <option value="0" {{ !$filtroAnio ? 'selected' : '' }}>Todos</option>
+                            @foreach($aniosDisp as $a)
+                            <option value="{{ $a }}" {{ $filtroAnio == $a ? 'selected' : '' }}>{{ $a }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:.15rem">
+                        <label>Razón Social</label>
+                        <select name="razon_social_id" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
+                            <option value="" {{ $filtroRs === '' ? 'selected' : '' }}>Todas</option>
+                            @foreach($rsSocDisp as $rs)
+                            <option value="{{ $rs['id'] }}" {{ $filtroRs == $rs['id'] ? 'selected' : '' }}>{{ $rs['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @if(!$sinFiltros)
+                    <a href="{{ route('admin.facturacion.historial', $cedula) }}" class="hi-pill active" style="margin-top:1rem">✕ Limpiar filtros</a>
+                    @endif
+                </form>
+                <button type="button" onclick="pedirHistorico()"
+                        style="background:#fff;color:#0f172a;border:none;border-radius:8px;padding:.45rem .8rem;font-size:.75rem;font-weight:800;cursor:pointer"
+                        title="Descargar en un .zip la planilla original de cada mes del año, de cualquier operador">
+                    📚 Histórico de planillas
+                </button>
+            </div>
             @if($sinFiltros)
             <span style="background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:.68rem;font-weight:700;padding:.2rem .6rem;border-radius:5px">Últimas 20 facturas</span>
             @else
@@ -121,30 +147,6 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
             @endif
         </div>
     </div>
-    {{-- FILTROS, dentro de la tarjeta --}}
-    <form method="GET" class="hi-filtros hi-filtros-card" id="formFiltro">
-        <div style="display:flex;flex-direction:column;gap:.15rem">
-            <label>Año</label>
-            <select name="anio" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
-                <option value="0" {{ !$filtroAnio ? 'selected' : '' }}>Todos</option>
-                @foreach($aniosDisp as $a)
-                <option value="{{ $a }}" {{ $filtroAnio == $a ? 'selected' : '' }}>{{ $a }}</option>
-                @endforeach
-            </select>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:.15rem">
-            <label>Razón Social</label>
-            <select name="razon_social_id" class="hi-sel" onchange="document.getElementById('formFiltro').submit()">
-                <option value="" {{ $filtroRs === '' ? 'selected' : '' }}>Todas</option>
-                @foreach($rsSocDisp as $rs)
-                <option value="{{ $rs['id'] }}" {{ $filtroRs == $rs['id'] ? 'selected' : '' }}>{{ $rs['label'] }}</option>
-                @endforeach
-            </select>
-        </div>
-        @if(!$sinFiltros)
-        <a href="{{ route('admin.facturacion.historial', $cedula) }}" class="hi-pill active" style="margin-top:1rem">✕ Limpiar filtros</a>
-        @endif
-    </form>
 </div>
 
 
