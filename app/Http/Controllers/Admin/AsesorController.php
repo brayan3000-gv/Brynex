@@ -65,6 +65,9 @@ class AsesorController extends Controller
             'comision_afil_valor' => 'required|numeric|min:0',
             'comision_admon_tipo' => 'required|in:fijo,porcentaje',
             'comision_admon_valor' => 'required|numeric|min:0',
+            'tipo_cobro' => 'sometimes|required|in:comision,neta,interno',
+            'tarifa_neta' => 'nullable|numeric|min:0',
+            'forma_pago' => 'nullable|in:descuenta,quincenal,mensual',
             'fecha_ingreso' => 'nullable|date',
             'activo' => 'boolean',
         ], $this->mensajes());
@@ -138,6 +141,9 @@ class AsesorController extends Controller
             'comision_afil_valor' => 'required|numeric|min:0',
             'comision_admon_tipo' => 'required|in:fijo,porcentaje',
             'comision_admon_valor' => 'required|numeric|min:0',
+            'tipo_cobro' => 'sometimes|required|in:comision,neta,interno',
+            'tarifa_neta' => 'nullable|numeric|min:0',
+            'forma_pago' => 'nullable|in:descuenta,quincenal,mensual',
             'fecha_ingreso' => 'nullable|date',
             'activo' => 'boolean',
         ], $this->mensajes());
@@ -195,6 +201,16 @@ class AsesorController extends Controller
             'asesores', 'anio', 'mes', 'periodoLabel',
             'totalAfiliacion', 'totalAdmon', 'totalPendiente', 'totalPagado'
         ));
+    }
+
+    // ─── Cómo van los asesores: cartera del mes, nivel y lo que dejaron ─
+    public function comoVan(Request $request, \App\Services\AsesorCarteraService $cartera)
+    {
+        $alidoId = (int) session('aliado_id_activo');
+        $anio = (int) $request->get('anio', now()->year);
+        $mes = min(12, max(1, (int) $request->get('mes', now()->month)));
+
+        return view('admin.asesores.como-van', $cartera->comoVan($alidoId, $anio, $mes) + compact('anio', 'mes'));
     }
 
     // ─── Marcar comisión como pagada ─────────────────────────────────

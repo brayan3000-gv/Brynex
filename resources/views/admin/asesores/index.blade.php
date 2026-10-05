@@ -17,6 +17,11 @@
             onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
             📊 Reporte Mensual Liquidación
         </a>
+        <a href="{{ route('admin.asesores.como_van') }}"
+            style="background:#f8fafc;border:1px solid #cbd5e1;padding:0.6rem 1.25rem;border-radius:8px;color:#334155;text-decoration:none;font-size:0.85rem;font-weight:600;display:inline-flex;align-items:center;gap:0.4rem;transition:background 0.2s;"
+            onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='#f8fafc'">
+            🧭 Cómo van
+        </a>
     </div>
 
     <div style="overflow-x:auto;">

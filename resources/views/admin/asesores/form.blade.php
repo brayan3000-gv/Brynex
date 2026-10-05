@@ -191,6 +191,34 @@
             </div>
         </div>
 
+        {{-- Cómo trabaja con el aliado: se cambia a mano; el informe «Cómo van» muestra si conviene moverlo --}}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1.5rem;margin-bottom:1.5rem;">
+            <div>
+                <label style="display:block;font-size:0.8rem;font-weight:600;color:#475569;margin-bottom:0.3rem;">Tipo de cobro</label>
+                <select name="tipo_cobro" style="width:100%;padding:0.6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;background:#fff;">
+                    @foreach(\App\Models\Asesor::TIPOS_COBRO as $valor => $etiqueta)
+                        <option value="{{ $valor }}" {{ old('tipo_cobro', $asesor->tipo_cobro ?? 'comision') === $valor ? 'selected' : '' }}>{{ $etiqueta }}</option>
+                    @endforeach
+                </select>
+                <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.3rem;">Comisión: su parte va en el contrato. Neta: paga un valor fijo y cobra lo suyo aparte.</div>
+            </div>
+            <div>
+                <label style="display:block;font-size:0.8rem;font-weight:600;color:#475569;margin-bottom:0.3rem;">Tarifa neta por persona ($)</label>
+                <input type="number" step="1" min="0" name="tarifa_neta" value="{{ old('tarifa_neta', $asesor->tarifa_neta !== null ? (int) $asesor->tarifa_neta : '') }}"
+                    style="width:100%;padding:0.6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;">
+                <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.3rem;">Solo si es tarifa neta. Es informativo: lo que se cobra sale del contrato.</div>
+            </div>
+            <div>
+                <label style="display:block;font-size:0.8rem;font-weight:600;color:#475569;margin-bottom:0.3rem;">Cómo recibe su comisión</label>
+                <select name="forma_pago" style="width:100%;padding:0.6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;background:#fff;">
+                    <option value="">Sin definir</option>
+                    @foreach(\App\Models\Asesor::FORMAS_PAGO as $valor => $etiqueta)
+                        <option value="{{ $valor }}" {{ old('forma_pago', $asesor->forma_pago) === $valor ? 'selected' : '' }}>{{ $etiqueta }}</option>
+                    @endforeach
+                </select>
+            </div>
+        </div>
+
         <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
             <div>
                 <label style="display:block;font-size:0.8rem;font-weight:600;color:#475569;margin-bottom:0.3rem;">Cuenta Bancaria (para liquidación)</label>

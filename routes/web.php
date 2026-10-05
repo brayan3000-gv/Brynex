@@ -231,6 +231,8 @@ Route::middleware('auth')->group(function () {
         Route::middleware('permiso:asesores.ver')->group(function () {
             Route::get('asesores/reporte-mensual', [\App\Http\Controllers\Admin\AsesorController::class, 'reporteMensual'])
                 ->name('asesores.reporte_mensual');
+            Route::get('asesores/como-van', [\App\Http\Controllers\Admin\AsesorController::class, 'comoVan'])
+                ->name('asesores.como_van');
             Route::get('asesores', [\App\Http\Controllers\Admin\AsesorController::class, 'index'])->name('asesores.index');
             // Antes de asesores/{asesor} no hace falta cuidarse: show tiene whereNumber.
             Route::get('asesores/{asesor}/tarifas', [\App\Http\Controllers\Admin\AsesorController::class, 'tarifas'])

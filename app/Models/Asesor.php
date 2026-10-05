@@ -28,6 +28,9 @@ class Asesor extends BaseModel
         'comision_afil_valor',
         'comision_admon_tipo',
         'comision_admon_valor',
+        'tipo_cobro',
+        'tarifa_neta',
+        'forma_pago',
         'nivel_id',
         'fecha_ingreso',
         'activo',
@@ -39,6 +42,20 @@ class Asesor extends BaseModel
         'fecha_ingreso' => 'date',
         'comision_afil_valor' => 'decimal:2',
         'comision_admon_valor' => 'decimal:2',
+        'tarifa_neta' => 'decimal:2',
+    ];
+
+    /** Cómo trabaja el asesor con el aliado. Se cambia a mano en su ficha. */
+    const TIPOS_COBRO = [
+        'comision' => 'Comisión en el programa',
+        'neta' => 'Tarifa neta (cobra lo suyo por fuera)',
+        'interno' => 'Interno (oficina)',
+    ];
+
+    const FORMAS_PAGO = [
+        'descuenta' => 'Descuenta al cobrar',
+        'quincenal' => 'Quincenal',
+        'mensual' => 'Mensual',
     ];
 
     // ─── Relaciones ───────────────────────────────────────────────────
