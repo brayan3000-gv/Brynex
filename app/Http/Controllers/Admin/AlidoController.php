@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Aliado;
 use App\Models\User;
+use App\Services\CompresorLogoService;
 use Illuminate\Http\Request;
 
 class AlidoController extends Controller
@@ -36,7 +37,7 @@ class AlidoController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, CompresorLogoService $compresor)
     {
         $data = $request->validate([
             'nombre'               => 'required|string|max:150',
@@ -52,9 +53,9 @@ class AlidoController extends Controller
             'eslogan'              => 'nullable|string|max:120',
             'color_primario'       => 'nullable|string|max:10',
             'activo'               => 'boolean',
-            'logo'                 => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
-            'logo_oscuro'          => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
-            'logo_marca_claro'     => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
+            'logo'                 => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
+            'logo_oscuro'          => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
+            'logo_marca_claro'     => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
             'imagen_planes'        => 'nullable|image|mimes:png,jpg,jpeg|max:5120',
             'logo_marca_recorte.alto_util_pct'         => 'nullable|numeric|min:0|max:100',
             'logo_marca_recorte.icono_ancho_pct'       => 'nullable|numeric|min:0|max:100',
@@ -65,22 +66,13 @@ class AlidoController extends Controller
         ]);
 
         if ($request->hasFile('logo')) {
-            $file      = $request->file('logo');
-            $filename  = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('storage/logos'), $filename);
-            $data['logo'] = 'logos/' . $filename;
+            $data['logo'] = $compresor->guardar($request->file('logo'), 'logos', '_', CompresorLogoService::LADO_ICONO);
         }
         if ($request->hasFile('logo_oscuro')) {
-            $file      = $request->file('logo_oscuro');
-            $filename  = time() . '_oscuro_' . $file->getClientOriginalName();
-            $file->move(public_path('storage/logos'), $filename);
-            $data['logo_oscuro'] = 'logos/' . $filename;
+            $data['logo_oscuro'] = $compresor->guardar($request->file('logo_oscuro'), 'logos', '_oscuro_', CompresorLogoService::LADO_MARCA);
         }
         if ($request->hasFile('logo_marca_claro')) {
-            $file      = $request->file('logo_marca_claro');
-            $filename  = time() . '_marca_claro_' . $file->getClientOriginalName();
-            $file->move(public_path('storage/logos'), $filename);
-            $data['logo_marca_claro'] = 'logos/' . $filename;
+            $data['logo_marca_claro'] = $compresor->guardar($request->file('logo_marca_claro'), 'logos', '_marca_claro_', CompresorLogoService::LADO_MARCA);
         }
         if ($request->hasFile('imagen_planes')) {
             $file      = $request->file('imagen_planes');
@@ -124,7 +116,7 @@ class AlidoController extends Controller
         return view('admin.aliados.form', compact('aliado', 'usuariosBrynex', 'todosModulos', 'modulosContratados'));
     }
 
-    public function update(Request $request, Aliado $aliado)
+    public function update(Request $request, Aliado $aliado, CompresorLogoService $compresor)
     {
         $data = $request->validate([
             'nombre'               => 'required|string|max:150',
@@ -140,9 +132,9 @@ class AlidoController extends Controller
             'eslogan'              => 'nullable|string|max:120',
             'color_primario'       => 'nullable|string|max:10',
             'activo'               => 'boolean',
-            'logo'                 => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
-            'logo_oscuro'          => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
-            'logo_marca_claro'     => 'nullable|image|mimes:png,jpg,jpeg,svg|max:2048',
+            'logo'                 => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
+            'logo_oscuro'          => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
+            'logo_marca_claro'     => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
             'imagen_planes'        => 'nullable|image|mimes:png,jpg,jpeg|max:5120',
             'logo_marca_recorte.alto_util_pct'         => 'nullable|numeric|min:0|max:100',
             'logo_marca_recorte.icono_ancho_pct'       => 'nullable|numeric|min:0|max:100',
@@ -158,10 +150,7 @@ class AlidoController extends Controller
                 $oldPath = public_path('storage/' . $aliado->logo);
                 if (file_exists($oldPath)) @unlink($oldPath);
             }
-            $file      = $request->file('logo');
-            $filename  = time() . '_' . $file->getClientOriginalName();
-            $file->move(public_path('storage/logos'), $filename);
-            $data['logo'] = 'logos/' . $filename;
+            $data['logo'] = $compresor->guardar($request->file('logo'), 'logos', '_', CompresorLogoService::LADO_ICONO);
         } else {
             // Preservar el logo existente si no se sube uno nuevo
             $data['logo'] = $aliado->logo;
@@ -171,10 +160,7 @@ class AlidoController extends Controller
                 $oldPath = public_path('storage/' . $aliado->logo_oscuro);
                 if (file_exists($oldPath)) @unlink($oldPath);
             }
-            $file      = $request->file('logo_oscuro');
-            $filename  = time() . '_oscuro_' . $file->getClientOriginalName();
-            $file->move(public_path('storage/logos'), $filename);
-            $data['logo_oscuro'] = 'logos/' . $filename;
+            $data['logo_oscuro'] = $compresor->guardar($request->file('logo_oscuro'), 'logos', '_oscuro_', CompresorLogoService::LADO_MARCA);
         } else {
             $data['logo_oscuro'] = $aliado->logo_oscuro;
         }
@@ -183,10 +169,7 @@ class AlidoController extends Controller
                 $oldPath = public_path('storage/' . $aliado->logo_marca_claro);
                 if (file_exists($oldPath)) @unlink($oldPath);
             }
-            $file      = $request->file('logo_marca_claro');
-            $filename  = time() . '_marca_claro_' . $file->getClientOriginalName();
-            $file->move(public_path('storage/logos'), $filename);
-            $data['logo_marca_claro'] = 'logos/' . $filename;
+            $data['logo_marca_claro'] = $compresor->guardar($request->file('logo_marca_claro'), 'logos', '_marca_claro_', CompresorLogoService::LADO_MARCA);
         } else {
             $data['logo_marca_claro'] = $aliado->logo_marca_claro;
         }
