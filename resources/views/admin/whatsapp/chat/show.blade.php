@@ -436,6 +436,15 @@
         {{-- Área de entrada --}}
         <div class="chat-input-area">
             {{-- Ventana activa: texto libre + adjuntos --}}
+            {{-- Acuse de recibido con un clic. Manual: sin bot, al cliente solo le escribe una persona --}}
+            <template x-if="conversacion.ventana_activa && ultimoEsDelCliente()">
+                <div style="margin-bottom:.4rem">
+                    <button type="button" class="btn-sm btn-outline" @click="enviarAcuse()" :disabled="enviando"
+                            title="Le dice al cliente que recibiste su mensaje y que en breve le respondes. La conversación sigue pendiente.">
+                        📨 Enviar «Recibimos tu mensaje»
+                    </button>
+                </div>
+            </template>
             <template x-if="conversacion.ventana_activa">
                 <div class="input-row">
                     <label class="btn-adjuntar" title="Adjuntar imagen/documento">
@@ -867,6 +876,46 @@ function chatApp() {
             } finally {
                 this.enviando = false;
             }
+        },
+
+        ultimoEsDelCliente() {
+            const ultimo = this.mensajes[this.mensajes.length - 1];
+            return !!ultimo && ultimo.es_entrante;
+        },
+
+        async enviarAcuse() {
+            if (this.enviando) return;
+            this.enviando = true;
+            this.mensajeError = '';
+            try {
+                const resp = await fetch(`/admin/whatsapp/chat/${this.convId}/acuse`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        'Accept': 'application/json',
+                    },
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    this.mensajes.push(data.mensaje_chat);
+                    // El acuse no es la respuesta: sigue pendiente y en «Esperando».
+                    this.conversacion.pendiente_atencion = true;
+                    this.conversacion.pendiente_motivo = data.pendiente_motivo;
+                    const conv = this.listaConversaciones.find(c => c.id == this.convId);
+                    if (conv) {
+                        if (!conv.esperando) this.totalEsperando++;
+                        conv.esperando = true;
+                        conv.pendiente_atencion = true;
+                        conv.pendiente_motivo = data.pendiente_motivo;
+                    }
+                    this.scrollBottom();
+                } else {
+                    this.mensajeError = data.error || 'No se pudo enviar el acuse.';
+                }
+            } catch (e) {
+                this.mensajeError = 'Error de conexión al enviar el acuse.';
+            }
+            this.enviando = false;
         },
 
         async reabrirConversacion() {

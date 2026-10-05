@@ -17,7 +17,7 @@ use Illuminate\Support\Collection;
  * Cuenta como «esperando»:
  *  - el último mensaje de la conversación es del cliente y no es una despedida, o
  *  - la conversación quedó marcada como pendiente por atender (el bot la pasó a una
- *    persona, o se le mandó un acuse automático porque nadie respondía).
+ *    persona, o un asesor le mandó el acuse de recibido y aún no la atiende).
  *
  * Un «ok» o un «gracias» de cierre no pide respuesta, y una lista llena de despedidas
  * se deja de leer.
@@ -277,7 +277,7 @@ class WhatsappEsperandoRespuesta
      *
      * Esa gente le escribe a la línea (el saludo automático de su WhatsApp Business, el
      * botón «Mantener activo» del aviso) y no es un cliente: no cuenta como esperando,
-     * no recibe acuse, y en el número compartido su conversación va al inbox de su aliado.
+     * y en el número compartido su conversación va al inbox de su aliado.
      *
      * @return string[]
      */

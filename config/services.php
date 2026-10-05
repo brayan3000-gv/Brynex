@@ -82,17 +82,11 @@ return [
         ],
         'pendientes_copia' => env('WHATSAPP_PENDIENTES_COPIA', ''),
 
-        // Acuse automático ("recibimos tu mensaje, ya te atendemos") en los aliados que no
-        // tienen IA en WhatsApp, cuando pasan unos minutos sin que nadie conteste.
-        // `acuse_sin_bot_excluir`: ids de aliado separados por coma que no lo quieren.
         // Horas con el cliente esperando para que una conversación asignada cuente como
         // «sin atender» y el aliado la pueda devolver al inbox general con el botón de la
         // pestaña Esperando. Es MANUAL a propósito: el dueño no quiso que el sistema le
         // quite conversaciones a los asesores por su cuenta (5-oct-2026).
         'liberar_horas' => env('WHATSAPP_LIBERAR_HORAS_MANUAL', 4),
-
-        'acuse_sin_bot' => env('WHATSAPP_ACUSE_SIN_BOT', true),
-        'acuse_sin_bot_excluir' => env('WHATSAPP_ACUSE_SIN_BOT_EXCLUIR', ''),
         // Rechazar los payloads cuya firma no valide. Arranca en false a
         // propósito: si algún número llega firmado por otra app de Meta (un
         // aliado con su propia cuenta), su firma no cuadra con este App Secret

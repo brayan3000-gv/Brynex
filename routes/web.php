@@ -1297,6 +1297,7 @@ Route::middleware('auth')->group(function () {
             Route::patch('chat/{id}/no-contactar', [$chat, 'noContactar'])->name('chat.no_contactar')->whereNumber('id');
             Route::post('chat/{id}/atendida', [$chat, 'marcarAtendida'])->name('chat.atendida')->whereNumber('id');
             Route::post('chat/{id}/reabrir', [$chat, 'reabrir'])->name('chat.reabrir')->whereNumber('id');
+            Route::post('chat/{id}/acuse', [$chat, 'enviarAcuse'])->name('chat.acuse')->whereNumber('id');
         });
         Route::patch('chat/{id}/asignar', [$chat, 'asignar'])->name('chat.asignar')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
         // Manual: devuelve al inbox general las asignadas con el cliente esperando hace horas.

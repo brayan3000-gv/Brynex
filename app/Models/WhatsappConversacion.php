@@ -297,9 +297,10 @@ class WhatsappConversacion extends BaseModel
     }
 
     /**
-     * Deja la conversación pendiente por atender SIN tocar el bot. Es lo que hace el
-     * acuse automático en los aliados sin IA: si apagara bot_activo como escalarAHumano(),
-     * el día que el aliado encienda la IA esas conversaciones seguirían mudas.
+     * Deja la conversación pendiente por atender SIN tocar el bot ni la asignación. Lo
+     * usan el acuse manual del chat y la bandeja del número compartido: si apagara
+     * bot_activo como escalarAHumano(), el día que el aliado encienda la IA esas
+     * conversaciones seguirían mudas.
      */
     public function marcarPendiente(string $motivo): void
     {

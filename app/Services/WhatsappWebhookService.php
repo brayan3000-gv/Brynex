@@ -6,7 +6,6 @@ use App\Events\WhatsappConversacionActualizada;
 use App\Events\WhatsappMensajeNuevo;
 use App\Jobs\MarketingConfirmarBloqueoJob;
 use App\Jobs\ResolverCaptchaAdresJob;
-use App\Jobs\WhatsappAcuseRecepcionJob;
 use App\Jobs\WhatsappDescargarMediaJob;
 use App\Jobs\WhatsappEscalarMultimediaJob;
 use App\Jobs\WhatsappResponderIaJob;
@@ -393,17 +392,11 @@ class WhatsappWebhookService
 
         $iaActiva = (bool) IaConfiguracionAliado::where('aliado_id', $alidoId)->value('activo_whatsapp');
 
-        // Aliados sin IA en WhatsApp: si en unos minutos nadie le ha contestado, se le manda
-        // un acuse ("recibimos tu mensaje, ya te atendemos") y la conversación queda
-        // pendiente. En Fecop, el 81 % de lo que escribían los clientes (sep-2026) no tuvo
-        // ninguna respuesta, ni un «lo recibimos». Los rechazos de publicidad ya reciben su
-        // propia confirmación, y las reacciones no son un mensaje que haya que contestar.
-        if (!$iaActiva && !$esRechazoPublicidad && !$esBajaEscrita
-            && !in_array($tipo, ['reaction', 'unsupported'], true)
-            && WhatsappAcuseRecepcionJob::aplicaA($alidoId, $waFrom)) {
-            WhatsappAcuseRecepcionJob::dispatch($conversacion->id, $mensaje->id)
-                ->delay(now()->addMinutes(WhatsappAcuseRecepcionJob::MINUTOS_ESPERA));
-        }
+        // En los aliados sin IA aquí NO sale ninguna respuesta automática, y es a propósito.
+        // Hubo un acuse («recibimos tu mensaje») que se mandaba solo a los 5 minutos sin
+        // respuesta, y el dueño lo apagó el 5-oct-2026: sin bot, al cliente solo le escribe
+        // una persona. El acuse quedó como botón manual en el chat (chat.acuse). Solo
+        // responde solo el Asistente IA, donde el aliado lo tiene contratado.
 
         // Asistente IA: solo si el bot está activo en esta conversación y el aliado
         // tiene la IA activada para WhatsApp. Se procesa en un Job para no bloquear

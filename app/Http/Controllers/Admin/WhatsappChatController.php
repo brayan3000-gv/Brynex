@@ -27,6 +27,19 @@ class WhatsappChatController extends Controller
         'otro'          => 'Otro medio',
     ];
 
+    /**
+     * Textos del acuse de recibido, según lo último que mandó el cliente. Sale solo
+     * cuando un asesor pulsa el botón: nunca automático (decisión del dueño, 5-oct-2026).
+     */
+    private const TEXTOS_ACUSE = [
+        'text'     => 'Hola 👋 Recibimos tu mensaje. En breve te respondemos.',
+        'button'   => 'Hola 👋 Recibimos tu respuesta. En breve te atendemos.',
+        'image'    => 'Recibimos tu imagen 📎. Si es un comprobante de pago, lo revisamos y te confirmamos en breve.',
+        'document' => 'Recibimos tu documento 📎. Lo revisamos y te respondemos en breve.',
+        'video'    => 'Recibimos tu video 📎. Lo revisamos y te respondemos en breve.',
+        'audio'    => 'Recibimos tu nota de voz 🎙️. En breve te respondemos.',
+    ];
+
     public function __construct(
         protected WhatsappApiService $apiService,
         protected WhatsappTipoContacto $tipos,
@@ -316,6 +329,69 @@ class WhatsappChatController extends Controller
             ->aprobadas()
             ->where('nombre', \App\Models\WhatsappPlantilla::SISTEMA_REABRIR)
             ->first();
+    }
+
+    /**
+     * Acuse de recibido con un clic: «recibimos tu mensaje, en breve te respondemos».
+     *
+     * Para cuando el asesor ve el mensaje pero todavía no puede atenderlo. El cliente
+     * sabe que lo leyeron, y la conversación sigue pendiente y en «Esperando»: el acuse
+     * no es la respuesta. No cambia la asignación ni toca el bot.
+     */
+    public function enviarAcuse(int $id)
+    {
+        $alidoId      = session('aliado_id_activo');
+        $conversacion = $this->findConversacionProtected($alidoId, $id);
+        $config       = WhatsappConfig::paraAliado($alidoId);
+
+        if (!$config->credencialesCompletas()) {
+            return response()->json(['ok' => false, 'error' => 'No hay credenciales de WhatsApp configuradas.'], 422);
+        }
+
+        if (!$conversacion->ventanaActiva()) {
+            return response()->json(['ok' => false, 'error' => 'La ventana de 24 h venció: usa «Reabrir conversación» o una plantilla.'], 422);
+        }
+
+        $ultimoEntrante = WhatsappMensaje::where('conversacion_id', $conversacion->id)
+            ->where('direccion', 'entrante')
+            ->orderByDesc('id')
+            ->value('tipo');
+
+        $nombreAgente = Auth::user()->nombre;
+        $texto = "*Atendido por {$nombreAgente}:*\n\n" . (self::TEXTOS_ACUSE[$ultimoEntrante] ?? self::TEXTOS_ACUSE['text']);
+
+        $resultado = $this->apiService->enviarTexto($conversacion->wa_contact_id, $texto, $config);
+        if (!$resultado['ok']) {
+            return response()->json(['ok' => false, 'error' => $resultado['error']], 422);
+        }
+
+        $mensaje = WhatsappMensaje::create([
+            'conversacion_id' => $conversacion->id,
+            'aliado_id'       => $conversacion->aliado_id,
+            'wa_message_id'   => $resultado['wa_message_id'],
+            'direccion'       => 'saliente',
+            'tipo'            => 'text',
+            'contenido'       => $texto,
+            'estado'          => 'enviado',
+            'usuario_id'      => Auth::id(),
+        ]);
+
+        $motivo = "{$nombreAgente} le envió acuse de recibido; falta atenderla.";
+        $conversacion->update(['ultimo_mensaje_at' => now()]);
+        $conversacion->marcarPendiente($motivo);
+
+        try {
+            broadcast(new \App\Events\WhatsappMensajeNuevo($mensaje, $conversacion))->toOthers();
+            broadcast(new WhatsappConversacionActualizada($conversacion))->toOthers();
+        } catch (\Throwable $e) {
+            // Sin Reverb el mensaje igual salió; los demás lo ven al recargar.
+        }
+
+        return response()->json([
+            'ok'               => true,
+            'mensaje_chat'     => $this->mapearMensajes(collect([$mensaje]))[0],
+            'pendiente_motivo' => $motivo,
+        ]);
     }
 
     /**

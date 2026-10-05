@@ -100,10 +100,11 @@ resources/views/admin/whatsapp/
 - `ultimosMensajes()` trae el último mensaje por conversación en UNA consulta y con
   `contenido` recortado a 300 caracteres: `nvarchar(max)` se baja fila por fila.
   El `with(['mensajes' => limit(1)])` NO sirve en Laravel 10 (el límite es global).
-- `WhatsappAcuseRecepcionJob`: en aliados sin IA de WhatsApp, 5 min después de un
-  mensaje sin respuesta manda «🤖 Respuesta automática: recibimos tu mensaje…» y marca
-  pendiente (`marcarPendiente`, sin tocar `bot_activo`). Se apaga con
-  `WHATSAPP_ACUSE_SIN_BOT=false` o por aliado con `WHATSAPP_ACUSE_SIN_BOT_EXCLUIR`.
+- **Sin IA no hay envíos automáticos a clientes** (decisión del dueño, 5-oct-2026: apagó el
+  acuse automático y la liberación automática; NO volver a automatizarlos). El acuse es
+  el botón **📨 Enviar «Recibimos tu mensaje»** del chat (`chat.acuse`): sale firmado por
+  el asesor y deja la conversación pendiente (`marcarPendiente`, sin tocar `bot_activo`
+  ni la asignación). Solo responde solo el Asistente IA, donde está contratado (Brygar).
 - **✔ Atendido por otro medio** (`chat.atendida`): el asesor contestó desde su celular,
   por llamada o en persona. Crea un `WhatsappMensaje` tipo `nota` (saliente, sin
   `wa_message_id`, no se envía a Meta) y la conversación sale de «Esperando». Se pinta
