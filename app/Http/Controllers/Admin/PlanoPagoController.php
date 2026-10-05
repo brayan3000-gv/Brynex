@@ -1535,6 +1535,140 @@ class PlanoPagoController extends Controller
             ->header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     }
 
+    /**
+     * Histórico del año: un ZIP con la planilla ORIGINAL de cada mes pagado, sin
+     * importar el operador (Simple, ARUS, Mi Planilla), nombradas por el mes en
+     * que se pagaron (enero_2026.pdf), como el resto de BryNex. Lo que no se pudo
+     * bajar no va: queda en LEEME.txt con el motivo (por WhatsApp y al cliente
+     * solo van originales).
+     */
+    public function historicoPlanillas(Request $request)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $cedula = (string) $request->input('cedula');
+        $anio = (int) $request->input('anio');
+
+        if ($cedula === '' || $anio < 2000 || $anio > 2100) {
+            return $this->errorSoporte('Falta la cédula o el año.', 422);
+        }
+
+        @set_time_limit(600);
+
+        $meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+        // El mes de pago: el del plano si paga mes actual, si no el siguiente.
+        $planos = Plano::with('razonSocial')
+            ->where('aliado_id', $aliadoId)
+            ->where('no_identifi', $cedula)
+            ->whereNull('deleted_at')
+            ->whereNotNull('numero_planilla')->where('numero_planilla', '<>', '')
+            ->get()
+            ->map(function ($p) {
+                $pago = Carbon::create((int) $p->anio_plano, max(1, (int) $p->mes_plano), 1);
+                $p->pago = $p->paga_mes_actual ? $pago : $pago->addMonth();
+
+                return $p;
+            })
+            ->filter(fn ($p) => $p->anio_plano && $p->pago->year === $anio)
+            ->filter(fn ($p) => \App\Services\EnlaceInformeIndividualService::numeroParaOperador($p->numero_planilla) !== null)
+            ->unique('numero_planilla')
+            ->sortBy(fn ($p) => $p->pago->format('Ym').'-'.$p->id)
+            ->values();
+
+        if ($planos->isEmpty()) {
+            return $this->errorSoporte("No hay planillas pagadas en {$anio} para la cédula {$cedula}.", 404);
+        }
+
+        $llave = self::llaveProgreso($request->input('progreso'));
+        $avisar = fn ($paso) => $llave && \Illuminate\Support\Facades\Cache::put($llave, [...\Illuminate\Support\Facades\Cache::get($llave, []), $paso], 600);
+
+        // Una sola instancia para todo el año: Simple/ARUS y Mi Planilla abren
+        // sesión una vez y la reusan mes a mes.
+        $soportes = app(\App\Services\EnlaceInformeIndividualService::class);
+        $operadores = DB::table('operadores_planilla')->get(['id', 'nombre']);
+        $porNombre = $operadores->mapWithKeys(fn ($o) => [mb_strtoupper(trim($o->nombre)) => (int) $o->id]);
+        $nombres = $operadores->pluck('nombre', 'id');
+        $operadorCliente = (int) DB::table('clientes')->where('aliado_id', $aliadoId)->where('cedula', $cedula)->value('operador_planilla_id') ?: null;
+
+        $tmp = tempnam(sys_get_temp_dir(), 'histpl');
+        $zip = new \ZipArchive;
+        $zip->open($tmp, \ZipArchive::OVERWRITE);
+        $incluidas = [];
+        $faltan = [];
+        $usados = [];
+
+        try {
+            foreach ($planos as $plano) {
+                $mes = $meses[$plano->pago->month - 1].'_'.$plano->pago->year;
+                $operadorId = $this->operadorDePlanilla($plano, $aliadoId, $porNombre) ?? $operadorCliente;
+                $operador = $nombres[$operadorId] ?? 'operador desconocido';
+                $avisar("{$mes} · {$plano->numero_planilla}: bajando de {$operador}");
+
+                try {
+                    $pdf = $soportes->soporteOriginal($plano, $operadorId)['pdf'];
+                } catch (\Throwable $e) {
+                    $faltan[] = "{$mes} (planilla {$plano->numero_planilla}, {$operador}): {$e->getMessage()}";
+                    $avisar("{$mes}: no se pudo, queda en LEEME.txt");
+                    continue;
+                }
+
+                // Dos planillas el mismo mes (una corrección, un retiro): _2, _3…
+                $usados[$mes] = ($usados[$mes] ?? 0) + 1;
+                $archivo = $mes.($usados[$mes] > 1 ? '_'.$usados[$mes] : '').'.pdf';
+                $zip->addFromString($archivo, $pdf);
+                $incluidas[] = "{$archivo} — planilla {$plano->numero_planilla}, {$operador}";
+            }
+        } finally {
+            $soportes->cerrarSesiones();
+        }
+
+        if (! $incluidas) {
+            $zip->close();
+            @unlink($tmp);
+
+            return $this->errorSoporte("No se pudo bajar ninguna planilla original de {$anio}. ".implode(' · ', $faltan), 502);
+        }
+
+        $nombrePersona = trim("{$planos[0]->primer_nombre} {$planos[0]->primer_ape}");
+        $zip->addFromString('LEEME.txt', implode("\r\n", array_merge(
+            ["Planillas de seguridad social {$anio} — {$nombrePersona}, CC {$cedula}", 'Generado por BryNex el '.now()->format('d/m/Y H:i'), '',
+                'Cada archivo es la planilla ORIGINAL del operador, nombrada por el mes en que se pagó.', '', 'Incluidas:'],
+            array_map(fn ($l) => "  - {$l}", $incluidas),
+            $faltan ? ['', 'No incluidas (no se pudo bajar la original):'] : [],
+            array_map(fn ($l) => "  - {$l}", $faltan),
+        )));
+        $zip->close();
+        $avisar('Armando el archivo comprimido');
+
+        $nombreZip = 'Planillas_'.preg_replace('/[^A-Za-z0-9]+/', '_', \Illuminate\Support\Str::ascii($nombrePersona))."_{$anio}.zip";
+
+        return response()->download($tmp, $nombreZip, [
+            'Content-Type' => 'application/zip',
+            'X-Historico-Incluidas' => (string) count($incluidas),
+            'X-Historico-Faltan' => rawurlencode(implode("\n", $faltan)),
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Por qué operador se pagó una planilla: el registro del API, si no el gasto
+     * del pago (por nombre). Null si no se sabe.
+     */
+    private function operadorDePlanilla(Plano $plano, int $aliadoId, $porNombre): ?int
+    {
+        $api = DB::table('operador_planillas_api')
+            ->where('aliado_id', $aliadoId)->where('numero_planilla', $plano->numero_planilla)
+            ->value('operador_planilla_id');
+        if ($api) {
+            return (int) $api;
+        }
+
+        $pagadoA = DB::table('gastos')
+            ->where('aliado_id', $aliadoId)->where('tipo', 'pago_planilla')->where('numero_planilla', $plano->numero_planilla)
+            ->value('pagado_a');
+
+        return $pagadoA ? ($porNombre[mb_strtoupper(trim($pagadoA))] ?? null) : null;
+    }
+
     /** En qué paso va la descarga que pidió el historial (ver descargarCertificadoPdf). */
     public function progresoCertificadoPdf(Request $request)
     {

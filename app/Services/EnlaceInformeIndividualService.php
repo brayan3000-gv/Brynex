@@ -80,6 +80,9 @@ class EnlaceInformeIndividualService
      */
     private array $sesionesFallidas = [];
 
+    /** Robots de Mi Planilla ya adentro, por aliado y cédula (ver robotMiPlanilla()). */
+    private array $robotsMiPlanilla = [];
+
     /** A quién se le cuenta cada paso (el botón muestra en qué va). */
     private ?\Closure $alAvanzar = null;
 
@@ -117,6 +120,7 @@ class EnlaceInformeIndividualService
         // Las sesiones abiertas antes no traen el tope: se abren de nuevo.
         $copia->sesiones = [];
         $copia->sesionesFallidas = [];
+        $copia->robotsMiPlanilla = [];
 
         return $copia;
     }
@@ -399,19 +403,44 @@ class EnlaceInformeIndividualService
             throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
         }
 
-        $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi, $plano->tipo_doc);
-        $this->paso('Ingresando a Mi Planilla');
-        $robot->login();
-
-        try {
-            $pdf = $robot->pdfPagada($numero, fn ($t) => $this->paso($t));
-        } finally {
-            rescue(fn () => $robot->logout(), report: false);
-        }
-
+        $pdf = $this->robotMiPlanilla($plano)->pdfPagada($numero, fn ($t) => $this->paso($t));
         Storage::disk('local')->put($ruta, $pdf);
 
         return ['pdf' => $pdf, 'origen' => 'operador'];
+    }
+
+    /**
+     * El robot de Mi Planilla de la persona, ya adentro. Se reusa en la misma
+     * instancia: el histórico del año baja doce planillas de la misma cuenta, y
+     * cada ingreso por el proxy colombiano tarda unos 14 s. La sesión se cierra
+     * con cerrarSesiones() o al destruirse el servicio.
+     */
+    private function robotMiPlanilla(Plano $plano): \App\Services\MiPlanilla\MiPlanillaPortalService
+    {
+        $llave = (int) $plano->aliado_id.'|'.$plano->no_identifi;
+
+        if (! isset($this->robotsMiPlanilla[$llave])) {
+            $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi, $plano->tipo_doc);
+            $this->paso('Ingresando a Mi Planilla');
+            $robot->login();
+            $this->robotsMiPlanilla[$llave] = $robot;
+        }
+
+        return $this->robotsMiPlanilla[$llave];
+    }
+
+    /** Cierra las sesiones de Mi Planilla abiertas (en el portal quedan vivas si no). */
+    public function cerrarSesiones(): void
+    {
+        foreach ($this->robotsMiPlanilla as $robot) {
+            rescue(fn () => $robot->logout(), report: false);
+        }
+        $this->robotsMiPlanilla = [];
+    }
+
+    public function __destruct()
+    {
+        $this->cerrarSesiones();
     }
 
     /**
@@ -810,15 +839,7 @@ class EnlaceInformeIndividualService
 
         // Mi Planilla: el «Reporte resumen de pago», con la clave de la persona.
         if (self::esMiPlanilla($operadorPlanillaId)) {
-            $robot = \App\Services\MiPlanilla\MiPlanillaPortalService::paraCedula((int) $plano->aliado_id, (string) $plano->no_identifi, $plano->tipo_doc);
-            $this->paso('Ingresando a Mi Planilla');
-            $robot->login();
-
-            try {
-                $pdf = $robot->resumenPagoPdf($numero, fn ($t) => $this->paso($t));
-            } finally {
-                rescue(fn () => $robot->logout(), report: false);
-            }
+            $pdf = $this->robotMiPlanilla($plano)->resumenPagoPdf($numero, fn ($t) => $this->paso($t));
 
             Storage::disk('local')->put($ruta, $pdf);
 

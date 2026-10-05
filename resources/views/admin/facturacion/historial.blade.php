@@ -100,7 +100,12 @@ table.hi-tbl{width:100%;border-collapse:collapse;font-size:.77rem}
                 <span>CC {{ $cedula }}</span>
             </div>
         </div>
-        <div style="text-align:right">
+        <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:.4rem">
+            <button type="button" onclick="pedirHistorico()"
+                    style="background:#fff;color:#0f172a;border:none;border-radius:8px;padding:.35rem .8rem;font-size:.75rem;font-weight:800;cursor:pointer"
+                    title="Descargar en un .zip la planilla original de cada mes del año, de cualquier operador">
+                📚 Histórico de planillas
+            </button>
             @if($sinFiltros)
             <span style="background:rgba(255,255,255,.12);color:rgba(255,255,255,.7);font-size:.68rem;font-weight:700;padding:.2rem .6rem;border-radius:5px">Últimas 20 facturas</span>
             @else
@@ -849,6 +854,7 @@ let _plCorrida = 0, _plBlob = null;
 // para pasar de uno al otro; sin ella, no.
 function abrirPlanilla(ev, url, que = 'planilla', otra = null) {
     const esComprobante = que === 'comprobante';
+    const esHistorico = que === 'historico';
     // Ctrl/Cmd + clic o clic del medio: se deja abrir directo en otra pestaña.
     if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.button === 1)) return true;
     if (ev) ev.preventDefault();
@@ -868,7 +874,8 @@ function abrirPlanilla(ev, url, que = 'planilla', otra = null) {
     document.getElementById('pl-visor').style.display = 'none';
     document.getElementById('pl-visor').src = 'about:blank';
     document.getElementById('pl-acciones').style.display = 'none';
-    document.getElementById('pl-titulo').textContent = esComprobante ? '⏳ Descargando comprobante de pago…' : '⏳ Descargando planilla…';
+    document.getElementById('pl-titulo').textContent = esHistorico ? '⏳ Armando el histórico de planillas…'
+        : (esComprobante ? '⏳ Descargando comprobante de pago…' : '⏳ Descargando planilla…');
     document.getElementById('modal-pl-ov').style.display = 'flex';
 
     const cerrarPaso = (estado) => {
@@ -911,7 +918,7 @@ function abrirPlanilla(ev, url, que = 'planilla', otra = null) {
         .then(async (resp) => {
             if (corrida !== _plCorrida) return;
             const tipo = resp.headers.get('Content-Type') || '';
-            if (!resp.ok || !tipo.includes('pdf')) {
+            if (!resp.ok || !(tipo.includes('pdf') || tipo.includes('zip'))) {
                 const html = await resp.text();
                 const texto = new DOMParser().parseFromString(html, 'text/html').body.innerText.trim();
                 throw new Error(texto.replace(/^⚠️\s*No se pudo descargar la planilla\s*/, '') || ('Error ' + resp.status));
@@ -921,6 +928,27 @@ function abrirPlanilla(ev, url, que = 'planilla', otra = null) {
             nuevoPaso('Listo');
             cerrarPaso('ok');
             const esCopia = resp.headers.get('X-Soporte-Origen') === 'brynex';
+            if (esHistorico) {
+                // Un .zip no se ve en el visor: se ofrece para descargar, con lo que faltó.
+                const nombreZip = (/filename="?([^";]+)"?/.exec(resp.headers.get('Content-Disposition') || '') || [])[1] || 'planillas.zip';
+                _plBlob = URL.createObjectURL(blob);
+                let faltan = '';
+                try { faltan = decodeURIComponent(resp.headers.get('X-Historico-Faltan') || ''); } catch (e) {}
+                document.getElementById('pl-titulo').textContent = '📚 Histórico listo: ' + (resp.headers.get('X-Historico-Incluidas') || '?') + ' planilla(s)';
+                if (faltan) {
+                    const err = document.getElementById('pl-error');
+                    err.textContent = '⚠️ No se incluyeron (quedan en LEEME.txt): ' + faltan.split('\n').join(' · ');
+                    err.style.display = 'block';
+                }
+                const bajar = document.getElementById('pl-bajar');
+                bajar.href = _plBlob; bajar.download = nombreZip;
+                document.getElementById('pl-abrir').style.display = 'none';
+                document.getElementById('pl-otra').style.display = 'none';
+                document.getElementById('pl-acciones').style.display = 'flex';
+                bajar.click();
+                return;
+            }
+            document.getElementById('pl-abrir').style.display = '';
             const nombre = (/filename="([^"]+)"/.exec(resp.headers.get('Content-Disposition') || '') || [])[1] || 'planilla.pdf';
             _plBlob = URL.createObjectURL(blob);
             const mostrarPdf = () => {
@@ -965,13 +993,25 @@ function abrirPlanilla(ev, url, que = 'planilla', otra = null) {
             if (corrida !== _plCorrida) return;
             terminar();
             cerrarPaso('error');
-            document.getElementById('pl-titulo').textContent = esComprobante ? '⚠️ No se pudo descargar el comprobante' : '⚠️ No se pudo descargar la planilla';
+            document.getElementById('pl-titulo').textContent = esHistorico ? '⚠️ No se pudo armar el histórico'
+                : (esComprobante ? '⚠️ No se pudo descargar el comprobante' : '⚠️ No se pudo descargar la planilla');
             const err = document.getElementById('pl-error');
             err.textContent = e.message || 'Error de conexión.';
             err.style.display = 'block';
         });
     return false;
 }
+// ── Histórico del año (.zip) ───────────────────────────
+const HIST_URL = '{{ route('admin.planos.historico_planillas') }}';
+function pedirHistorico() {
+    document.getElementById('modal-hist-ov').style.display = 'flex';
+}
+function descargarHistorico() {
+    const anio = document.getElementById('hist-anio').value;
+    document.getElementById('modal-hist-ov').style.display = 'none';
+    abrirPlanilla(null, HIST_URL + '?cedula={{ (int) $cedula }}&anio=' + anio, 'historico');
+}
+
 function cerrarPlanilla() {
     _plCorrida++;
     document.getElementById('modal-pl-ov').style.display = 'none';
@@ -1024,6 +1064,31 @@ function cerrarSoportePlanilla() {
         </div>
         <div style="flex:1;background:#e8edf2;padding:.35rem 0 0;overflow:hidden;">
             <iframe id="recibo-frame" src="" style="width:100%;height:100%;border:none;display:block;"></iframe>
+        </div>
+    </div>
+</div>
+
+{{-- Histórico del año: se escoge el año y se descarga el .zip con los pasos --}}
+<div id="modal-hist-ov"
+     onclick="if(event.target.id==='modal-hist-ov')this.style.display='none'"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);backdrop-filter:blur(3px);z-index:99998;align-items:center;justify-content:center;padding:.75rem">
+    <div style="background:#fff;border-radius:14px;width:min(400px,97vw);box-shadow:0 24px 60px rgba(0,0,0,.4);overflow:hidden">
+        <div style="background:linear-gradient(135deg,#0f172a,#1e3a8a);padding:.75rem 1.1rem;display:flex;justify-content:space-between;align-items:center">
+            <div style="color:#fff;font-size:.9rem;font-weight:800">📚 Histórico de planillas</div>
+            <button onclick="document.getElementById('modal-hist-ov').style.display='none'" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:6px;width:28px;height:28px;font-size:1rem;cursor:pointer;font-weight:700">&#x2715;</button>
+        </div>
+        <div style="padding:1rem 1.1rem">
+            <label style="display:block;font-size:.72rem;font-weight:700;color:#475569;margin-bottom:.2rem">Año</label>
+            <select id="hist-anio" style="width:100%;padding:.45rem .6rem;border:1px solid #cbd5e1;border-radius:8px;font-size:.85rem;margin-bottom:.6rem">
+                @foreach(collect($aniosDisp)->push(now()->year)->unique()->sortDesc() as $a)
+                <option value="{{ $a }}" {{ (int) $a === (int) ($filtroAnio ?: now()->year) ? 'selected' : '' }}>{{ $a }}</option>
+                @endforeach
+            </select>
+            <div style="font-size:.72rem;color:#64748b;line-height:1.45;margin-bottom:.8rem">
+                Baja la planilla <b>original</b> de cada mes pagado en ese año, sea de Simple, Enlace o Mi Planilla, y las entrega en un <b>.zip</b> como <code>enero_2026.pdf</code>, <code>febrero_2026.pdf</code>… Los meses que no se puedan bajar quedan anotados con el motivo en <code>LEEME.txt</code>. La primera vez puede tardar unos segundos por mes.
+            </div>
+            <button type="button" onclick="descargarHistorico()"
+                    style="width:100%;background:#0f172a;color:#fff;border:none;border-radius:8px;padding:.55rem;font-size:.82rem;font-weight:700;cursor:pointer">⬇️ Descargar .zip</button>
         </div>
     </div>
 </div>
