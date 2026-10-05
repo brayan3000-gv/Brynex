@@ -1604,10 +1604,23 @@ class PlanoPagoController extends Controller
                 $operador = $nombres[$operadorId] ?? 'operador desconocido';
                 $avisar("{$mes} · {$plano->numero_planilla}: bajando de {$operador}");
 
+                // El retiro va aparte: ese mes suele traer también la planilla del contrato nuevo.
+                if ($plano->tipo_reg === 'retiro') {
+                    $mes .= '_retiro';
+                }
+
                 try {
                     $pdf = $soportes->soporteOriginal($plano, $operadorId)['pdf'];
+                    // Sin operador conocido se buscó en todos los de Enlace: ya se sabe cuál fue.
+                    if (! $operadorId && ($nuevo = $this->operadorDePlanilla($plano, $aliadoId, $porNombre))) {
+                        $operador = $nombres[$nuevo] ?? $operador;
+                    }
                 } catch (\Throwable $e) {
-                    $faltan[] = "{$mes} (planilla {$plano->numero_planilla}, {$operador}): {$e->getMessage()}";
+                    $motivo = str_replace(' Por WhatsApp solo se envían originales, no la copia de BryNex.', '', $e->getMessage());
+                    if (str_contains($motivo, 'No se encontraron datos')) {
+                        $motivo = "el operador no encuentra a la persona en esa planilla: revisar si de verdad se incluyó ({$motivo})";
+                    }
+                    $faltan[] = "{$mes} (planilla {$plano->numero_planilla}, {$operador}): {$motivo}";
                     $avisar("{$mes}: no se pudo, queda en LEEME.txt");
                     continue;
                 }
@@ -1650,8 +1663,8 @@ class PlanoPagoController extends Controller
     }
 
     /**
-     * Por qué operador se pagó una planilla: el registro del API, si no el gasto
-     * del pago (por nombre). Null si no se sabe.
+     * Por qué operador se pagó una planilla: el registro del API, si no de dónde
+     * se bajó la original, si no el gasto del pago (por nombre). Null si no se sabe.
      */
     private function operadorDePlanilla(Plano $plano, int $aliadoId, $porNombre): ?int
     {
@@ -1660,6 +1673,15 @@ class PlanoPagoController extends Controller
             ->value('operador_planilla_id');
         if ($api) {
             return (int) $api;
+        }
+
+        // De dónde se bajó la original alguna vez (los pagos migrados del sistema
+        // viejo no traen el operador en el gasto).
+        $bajada = DB::table('planillas_pago_operador')
+            ->where('aliado_id', $aliadoId)->where('numero_planilla', $plano->numero_planilla)
+            ->value('operador_planilla_id');
+        if ($bajada) {
+            return (int) $bajada;
         }
 
         $pagadoA = DB::table('gastos')
