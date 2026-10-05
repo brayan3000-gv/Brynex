@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\DB;
  *
  * No cambia nada: el tipo de cobro y el porcentaje de cada asesor se editan a
  * mano en su ficha. Esto solo cuenta la cartera del mes, dice en qué nivel de la
- * escalera del aliado cae (config/asesores.php) y qué dejó en plata, para que
- * quien decide vea si hay que subirlo, avisarle o dejarlo como está.
+ * escalera del aliado cae (config/asesores.php) y qué dejó en plata. Lo de la
+ * escalera es una SUGERENCIA para quien mira el informe, no algo que el asesor
+ * tenga ganado: cada caso se decide a mano (y varios se dejan como están).
  *
  * Cartera del mes = cédulas distintas que tuvieron contrato activo en algún
  * momento del mes o planilla facturada ese mes. Una cédula con tres contratos
@@ -301,17 +302,17 @@ class AsesorCarteraService
         if ($pctActual === null) {
             $equivale = $tarifaLista ? ' ('.$this->cop($tarifaLista * $nivel['pct'] / 100).' sobre '.$this->cop($tarifaLista).')' : '';
 
-            return ['tono' => 'info', 'texto' => 'Tiene comisión fija. Por cartera le corresponde el '.$nivel['pct'].' %'.$equivale.'.'.$falta];
+            return ['tono' => 'info', 'texto' => 'Tiene comisión fija. Como referencia, con esta cartera la escalera sugiere el '.$nivel['pct'].' %'.$equivale.'.'.$falta];
         }
 
         if ((int) round($pctActual) === $nivel['pct']) {
-            return ['tono' => 'ok', 'texto' => 'Está en su nivel.'.$falta];
+            return ['tono' => 'ok', 'texto' => 'Su porcentaje coincide con el que sugiere la escalera.'.$falta];
         }
         if ($pctActual < $nivel['pct']) {
-            return ['tono' => 'sube', 'texto' => 'Puede subir: tiene el '.(int) round($pctActual).' % y por cartera le corresponde el '.$nivel['pct'].' %.'];
+            return ['tono' => 'sube', 'texto' => 'Sugerencia: podría subir. Tiene el '.(int) round($pctActual).' % y con esta cartera la escalera sugiere el '.$nivel['pct'].' %.'];
         }
 
-        return ['tono' => 'aviso', 'texto' => 'Está por encima de su cartera: tiene el '.(int) round($pctActual).' % y le corresponde el '.$nivel['pct'].' %. Va un mes de aviso antes de bajarlo.'.$falta];
+        return ['tono' => 'aviso', 'texto' => 'Sugerencia: revisar. Tiene el '.(int) round($pctActual).' % y con esta cartera la escalera sugiere el '.$nivel['pct'].' %. Si se decide bajarlo, va un mes de aviso antes.'.$falta];
     }
 
     private function cop(float $v): string

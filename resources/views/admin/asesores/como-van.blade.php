@@ -16,7 +16,7 @@
 
     @include('admin.partials.table-header', [
         'titulo'    => '🧭 Cómo van los asesores',
-        'subtitulo' => 'Cartera del mes, nivel que le corresponde y lo que dejó cada uno. Este informe no cambia nada: el tipo de cobro y el porcentaje se editan en la ficha del asesor.',
+        'subtitulo' => 'Cartera del mes, lo que dejó cada uno y el nivel que sugiere la escalera. Es solo una guía: nada cambia solo, y el tipo de cobro y el porcentaje se editan en la ficha del asesor.',
     ])
 
     <form method="GET" action="{{ route('admin.asesores.como_van') }}" style="background:#f8fafc;padding:1rem 1.25rem;border-radius:10px;border:1px solid #e2e8f0;margin-bottom:1.25rem;display:flex;gap:1rem;align-items:flex-end;flex-wrap:wrap;">
@@ -65,7 +65,7 @@
         </div>
         @if($escalera)
         <div style="background:#f8fafc;padding:1rem;border-radius:10px;border:1px dashed #cbd5e1;">
-            <div style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:0.35rem;">Escalera de administración</div>
+            <div style="font-size:0.72rem;font-weight:600;color:#64748b;text-transform:uppercase;margin-bottom:0.35rem;">Escalera de referencia</div>
             <div style="font-size:0.82rem;color:#334155;line-height:1.5;">
                 @foreach($escalera['niveles'] as $desde => $pct)
                     <span style="white-space:nowrap;"><strong>{{ $pct }} %</strong> desde {{ $desde }}</span>@if(! $loop->last) · @endif
@@ -111,7 +111,7 @@
                         <div style="font-weight:600;color:#0f172a;">{{ $f->tiene }}</div>
                     </div>
                     <div>
-                        <div style="font-size:0.66rem;color:#64748b;text-transform:uppercase;font-weight:600;">Por cartera</div>
+                        <div style="font-size:0.66rem;color:#64748b;text-transform:uppercase;font-weight:600;">Sugerido por cartera</div>
                         <div style="font-weight:600;color:#0f172a;">
                             @if(! $f->nivel) —
                             @else {{ $f->nivel['pct'] }} % (desde {{ $f->nivel['desde'] }})
