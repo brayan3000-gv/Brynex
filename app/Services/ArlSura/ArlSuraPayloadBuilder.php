@@ -180,6 +180,12 @@ class ArlSuraPayloadBuilder
             $problemas[] = 'No hay correo del cliente, ni de la razón social, ni del aliado.';
         }
 
+        // El sitio de trabajo lleva el correo de la empresa, no el del
+        // trabajador: sin él Sura responde «sitioTrabajo.email : may not be null».
+        if (! $this->correoEmpresa($contrato, $rs)) {
+            $problemas[] = 'Ni la razón social ni el aliado tienen correo: Sura lo exige para el sitio de trabajo. Regístralo en la razón social o en la ficha del aliado.';
+        }
+
         if (! $this->telefono($contrato, $cliente, $rs)) {
             $problemas[] = 'No hay teléfono del cliente, ni de la razón social, ni del aliado.';
         }
@@ -368,11 +374,7 @@ class ArlSuraPayloadBuilder
                 $centro->telefono ?: $this->telefono($contrato, $contrato->cliente, $rs)
             ),
             'telefono2'     => null,
-            'email'         => $this->primerValor(
-                $rs->correo_formulario,
-                $rs->correos,
-                $contrato->aliado?->correo,
-            ),
+            'email'         => $this->correoEmpresa($contrato, $rs),
             'direccion'     => $centro->direccion,
             'cordenadasDir' => [
                 'vectorx'   => (float) ($geo['longitude'] ?? 0),
@@ -491,6 +493,16 @@ class ArlSuraPayloadBuilder
     {
         return $this->primerValor(
             $cliente->correo,
+            $rs?->correo_formulario,
+            $rs?->correos,
+            $contrato->aliado?->correo,
+        );
+    }
+
+    /** El correo del sitio de trabajo: el de la empresa o, si no tiene, el del aliado. */
+    private function correoEmpresa(Contrato $contrato, $rs): ?string
+    {
+        return $this->primerValor(
             $rs?->correo_formulario,
             $rs?->correos,
             $contrato->aliado?->correo,
