@@ -16,25 +16,28 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * Registra en Finanzas los gastos que Brayan le reporta a GARVIS por WhatsApp.
+ * Registra en Finanzas los gastos que Brayan le reporta a GARVIS por WhatsApp, anula los
+ * que dice que no eran y le arma el resumen del día.
  *
  * GARVIS corre en GitHub Actions y no tiene ni la base ni una sesión de Brynex: cuando
- * Brayan confirma un gasto, deja gasto.json y el workflow lo manda por la entrada estándar
+ * Brayan le cuenta un gasto, deja gasto.json y el workflow lo manda por la entrada estándar
  * a /usr/local/sbin/garvis-responder-gh en modo `gasto`, que llama a este comando. Lo que
  * este comando imprime es lo que le llega a Brayan, así que se escribe para él.
  *
  *   echo '{"referencia":"12-345","gastos":[{"monto":45000,"categoria":"Mercado"}]}' \
  *     | php artisan garvis:gasto
+ *   echo '{"referencia":"12-346","anular":[123]}' | php artisan garvis:gasto
+ *   echo '{"referencia":"12-347","resumen":"hoy"}' | php artisan garvis:gasto
  *   php artisan garvis:gasto --catalogo   # categorías y cuentas, sin saldos
  *
- * Todo o nada: si un renglón no sirve no se registra ninguno, para que Brayan no tenga
+ * Todo o nada: si un renglón no sirve no se registra ni se anula ninguno, para que Brayan no tenga
  * que adivinar cuáles quedaron.
  */
 class GarvisGasto extends Command
 {
     protected $signature = 'garvis:gasto {--catalogo : Solo lista las categorías y cuentas}';
 
-    protected $description = 'Registra en Finanzas los gastos que Brayan confirmó con GARVIS (JSON por stdin)';
+    protected $description = 'Registra, anula y resume en Finanzas los gastos que Brayan le reporta a GARVIS (JSON por stdin)';
 
     /** Un gasto personal más grande que esto es casi seguro un cero de más. */
     private const MONTO_MAXIMO = 50_000_000;
@@ -43,6 +46,9 @@ class GarvisGasto extends Command
     private const DIAS_ATRAS = 62;
 
     private const MAX_RENGLONES = 20;
+
+    /** «No era» se dice enseguida; pasada una semana, se borra en la pantalla. */
+    private const DIAS_PARA_ANULAR = 7;
 
     public function handle(): int
     {
@@ -61,8 +67,14 @@ class GarvisGasto extends Command
         }
 
         $entrada = json_decode((string) stream_get_contents(STDIN), true);
+        if (! is_array($entrada)) {
+            return $this->rechazar('lo que llegó no se entiende.');
+        }
 
-        if (! is_array($entrada) || ! isset($entrada['gastos']) || ! is_array($entrada['gastos']) || $entrada['gastos'] === []) {
+        $gastos = $entrada['gastos'] ?? [];
+        $anular = $entrada['anular'] ?? [];
+        $resumen = $entrada['resumen'] ?? null;
+        if (! is_array($gastos) || ! is_array($anular) || ($gastos === [] && $anular === [] && ! $resumen)) {
             return $this->rechazar('lo que llegó no trae gastos.');
         }
 
@@ -71,79 +83,214 @@ class GarvisGasto extends Command
             return $this->rechazar('falta la referencia del mensaje.');
         }
 
-        if (count($entrada['gastos']) > self::MAX_RENGLONES) {
+        if (count($gastos) > self::MAX_RENGLONES || count($anular) > self::MAX_RENGLONES) {
             return $this->rechazar('son más de '.self::MAX_RENGLONES.' gastos en un solo mensaje.');
         }
 
-        $categorias = CategoriaGasto::where('user_id', $dueno->id)->activas()->get();
-        $cuentas = Cuenta::where('user_id', $dueno->id)->activas()->orderBy('orden')->get();
-
         // Primero se revisa todo; solo si todo sirve se escribe.
-        $renglones = [];
-        foreach (array_values($entrada['gastos']) as $i => $g) {
-            $n = count($entrada['gastos']) > 1 ? ' (renglón '.($i + 1).')' : '';
-            $renglon = is_array($g) ? $this->revisar($g, $categorias, $cuentas) : 'no es un gasto.';
-            if (is_string($renglon)) {
-                return $this->rechazar($renglon.$n);
+        $renglones = $this->revisarGastos($gastos, $dueno->id, $referencia);
+        if (is_string($renglones)) {
+            return $this->rechazar($renglones);
+        }
+
+        $porAnular = $this->revisarAnulaciones($anular, $dueno->id);
+        if (is_string($porAnular)) {
+            return $this->rechazar($porAnular);
+        }
+
+        $diaResumen = null;
+        if ($resumen) {
+            $diaResumen = $this->fecha((string) $resumen);
+            if (! $diaResumen) {
+                return $this->rechazar('la fecha del resumen no es válida.');
             }
-            $renglon['origen'] = 'garvis:'.$referencia.'#'.($i + 1);
-            $renglones[] = $renglon;
         }
 
         // La bitácora toma el usuario de la sesión; en consola no hay, así que se pone el dueño.
         Auth::setUser($dueno);
 
         $lineas = [];
-        DB::connection('finanzas')->transaction(function () use ($renglones, $dueno, &$lineas) {
+        DB::connection('finanzas')->transaction(function () use ($renglones, $porAnular, $dueno, &$lineas) {
+            foreach ($porAnular as $gasto) {
+                $lineas[] = $this->anularGasto($gasto);
+            }
             $creadas = [];
             foreach ($renglones as $r) {
-                $ya = Gasto::where('origen', $r['origen'])->first();
-                if ($ya) {
-                    $lineas[] = '↩️ Ya estaba registrado: '.$this->resumen($ya->monto, $r).' (#'.$ya->id.')';
-
-                    continue;
-                }
-
-                // Dos renglones con la misma categoría nueva la crean una sola vez.
-                $clave = $this->normalizar((string) $r['categoria_nueva']);
-                $categoriaId = $r['categoria']?->id ?? $creadas[$clave] ??= CategoriaGasto::create([
-                    'user_id' => $dueno->id,
-                    'nombre' => $r['categoria_nueva'],
-                    'icono' => '📂',
-                    'color' => '#64748b',
-                    'es_recurrente' => false,
-                    'activo' => true,
-                    'orden' => 50,
-                ])->id;
-
-                $gasto = Gasto::create([
-                    'user_id' => $dueno->id,
-                    'categoria_id' => $categoriaId,
-                    'cuenta_id' => $r['cuenta']?->id,
-                    'fecha' => $r['fecha']->toDateString(),
-                    'monto' => $r['monto'],
-                    'descripcion' => $r['descripcion'],
-                    'tipo_movimiento' => 'gasto',
-                    'es_patrimonio' => false,
-                    'soporte_path' => $this->copiarFoto($r['foto']),
-                    'origen' => $r['origen'],
-                ]);
-
-                $linea = '✅ Registrado: '.$this->resumen($gasto->monto, $r).' (#'.$gasto->id.')';
-                if ($r['foto'] && ! $gasto->soporte_path) {
-                    $linea .= "\n   La foto del recibo ya no estaba en el servidor; quedó sin soporte.";
-                }
-                $lineas[] = $linea;
-
-                Bitacora::registrar('created', 'FinanzasGasto', $gasto->id,
-                    'GARVIS registró por WhatsApp un gasto de $'.number_format($gasto->monto, 0, ',', '.'),
-                    ['origen' => $r['origen'], 'categoria_id' => $categoriaId, 'cuenta_id' => $r['cuenta']?->id]);
+                $lineas[] = $this->registrar($r, $dueno->id, $creadas);
             }
         });
 
-        $this->line(implode("\n", $lineas));
+        if ($diaResumen) {
+            $lineas[] = $this->resumenDelDia($dueno->id, $diaResumen);
+        } elseif ($renglones !== []) {
+            $lineas[] = '¿Quieres ver el resumen de hoy? Si alguno no era, dime «anula el #…».';
+        }
+
+        $this->line(implode("\n", array_filter($lineas)));
 
         return self::SUCCESS;
+    }
+
+    /** @return array<int, array>|string */
+    private function revisarGastos(array $gastos, int $userId, string $referencia): array|string
+    {
+        if ($gastos === []) {
+            return [];
+        }
+
+        $categorias = CategoriaGasto::where('user_id', $userId)->activas()->get();
+        $cuentas = Cuenta::where('user_id', $userId)->activas()->orderBy('orden')->get();
+
+        $renglones = [];
+        foreach (array_values($gastos) as $i => $g) {
+            $n = count($gastos) > 1 ? ' (renglón '.($i + 1).')' : '';
+            $renglon = is_array($g) ? $this->revisar($g, $categorias, $cuentas) : 'no es un gasto.';
+            if (is_string($renglon)) {
+                return $renglon.$n;
+            }
+            $renglon['origen'] = 'garvis:'.$referencia.'#'.($i + 1);
+            $renglones[] = $renglon;
+        }
+
+        return $renglones;
+    }
+
+    /**
+     * Por aquí solo se anula lo que entró por GARVIS y es reciente: lo digitado en la
+     * pantalla, o un gasto viejo, se borra en la pantalla, mirándolo.
+     *
+     * @return \Illuminate\Support\Collection<int, Gasto>|string
+     */
+    private function revisarAnulaciones(array $ids, int $userId)
+    {
+        if ($ids === []) {
+            return collect();
+        }
+
+        foreach ($ids as $id) {
+            if (! is_int($id) && ! ctype_digit((string) $id)) {
+                return 'el número del gasto por anular no es válido.';
+            }
+        }
+
+        $gastos = Gasto::where('user_id', $userId)->whereIn('id', $ids)->get()->keyBy('id');
+        foreach ($ids as $id) {
+            $gasto = $gastos->get((int) $id);
+            if (! $gasto) {
+                return 'no encontré el gasto #'.$id.'.';
+            }
+            if (! str_starts_with((string) $gasto->origen, 'garvis:')) {
+                return 'el gasto #'.$id.' no lo registré yo; ese se borra en la pantalla de Finanzas.';
+            }
+            if ($gasto->created_at && $gasto->created_at->lt(now()->subDays(self::DIAS_PARA_ANULAR))) {
+                return 'el gasto #'.$id.' tiene más de '.self::DIAS_PARA_ANULAR.' días; ese se borra en la pantalla de Finanzas.';
+            }
+        }
+
+        return $gastos->values();
+    }
+
+    /** Igual que borrarlo en la pantalla, pero con lo que era guardado en la bitácora. */
+    private function anularGasto(Gasto $gasto): string
+    {
+        $linea = '🗑️ Anulado: $'.number_format((float) $gasto->monto, 0, ',', '.')
+            .' · '.($gasto->categoria?->nombre ?? 'sin categoría')
+            .($gasto->descripcion ? ' · '.$gasto->descripcion : '').' (#'.$gasto->id.')';
+
+        Bitacora::registrar('deleted', 'FinanzasGasto', $gasto->id,
+            'GARVIS anuló por WhatsApp un gasto de $'.number_format((float) $gasto->monto, 0, ',', '.'),
+            $gasto->only(['fecha', 'monto', 'descripcion', 'categoria_id', 'cuenta_id', 'origen']));
+
+        if ($gasto->soporte_path) {
+            Storage::disk('local')->delete($gasto->soporte_path);
+        }
+        $gasto->delete();
+
+        return $linea;
+    }
+
+    private function registrar(array $r, int $userId, array &$creadas): string
+    {
+        $ya = Gasto::where('origen', $r['origen'])->first();
+        if ($ya) {
+            return '↩️ Ya estaba registrado: '.$this->resumen($ya->monto, $r).' (#'.$ya->id.')';
+        }
+
+        // Dos renglones con la misma categoría nueva la crean una sola vez.
+        $clave = $this->normalizar((string) $r['categoria_nueva']);
+        $categoriaId = $r['categoria']?->id ?? $creadas[$clave] ??= CategoriaGasto::create([
+            'user_id' => $userId,
+            'nombre' => $r['categoria_nueva'],
+            'icono' => '📂',
+            'color' => '#64748b',
+            'es_recurrente' => false,
+            'activo' => true,
+            'orden' => 50,
+        ])->id;
+
+        $gasto = Gasto::create([
+            'user_id' => $userId,
+            'categoria_id' => $categoriaId,
+            'cuenta_id' => $r['cuenta']?->id,
+            'fecha' => $r['fecha']->toDateString(),
+            'monto' => $r['monto'],
+            'descripcion' => $r['descripcion'],
+            'tipo_movimiento' => 'gasto',
+            'es_patrimonio' => false,
+            'soporte_path' => $this->copiarFoto($r['foto']),
+            'origen' => $r['origen'],
+        ]);
+
+        $linea = '✅ Registrado: '.$this->resumen($gasto->monto, $r).' (#'.$gasto->id.')';
+        if ($r['foto'] && ! $gasto->soporte_path) {
+            $linea .= "\n   La foto del recibo ya no estaba en el servidor; quedó sin soporte.";
+        }
+
+        Bitacora::registrar('created', 'FinanzasGasto', $gasto->id,
+            'GARVIS registró por WhatsApp un gasto de $'.number_format($gasto->monto, 0, ',', '.'),
+            ['origen' => $r['origen'], 'categoria_id' => $categoriaId, 'cuenta_id' => $r['cuenta']?->id]);
+
+        return $linea;
+    }
+
+    /** Todos los gastos del día, también los digitados en la pantalla. */
+    private function resumenDelDia(int $userId, Carbon $dia): string
+    {
+        $gastos = Gasto::with('categoria')
+            ->where('user_id', $userId)
+            ->where('tipo_movimiento', 'gasto')
+            ->whereDate('fecha', $dia->toDateString())
+            ->orderBy('id')
+            ->get();
+
+        $titulo = '*Gastos del '.$dia->locale('es')->isoFormat('dddd D [de] MMMM').'*';
+        if ($gastos->isEmpty()) {
+            return $titulo."\nNinguno.";
+        }
+
+        $renglones = $gastos->take(30)->map(fn ($g) => '- $'.number_format((float) $g->monto, 0, ',', '.')
+            .' · '.($g->categoria?->nombre ?? 'sin categoría')
+            .($g->descripcion ? ' · '.$g->descripcion : '').' (#'.$g->id.')');
+        if ($gastos->count() > 30) {
+            $renglones->push('- … y '.($gastos->count() - 30).' más');
+        }
+
+        return $titulo."\n".$renglones->implode("\n")
+            ."\n*Total: $".number_format((float) $gastos->sum('monto'), 0, ',', '.').'*';
+    }
+
+    private function fecha(string $texto): ?Carbon
+    {
+        $hoy = Carbon::now('America/Bogota')->startOfDay();
+        if ($texto === 'hoy') {
+            return $hoy;
+        }
+        if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $texto)) {
+            return null;
+        }
+        $fecha = Carbon::createFromFormat('!Y-m-d', $texto, 'America/Bogota');
+
+        return $fecha && $fecha->format('Y-m-d') === $texto ? $fecha : null;
     }
 
     /**
@@ -161,11 +308,8 @@ class GarvisGasto extends Command
         }
 
         $hoy = Carbon::now('America/Bogota')->startOfDay();
-        $fechaTexto = (string) ($g['fecha'] ?? $hoy->toDateString());
-        $fecha = preg_match('/^\d{4}-\d{2}-\d{2}$/', $fechaTexto)
-            ? Carbon::createFromFormat('!Y-m-d', $fechaTexto, 'America/Bogota')
-            : false;
-        if (! $fecha || $fecha->format('Y-m-d') !== $fechaTexto) {
+        $fecha = $this->fecha((string) ($g['fecha'] ?? 'hoy'));
+        if (! $fecha) {
             return 'la fecha no es válida.';
         }
         if ($fecha->gt($hoy)) {
@@ -273,7 +417,7 @@ class GarvisGasto extends Command
 
     private function rechazar(string $motivo): int
     {
-        $this->line('⚠️ No registré nada: '.$motivo);
+        $this->line('⚠️ No hice nada: '.$motivo);
 
         return self::FAILURE;
     }
