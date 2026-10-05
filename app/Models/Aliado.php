@@ -32,6 +32,8 @@ class Aliado extends BaseModel
         'correo',
         'direccion',
         'ciudad',
+        'departamento_id',
+        'municipio_id',
         'logo',
         'logo_oscuro',
         'logo_marca_claro',

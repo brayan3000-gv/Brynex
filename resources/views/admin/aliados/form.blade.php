@@ -27,7 +27,7 @@
         {{-- Fila 1 --}}
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
             <div>
-                <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Nombre *</label>
+                <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Nombre o razón social *</label>
                 <input type="text" name="nombre" value="{{ old('nombre', $aliado->nombre) }}" required
                     style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;"
                     onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
@@ -40,12 +40,14 @@
             </div>
         </div>
 
-        {{-- Razón social --}}
+        {{-- Eslogan: la frase que va debajo del nombre --}}
         <div style="margin-bottom:1rem;">
-            <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Razón Social</label>
-            <input type="text" name="razon_social" value="{{ old('razon_social', $aliado->razon_social) }}"
+            <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Eslogan</label>
+            <input type="text" name="eslogan" maxlength="120" value="{{ old('eslogan', $aliado->eslogan ?? '') }}"
+                placeholder="Ej: Seguridad social sin complicaciones"
                 style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;"
                 onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
+            <div style="font-size:0.7rem;color:#64748b;margin-top:0.3rem;">Va debajo del nombre en el encabezado del sistema y en los flyers. Si se deja vacío, no se muestra.</div>
         </div>
 
         {{-- Fila contacto --}}
@@ -76,8 +78,12 @@
             </div>
         </div>
 
-        {{-- Correo + Dirección --}}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
+        {{-- Correo + ubicación: departamento y municipio de las listas, como en la ficha del cliente --}}
+        @php
+            $deptoActual = old('departamento_id', $aliado->departamento_id);
+            $munActual   = old('municipio_id', $aliado->municipio_id);
+        @endphp
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:1rem;margin-bottom:1rem;">
             <div>
                 <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Correo</label>
                 <input type="email" name="correo" value="{{ old('correo', $aliado->correo) }}"
@@ -85,10 +91,22 @@
                     onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
             </div>
             <div>
-                <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Ciudad</label>
-                <input type="text" name="ciudad" value="{{ old('ciudad', $aliado->ciudad) }}"
-                    style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;"
-                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
+                <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Departamento</label>
+                <select name="departamento_id" id="selDepto" style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;background:#fff;">
+                    <option value="">— Seleccionar —</option>
+                    @foreach($departamentos as $id => $nombre)
+                        <option value="{{ $id }}" {{ $deptoActual == $id ? 'selected' : '' }}>{{ $nombre }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Municipio</label>
+                <select name="municipio_id" id="selMunicipio" style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;background:#fff;">
+                    <option value="">— Seleccionar —</option>
+                </select>
+                @if($aliado->ciudad && ! $aliado->municipio_id)
+                    <div style="font-size:0.7rem;color:#b45309;margin-top:0.3rem;">Antes decía «{{ $aliado->ciudad }}»: escoge el municipio.</div>
+                @endif
             </div>
         </div>
 
@@ -125,16 +143,6 @@
                         style="flex:1;min-width:200px;padding:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.82rem;font-family:inherit;background:#fff;">
                 </div>
                 <div style="font-size:0.7rem;color:#64748b;margin-top:0.35rem;">Ícono cuadrado — se usa en el panel, selector de aliado, facturación y la web pública.</div>
-            </div>
-
-            {{-- 2. Eslogan --}}
-            <div>
-                <label style="display:block;font-size:0.75rem;font-weight:700;color:#475569;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.04em;">Eslogan del Aliado</label>
-                <input type="text" name="eslogan" maxlength="120" value="{{ old('eslogan', $aliado->eslogan ?? '') }}"
-                    placeholder="Ej: Seguridad social sin complicaciones"
-                    style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.88rem;font-family:inherit;outline:none;background:#fff;"
-                    onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
-                <div style="font-size:0.7rem;color:#64748b;margin-top:0.3rem;">Va debajo del nombre en los flyers publicitarios. Si se deja vacío, no se muestra.</div>
             </div>
 
             {{-- 3. Color Primario y Estado --}}
@@ -438,6 +446,32 @@
 @endif
 
 </div>
+<script>
+// Municipios del departamento escogido, como en la ficha del cliente.
+(function () {
+    var ciudades  = @json($ciudades);
+    var munActual = {{ $munActual ?: 'null' }};
+    var selDepto  = document.getElementById('selDepto');
+    var selMun    = document.getElementById('selMunicipio');
+
+    function filtrar() {
+        var depto = parseInt(selDepto.value);
+        selMun.innerHTML = '<option value="">— Seleccionar —</option>';
+        if (!depto) return;
+        ciudades.forEach(function (c) {
+            if (parseInt(c.departamento_id) !== depto) return;
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nombre;
+            if (munActual && parseInt(c.id) === parseInt(munActual)) opt.selected = true;
+            selMun.appendChild(opt);
+        });
+    }
+
+    selDepto.addEventListener('change', function () { munActual = null; filtrar(); });
+    filtrar();
+})();
+</script>
 @endsection
 
 @push('scripts')

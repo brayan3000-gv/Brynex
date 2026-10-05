@@ -795,7 +795,11 @@
             @endif
             <div class="header-aliado-info">
                 <h2>{{ $alidoActivo->nombre ?? 'BryNex' }}</h2>
-                <small>{{ $alidoActivo->razon_social ?? 'Asesores en Seguridad Social' }}</small>
+                @if($alidoActivo)
+                    @if($alidoActivo->eslogan)<small>{{ $alidoActivo->eslogan }}</small>@endif
+                @else
+                    <small>Asesores en Seguridad Social</small>
+                @endif
             </div>
         </a>
 

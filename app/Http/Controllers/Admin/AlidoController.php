@@ -43,7 +43,42 @@ class AlidoController extends Controller
             'usuariosBrynex' => $usuariosBrynex,
             'todosModulos' => $todosModulos,
             'modulosContratados' => $modulosContratados,
-        ]);
+        ] + $this->ubicaciones());
+    }
+
+    /** Departamentos y municipios para las listas de la ficha, como en la del cliente. */
+    private function ubicaciones(): array
+    {
+        return [
+            'departamentos' => DB::table('departamentos')->orderBy('nombre')->pluck('nombre', 'id'),
+            'ciudades'      => DB::table('ciudades')->orderBy('nombre')->get(['id', 'departamento_id', 'nombre']),
+        ];
+    }
+
+    /**
+     * El nombre ES la razón social: antes eran dos campos y en el encabezado
+     * salía el mismo texto dos veces. La frase de debajo es el eslogan.
+     *
+     * `ciudad` se sigue llenando, con el nombre del municipio, porque la usan
+     * las cuentas de cobro y la página pública. Si no se escoge municipio se
+     * deja la que había escrita a mano.
+     */
+    private function nombreYUbicacion(array $data): array
+    {
+        $data['razon_social'] = $data['nombre'];
+
+        $municipio = ! empty($data['municipio_id'])
+            ? DB::table('ciudades')->where('id', $data['municipio_id'])->first(['nombre', 'departamento_id'])
+            : null;
+
+        if ($municipio) {
+            $data['departamento_id'] = (int) $municipio->departamento_id;
+            $data['ciudad'] = mb_convert_case(mb_strtolower(trim($municipio->nombre)), MB_CASE_TITLE);
+        } else {
+            $data['municipio_id'] = null;
+        }
+
+        return $data;
     }
 
     public function store(Request $request, CompresorLogoService $compresor)
@@ -51,14 +86,14 @@ class AlidoController extends Controller
         $data = $request->validate([
             'nombre'               => 'required|string|max:150',
             'nit'                  => 'nullable|string|max:20|unique:aliados,nit',
-            'razon_social'         => 'nullable|string|max:200',
             'contacto'             => 'nullable|string|max:100',
             'telefono'             => 'nullable|string|max:30',
             'celular'              => 'nullable|string|max:30',
             'whatsapp'             => 'nullable|string|max:30',
             'correo'               => 'nullable|email|max:150',
             'direccion'            => 'nullable|string|max:255',
-            'ciudad'               => 'nullable|string|max:80',
+            'departamento_id'      => 'nullable|integer|exists:departamentos,id',
+            'municipio_id'         => 'nullable|integer|exists:ciudades,id',
             'eslogan'              => 'nullable|string|max:120',
             'color_primario'       => 'nullable|string|max:10',
             'activo'               => 'boolean',
@@ -90,6 +125,7 @@ class AlidoController extends Controller
             $data['imagen_planes'] = 'planes-precios/' . $filename;
         }
         $data['logo_marca_recorte'] = array_filter($data['logo_marca_recorte'] ?? []) ?: null;
+        $data = $this->nombreYUbicacion($data);
 
         $data['activo'] = $request->boolean('activo', true);
         $data['afiliaciones_brynex'] = $request->boolean('afiliaciones_brynex', false);
@@ -122,7 +158,7 @@ class AlidoController extends Controller
         $usuariosBrynex = User::where('es_brynex', true)->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']);
         $todosModulos = \App\Models\BrynexModulo::orderBy('orden')->get();
         $modulosContratados = \App\Models\BrynexModuloAliado::where('aliado_id', $aliado->id)->pluck('activo', 'modulo_id')->toArray();
-        return view('admin.aliados.form', compact('aliado', 'usuariosBrynex', 'todosModulos', 'modulosContratados'));
+        return view('admin.aliados.form', compact('aliado', 'usuariosBrynex', 'todosModulos', 'modulosContratados') + $this->ubicaciones());
     }
 
     public function update(Request $request, Aliado $aliado, CompresorLogoService $compresor)
@@ -130,14 +166,14 @@ class AlidoController extends Controller
         $data = $request->validate([
             'nombre'               => 'required|string|max:150',
             'nit'                  => "nullable|string|max:20|unique:aliados,nit,{$aliado->id}",
-            'razon_social'         => 'nullable|string|max:200',
             'contacto'             => 'nullable|string|max:100',
             'telefono'             => 'nullable|string|max:30',
             'celular'              => 'nullable|string|max:30',
             'whatsapp'             => 'nullable|string|max:30',
             'correo'               => 'nullable|email|max:150',
             'direccion'            => 'nullable|string|max:255',
-            'ciudad'               => 'nullable|string|max:80',
+            'departamento_id'      => 'nullable|integer|exists:departamentos,id',
+            'municipio_id'         => 'nullable|integer|exists:ciudades,id',
             'eslogan'              => 'nullable|string|max:120',
             'color_primario'       => 'nullable|string|max:10',
             'activo'               => 'boolean',
@@ -195,6 +231,7 @@ class AlidoController extends Controller
             $data['imagen_planes'] = $aliado->imagen_planes;
         }
         $data['logo_marca_recorte'] = array_filter($data['logo_marca_recorte'] ?? []) ?: null;
+        $data = $this->nombreYUbicacion($data);
 
         $data['activo'] = $request->boolean('activo');
         $data['afiliaciones_brynex'] = $request->boolean('afiliaciones_brynex', false);
