@@ -148,6 +148,22 @@
         .salida .btn { width: 100%; margin-top: 20px; }
         .pie-cot { font-size: 13px; color: var(--tinta-suave); margin-top: 14px; }
 
+        .mitades { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 32px; }
+        .mitad { background: var(--blanco); border: 1px solid var(--linea); border-radius: 18px; padding: 24px; min-width: 0; }
+        .mitad .v { font-family: var(--display); font-weight: 800; font-size: clamp(34px, 5vw, 52px); line-height: 1; color: var(--azul); margin: 10px 0 8px; }
+        .mitad p { color: var(--tinta-suave); font-size: 16px; }
+        .escalera { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; align-items: end; height: 230px; margin-top: 22px; }
+        .peldano { height: var(--h); min-width: 0; border-radius: 14px 14px 0 0; background: var(--azul-suave); color: var(--marino); display: flex; flex-direction: column; justify-content: flex-end; padding: 12px 10px; text-align: center; transition: background .3s, color .3s, transform .3s; transform-origin: bottom; }
+        .peldano b { font-family: var(--display); font-size: clamp(22px, 3.4vw, 34px); font-weight: 800; line-height: 1; }
+        .peldano span { font-size: 13px; margin-top: 4px; line-height: 1.25; }
+        .peldano.activo { background: var(--marino); color: #fff; transform: scaleY(1.03); }
+        .reglas { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; margin-top: 28px; }
+        .reglas li { font-size: 15.5px; color: var(--tinta-suave); padding-left: 16px; border-left: 3px solid var(--azul-suave); min-width: 0; }
+        .reglas strong { color: var(--marino); }
+        .casilla { display: flex; gap: 10px; align-items: center; font-size: 15px; font-weight: 500; cursor: pointer; }
+        .casilla input { width: 20px; height: 20px; accent-color: var(--azul); }
+        .ahorro .neto { margin-top: 0; }
+
         .final { text-align: center; }
         .final h2 { max-width: 18ch; margin-inline: auto; }
         .final .lead { margin: 16px auto 28px; }
@@ -156,7 +172,10 @@
 
         @media (max-width: 900px) {
             .dos, .cot { grid-template-columns: 1fr; }
-            .pilares, .planes, .opciones { grid-template-columns: 1fr; }
+            .pilares, .planes, .opciones, .mitades, .reglas { grid-template-columns: 1fr; }
+            .escalera { height: 200px; gap: 6px; }
+            .peldano { padding: 10px 4px; }
+            .peldano span { font-size: 11.5px; }
             .recibe { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .hero figure { order: -1; }
             .marca small { display: block; margin-left: 0; }
@@ -191,6 +210,7 @@
                 <a class="btn btn-azul btn-grande" href="#cotizador">Cotizar mi alianza</a>
                 <a class="btn btn-linea btn-grande" href="#planes">Ver los tres planes</a>
             </div>
+            <p class="reveal in" style="margin-top:16px;font-size:15px;color:var(--tinta-suave)">¿Es asesor independiente? <a href="#asesor" style="color:var(--azul);font-weight:600">Trabaje con la empresa de Brygar</a>.</p>
         </div>
         <figure class="reveal in">
             <img src="/img/aliados/atencion.jpg" alt="Asesora de Brygar atendiendo a una pareja de clientes">
@@ -236,8 +256,9 @@
 
 <section id="planes" style="background:var(--blanco)">
     <div class="wrap">
-        <div class="eyebrow reveal">Nuestras alternativas</div>
+        <div class="eyebrow reveal">Alianzas para empresas</div>
         <h2 class="reveal" style="--i:1">Elija la que mejor se adapte a su operación.</h2>
+        <p class="lead reveal" style="--i:2;margin-top:14px">Para empresas que ya manejan 100 afiliados o más. Trabajan con su propio logo y todo sale a nombre de su empresa. ¿Todavía no llega a esa cifra? Mire el <a href="#asesor" style="color:var(--azul);font-weight:600">Plan Asesor</a>.</p>
         <div class="planes">
             <article class="plan reveal" style="--i:1">
                 <header><h3>Alianza Integral</h3><div class="precio"><b class="num">$15.000</b><small>por afiliado al mes</small></div></header>
@@ -371,6 +392,79 @@
     </div>
 </section>
 
+<section id="asesor">
+    <div class="wrap">
+        <div class="eyebrow reveal">Plan Asesor</div>
+        <h2 class="reveal" style="--i:1">¿Todavía no tiene empresa? Trabaje con la de Brygar.</h2>
+        <p class="lead reveal" style="--i:2;margin-top:14px">Le damos acceso al programa como asesor de Brygar. Usted trae y atiende a sus clientes; Brygar pone las razones sociales, la plataforma y la operación. Y lo que paga el cliente se reparte por mitades.</p>
+
+        <div class="mitades">
+            <div class="mitad reveal" style="--i:1">
+                <div class="eyebrow" style="margin:0">Afiliación</div>
+                <div class="v num">50 %</div>
+                <p>La mitad de cada afiliación que traiga, siempre, tenga 2 clientes o 200.</p>
+            </div>
+            <div class="mitad reveal" style="--i:2">
+                <div class="eyebrow" style="margin:0">Administración mensual</div>
+                <div class="v num">hasta 50 %</div>
+                <p>Si Brygar cobra $46.000 de administración, $23.000 son suyos cada mes por cada cliente al día.</p>
+            </div>
+        </div>
+
+        <h3 class="reveal" style="margin-top:44px">Su parte de la administración sube a medida que entran clientes</h3>
+        <div class="escalera reveal" id="escalera">
+            <div class="peldano" data-nivel="0" style="--h:40%"><b class="num">20 %</b><span>1 a 4 clientes</span></div>
+            <div class="peldano" data-nivel="1" style="--h:60%"><b class="num">30 %</b><span>5 a 9 clientes</span></div>
+            <div class="peldano" data-nivel="2" style="--h:80%"><b class="num">40 %</b><span>10 a 19 clientes</span></div>
+            <div class="peldano" data-nivel="3" style="--h:100%"><b class="num">50 %</b><span>20 clientes o más</span></div>
+        </div>
+        <ul class="reglas">
+            <li class="reveal" style="--i:1"><strong>Arranca con el 50 %.</strong> Sus tres primeros meses gana la mitad completa, tenga los clientes que tenga, para que construya su cartera.</li>
+            <li class="reveal" style="--i:2"><strong>Sube al mes siguiente.</strong> Apenas llega a un nivel, el mes que sigue ya gana ese porcentaje sobre todos sus clientes.</li>
+            <li class="reveal" style="--i:3"><strong>Si baja, tiene un mes de aviso</strong> para recuperar el nivel antes de que cambie su porcentaje.</li>
+            <li class="reveal" style="--i:4"><strong>Cuenta el cliente al día.</strong> La comisión se paga sobre lo recaudado; un cliente en mora no suma ese mes.</li>
+            <li class="reveal" style="--i:5"><strong>Con menos de 5 clientes</strong> los atiende el equipo de Brygar y usted gana el 20 % durante los primeros 6 meses de cada uno. Al llegar a 5 recibe su acceso y sube al 30 %.</li>
+            <li class="reveal" style="--i:6"><strong>Al pasar de 100</strong> puede dar el salto a una alianza con su propio logo y su nombre.</li>
+        </ul>
+
+        <div class="cot reveal" style="margin-top:36px">
+            <div>
+                <h3 style="margin-bottom:22px">¿Cuánto ganaría?</h3>
+                <div class="campo">
+                    <label for="a-clientes">Clientes activos y al día <input type="number" id="a-clientes" min="1" max="2000" step="1" value="20" inputmode="numeric"></label>
+                    <input type="range" id="a-clientes-r" min="1" max="150" step="1" value="20" aria-label="Clientes activos">
+                </div>
+                <div class="campo">
+                    <label for="a-nuevos">Afiliaciones nuevas al mes <input type="number" id="a-nuevos" min="0" max="500" step="1" value="4" inputmode="numeric"></label>
+                    <input type="range" id="a-nuevos-r" min="0" max="60" step="1" value="4" aria-label="Afiliaciones nuevas al mes">
+                </div>
+                <label class="casilla"><input type="checkbox" id="a-arranque"> Estoy en mis tres primeros meses</label>
+                <details class="sup" style="margin-top:20px">
+                    <summary>Cambiar lo que paga el cliente</summary>
+                    <div class="fila"><label for="a-admon">Administración mensual</label><input type="number" id="a-admon" min="0" step="1000" value="46000" inputmode="numeric"></div>
+                    <div class="fila"><label for="a-afil">Valor de la afiliación</label><input type="number" id="a-afil" min="0" step="1000" value="55000" inputmode="numeric"></div>
+                    <p style="margin-top:10px">Son los valores más comunes que cobra Brygar hoy. Cámbielos si sus clientes pagan otra tarifa.</p>
+                </details>
+            </div>
+            <div class="salida" aria-live="polite">
+                <div class="lineas">
+                    <div class="linea"><span id="a-o-admon-etq">Administración</span><span class="num" id="a-o-admon">—</span></div>
+                    <div class="linea"><span id="a-o-afil-etq">Afiliaciones</span><span class="num" id="a-o-afil">—</span></div>
+                </div>
+                <div class="total">
+                    <div>Usted gana al mes<small id="a-o-nivel">—</small></div>
+                    <b class="num" id="a-o-total">—</b>
+                </div>
+                <div class="ahorro">
+                    <div class="neto" id="a-o-sig"></div>
+                </div>
+                <a class="btn btn-wa btn-grande" id="a-o-wa" href="{{ $urlWhatsapp }}" target="_blank" rel="noopener">{!! $iconoWa !!}Quiero ser asesor de Brygar</a>
+                <p class="pie-cot">Es una referencia con todos sus clientes al día. El botón abre WhatsApp con estos números ya escritos; usted decide si lo envía.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
 <section class="final" style="background:var(--blanco)">
     <div class="wrap">
         <h2 class="reveal">Hablemos de cómo llevar esto a sus afiliados.</h2>
@@ -489,6 +583,59 @@
         $('o-wa').href = WA + '?text=' + encodeURIComponent(texto);
     }
     calcular();
+
+    // ── Calculadora del Plan Asesor ──
+    // Niveles de administración por cartera activa: [desde, %, nombre del siguiente tope]
+    var NIVELES = [[1, 0.20], [5, 0.30], [10, 0.40], [20, 0.50]];
+    function nivelDe(n) { var i = 0; NIVELES.forEach(function (x, k) { if (n >= x[0]) i = k; }); return i; }
+    enlazar2('a-clientes', 'a-clientes-r');
+    enlazar2('a-nuevos', 'a-nuevos-r');
+    ['a-admon', 'a-afil', 'a-arranque'].forEach(function (id) { $(id).addEventListener('input', asesor); });
+    function enlazar2(numId, rangoId) {
+        var n = $(numId), r = $(rangoId);
+        n.addEventListener('input', function () { r.value = n.value; asesor(); });
+        r.addEventListener('input', function () { n.value = r.value; asesor(); });
+    }
+    function asesor() {
+        var c = Math.max(+$('a-clientes').value || 0, 0), nuevos = Math.max(+$('a-nuevos').value || 0, 0);
+        var admon = Math.max(+$('a-admon').value || 0, 0), afil = Math.max(+$('a-afil').value || 0, 0);
+        var arranque = $('a-arranque').checked;
+        var k = nivelDe(c), pct = arranque ? 0.5 : NIVELES[k][1];
+        var gAdmon = c * admon * pct, gAfil = nuevos * afil * 0.5, total = gAdmon + gAfil;
+
+        document.querySelectorAll('#escalera .peldano').forEach(function (p) {
+            p.classList.toggle('activo', arranque ? +p.dataset.nivel === 3 : +p.dataset.nivel === k);
+        });
+        $('a-o-admon-etq').textContent = c + ' clientes × ' + cop(admon * pct) + ' (' + Math.round(pct * 100) + ' % de ' + cop(admon) + ')';
+        $('a-o-admon').textContent = cop(gAdmon);
+        $('a-o-afil-etq').textContent = nuevos + ' afiliaciones × ' + cop(afil * 0.5) + ' (50 %)';
+        $('a-o-afil').textContent = cop(gAfil);
+        $('a-o-total').textContent = cop(total);
+        $('a-o-nivel').textContent = arranque ? 'Meses de arranque: 50 % completo' : 'Nivel del ' + Math.round(pct * 100) + ' % de administración';
+
+        var sig = $('a-o-sig');
+        sig.className = 'neto';
+        if (arranque) {
+            var real = NIVELES[k][1];
+            sig.textContent = real < 0.5
+                ? 'Al terminar el arranque, con ' + c + ' clientes quedaría en el ' + Math.round(real * 100) + ' %. Le faltan ' + (20 - c) + ' para conservar el 50 %.'
+                : 'Ya tiene la cartera para conservar el 50 % cuando termine el arranque.';
+        } else if (k < 3) {
+            var meta = NIVELES[k + 1][0], pctSig = NIVELES[k + 1][1];
+            var conMeta = meta * admon * pctSig;
+            sig.textContent = 'Le faltan ' + (meta - c) + (meta - c === 1 ? ' cliente' : ' clientes') + ' para subir al ' + Math.round(pctSig * 100) + ' %: con ' + meta + ' ganaría ' + cop(conMeta) + ' de administración al mes' + (k === 0 ? ' y recibe su acceso al programa.' : '.');
+        } else if (c >= 100) {
+            sig.textContent = 'Con ' + c + ' clientes ya puede pasar a una alianza con su propio logo: en la Integral le quedarían ' + cop(c * Math.max(admon - 15000, 0)) + ' al mes de administración.';
+        } else {
+            sig.textContent = 'Está en el nivel más alto. Cada cliente nuevo le suma ' + cop(admon * 0.5) + ' al mes, más ' + cop(afil * 0.5) + ' por afiliarlo.';
+        }
+        var texto = 'Hola, quiero ser asesor de Brygar.\n' +
+            '• Clientes que manejo: ' + c + '\n' +
+            '• Afiliaciones nuevas al mes: ' + nuevos + '\n' +
+            '• Según la calculadora ganaría: ' + cop(total) + ' al mes';
+        $('a-o-wa').href = WA + '?text=' + encodeURIComponent(texto);
+    }
+    asesor();
 })();
 </script>
 </body>
