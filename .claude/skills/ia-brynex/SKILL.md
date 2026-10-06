@@ -34,7 +34,8 @@ Tools existentes: `BuscarConocimientoTool`, `BuscarInternetTool`,
 `CatalogoModulosTool`, `ChequeoSeguridadSocialTool`, `ConsultarClienteTool`,
 `ConsultarParametrosTool`, `CotizarPlanTool` / `CotizarPlanPublicoTool`,
 `EnviarPlanillaTool`, `EnviarTablaPlanesTool`, `HablarConAsesorTool`,
-`NoContactarTool`, `PreguntarEntrenadorTool`.
+`NoContactarTool`, `PerfilarAliadoTool` (prospectos que quieren trabajar con
+el aliado: ver la sección en [[whatsapp-brynex]]), `PreguntarEntrenadorTool`.
 
 Para agregar una tool nueva: implementar `IaToolInterface` en
 `app/Services/Ia/Tools/`, registrarla donde se arma la lista de tools

@@ -734,6 +734,7 @@ class AsistenteIaService
         - Responde concreto en el mismo turno: el camino que le conviene, UNA cifra que le sirva (lo que
           ganaría al mes o lo que vale su alianza) y el enlace para que juegue con la calculadora. Después
           sigue conversando: las dudas se responden con lo que trajo la herramienta o buscar_conocimiento.
+          No digas «garantizado» ni «asegurado»: el arranque y los niveles tienen metas y condiciones.
         - NO lo mandes a llamar a ningún teléfono ni le digas que «ahí lo atienden»: la conversación sigue
           por aquí. La herramienta te dice qué persona del equipo quedó avisada y le va a escribir por este
           mismo WhatsApp; dilo así. Solo das un número si la herramienta lo trae, y como opción.

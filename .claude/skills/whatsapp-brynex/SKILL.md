@@ -125,6 +125,25 @@ resources/views/admin/whatsapp/
   al inbox del aliado BryNex (id 1) como pendiente y se mueve con **🔀 Mover a aliado**
   (solo `es_brynex`, ruta `chat.mover_aliado`). Ya no se bota ningún mensaje.
 
+## Prospectos que quieren trabajar con el aliado (oct-2026)
+
+- Asesores con cartera, empresas que quieren su marca y negocios que quieren afiliar a sus
+  empleados. La IA los perfila con la tool `perfilar_aliado` (`ProspectoAliadoService`): guarda en
+  la conversación `perfil_aliado` (asesor | empresa | empleador), `personas_declaradas`,
+  `perfil_sugerencia`, `perfil_aliado_at` y `perfil_avisado_a`, y orienta con los números públicos
+  de `config/alianzas.php` (los mismos de brynex.co/aliados; la escalera del asesor está en
+  `config/asesores.php`). La IA solo repite esas cifras; nunca negocia.
+- Quién atiende: `config('alianzas.contactos.{aliado}')` — más de `mayores_de` personas → `mayor`,
+  el resto → `menor`. Se avisa por WhatsApp (`AlertaOperativaService::enviarDesdeAliado`, plantilla
+  `notificar_brynex`) una vez por responsable, y al pasar a humano (`hablar_con_asesor`) la
+  conversación queda asignada a esa persona si es usuario, con el motivo «🤝 Prospecto … → lo
+  atiende X» para que nadie más la tome. La conversación sigue por el chat; no se manda a llamar.
+- Informe **🤝 Aliados** en el inbox (`chat.prospectos_aliados`): tipo, personas, sugerencia, quién
+  lo atiende, minutos hasta la primera respuesta humana y estado. Insignia morada en la lista y en
+  el encabezado del chat. Marcar a mano: `whatsapp:perfil-aliado {conv} {tipo} {personas} [--avisar]`.
+- El enlace que manda la IA lleva `?personas=N&perfil=asesor|empresa`: brynex.co/aliados arranca
+  con ese número puesto en su selector y sus calculadoras.
+
 ## Notas Importantes
 
 - Las plantillas deben estar **aprobadas por Meta** antes de usarse
