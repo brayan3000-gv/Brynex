@@ -97,6 +97,53 @@ class ProspectoAliadoService
         return ['camino' => 'asesor', 'sugerencia' => "Plan Asesor {$pct} %", 'resumen' => $resumen, 'url' => $url];
     }
 
+    /**
+     * Es un prospecto que quiere trabajar con nosotros: ya perfilado como asesor o
+     * empresa, o llegó por un anuncio para asesores (aunque todavía no haya contestado).
+     */
+    public function esProspectoAliado(WhatsappConversacion $conv): bool
+    {
+        if (in_array($conv->perfil_aliado, ['asesor', 'empresa'], true)) {
+            return true;
+        }
+        if ($conv->origen_publicacion_id) {
+            $pieza = \App\Models\Publicacion::find($conv->origen_publicacion_id);
+
+            return $pieza && \App\Services\Ia\AsistenteIaService::esPiezaDeAsesores($pieza);
+        }
+
+        return false;
+    }
+
+    /**
+     * Si este usuario NO debe tomar la conversación, devuelve el mensaje que explica
+     * quién la atiende; null si puede. Pueden: el superadmin, los responsables
+     * configurados y quien ya la tenga asignada.
+     */
+    public function porQueNoPuedeAtender(?\App\Models\User $user, WhatsappConversacion $conv): ?string
+    {
+        if (! $user || ! $this->esProspectoAliado($conv)) {
+            return null;
+        }
+        $contactos = config("alianzas.contactos.{$conv->aliado_id}");
+        if (! $contactos) {
+            return null;
+        }
+        $permitidos = array_filter([$contactos['mayor']['user_id'] ?? null, $contactos['menor']['user_id'] ?? null, $conv->asignado_a]);
+        if (in_array((int) $user->id, array_map('intval', $permitidos), true) || (method_exists($user, 'hasRole') && $user->hasRole('superadmin'))) {
+            return null;
+        }
+        $responsable = $conv->personas_declaradas !== null
+            ? $this->responsable((int) $conv->aliado_id, (int) $conv->personas_declaradas)
+            : null;
+        $quien = $responsable
+            ? $responsable['nombre']
+            : $contactos['menor']['nombre'].' o '.$contactos['mayor']['nombre'].' (según cuántas personas maneje)';
+
+        return 'Este contacto quiere trabajar con nosotros como asesor o empresa. Lo atiende '.$quien
+            .': no lo tomes ni le escribas por aquí. La IA ya lo está orientando y a esa persona se le avisa por WhatsApp.';
+    }
+
     /** Quién atiende a este prospecto según cuántas personas maneja. */
     public function responsable(int $aliadoId, int $personas): ?array
     {

@@ -67,14 +67,29 @@ class WhatsappResponderIaJob implements ShouldQueue
             ->latest('id')
             ->first();
 
+        // Pendientes = lo que llegó DESPUÉS del último mensaje que ya se le pasó al modelo. Antes
+        // se comparaba contra la hora de la última respuesta del bot, y un mensaje que entraba
+        // mientras la IA generaba (ej. «Si» y 10 s después «20») quedaba con hora anterior a esa
+        // respuesta: se daba por atendido y nunca se respondió (visto el 6-oct-2026).
+        $claveUltimoAtendido = "wa_ia_ultimo_atendido_{$conversacion->id}";
+        $ultimoAtendidoId = (int) Cache::get($claveUltimoAtendido, 0);
+        $ultimoUsuario = IaMensaje::where('conversacion_id', $iaConversacion->id)
+            ->where('rol', 'user')
+            ->latest('id')
+            ->first();
+
         $mensajesPendientes = WhatsappMensaje::where('conversacion_id', $conversacion->id)
             ->where('direccion', 'entrante')
             ->whereIn('tipo', ['text', 'button'])
-            ->when($ultimaRespuesta, fn ($q) => $q->where('created_at', '>', $ultimaRespuesta->created_at))
+            ->when($ultimoAtendidoId > 0, fn ($q) => $q->where('id', '>', $ultimoAtendidoId))
+            ->when($ultimoAtendidoId === 0 && $ultimoUsuario, fn ($q) => $q->where('created_at', '>', $ultimoUsuario->created_at))
+            ->when($ultimoAtendidoId === 0 && ! $ultimoUsuario && $ultimaRespuesta, fn ($q) => $q->where('created_at', '>', $ultimaRespuesta->created_at))
             ->orderBy('id')
-            ->get(['contenido', 'wa_message_id']);
+            ->get(['id', 'contenido', 'wa_message_id']);
 
         if ($mensajesPendientes->isEmpty()) return;
+
+        Cache::put($claveUltimoAtendido, (int) $mensajesPendientes->last()->id, now()->addDays(30));
 
         $textoUsuario = $mensajesPendientes->pluck('contenido')->implode("\n");
         $ultimoWaMessageId = $mensajesPendientes->last()->wa_message_id;

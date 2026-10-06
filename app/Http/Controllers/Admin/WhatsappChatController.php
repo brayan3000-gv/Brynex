@@ -189,6 +189,10 @@ class WhatsappChatController extends Controller
 
         $tipo = $request->input('tipo', 'text');
 
+        if ($motivo = app(\App\Services\ProspectoAliadoService::class)->porQueNoPuedeAtender(Auth::user(), $conversacion)) {
+            return response()->json(['ok' => false, 'error' => $motivo], 403);
+        }
+
         // ── Validación según tipo ──────────────────────────────────────
         $rules = ['tipo' => 'required|in:text,image,audio,document,template'];
 
@@ -498,8 +502,11 @@ class WhatsappChatController extends Controller
         ]);
 
         if ($validated['user_id']) {
-            $conversacion->asignarA($validated['user_id']);
             $usuario = User::find($validated['user_id']);
+            if ($motivo = app(\App\Services\ProspectoAliadoService::class)->porQueNoPuedeAtender($usuario, $conversacion)) {
+                return response()->json(['ok' => false, 'error' => $motivo], 403);
+            }
+            $conversacion->asignarA($validated['user_id']);
             $msg = "Conversación asignada a {$usuario->nombre}";
         } else {
             $conversacion->liberar();
@@ -527,6 +534,11 @@ class WhatsappChatController extends Controller
 
         $validated = $request->validate(['activo' => 'required|boolean']);
         $iaActivaAliado = IaConfiguracionAliado::where('aliado_id', $alidoId)->value('activo_whatsapp') ?? false;
+
+        // Un prospecto aliado lo toma solo quien lo atiende según su tamaño (config/alianzas.php).
+        if (! $validated['activo'] && ($motivo = app(\App\Services\ProspectoAliadoService::class)->porQueNoPuedeAtender(Auth::user(), $conversacion))) {
+            return response()->json(['ok' => false, 'error' => $motivo], 403);
+        }
 
         if ($validated['activo']) {
             $conversacion->activarBot();

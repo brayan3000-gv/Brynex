@@ -1190,6 +1190,8 @@ function chatApp() {
                 }
 
                 if (data.mensaje && data.mensaje.includes('apagado')) alert(data.mensaje);
+            } else if (data.error) {
+                alert(data.error);
             }
         },
 
