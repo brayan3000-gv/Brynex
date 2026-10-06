@@ -971,6 +971,17 @@
         var seccion = destino && destino.closest('section');
         if (seccion && getComputedStyle(seccion).display === 'none') fijarPerfil('todos');
     });
+    // Enlace con el número puesto (lo manda la IA de WhatsApp): ?personas=40&perfil=asesor
+    try {
+        var qs = new URLSearchParams(location.search);
+        var np = parseInt(qs.get('personas'), 10);
+        if (np > 0) {
+            poner('s-n', 's-n-r', np); sel.n = Math.min(np, 20000);
+            if (qs.get('perfil') === 'empresa' || qs.get('perfil') === 'asesor') sel.forzado = qs.get('perfil');
+            poner('a-clientes', 'a-clientes-r', sel.n); asesor();
+            poner('q-afiliados', 'q-afiliados-r', sel.n); calcular();
+        }
+    } catch (e) {}
     pintarSelector();
 })();
 </script>

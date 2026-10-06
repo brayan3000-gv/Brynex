@@ -752,6 +752,60 @@ class WhatsappChatController extends Controller
         ]);
     }
 
+    /**
+     * Prospectos que quieren trabajar con el aliado (asesores y empresas): qué dijeron
+     * ser, cuántas personas manejan, qué les sugirió la IA y cómo va cada conversación.
+     * Lo marca la herramienta perfilar_aliado o el comando whatsapp:perfil-aliado.
+     */
+    public function prospectosAliados(Request $request)
+    {
+        $alidoId = (int) session('aliado_id_activo');
+        $tipo = $request->get('tipo');
+        $desde = $request->get('desde');
+
+        $q = WhatsappConversacion::delAliado($alidoId)
+            ->whereNotNull('perfil_aliado')
+            ->with('asignado')
+            ->orderByDesc('perfil_aliado_at');
+        if ($tipo && array_key_exists($tipo, \App\Services\ProspectoAliadoService::TIPOS)) {
+            $q->where('perfil_aliado', $tipo);
+        }
+        if ($desde) {
+            $q->where('perfil_aliado_at', '>=', $desde);
+        }
+        $prospectos = $q->get();
+
+        // Cuánto tardó la primera respuesta humana desde el primer mensaje del prospecto,
+        // y cuándo fue el último mensaje de cada lado. Una sola consulta para todas.
+        $ids = $prospectos->pluck('id')->all();
+        $tiempos = $ids ? collect(DB::select("
+            select conversacion_id,
+                   min(case when direccion = 'entrante' then created_at end) primer_cliente,
+                   min(case when direccion = 'saliente' and (es_bot = 0 or es_bot is null) and tipo <> 'nota' then created_at end) primer_humano,
+                   max(case when direccion = 'entrante' then created_at end) ultimo_cliente,
+                   max(case when direccion = 'saliente' then created_at end) ultimo_nuestro
+            from whatsapp_mensajes where conversacion_id in (".implode(',', array_map('intval', $ids)).")
+            group by conversacion_id"))->keyBy('conversacion_id') : collect();
+
+        foreach ($prospectos as $p) {
+            $t = $tiempos->get($p->id);
+            $p->primer_humano_min = ($t && $t->primer_cliente && $t->primer_humano)
+                ? max(0, (int) round((strtotime($t->primer_humano) - strtotime($t->primer_cliente)) / 60)) : null;
+            $p->sin_respuesta_humana = ! ($t && $t->primer_humano);
+            $p->esperando_a_nosotros = $t && $t->ultimo_cliente && (! $t->ultimo_nuestro || $t->ultimo_cliente > $t->ultimo_nuestro);
+        }
+
+        $resumen = [
+            'total' => $prospectos->count(),
+            'asesores' => $prospectos->where('perfil_aliado', 'asesor')->count(),
+            'empresas' => $prospectos->where('perfil_aliado', 'empresa')->count(),
+            'personas' => (int) $prospectos->sum('personas_declaradas'),
+            'sin_humano' => $prospectos->where('sin_respuesta_humana', true)->count(),
+        ];
+
+        return view('admin.whatsapp.prospectos-aliados', compact('prospectos', 'resumen', 'tipo', 'desde'));
+    }
+
     // ── Helpers privados ─────────────────────────────────────────────
 
     /**
@@ -905,6 +959,7 @@ class WhatsappChatController extends Controller
             // Sin esta, ventanaActiva() da siempre false y el chip de espera marca
             // «vencida» a gente que escribió hace una hora.
             'ventana_activa_hasta', 'asignado_at',
+            'perfil_aliado', 'personas_declaradas', 'perfil_sugerencia',
         ];
     }
 
@@ -949,6 +1004,12 @@ class WhatsappChatController extends Controller
             'tipo_contacto'            => $c->tipo_contacto,
             'tipo_label'               => WhatsappTipoContacto::ETIQUETAS[$c->tipo_contacto] ?? null,
             'desde_marketing'          => $c->desde_marketing,
+            'perfil_aliado'            => $c->perfil_aliado,
+            'perfil_label'             => $c->perfil_aliado
+                ? '🤝 '.(\App\Services\ProspectoAliadoService::TIPOS[$c->perfil_aliado] ?? $c->perfil_aliado)
+                    .($c->personas_declaradas !== null ? ' · '.$c->personas_declaradas : '')
+                : null,
+            'perfil_sugerencia'        => $c->perfil_sugerencia,
             'url_show'                 => route('admin.whatsapp.chat.show', $c->id),
         ] + $this->esperaSidebar($c);
     }

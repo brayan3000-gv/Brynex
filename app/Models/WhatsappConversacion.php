@@ -30,6 +30,7 @@ class WhatsappConversacion extends BaseModel
         'seguimiento_enviado_at',
         'pendiente_atencion',
         'pendiente_motivo',
+        'perfil_aliado', 'personas_declaradas', 'perfil_sugerencia', 'perfil_aliado_at', 'perfil_avisado_a',
         'ultimo_mensaje_at',
         'ventana_activa_hasta',
         'total_mensajes_no_leidos',
@@ -65,6 +66,8 @@ class WhatsappConversacion extends BaseModel
     protected $casts = [
         'ultimo_mensaje_at'         => 'datetime',
         'asignado_at'               => 'datetime',
+        'perfil_aliado_at'          => 'datetime',
+        'personas_declaradas'       => 'integer',
         'ventana_activa_hasta'      => 'datetime',
         'total_mensajes_no_leidos'  => 'integer',
         'bot_activo'                => 'boolean',

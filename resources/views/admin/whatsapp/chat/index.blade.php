@@ -270,6 +270,7 @@
                 </a>
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'mias', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'mias' ? 'active' : '' }}">👤 Míos</a>
+                <a href="{{ route('admin.whatsapp.prospectos_aliados') }}" class="sidebar-tab" title="Asesores y empresas que escribieron para trabajar con nosotros">🤝 Aliados</a>
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'ia', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'ia' ? 'active' : '' }}">🤖 IA
                     @if($totalIa > 0)<span class="sidebar-badge" style="margin-left:.25rem;">{{ $totalIa }}</span>@endif
@@ -320,6 +321,11 @@
                                 <span class="tipo-chip t-{{ $conv->tipo_contacto }}"
                                       title="{{ $conv->desde_marketing ? 'Llegó por marketing: ' . ($conv->origen_campana ?: 'campaña o pieza publicada') : '' }}">
                                     {{ $conv->desde_marketing ? '📣 ' : '' }}{{ \App\Services\WhatsappTipoContacto::ETIQUETAS[$conv->tipo_contacto] }}
+                                </span>
+                            @endif
+                            @if($conv->perfil_aliado)
+                                <span class="tipo-chip" style="background:#ede9fe;color:#5b21b6" title="{{ $conv->perfil_sugerencia }}">
+                                    🤝 {{ \App\Services\ProspectoAliadoService::TIPOS[$conv->perfil_aliado] ?? $conv->perfil_aliado }}{{ $conv->personas_declaradas !== null ? ' · '.$conv->personas_declaradas : '' }}
                                 </span>
                             @endif
                         </div>

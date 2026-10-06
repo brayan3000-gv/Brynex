@@ -209,6 +209,9 @@
                                 <span class="tipo-chip" :class="'t-' + c.tipo_contacto"
                                       x-text="(c.desde_marketing ? '📣 ' : '') + c.tipo_label"></span>
                             </template>
+                            <template x-if="c.perfil_label">
+                                <span class="tipo-chip" style="background:#ede9fe;color:#5b21b6" :title="c.perfil_sugerencia" x-text="c.perfil_label"></span>
+                            </template>
                         </div>
                         <div class="conv-preview">
                             <template x-if="c.pendiente_atencion">
@@ -262,6 +265,9 @@
                     <template x-if="conversacion.tipo_contacto">
                         <span class="tipo-chip" :class="'t-' + conversacion.tipo_contacto"
                               x-text="(conversacion.desde_marketing ? '📣 ' : '') + conversacion.tipo_label"></span>
+                    </template>
+                    <template x-if="conversacion.perfil_label">
+                        <span class="tipo-chip" style="background:#ede9fe;color:#5b21b6" :title="conversacion.perfil_sugerencia" x-text="conversacion.perfil_label"></span>
                     </template>
                 </div>
                 <div class="chat-contact-sub">

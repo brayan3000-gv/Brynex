@@ -1301,6 +1301,8 @@ Route::middleware('auth')->group(function () {
         // el JS pierde la conversación— reventaba con un 500 al recargar.
         Route::middleware('permiso:whatsapp.ver')->group(function () use ($chat) {
             Route::get('chat', [$chat, 'index'])->name('chat.index');
+            // Quiénes escribieron para trabajar con nosotros (asesores y empresas) y cómo van.
+            Route::get('prospectos-aliados', [$chat, 'prospectosAliados'])->name('prospectos_aliados');
             Route::get('chat/{id}', [$chat, 'show'])->name('chat.show')->whereNumber('id');
             Route::get('chat/{id}/api-mensajes', [$chat, 'apiMensajes'])->name('chat.api_mensajes')->whereNumber('id');
             Route::get('chat/{id}/api-sidebar', [$chat, 'apiConversacionSidebar'])->name('chat.api_sidebar')->whereNumber('id');

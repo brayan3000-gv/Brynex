@@ -3,6 +3,7 @@
 namespace App\Services\Ia\Tools;
 
 use App\Models\WhatsappConversacion;
+use App\Services\ProspectoAliadoService;
 
 /**
  * Solo disponible en el canal WhatsApp. Transfiere la conversación a un humano:
@@ -35,9 +36,25 @@ class HablarConAsesorTool implements IaToolInterface
 
     public function ejecutar(array $input, array $contexto): array
     {
+        $responsable = null;
         if (!empty($contexto['wa_conversacion_id'])) {
             $motivo = trim((string) ($input['motivo'] ?? '')) ?: 'El cliente pidió hablar con un asesor.';
-            WhatsappConversacion::find($contexto['wa_conversacion_id'])?->escalarAHumano($motivo);
+            $conv = WhatsappConversacion::find($contexto['wa_conversacion_id']);
+            // Un prospecto que quiere trabajar con nosotros va a quien lo atiende según su tamaño,
+            // no al inbox general; el resto sigue el camino de siempre.
+            $responsable = $conv && empty($contexto['modo_prueba'])
+                ? app(ProspectoAliadoService::class)->pasarAlResponsable($conv, $motivo)
+                : null;
+            if ($conv && ! $responsable && empty($contexto['modo_prueba'])) {
+                $conv->escalarAHumano($motivo);
+            }
+        }
+        if ($responsable) {
+            return [
+                'ok'      => true,
+                'mensaje' => "{$responsable['nombre']} quedó avisado y va a continuar esta conversación por este mismo WhatsApp. "
+                    . 'Dile al cliente SOLO eso, en una o dos frases. NO prometas día ni hora ni digas que algo quedó agendado.',
+            ];
         }
 
         // Lo que el modelo diga después sale de aquí más que de las reglas generales del prompt:

@@ -27,6 +27,7 @@ use App\Services\Ia\Tools\EnviarTablaPlanesTool;
 use App\Services\Ia\Tools\HablarConAsesorTool;
 use App\Services\Ia\Tools\IaToolInterface;
 use App\Services\Ia\Tools\NoContactarTool;
+use App\Services\Ia\Tools\PerfilarAliadoTool;
 use App\Services\Ia\Tools\PreguntarEntrenadorTool;
 use Illuminate\Support\Facades\Log;
 
@@ -239,6 +240,7 @@ class AsistenteIaService
         $tools[] = new NoContactarTool;
         $tools[] = new ChequeoSeguridadSocialTool;
         $tools[] = new EnviarTablaPlanesTool;
+        $tools[] = new PerfilarAliadoTool;
 
         return $tools;
     }
@@ -633,24 +635,10 @@ class AsistenteIaService
 
             ## ⚠️ Este contacto llegó por un anuncio para ASESORES (pieza #{$piezaOrigen->id})
 
-            NO es alguien que quiera afiliarse: es un asesor que ya vende seguridad social y tiene
-            su propia cartera. Está viendo si le conviene trabajar con nosotros.
-
-            - NO le cotices, NO le preguntes qué cobertura necesita, NO le mandes la tabla de planes.
-              Nada de eso aplica: él ya sabe cómo funciona el negocio.
-            - Salúdalo reconociendo a qué vino y PREGÚNTALE CUÁNTOS CLIENTES MANEJA HOY. Es el dato
-              que define la conversación y lo que hay que llevarse de este primer contacto.
-            - Lo que ofrecemos, en corto: mejores comisiones y que NOSOTROS NOS ENCARGAMOS DE TODO
-              —afiliaciones, cobros automáticos, incapacidades, planillas— con la plataforma de
-              BRYNEX.co. No tiene que poner razones sociales propias, no hace papeleo y todo sale en
-              tiempo récord. Él solo consigue clientes nuevos; lo operativo corre por nuestra cuenta.
-            - Y si YA TIENE SUFICIENTES CLIENTES y quiere independizarse, también lo ayudamos a montar
-              SU PROPIA EMPRESA y le damos la plataforma para manejarla. Menciónalo solo si él abre esa
-              puerta o si el número de clientes que dice es alto; no arranques por ahí.
-            - En cuanto tengas el número de clientes —o si insiste en hablar de condiciones o
-              comisiones concretas— PÁSALO al 3117762689: ahí se cierra directamente. Dilo con esas
-              palabras, dale el número completo y explícale que ahí lo atienden para su caso.
-            - NUNCA inventes porcentajes de comisión ni condiciones. Ese acuerdo lo hace una persona.
+            NO es alguien que quiera afiliarse: ya vende seguridad social o tiene gente a cargo y está
+            viendo si le conviene trabajar con nosotros. Salúdalo reconociendo a qué vino, en media línea,
+            y sigue el bloque «Quienes quieren trabajar con nosotros» de abajo. NO le cotices ni le mandes
+            la tabla de planes.
 
             ASESOR;
         } elseif ($piezaOrigen && ! $esCliente && ! $empresa) {
@@ -722,6 +710,38 @@ class AsistenteIaService
             PIEZA;
         }
 
+        // Quien quiere TRABAJAR con nosotros no es un cliente: hoy el guion lo frenaba en «¿cuántos
+        // clientes manejas?» y lo mandaba a llamar; de 8 que llegaron así en sep-oct 2026 ninguno cerró.
+        $contextoAliados = (! $esCliente && ! $empresa) ? <<<ALIADOS
+
+        ## Quienes quieren TRABAJAR CON NOSOTROS (asesores, empresas aliadas, empleadores)
+        Aplica si dice que es asesor, que hace o vende afiliaciones, que tiene cartera o clientes, que
+        pregunta por comisiones, alianzas o cómo trabajar con nosotros, o que tiene una empresa con
+        empleados. Hay tres caminos y tu primer trabajo es saber cuál es:
+        - ASESOR: trabaja por su cuenta y afilia a SUS clientes bajo la empresa de {$nombreAliado}. No paga
+          plataforma; gana la mitad de cada afiliación y un porcentaje de la administración mensual que sube
+          con su cartera.
+        - EMPRESA ALIADA: tiene su propia empresa, quiere su marca y nuestra plataforma. Es para 100 afiliados
+          o más; con menos le conviene empezar como asesor.
+        - EMPLEADOR: un negocio que quiere afiliar a SUS PROPIOS trabajadores. Es un cliente, no un aliado:
+          cotízale con cotizar_plan como dependientes y pásalo con hablar_con_asesor cuando quiera avanzar.
+        Cómo llevarlo:
+        - Si no es obvio, pregunta con naturalidad y en UNA sola pregunta si trabaja por su cuenta o tiene
+          empresa, y cuántas personas maneja hoy. Si ya lo dijo, no lo repitas.
+        - En cuanto tengas tipo y cantidad, llama perfilar_aliado EN ESE MISMO TURNO. Te devuelve el camino,
+          las cifras públicas de brynex.co/aliados y el enlace con su número puesto. Usa SOLO esas cifras:
+          nunca inventes porcentajes, precios ni condiciones, y no negocies.
+        - Responde concreto en el mismo turno: el camino que le conviene, UNA cifra que le sirva (lo que
+          ganaría al mes o lo que vale su alianza) y el enlace para que juegue con la calculadora. Después
+          sigue conversando: las dudas se responden con lo que trajo la herramienta o buscar_conocimiento.
+        - NO lo mandes a llamar a ningún teléfono ni le digas que «ahí lo atienden»: la conversación sigue
+          por aquí. La herramienta te dice qué persona del equipo quedó avisada y le va a escribir por este
+          mismo WhatsApp; dilo así. Solo das un número si la herramienta lo trae, y como opción.
+        - Cuando quiera cerrar, pida condiciones distintas, o pregunte algo que la herramienta no cubre, usa
+          hablar_con_asesor con el resumen (tipo, personas, qué le interesa) y despídete en una frase.
+
+        ALIADOS : '';
+
         $contextoCampana = '';
         // Una plantilla de servicio (UTILITY: cobro, planilla, notificación) se evalúa ANTES
         // que la campaña de marketing que originó la conversación: si le mandamos un cobro
@@ -769,7 +789,7 @@ class AsistenteIaService
         Eres {$nombreBot}, asesora comercial experta en seguridad social de "{$nombreAliado}", atendiendo por
         WhatsApp a un cliente o prospecto externo. Hoy es {$fecha}. Preséntate por tu nombre si es natural en el
         saludo inicial, y si te preguntan quién eres, responde que eres {$nombreBot}, el asistente virtual.
-        {$contextoContacto}{$contextoPieza}{$contextoCampana}
+        {$contextoContacto}{$contextoPieza}{$contextoAliados}{$contextoCampana}
         ## Cómo cotizar (usa cotizar_plan) — simplifica al máximo, el cliente casi nunca sabe estos términos:
         - Si pregunta por planes o precios EN GENERAL, sin haber dicho aún qué componentes quiere (ej. "¿qué
           planes tienen?", "quiero info de precios", "cuánto cuesta afiliarme"), arranca la conversación con
