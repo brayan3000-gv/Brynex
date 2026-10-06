@@ -2942,7 +2942,13 @@ async function cargarEstadoEnlace() {
         });
 
         // Si ya se liquidó este periodo, mostrarlo en vez de arrancar en blanco.
-        const yaLiquidado = data.operadores.find(o => o.planilla);
+        // Manda la planilla liquidada; si no hay, el intento más reciente —el
+        // del operador al que se le dio clic—. Antes salía el del primer
+        // operador de la lista, y un error viejo de Simple tapaba la planilla
+        // ya liquidada en Enlace.
+        const conIntento = data.operadores.filter(o => o.planilla);
+        const yaLiquidado = conIntento.find(o => o.planilla.estado === 'validada' && o.planilla.numero_planilla)
+            || conIntento.sort((a, b) => (b.planilla.fecha || '').localeCompare(a.planilla.fecha || ''))[0];
         if (yaLiquidado) {
             // En la E-1 `planilla` es el paso 1. Si ya está pagado y la
             // corrección espera pago, lo que hay que mostrar —total y enlace
