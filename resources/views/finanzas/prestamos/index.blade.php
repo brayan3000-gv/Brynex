@@ -5,7 +5,15 @@
 
 @section('contenido')
 @include('finanzas.partials._responsive_fin')
-<div class="finanzas-container" x-data="{ buscar: '' }">
+{{-- El buscador filtra mientras se escribe: cada palabra escrita debe aparecer
+     en el nombre, la cédula o el celular, sin importar mayúsculas ni tildes. --}}
+<div class="finanzas-container" x-data="{
+    buscar: '',
+    coincide(texto) {
+        const palabras = this.buscar.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+        return palabras.every(p => texto.includes(p));
+    }
+}">
 
     @component('finanzas.partials._header_banner', [
         'titulo' => '🤝 Préstamos a Terceros',
@@ -43,11 +51,8 @@
             <input type="text" 
                    x-model="buscar" 
                    placeholder="Buscar deudor por nombre, cédula o celular..." 
-                   style="width: 100%; padding: 0.6rem 0.9rem 0.6rem 2.2rem; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 0.85rem; outline: none; box-sizing: border-box;"
-                   @input="buscar = $event.target.value">
-        </div>
-        <div x-show="buscar.length > 0 && buscar.length <= 5" x-cloak style="font-size: 0.7rem; color: #64748b; margin-top: 0.25rem; font-weight: 500;">
-            ⚠️ Escribe más de 5 caracteres para comenzar a filtrar...
+                   autofocus
+                   style="width: 100%; padding: 0.6rem 0.9rem 0.6rem 2.2rem; border-radius: 10px; border: 1px solid #cbd5e1; font-size: 0.85rem; outline: none; box-sizing: border-box;">
         </div>
     </div>
 
@@ -108,10 +113,8 @@
                          });
                      }
                  }"
-                 x-show="buscar.length <= 5 || 
-                         '{{ nombre_oracion(Str::lower(Str::ascii($p->nombre_deudor))) }}'.includes(buscar.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()) || 
-                         '{{ $p->cedula_deudor }}'.includes(buscar) || 
-                         '{{ $p->telefono_deudor }}'.includes(buscar)"
+                 data-buscar="{{ Str::lower(Str::ascii($p->nombre_deudor . ' ' . $p->cedula_deudor . ' ' . $p->telefono_deudor)) }}"
+                 x-show="coincide($el.dataset.buscar)"
                  style="border-top: 4px solid {{ $colorMora }}">
                 <div class="pc-header">
                     <div>
