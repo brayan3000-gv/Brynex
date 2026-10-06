@@ -67,7 +67,7 @@ class PerfilarAliadoTool implements IaToolInterface
             'enlace' => $r['url'],
             'instrucciones' => trim(($r['camino'] === 'cliente' ? '' : 'Responde con el camino y las cifras por unidad, en lenguaje natural y breve, y pásale el enlace para que juegue con la calculadora. ')
                 .'TÚ sigues atendiendo: NO le digas que alguien del equipo le va a escribir ni le des ningún teléfono. '
-                .'Usa solo estas cifras; si pide hablar con una persona, cerrar, o condiciones distintas, ahí sí usa hablar_con_asesor.'),
+                .'Usa solo estas cifras; si pregunta cómo empezar, ofrécele una reunión virtual; si la acepta, pide hablar con una persona o condiciones distintas, ahí sí usa hablar_con_asesor.'),
         ];
     }
 }
