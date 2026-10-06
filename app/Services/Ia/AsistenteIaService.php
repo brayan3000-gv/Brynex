@@ -111,6 +111,14 @@ class AsistenteIaService
             ? \App\Models\Publicacion::find($waConversacion->origen_publicacion_id)
             : null;
 
+        // Prospecto que quiere trabajar con nosotros: la IA necesita saber dónde quedó la
+        // conversación, incluido lo que escribió una persona del equipo (eso no está en su
+        // propio historial), para retomar sin repetir preguntas ni prometer lo mismo otra vez.
+        $prospectos = app(\App\Services\ProspectoAliadoService::class);
+        $retomaAliado = ($waConversacion && $prospectos->esProspectoAliado($waConversacion))
+            ? $prospectos->resumenRetoma($waConversacion)
+            : '';
+
         $aliado = Aliado::find($alidoId);
         $systemPrompt = $this->construirSystemPromptWhatsapp(
             $aliado?->nombre ?? 'nuestra empresa',
@@ -120,7 +128,8 @@ class AsistenteIaService
             $clienteInfo,
             $campana,
             $ultimoEnvio,
-            $piezaOrigen
+            $piezaOrigen,
+            $retomaAliado
         );
         $tools = $this->construirToolsWhatsapp($credenciales);
         // modo_prueba: usado por el simulador de conversación (/brynex/ia/simulador) para que las
@@ -336,6 +345,7 @@ class AsistenteIaService
         }
 
         return [
+            'clave' => $plantilla->nombre,
             'nombre' => $plantilla->nombre_display ?: $plantilla->nombre,
             'categoria' => $plantilla->categoria,
             'texto' => $this->renderizarCuerpoPlantilla($plantilla->cuerpo, $mensaje->plantilla_parametros ?? []),
@@ -584,7 +594,8 @@ class AsistenteIaService
         array $clienteInfo = [],
         ?MarketingCampana $campana = null,
         ?array $ultimoEnvio = null,
-        ?\App\Models\Publicacion $piezaOrigen = null
+        ?\App\Models\Publicacion $piezaOrigen = null,
+        string $retomaAliado = ''
     ): string {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
         $esCliente = $clienteInfo['es_cliente'] ?? false;
@@ -745,6 +756,18 @@ class AsistenteIaService
 
         ALIADOS : '';
 
+        $contextoRetoma = $retomaAliado !== '' ? <<<RETOMA
+
+        ## Dónde quedó esta conversación (léelo antes de responder)
+        {$retomaAliado}
+        Retoma desde ahí: no vuelvas a preguntar lo que ya dijo (si ya se sabe que es asesor o
+        empresa y cuántas personas maneja, llama perfilar_aliado de una con esos datos y entrégale la
+        respuesta concreta). Si le prometimos que alguien lo contactaría y no pasó, discúlpate en media
+        línea y dale ahora tú la información. Si vuelve tras la invitación «ya tenemos respuesta a tu
+        mensaje», lo primero que debe recibir es esa respuesta, no un saludo.
+
+        RETOMA : '';
+
         $contextoCampana = '';
         // Una plantilla de servicio (UTILITY: cobro, planilla, notificación) se evalúa ANTES
         // que la campaña de marketing que originó la conversación: si le mandamos un cobro
@@ -792,7 +815,7 @@ class AsistenteIaService
         Eres {$nombreBot}, asesora comercial experta en seguridad social de "{$nombreAliado}", atendiendo por
         WhatsApp a un cliente o prospecto externo. Hoy es {$fecha}. Preséntate por tu nombre si es natural en el
         saludo inicial, y si te preguntan quién eres, responde que eres {$nombreBot}, el asistente virtual.
-        {$contextoContacto}{$contextoPieza}{$contextoAliados}{$contextoCampana}
+        {$contextoContacto}{$contextoPieza}{$contextoAliados}{$contextoRetoma}{$contextoCampana}
         ## Cómo cotizar (usa cotizar_plan) — simplifica al máximo, el cliente casi nunca sabe estos términos:
         - Si pregunta por planes o precios EN GENERAL, sin haber dicho aún qué componentes quiere (ej. "¿qué
           planes tienen?", "quiero info de precios", "cuánto cuesta afiliarme"), arranca la conversación con
@@ -993,6 +1016,14 @@ class AsistenteIaService
             $bloque .= " Esto fue lo que le llegó, textualmente:\n\"\"\"\n{$ultimoEnvio['texto']}\n\"\"\"\n"
                 .'Léelo antes de responder: los datos que ya le dimos ahí (cuentas de pago, plazos, a qué '
                 .'número enviar el comprobante) son los que debes usar si pregunta por ellos, sin inventar otros.';
+        }
+
+        // La invitación a continuar no es un mensaje de cuenta: quien la toca quiere la respuesta
+        // que le prometimos. Sin esto, la regla de abajo le prohibía a la IA vender u orientar.
+        if (($ultimoEnvio['clave'] ?? null) === WhatsappPlantilla::SISTEMA_REABRIR) {
+            return $bloque.' Le dijimos que ya teníamos respuesta a su mensaje y tocó «Continuar»: no lo saludes '
+                .'como si llegara de cero ni le preguntes en qué puedes ayudar; entrégale de una la respuesta '
+                ."concreta a lo que había preguntado (mira «Dónde quedó esta conversación» si está) y sigue desde ahí.\n";
         }
 
         if (($ultimoEnvio['categoria'] ?? null) === 'UTILITY') {

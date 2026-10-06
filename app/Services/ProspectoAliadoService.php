@@ -147,6 +147,111 @@ class ProspectoAliadoService
             .': no lo tomes ni le escribas por aquí. La IA ya lo está orientando y a esa persona se le avisa por WhatsApp.';
     }
 
+    /**
+     * Lo que pasó antes en esta conversación, para que la IA retome sin repetir preguntas:
+     * incluye lo que escribieron las personas del equipo, que la IA no ve en su propio
+     * historial. Texto corto para el prompt.
+     */
+    public function resumenRetoma(WhatsappConversacion $conv, int $maximo = 12): string
+    {
+        $mensajes = \App\Models\WhatsappMensaje::where('conversacion_id', $conv->id)
+            ->orderByDesc('id')
+            ->limit($maximo)
+            ->get(['direccion', 'es_bot', 'tipo', 'contenido', 'created_at', 'usuario_id'])
+            ->reverse();
+        if ($mensajes->isEmpty()) {
+            return '';
+        }
+        $usuarios = \App\Models\User::whereIn('id', $mensajes->pluck('usuario_id')->filter()->unique())->pluck('nombre', 'id');
+        $lineas = [];
+        $humanos = 0;
+        foreach ($mensajes as $m) {
+            $texto = trim(preg_replace('/\s+/', ' ', (string) $m->contenido));
+            $texto = preg_replace('/^(🤖 )?\*[^*]+:\*\s*/u', '', $texto); // sin la firma «*Brygar:*» / «*Atendido por X:*»
+            if ($texto === '' && ! in_array($m->tipo, ['image', 'document', 'audio', 'video'], true)) {
+                continue;
+            }
+            if ($m->direccion === 'entrante') {
+                $quien = 'ÉL';
+            } elseif ($m->tipo === 'template') {
+                $quien = 'NOSOTROS (plantilla)';
+            } elseif ($m->es_bot) {
+                $quien = 'TÚ (IA)';
+            } else {
+                $humanos++;
+                $quien = 'NOSOTROS ('.($usuarios[$m->usuario_id] ?? 'una persona del equipo').')';
+            }
+            if (in_array($m->tipo, ['image', 'document', 'audio', 'video'], true)) {
+                $texto = "[{$m->tipo}] ".$texto;
+            }
+            $lineas[] = $m->created_at->format('d/m H:i')." {$quien}: ".mb_substr($texto, 0, 220);
+        }
+        $cabecera = 'Perfil guardado: '.($conv->perfil_aliado ? (self::TIPOS[$conv->perfil_aliado] ?? $conv->perfil_aliado) : 'sin definir')
+            .($conv->personas_declaradas !== null ? ", {$conv->personas_declaradas} personas" : '')
+            .($conv->perfil_sugerencia ? ", sugerido: {$conv->perfil_sugerencia}" : '')
+            .($conv->perfil_avisado_a ? ", avisado a {$conv->perfil_avisado_a}" : '').'.';
+        $nota = $humanos > 0
+            ? ' Una persona del equipo ya le escribió; si quedó de contactarlo y no se concretó, discúlpate en media línea y dale ahora tú la información concreta.'
+            : '';
+
+        return $cabecera."\nÚltimos mensajes (del más viejo al más nuevo):\n".implode("\n", $lineas).$nota;
+    }
+
+    /**
+     * Invita a continuar con la plantilla «ya tenemos respuesta a tu mensaje» y deja la
+     * conversación lista para que la IA la retome (bot activo, sin asignar, sin pendiente).
+     * Devuelve [ok, motivo].
+     */
+    public function reabrir(WhatsappConversacion $conv, bool $simular = false): array
+    {
+        if ($conv->ventanaActiva()) {
+            return ['ok' => false, 'motivo' => 'ventana abierta: se le puede escribir directo'];
+        }
+        if (\App\Models\MarketingBloqueado::estaBloqueado((int) $conv->aliado_id, $conv->wa_contact_id)) {
+            return ['ok' => false, 'motivo' => 'pidió no ser contactado'];
+        }
+        $config = \App\Models\WhatsappConfig::paraAliado((int) $conv->aliado_id);
+        if (! $config->credencialesCompletas()) {
+            return ['ok' => false, 'motivo' => 'sin credenciales de WhatsApp'];
+        }
+        $duenoCuenta = $config->usa_cuenta_brynex ? \App\Services\WhatsappBandejaCompartida::aliadoBandeja() : (int) $conv->aliado_id;
+        $plantilla = \App\Models\WhatsappPlantilla::delAliado($duenoCuenta)->aprobadas()->where('nombre', \App\Models\WhatsappPlantilla::SISTEMA_REABRIR)->first();
+        if (! $plantilla) {
+            return ['ok' => false, 'motivo' => 'la plantilla para reabrir no está aprobada'];
+        }
+        $yaInvitado = \App\Models\WhatsappMensaje::where('conversacion_id', $conv->id)->where('plantilla_id', $plantilla->id)->where('created_at', '>=', now()->subDays(7))->exists();
+        if ($yaInvitado) {
+            return ['ok' => false, 'motivo' => 'ya se le invitó a continuar en los últimos 7 días'];
+        }
+        if ($simular) {
+            return ['ok' => true, 'motivo' => 'se enviaría la invitación'];
+        }
+
+        $params = [\App\Models\Aliado::find($conv->aliado_id)?->nombre ?: 'nuestro equipo'];
+        $r = app(\App\Services\WhatsappApiService::class)->enviarTemplate($conv->wa_contact_id, $plantilla, $params, $config);
+        if (! ($r['ok'] ?? false)) {
+            return ['ok' => false, 'motivo' => 'Meta no aceptó el envío: '.($r['error'] ?? '')];
+        }
+        \App\Models\WhatsappMensaje::create([
+            'conversacion_id' => $conv->id,
+            'aliado_id' => $conv->aliado_id,
+            'wa_message_id' => $r['wa_message_id'] ?? null,
+            'direccion' => 'saliente',
+            'tipo' => 'template',
+            'contenido' => $plantilla->cuerpoRenderizado($params),
+            'plantilla_id' => $plantilla->id,
+            'plantilla_parametros' => $params,
+            'estado' => 'enviado',
+            'usuario_id' => null,
+        ]);
+        $conv->forceFill([
+            'bot_activo' => true, 'asignado_a' => null, 'asignado_at' => null, 'estado' => 'abierta',
+            'pendiente_atencion' => false, 'pendiente_motivo' => null, 'ultimo_mensaje_at' => now(),
+        ])->save();
+
+        return ['ok' => true, 'motivo' => 'invitación enviada; la IA retoma cuando toque «Continuar»'];
+    }
+
     /** Quién atiende a este prospecto según cuántas personas maneja. */
     public function responsable(int $aliadoId, int $personas): ?array
     {
