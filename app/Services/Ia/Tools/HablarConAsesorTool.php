@@ -50,10 +50,15 @@ class HablarConAsesorTool implements IaToolInterface
             }
         }
         if ($responsable) {
+            $numero = ($responsable['compartir'] ?? false) && ! empty($responsable['numero'])
+                ? " Si prefiere llamar, puede dar como opción el número {$responsable['numero']}."
+                : ' No le des ningún teléfono.';
+
             return [
                 'ok'      => true,
                 'mensaje' => "{$responsable['nombre']} quedó avisado y va a continuar esta conversación por este mismo WhatsApp. "
-                    . 'Dile al cliente SOLO eso, en una o dos frases. NO prometas día ni hora ni digas que algo quedó agendado.',
+                    . 'Dile al cliente SOLO eso, en una o dos frases.' . $numero
+                    . ' NO prometas día ni hora ni digas que algo quedó agendado.',
             ];
         }
 

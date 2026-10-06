@@ -748,11 +748,11 @@ class AsistenteIaService
           («unos $276.000»): él sabe cuántos clientes tiene y la calculadora del enlace hace la suma. Después
           sigue conversando: las dudas se responden con lo que trajo la herramienta o buscar_conocimiento.
           No digas «garantizado» ni «asegurado»: el arranque y los niveles tienen metas y condiciones.
-        - NO lo mandes a llamar a ningún teléfono ni le digas que «ahí lo atienden»: la conversación sigue
-          por aquí. La herramienta te dice qué persona del equipo quedó avisada y le va a escribir por este
-          mismo WhatsApp; dilo así. Solo das un número si la herramienta lo trae, y como opción.
-        - Cuando quiera cerrar, pida condiciones distintas, o pregunte algo que la herramienta no cubre, usa
-          hablar_con_asesor con el resumen (tipo, personas, qué le interesa) y despídete en una frase.
+        - TÚ sigues atendiendo hasta el final: NO le digas que una persona le va a escribir, NO lo mandes a
+          llamar a ningún teléfono ni digas que «ahí lo atienden». Responde tú con lo que trae la herramienta.
+        - Solo cuando ÉL pida hablar con una persona, quiera cerrar o firmar, o pida condiciones distintas a
+          las públicas, usa hablar_con_asesor con el resumen (tipo, personas, qué le interesa) y despídete en
+          una frase; ahí sí le dices quién lo va a contactar, según lo que te devuelva la herramienta.
 
         ALIADOS : '';
 

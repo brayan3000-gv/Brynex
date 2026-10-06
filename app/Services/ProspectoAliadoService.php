@@ -293,15 +293,19 @@ class ProspectoAliadoService
      * Aviso por WhatsApp a quien atiende, con el resumen. Una vez por responsable:
      * si el prospecto corrige la cantidad y cambia de responsable, se avisa al nuevo.
      */
-    public function avisar(WhatsappConversacion $conv, array $orientacion, array $responsable): bool
+    public function avisar(WhatsappConversacion $conv, array $orientacion, array $responsable, bool $traspaso = false): bool
     {
-        if ($conv->perfil_avisado_a === $responsable['nombre']) {
+        if (! $traspaso && $conv->perfil_avisado_a === $responsable['nombre']) {
             return true;
         }
-        $mensaje = ($conv->nombreMostrar() ?: 'Sin nombre').' ('.$conv->wa_contact_id.') · '
+        $quien = ($conv->nombreMostrar() ?: 'Sin nombre').' ('.$conv->wa_contact_id.') · '
             .strtolower(self::TIPOS[$conv->perfil_aliado] ?? $conv->perfil_aliado).' · '
-            .$conv->personas_declaradas.' personas · sugerido: '.$orientacion['sugerencia'].'. '
-            .'La IA lo está orientando; para concretar escríbele por el chat: '.route('admin.whatsapp.chat.show', $conv->id);
+            .$conv->personas_declaradas.' personas · sugerido: '.($orientacion['sugerencia'] ?? '').'. ';
+        // Al perfilar es solo para que sepa que existe: la IA sigue atendiendo y no hay que
+        // intervenir. Al pasarlo (el prospecto pidió una persona) sí le toca escribirle.
+        $mensaje = $traspaso
+            ? $quien.'PIDIÓ HABLAR CON UNA PERSONA: te toca escribirle por el chat: '.route('admin.whatsapp.chat.show', $conv->id)
+            : $quien.'La IA lo está atendiendo; no hace falta intervenir. Se te avisa si pide hablar con alguien. Chat: '.route('admin.whatsapp.chat.show', $conv->id);
 
         $ok = false;
         try {
@@ -337,7 +341,7 @@ class ProspectoAliadoService
             $datos += ['asignado_a' => $responsable['user_id'], 'asignado_at' => now(), 'estado' => 'asignada'];
         }
         $conv->forceFill($datos)->save();
-        $this->avisar($conv, ['sugerencia' => $conv->perfil_sugerencia ?? ''], $responsable);
+        $this->avisar($conv, ['sugerencia' => $conv->perfil_sugerencia ?? ''], $responsable, traspaso: true);
 
         return $responsable;
     }

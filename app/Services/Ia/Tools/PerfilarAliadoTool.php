@@ -60,20 +60,14 @@ class PerfilarAliadoTool implements IaToolInterface
             $conv->forceFill(['pendiente_motivo' => mb_substr('🤝 '.ucfirst($tipo).' · '.$personas.' personas · '.$input['detalle'], 0, 255)])->save();
         }
 
-        $resp = $r['responsable'] ?? null;
-        $quien = $resp
-            ? ($resp['compartir'] ?? false
-                ? "{$resp['nombre']} ya quedó avisado y le va a escribir por este mismo WhatsApp. Si el prospecto prefiere llamar, dale el número {$resp['numero']} como opción; no lo mandes a llamar."
-                : "{$resp['nombre']} ya quedó avisada y le va a escribir por este mismo WhatsApp. No le des ningún teléfono: la conversación sigue aquí.")
-            : '';
-
         return [
             'ok' => true,
             'camino' => $r['camino'],
             'resumen' => $r['resumen'],
             'enlace' => $r['url'],
-            'instrucciones' => trim(($r['camino'] === 'cliente' ? '' : 'Responde con el camino y UNA cifra que le sirva, en lenguaje natural y breve, y pásale el enlace para que juegue con la calculadora. ')
-                .$quien.' Usa solo estas cifras; lo que no esté aquí, lo responde la persona (hablar_con_asesor cuando quiera cerrar o negociar).'),
+            'instrucciones' => trim(($r['camino'] === 'cliente' ? '' : 'Responde con el camino y las cifras por unidad, en lenguaje natural y breve, y pásale el enlace para que juegue con la calculadora. ')
+                .'TÚ sigues atendiendo: NO le digas que alguien del equipo le va a escribir ni le des ningún teléfono. '
+                .'Usa solo estas cifras; si pide hablar con una persona, cerrar, o condiciones distintas, ahí sí usa hablar_con_asesor.'),
         ];
     }
 }
