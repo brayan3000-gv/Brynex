@@ -50,6 +50,15 @@ Reglas:
 - Decimales: sin punto decimal (ej: `150000` = `$150.000`)
 - Secuencia: registro de control → registros de cotizantes → registro de cierre
 
+### Sucursal del aportante (registro tipo 1, campos 12-13)
+La sucursal es **del aliado**, no de la empresa: una razón social prestada tiene
+una sucursal por aliado ante el operador (01 Brygar, 02 Fecop, 03 Luis López,
+04 Integra Duitama). Se configura en la ficha del aliado
+(`aliados.codigo_sucursal` / `nombre_sucursal`) y `SucursalOperador::aplicar($rs)`
+la pone en la razón social antes de generar el TXT y los Excel (NI, Aportes en
+Línea 1 y 2). Si el aliado no tiene, se usa la de la razón social. La razón
+social de independientes nunca lleva sucursal.
+
 ## Campos Calculados por `PilaCotizanteCalculator`
 
 ```php

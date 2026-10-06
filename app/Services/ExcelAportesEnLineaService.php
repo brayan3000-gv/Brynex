@@ -180,6 +180,8 @@ class ExcelAportesEnLineaService
         if (!$rs) {
             throw new \RuntimeException("Razón social {$razonSocialId} no encontrada.");
         }
+        // La sucursal ante el operador es la del aliado; la de la razón social solo si el aliado no tiene.
+        $rs = SucursalOperador::aplicar($rs);
 
         // Nombre ARL de la empresa
         $nombreArl = null;

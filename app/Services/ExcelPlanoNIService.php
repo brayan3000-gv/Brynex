@@ -191,6 +191,8 @@ class ExcelPlanoNIService
         if (!$rs) {
             throw new \RuntimeException("Razon social {$razonSocialId} no encontrada.");
         }
+        // La sucursal ante el operador es la del aliado; la de la razón social solo si el aliado no tiene.
+        $rs = SucursalOperador::aplicar($rs);
 
         // Operador seleccionado por el usuario (si pasa operador_id, busca ese; si no, el primero activo)
         $operadorId = $params['operador_id'] ?? null;

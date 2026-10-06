@@ -48,6 +48,8 @@ class Aliado extends BaseModel
         'brynex_fecha_inicio',
         'brynex_fecha_fin',
         'recibo_doble_copia',
+        'codigo_sucursal',
+        'nombre_sucursal',
     ];
 
     protected $casts = [

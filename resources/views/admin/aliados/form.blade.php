@@ -258,6 +258,30 @@
                 style="width:100%;max-width:420px;padding:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.85rem;font-family:inherit;">
         </div>
 
+        {{-- ── Sucursal ante el operador: es del aliado y vale para todas sus razones sociales ── --}}
+        <div style="margin-bottom:1.5rem;padding:1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;">
+            <div style="font-size:0.78rem;font-weight:700;color:#15803d;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.3rem;">
+                🏬 Sucursal ante el operador de planilla
+            </div>
+            <p style="font-size:0.72rem;color:#64748b;margin:0 0 0.8rem;">
+                La que tiene este aliado en Enlace (01 Brygar, 02 Fecop, 03 Luis López…). Los planos la usan en <strong>todas</strong> las razones sociales del aliado; si se deja vacía, usan la de cada razón social. No aplica a independientes.
+            </p>
+            <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;">
+                <div>
+                    <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Código</label>
+                    <input type="text" name="codigo_sucursal" maxlength="10" value="{{ old('codigo_sucursal', $aliado->codigo_sucursal ?? '') }}" placeholder="Ej: 02"
+                        style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;"
+                        onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
+                </div>
+                <div>
+                    <label style="display:block;font-size:0.78rem;font-weight:600;color:#475569;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.04em;">Nombre</label>
+                    <input type="text" name="nombre_sucursal" maxlength="40" value="{{ old('nombre_sucursal', $aliado->nombre_sucursal ?? '') }}" placeholder="Ej: FECOP"
+                        style="width:100%;padding:0.6rem 0.85rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.9rem;outline:none;font-family:inherit;text-transform:uppercase;"
+                        onfocus="this.style.borderColor='#3b82f6'" onblur="this.style.borderColor='#cbd5e1'">
+                </div>
+            </div>
+        </div>
+
         {{-- ── Afiliaciones BryNex ── --}}
         <div style="margin-bottom:1.5rem;padding:1rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;">
             <div style="font-size:0.78rem;font-weight:700;color:#0369a1;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.8rem;">

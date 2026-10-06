@@ -81,6 +81,16 @@ class AlidoController extends Controller
         return $data;
     }
 
+    /** Sucursal ante el operador: vacía queda en null (los planos usan la de la razón social). */
+    private function sucursal(array $data): array
+    {
+        $codigo = trim((string) ($data['codigo_sucursal'] ?? ''));
+        $data['codigo_sucursal'] = $codigo !== '' ? $codigo : null;
+        $data['nombre_sucursal'] = $codigo !== '' ? mb_strtoupper(trim((string) $data['nombre_sucursal'])) : null;
+
+        return $data;
+    }
+
     public function store(Request $request, CompresorLogoService $compresor)
     {
         $data = $request->validate([
@@ -95,6 +105,8 @@ class AlidoController extends Controller
             'departamento_id'      => 'nullable|integer|exists:departamentos,id',
             'municipio_id'         => 'nullable|integer|exists:ciudades,id',
             'eslogan'              => 'nullable|string|max:120',
+            'codigo_sucursal'      => 'nullable|string|max:10|regex:/^[A-Za-z0-9]+$/',
+            'nombre_sucursal'      => 'nullable|string|max:40|required_with:codigo_sucursal',
             'color_primario'       => 'nullable|string|max:10',
             'activo'               => 'boolean',
             'logo'                 => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
@@ -126,6 +138,7 @@ class AlidoController extends Controller
         }
         $data['logo_marca_recorte'] = array_filter($data['logo_marca_recorte'] ?? []) ?: null;
         $data = $this->nombreYUbicacion($data);
+        $data = $this->sucursal($data);
 
         $data['activo'] = $request->boolean('activo', true);
         $data['afiliaciones_brynex'] = $request->boolean('afiliaciones_brynex', false);
@@ -175,6 +188,8 @@ class AlidoController extends Controller
             'departamento_id'      => 'nullable|integer|exists:departamentos,id',
             'municipio_id'         => 'nullable|integer|exists:ciudades,id',
             'eslogan'              => 'nullable|string|max:120',
+            'codigo_sucursal'      => 'nullable|string|max:10|regex:/^[A-Za-z0-9]+$/',
+            'nombre_sucursal'      => 'nullable|string|max:40|required_with:codigo_sucursal',
             'color_primario'       => 'nullable|string|max:10',
             'activo'               => 'boolean',
             'logo'                 => 'nullable|image|mimes:png,jpg,jpeg,webp,svg|max:10240',
@@ -232,6 +247,7 @@ class AlidoController extends Controller
         }
         $data['logo_marca_recorte'] = array_filter($data['logo_marca_recorte'] ?? []) ?: null;
         $data = $this->nombreYUbicacion($data);
+        $data = $this->sucursal($data);
 
         $data['activo'] = $request->boolean('activo');
         $data['afiliaciones_brynex'] = $request->boolean('afiliaciones_brynex', false);
@@ -300,7 +316,8 @@ class AlidoController extends Controller
                 'razon_social' => $r->razon_social,
                 'nit' => $r->nit,
                 'estado' => $r->estado,
-                'sucursal' => $r->codigo_sucursal,
+                // La del aliado manda en los planos; la de la copia solo si el aliado no tiene.
+                'sucursal' => $aliado->codigo_sucursal ?: $r->codigo_sucursal,
                 've_claves' => (bool) $r->ve_claves,
                 'dueno' => $r->dueno,
                 'vigentes' => (int) ($vigentes[$r->id] ?? 0),

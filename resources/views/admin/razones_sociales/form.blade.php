@@ -475,6 +475,12 @@
                            value="{{ old('nombre_sucursal', $rs?->nombre_sucursal) }}"
                            placeholder="Nombre de la sucursal">
                 </div>
+                @php $sucursalPlano = $rs ? \App\Services\SucursalOperador::de($rs) : null; @endphp
+                @if($sucursalPlano && $sucursalPlano['origen'] === 'aliado')
+                    <div style="grid-column:1 / -1;font-size:.75rem;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.45rem .7rem">
+                        Los planos usan la sucursal del aliado: <strong>{{ $sucursalPlano['codigo'] }} {{ $sucursalPlano['nombre'] }}</strong>. La de aquí solo cuenta si el aliado deja la suya vacía.
+                    </div>
+                @endif
             </div>
         </div>
     </div>
