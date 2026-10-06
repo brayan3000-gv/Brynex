@@ -264,7 +264,7 @@
                 🏬 Sucursal ante el operador de planilla
             </div>
             <p style="font-size:0.72rem;color:#64748b;margin:0 0 0.8rem;">
-                La que tiene este aliado en Enlace (01 Brygar, 02 Fecop, 03 Luis López…). Los planos la usan en <strong>todas</strong> las razones sociales del aliado; si se deja vacía, usan la de cada razón social. No aplica a independientes.
+                La que tiene este aliado en Enlace (01 Brygar, 02 Fecop, 03 Luis López…). Los planos usan la de cada razón social y, si la razón social no tiene, <strong>esta</strong>. No aplica a independientes.
             </p>
             <div style="display:grid;grid-template-columns:140px 1fr;gap:1rem;">
                 <div>

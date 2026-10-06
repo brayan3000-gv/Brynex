@@ -168,7 +168,7 @@ class PlanoPilaTxtService
         if (! $rs) {
             throw new \RuntimeException("Razón social {$razonSocialId} no encontrada.");
         }
-        // La sucursal ante el operador es la del aliado; la de la razón social solo si el aliado no tiene.
+        // La sucursal es la de la razón social; si está vacía, la del aliado.
         $rs = SucursalOperador::aplicar($rs);
 
         $codigoArlRs = null;

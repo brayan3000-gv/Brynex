@@ -8,10 +8,10 @@ use Illuminate\Support\Facades\DB;
  * La sucursal con la que va una razón social en el plano.
  *
  * Una empresa prestada tiene una sucursal por aliado ante el operador (01
- * Brygar, 02 Fecop, 03 Luis López…), y es siempre la misma para todas las
- * empresas de ese aliado. Por eso manda la del aliado (`aliados.codigo_sucursal`
- * y `nombre_sucursal`); solo si el aliado no tiene una se usa la de la razón
- * social, como siempre.
+ * Brygar, 02 Fecop, 03 Luis López…), casi siempre la misma para todas las
+ * empresas de ese aliado. Manda la de la razón social, como siempre; si está
+ * vacía se usa la del aliado (`aliados.codigo_sucursal` y `nombre_sucursal`),
+ * para no tener que llenarla en cada copia.
  *
  * La razón social de independientes no tiene sucursal: cada persona se liquida
  * como aportante único, así que ahí no se pone la del aliado.
@@ -19,21 +19,21 @@ use Illuminate\Support\Facades\DB;
 class SucursalOperador
 {
     /**
-     * @return array{codigo: string, nombre: string, origen: 'aliado'|'razon_social'}
+     * @return array{codigo: string, nombre: string, origen: 'razon_social'|'aliado'|'ninguna'}
      */
     public static function de(object $rs): array
     {
-        $aliado = empty($rs->es_independiente) ? self::delAliado((int) ($rs->aliado_id ?? 0)) : null;
+        $codigo = trim((string) ($rs->codigo_sucursal ?? ''));
 
-        if ($aliado) {
-            return ['codigo' => $aliado->codigo_sucursal, 'nombre' => (string) $aliado->nombre_sucursal, 'origen' => 'aliado'];
+        if ($codigo !== '') {
+            return ['codigo' => $codigo, 'nombre' => trim((string) ($rs->nombre_sucursal ?? '')), 'origen' => 'razon_social'];
         }
 
-        return [
-            'codigo' => trim((string) ($rs->codigo_sucursal ?? '')),
-            'nombre' => trim((string) ($rs->nombre_sucursal ?? '')),
-            'origen' => 'razon_social',
-        ];
+        $aliado = empty($rs->es_independiente) ? self::delAliado((int) ($rs->aliado_id ?? 0)) : null;
+
+        return $aliado
+            ? ['codigo' => $aliado->codigo_sucursal, 'nombre' => $aliado->nombre_sucursal, 'origen' => 'aliado']
+            : ['codigo' => '', 'nombre' => '', 'origen' => 'ninguna'];
     }
 
     /**

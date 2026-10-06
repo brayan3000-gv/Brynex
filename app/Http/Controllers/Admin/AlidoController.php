@@ -316,8 +316,8 @@ class AlidoController extends Controller
                 'razon_social' => $r->razon_social,
                 'nit' => $r->nit,
                 'estado' => $r->estado,
-                // La del aliado manda en los planos; la de la copia solo si el aliado no tiene.
-                'sucursal' => $aliado->codigo_sucursal ?: $r->codigo_sucursal,
+                // La de la copia manda en los planos; si está vacía, la del aliado.
+                'sucursal' => $r->codigo_sucursal ?: $aliado->codigo_sucursal,
                 've_claves' => (bool) $r->ve_claves,
                 'dueno' => $r->dueno,
                 'vigentes' => (int) ($vigentes[$r->id] ?? 0),
