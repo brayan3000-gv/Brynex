@@ -75,21 +75,24 @@ class ProspectoAliadoService
             }
         }
         $admon = (int) $c['asesor']['admon_lista'];
-        $gana = (int) round($n * $admon * $pct / 100);
+        $porPersona = (int) round($admon * $pct / 100);
         $afil = (int) $c['asesor']['afiliacion_ejemplo'];
         $maximo = max($niveles);
 
+        // Valores por unidad, nunca un total proyectado: el dueño no quiere «unos $276.000 al
+        // mes», sino cuánto por cada cliente de administración y cuánto por cada afiliación.
         $resumen = ($tipo === 'empresa'
                 ? "Con {$n} personas todavía no le conviene una alianza (son desde {$umbral} afiliados y la plataforma dedicada cuesta mínimo $"
                     .number_format($c['min_plataforma'], 0, ',', '.')." al mes): le recomendamos el Plan Asesor, y cuando llegue a {$umbral} da el salto a su propia marca. "
                 : "Con {$n} personas su camino es el Plan Asesor: trabaja con la empresa de Brygar, sin pagar plataforma. ")
-            .'Gana la mitad de cada afiliación (de un plan de $'.number_format($afil, 0, ',', '.').' son $'.number_format($afil / 2, 0, ',', '.')
-            .' para él; el valor depende del plan) y un porcentaje de la administración mensual que sube con la cartera: '
+            .'Gana por dos lados. Por cada afiliación, la mitad del valor del plan: en un plan de $'.number_format($afil, 0, ',', '.').' son $'
+            .number_format($afil / 2, 0, ',', '.').' para él (depende del plan del cliente). Y por cada cliente, un porcentaje de la administración mensual de $'
+            .number_format($admon, 0, ',', '.').' que sube con la cartera: '
             .implode(', ', array_map(fn ($d, $p) => "{$p} % desde {$d}", array_keys($niveles), $niveles)).'. '
             .($n > 0
-                ? "Con {$n} personas estaría en el {$pct} %: unos $".number_format($gana, 0, ',', '.').' al mes de administración (sobre $'.number_format($admon, 0, ',', '.').' por persona), más las afiliaciones. '
+                ? "Con {$n} personas estaría en el {$pct} %: $".number_format($porPersona, 0, ',', '.')." al mes por cada cliente de administración. "
                 : '')
-            .($siguiente ? "Con {$siguiente['desde']} sube al {$siguiente['pct']} %. " : 'Ya está en el nivel más alto. ')
+            .($siguiente ? "Con {$siguiente['desde']} sube al {$siguiente['pct']} % ($".number_format($admon * $siguiente['pct'] / 100, 0, ',', '.').' por cliente). ' : 'Ya está en el nivel más alto. ')
             ."Los tres primeros meses arranca con el {$maximo} % mientras cumple las metas (10 personas al cierre del segundo mes y 20 al del tercero). "
             .($n < 5 ? 'Con menos de 5 personas empieza refiriendo (20 % durante 6 meses por cada cliente) y al llegar a 5 recibe su acceso al programa. ' : '')
             .($tipo === 'asesor' && $n >= $umbral ? "Con {$n} también le alcanza para una alianza con su propia marca, si la prefiere. " : '');

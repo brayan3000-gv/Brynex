@@ -731,8 +731,10 @@ class AsistenteIaService
         - En cuanto tengas tipo y cantidad, llama perfilar_aliado EN ESE MISMO TURNO. Te devuelve el camino,
           las cifras públicas de brynex.co/aliados y el enlace con su número puesto. Usa SOLO esas cifras:
           nunca inventes porcentajes, precios ni condiciones, y no negocies.
-        - Responde concreto en el mismo turno: el camino que le conviene, UNA cifra que le sirva (lo que
-          ganaría al mes o lo que vale su alianza) y el enlace para que juegue con la calculadora. Después
+        - Responde concreto en el mismo turno: el camino que le conviene, las cifras POR UNIDAD (cuánto
+          gana por cada cliente al mes de administración y cuánto por cada afiliación; o lo que vale su
+          alianza) y el enlace para que juegue con la calculadora. NUNCA le des un total proyectado al mes
+          («unos $276.000»): él sabe cuántos clientes tiene y la calculadora del enlace hace la suma. Después
           sigue conversando: las dudas se responden con lo que trajo la herramienta o buscar_conocimiento.
           No digas «garantizado» ni «asegurado»: el arranque y los niveles tienen metas y condiciones.
         - NO lo mandes a llamar a ningún teléfono ni le digas que «ahí lo atienden»: la conversación sigue
