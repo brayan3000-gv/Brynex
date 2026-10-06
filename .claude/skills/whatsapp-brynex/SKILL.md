@@ -141,6 +141,12 @@ resources/views/admin/whatsapp/
 - Informe **🤝 Aliados** en el inbox (`chat.prospectos_aliados`): tipo, personas, sugerencia, quién
   lo atiende, minutos hasta la primera respuesta humana y estado. Insignia morada en la lista y en
   el encabezado del chat. Marcar a mano: `whatsapp:perfil-aliado {conv} {tipo} {personas} [--avisar]`.
+- Reabrir en lote: `whatsapp:reabrir-prospectos --aliado=2 [--ids=…] [--aplicar]` manda la
+  plantilla `reabrir_conversacion` («ya tenemos respuesta a tu mensaje», botón Continuar) a los
+  prospectos aliados con ventana vencida y deja la conversación con la IA activa y sin asignar.
+  Al retomar, la IA recibe `ProspectoAliadoService::resumenRetoma()` (últimos mensajes con quién
+  los escribió, incluidas las personas del equipo) y esa plantilla NO activa el guion de
+  «mensaje de cuenta, no vender».
 - El enlace que manda la IA lleva `?personas=N&perfil=asesor|empresa`: brynex.co/aliados arranca
   con ese número puesto en su selector y sus calculadoras.
 
