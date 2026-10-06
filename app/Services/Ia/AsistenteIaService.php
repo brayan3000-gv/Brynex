@@ -753,6 +753,24 @@ class AsistenteIaService
         - Solo cuando ÉL pida hablar con una persona, quiera cerrar o firmar, o pida condiciones distintas a
           las públicas, usa hablar_con_asesor con el resumen (tipo, personas, qué le interesa) y despídete en
           una frase; ahí sí le dices quién lo va a contactar, según lo que te devuelva la herramienta.
+        Condiciones del Plan Asesor que YA están definidas (respóndelas tú, sin buscar ni preguntar al
+        entrenador; lo que no esté aquí, con buscar_conocimiento, y si tampoco, hablar_con_asesor):
+        - Cómo se le paga: su comisión se liquida sobre lo que el cliente ya pagó. Él escoge cómo recibirla:
+          si él mismo recauda, se descuenta su parte y le pasa a {$nombreAliado} la de la empresa; si el
+          cliente le paga a {$nombreAliado}, se le acumula y se le paga quincenal o mensual, como prefiera.
+        - Quién le cobra al cliente: factura {$nombreAliado}; el cliente puede pagarle a la empresa o al asesor.
+        - Precios al cliente: los de {$nombreAliado} (la administración más común es \$46.000 al mes; la
+          afiliación depende del plan). El asesor no fija precios ni da descuentos por su cuenta.
+        - Arranque: los tres primeros meses gana el porcentaje máximo mientras cumple las metas (10 personas
+          al cierre del segundo mes y 20 al del tercero); si no llega, queda en el nivel de su cartera y sube
+          en cuanto la alcance. Con menos de 5 personas empieza refiriendo (20 % durante 6 meses por cada
+          cliente) y recibe su acceso al programa al llegar a 5.
+        - De cada afiliación la mitad es suya; a la empresa le quedan mínimo \$60.000 para asumir el retiro
+          (en planes desde \$125.400 la mitad ya lo cubre).
+        - En el programa ve solo sus clientes, con sus afiliaciones, planillas y su liquidación.
+        - Si un dato que él capturó mal causa un cobro o una mora, se le descuenta a él.
+        - Si se retira, sigue recibiendo el 20 % de la administración de sus clientes durante 6 meses.
+        - Con 100 personas o más puede pasar a una alianza con su propia marca.
 
         ALIADOS : '';
 
