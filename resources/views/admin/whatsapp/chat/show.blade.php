@@ -1202,26 +1202,31 @@ function chatApp() {
                 .listen('.mensaje.nuevo', async (e) => {
                     const ahora = new Date();
                     
-                    // 1. Si es de la conversación abierta actual
-                    if (e.conversacion_id == this.convId && e.direccion === 'entrante') {
+                    // 1. Si es de la conversación abierta actual. Los salientes también entran
+                    // (la IA, otro asesor): antes solo se pintaban al recargar. Lo que envió este
+                    // mismo usuario ya lo agregó la vista al enviarlo, y se evita repetir por id.
+                    const esPropio = e.direccion !== 'entrante' && e.usuario_id && e.usuario_id == {{ (int) Auth::id() }};
+                    const yaEsta = e.mensaje_id && this.mensajes.some(m => m.id == e.mensaje_id);
+                    if (e.conversacion_id == this.convId && !esPropio && !yaEsta) {
+                        const entrante = e.direccion === 'entrante';
                         this.mensajes.push({
                             id: e.mensaje_id || Date.now(),
                             tipo: e.tipo || 'text',
                             contenido: e.contenido,
-                            es_entrante: true,
-                            usuario_nombre: null,
+                            es_entrante: entrante,
+                            usuario_nombre: entrante ? null : (e.usuario_nombre || null),
                             plantilla_nombre: null,
                             tiene_media: e.tipo !== 'text' && e.tipo !== 'template',
                             media_url: e.media_url || null,
                             media_nombre: e.media_nombre || null,
                             media_mime_type: e.media_mime_type || null,
                             hora: String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0'),
-                            icono_estado: null,
+                            icono_estado: entrante ? null : '✓',
                         });
                         
                         this.scrollBottom();
                         // Marcar como leído
-                        fetch(`/admin/whatsapp/chat/${this.convId}/leer`, {
+                        if (entrante) fetch(`/admin/whatsapp/chat/${this.convId}/leer`, {
                             method: 'PATCH',
                             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content }
                         });
@@ -1240,8 +1245,8 @@ function chatApp() {
                         const mins = String(ahora.getMinutes()).padStart(2, '0');
                         conv.hora_display = `${hrs}:${mins}`;
 
-                        // Si no es la conversación abierta, sumar no leído
-                        if (convIdTarget != this.convId) {
+                        // Si no es la conversación abierta, sumar no leído (solo lo que escribe el cliente)
+                        if (convIdTarget != this.convId && e.direccion === 'entrante') {
                             conv.total_mensajes_no_leidos++;
                             this.totalNoLeidos++;
                         }

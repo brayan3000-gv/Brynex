@@ -36,6 +36,9 @@ class WhatsappMensajeNuevo implements ShouldBroadcast
             'media_nombre'      => $mensaje->media_nombre,
             'estado'            => $mensaje->estado,
             'usuario_nombre'    => $mensaje->usuario?->nombre,
+            // Para que la vista no repita lo que envió el mismo usuario (eso ya lo pinta al enviar)
+            'usuario_id'        => $mensaje->usuario_id,
+            'es_bot'            => (bool) $mensaje->es_bot,
             'timestamp'         => $mensaje->created_at?->toIso8601String(),
             'preview'           => $conversacion->previewUltimoMensaje(),
             'no_leidos'         => $conversacion->total_mensajes_no_leidos,
