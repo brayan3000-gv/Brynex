@@ -35,19 +35,19 @@ class GarvisNotaDeVozJob implements ShouldQueue
         return [10, 30];
     }
 
-    public function __construct(protected string $mediaId, protected ?string $mimeType = null) {}
+    public function __construct(protected string $mediaId, protected ?string $mimeType = null, protected string $canal = GarvisService::CANAL_BRYGAR) {}
 
     public function handle(GarvisService $garvis, WhatsappApiService $whatsappApi): void
     {
         $apiKey = $garvis->llaveGemini();
 
         if (! $apiKey) {
-            $garvis->responder('No pude escuchar tu nota de voz: no hay llave de Gemini ni en la IA de Brygar ni en la global de Brynex. Escríbeme el mensaje mientras tanto.');
+            $garvis->responder('No pude escuchar tu nota de voz: no hay llave de Gemini ni en la IA de Brygar ni en la global de Brynex. Escríbeme el mensaje mientras tanto.', $this->canal);
 
             return;
         }
 
-        $ruta = $whatsappApi->descargarMedia($this->mediaId, $garvis->config());
+        $ruta = $whatsappApi->descargarMedia($this->mediaId, $garvis->config($this->canal));
 
         if (! $ruta) {
             // Meta a veces tarda en servir el archivo; los reintentos lo cubren.
@@ -62,19 +62,19 @@ class GarvisNotaDeVozJob implements ShouldQueue
 
         if (! $r['ok']) {
             Log::warning('GARVIS: no se pudo transcribir la nota de voz', ['error' => $r['error']]);
-            $garvis->responder('No te entendí la nota de voz. ¿Me la repites o me la escribes?');
+            $garvis->responder('No te entendí la nota de voz. ¿Me la repites o me la escribes?', $this->canal);
 
             return;
         }
 
         // 🎤 le dice a GARVIS que esto se dijo en voz alta: la transcripción puede traer
         // un nombre mal escuchado, y conviene que lo tenga en cuenta antes de actuar.
-        $garvis->pasarAGarvis('📱 🎤 '.$r['texto']);
+        $garvis->pasarAGarvis('📱 🎤 '.$r['texto'], $this->canal);
     }
 
     public function failed(\Throwable $e): void
     {
         Log::error('GARVIS: la nota de voz no llegó', ['error' => $e->getMessage()]);
-        app(GarvisService::class)->responder('No pude bajar tu nota de voz de WhatsApp. ¿Me la mandas otra vez o me la escribes?');
+        app(GarvisService::class)->responder('No pude bajar tu nota de voz de WhatsApp. ¿Me la mandas otra vez o me la escribes?', $this->canal);
     }
 }

@@ -147,7 +147,7 @@ class WhatsappWebhookService
                             if (!$garvis->esParaGarvis($msg, $phoneNumberId, $firmaVerificada)) {
                                 return true;
                             }
-                            $garvis->recibir($msg);
+                            $garvis->recibir($msg, $garvis->canalDe($phoneNumberId));
 
                             return false;
                         }

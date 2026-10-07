@@ -13,7 +13,7 @@ use Illuminate\Console\Command;
  */
 class GarvisVoz extends Command
 {
-    protected $signature = 'garvis:voz';
+    protected $signature = 'garvis:voz {--gastos : Desde la línea de gastos y no desde la de Brygar}';
 
     protected $description = 'Envía a Brayan por WhatsApp una nota de voz de GARVIS (texto por stdin)';
 
@@ -30,7 +30,7 @@ class GarvisVoz extends Command
             return self::FAILURE;
         }
 
-        if ($garvis->enviarVoz(mb_substr($texto, 0, self::MAX_CARACTERES))) {
+        if ($garvis->enviarVoz(mb_substr($texto, 0, self::MAX_CARACTERES), $this->option('gastos') ? GarvisService::CANAL_GASTOS : GarvisService::CANAL_BRYGAR)) {
             $this->info('Nota de voz enviada.');
 
             return self::SUCCESS;
