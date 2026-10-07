@@ -712,15 +712,15 @@ class AfiliacionController extends Controller
 
     /** Con qué se reconoce a una empresa: su NIT y, si no lo tiene, su nombre. */
     /**
-     * Saca de la lista los contratos retirados con un motivo de retiro «por
-     * error»: esa afiliación no debía existir y, si se deja a la vista, alguien
-     * la radica sin fijarse. El motivo se busca por nombre porque el catálogo
-     * se administra en la base, no en migraciones.
+     * Saca de la lista los contratos retirados con el motivo «Error - Sin
+     * Afiliación»: esa afiliación no debía existir y, si se deja a la vista,
+     * alguien la radica sin fijarse. El motivo se busca por nombre porque el
+     * catálogo de producción no tiene ids fijos.
      */
     private function sinRetiradosPorError($query)
     {
         static $motivos = null;
-        $motivos ??= DB::table('motivos_retiro')->where('nombre', 'like', '%error%')->pluck('id')->all();
+        $motivos ??= DB::table('motivos_retiro')->where('nombre', 'Error - Sin Afiliación')->pluck('id')->all();
 
         if (! $motivos) {
             return $query;
