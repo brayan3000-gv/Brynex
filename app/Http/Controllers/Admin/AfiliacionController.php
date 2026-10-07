@@ -77,6 +77,7 @@ class AfiliacionController extends Controller
         $baseIds = Contrato::whereIn('aliado_id', $aliados)
             ->whereMonth('fecha_ingreso', $mes)
             ->whereYear('fecha_ingreso', $anio)
+            ->where(fn ($q) => $this->sinRetiradosPorError($q))
             ->pluck('id');
         $baseContratos = Contrato::whereIn('id', $baseIds)
             ->get(['id','razon_social_id','tipo_modalidad_id','eps_id','arl_id','caja_id','pension_id','estado','encargado_id']);
@@ -121,7 +122,8 @@ class AfiliacionController extends Controller
         ])
         ->whereIn('aliado_id', $aliados)
         ->whereMonth('fecha_ingreso', $mes)
-        ->whereYear('fecha_ingreso', $anio);
+        ->whereYear('fecha_ingreso', $anio)
+        ->where(fn ($q) => $this->sinRetiradosPorError($q));
 
         if ($estadoCont) $query->where('estado', $estadoCont);
 
@@ -407,7 +409,8 @@ class AfiliacionController extends Controller
         ])
         ->whereIn('aliado_id', $aliados)
         ->whereMonth('fecha_ingreso', $mes)
-        ->whereYear('fecha_ingreso', $anio);
+        ->whereYear('fecha_ingreso', $anio)
+        ->where(fn ($q) => $this->sinRetiradosPorError($q));
 
         if ($estadoCont) $query->where('estado', $estadoCont);
 
@@ -708,6 +711,26 @@ class AfiliacionController extends Controller
     }
 
     /** Con qué se reconoce a una empresa: su NIT y, si no lo tiene, su nombre. */
+    /**
+     * Saca de la lista los contratos retirados con un motivo de retiro «por
+     * error»: esa afiliación no debía existir y, si se deja a la vista, alguien
+     * la radica sin fijarse. El motivo se busca por nombre porque el catálogo
+     * se administra en la base, no en migraciones.
+     */
+    private function sinRetiradosPorError($query)
+    {
+        static $motivos = null;
+        $motivos ??= DB::table('motivos_retiro')->where('nombre', 'like', '%error%')->pluck('id')->all();
+
+        if (! $motivos) {
+            return $query;
+        }
+
+        return $query->where(fn ($q) => $q->where('estado', '!=', 'retirado')
+            ->orWhereNull('motivo_retiro_id')
+            ->orWhereNotIn('motivo_retiro_id', $motivos));
+    }
+
     private function claveRazon(object $razonSocial): string
     {
         $digitos = preg_replace('/\D/', '', (string) $razonSocial->nit);
