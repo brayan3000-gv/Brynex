@@ -591,6 +591,9 @@ Route::middleware('auth')->group(function () {
             Route::post('api/verificar-periodo', [$fc, 'verificarPeriodoLote'])->name('api.verificar_periodo');
             Route::get('api/cotizacion-contrato/{id}', [$fc, 'cotizacionContrato'])->name('api.cotizacion_contrato');
             Route::delete('{id}/anular', [$fc, 'anular'])->name('anular')->middleware('permiso:facturacion.anular');
+            // Corregir forma y fecha de pago de un recibo ya pagado (solo admin, el controlador lo valida)
+            Route::get('{id}/corregir-pago', [\App\Http\Controllers\Admin\CorreccionPagoController::class, 'show'])->whereNumber('id')->name('corregir_pago.show');
+            Route::post('{id}/corregir-pago', [\App\Http\Controllers\Admin\CorreccionPagoController::class, 'store'])->whereNumber('id')->name('corregir_pago.store');
             Route::get('historial/{cedula}', [$fc, 'historial'])->name('historial');
             Route::get('anuladas', [$fc, 'anuladas'])->name('anuladas');
             Route::post('{id}/restaurar', [$fc, 'restaurar'])->name('restaurar')->middleware('permiso:facturacion.anular');

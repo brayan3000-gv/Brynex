@@ -790,6 +790,7 @@ $estadoCls = fn($e) => match($e) {
     <button class="btn-a" id="btnToggleVista" style="background:#f1f5f9;color:#475569" onclick="toggleVistaDet()">📋 Vista detallada</button>
     <button class="btn-a" style="background:#0f172a;color:#fff" onclick="window.print()">🖨 Imprimir</button>
     @if((auth()->user()?->hasRole('admin') || auth()->user()?->hasRole('superadmin')) && !request()->boolean('no_anular'))
+    <button class="btn-a" style="background:#1e3a5f;color:#fff" onclick="abrirCorregirPago()">💳 Corregir pago</button>
     <button class="btn-a" style="background:#dc2626;color:#fff" onclick="abrirAnular()">🗑 Anular</button>
     @endif
     @if(request()->boolean('modal'))
@@ -1087,6 +1088,10 @@ function verSoporte(url) {
     ov.style.display = 'flex';
 }
 </script>
+
+@if((auth()->user()?->hasRole('admin') || auth()->user()?->hasRole('superadmin')) && !request()->boolean('no_anular'))
+@include('admin.facturacion._modal_corregir_pago')
+@endif
 
 {{-- Modal soporte consignación --}}
 <div id="soporte-ov" onclick="if(event.target===this)document.getElementById('soporte-ov').style.display='none'"

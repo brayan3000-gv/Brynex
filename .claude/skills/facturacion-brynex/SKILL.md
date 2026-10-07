@@ -178,6 +178,26 @@ siempre cuadra; en filas sueltas puede no cuadrar porque hay registros con
 desglose calcula la diferencia y la muestra como fila **"Ajuste"** en vez de
 dejar el recibo descuadrado.
 
+## Corregir pago de un recibo (oct-2026)
+
+Botón «💳 Corregir pago» del recibo (admin y superadmin) →
+`CorreccionPagoController` + `CorreccionPagoService`. Cambia forma de pago,
+consignaciones y fecha de pago **sin anular**, para recibos que ya tienen
+planilla pagada (pedido de Formalizate: antes anulaban y re-facturaban).
+
+- Opera sobre todo el `numero_factura`. El **total pagado no cambia**: el
+  consignado se reparte por fila en proporción a lo que pagó cada una (resto
+  mayor), así `saldo_proximo`, mora y planilla quedan intactos.
+- Fecha: solo consignación → la consignación más reciente; con efectivo → la
+  que escriben (es la que cuenta en la caja). Igual que `_fechaPagoRecibo`.
+- Bloquea: préstamos, pre-facturas, recibos pagados solo con anticipo, y si el
+  día de caja de quien facturó (fecha vieja o nueva) ya está **cuadrado** —
+  un superadmin lo reabre primero. Las consignaciones validadas contra el
+  extracto no se tocan.
+- Las consignaciones que cambian se borran (soft) y se crean de nuevo, para
+  que el observer de facturación electrónica vea la plata nueva.
+- Bitácora: `accion = pago_corregido`, con antes/después de filas y consignaciones.
+
 ## Rutas Principales
 
 ```
