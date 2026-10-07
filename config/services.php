@@ -56,6 +56,9 @@ return [
         'repo' => env('GARVIS_REPO', 'brayan3000-gv/garvis'),
         // Fine-grained, solo el repo garvis, Issues: lectura y escritura.
         'github_token' => env('GARVIS_GITHUB_TOKEN'),
+        // La línea aparte para los gastos de Brayan: otro número de la misma cuenta de
+        // WhatsApp de Brygar (mismo webhook, mismo token). Sin ella, todo va por Brygar.
+        'gastos_phone_number_id' => env('GARVIS_GASTOS_PHONE_NUMBER_ID'),
     ],
 
     'whatsapp' => [

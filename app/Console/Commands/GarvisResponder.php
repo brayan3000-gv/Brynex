@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
  */
 class GarvisResponder extends Command
 {
-    protected $signature = 'garvis:responder';
+    protected $signature = 'garvis:responder {--gastos : Desde la línea de gastos y no desde la de Brygar}';
 
     protected $description = 'Envía a Brayan por WhatsApp la respuesta de GARVIS (texto por stdin)';
 
@@ -37,14 +37,15 @@ class GarvisResponder extends Command
             return self::FAILURE;
         }
 
-        if ($garvis->responder($texto)) {
+        if ($garvis->responder($texto, $this->option('gastos') ? GarvisService::CANAL_GASTOS : GarvisService::CANAL_BRYGAR)) {
             $this->info('Respuesta enviada.');
 
             return self::SUCCESS;
         }
 
         // Fuera de la ventana de 24 h Meta no deja mandar texto libre; la
-        // plantilla sí sale siempre, recortada, y el resto queda en el issue.
+        // plantilla sí sale siempre, recortada, y el resto queda en el issue. Sale
+        // por el número de Brygar aunque la pregunta haya llegado por la de gastos.
         if ($alertas->enviarA($garvis->numero(), 'GARVIS', $texto)) {
             $this->warn('No salió como texto; se mandó recortada por la plantilla.');
 

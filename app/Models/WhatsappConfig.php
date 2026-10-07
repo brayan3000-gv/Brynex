@@ -72,7 +72,24 @@ class WhatsappConfig extends BaseModel
      * Si el aliado usa la cuenta de Brynex, retorna las del .env.
      * Si tiene su propia cuenta, retorna las del registro.
      */
+    /**
+     * Otro número de la misma cuenta (mismo token y WABA). No se guarda: lo pone quien
+     * necesita hablar desde ese número, como la línea de gastos de GARVIS.
+     */
+    public ?string $phoneNumberIdForzado = null;
+
     public function credencialesEfectivas(): array
+    {
+        $creds = $this->credencialesPropias();
+
+        if ($this->phoneNumberIdForzado) {
+            $creds['phone_number_id'] = $this->phoneNumberIdForzado;
+        }
+
+        return $creds;
+    }
+
+    private function credencialesPropias(): array
     {
         if ($this->usa_cuenta_brynex) {
             $dbToken = \App\Models\ConfiguracionBrynex::obtener('whatsapp_global_access_token');
