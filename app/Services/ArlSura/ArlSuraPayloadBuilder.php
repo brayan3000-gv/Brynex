@@ -97,6 +97,15 @@ class ArlSuraPayloadBuilder
             unset($payload['afiliado']['fechaRetiroProgramada']);
         }
 
+        // El estudiante lleva las fechas de la práctica. Sin este bloque Sura
+        // no valida nada: responde 500 «Error al ingresar el trabajador
+        // dependiente : 025:…». Igual que el independiente, va sin fecha de
+        // retiro programada.
+        if ($tipoAfiliado === 'E') {
+            $payload['datosEstudiante'] = $this->datosEstudiante($contrato, $inicioCobertura);
+            unset($payload['afiliado']['fechaRetiroProgramada']);
+        }
+
         return $payload;
     }
 
@@ -287,6 +296,26 @@ class ArlSuraPayloadBuilder
             'tipoContrato'         => ['codigo' => '01', 'desTipoContrato' => 'CIVIL'],
             'valorHonorarios'      => $honorarios,
             'valorTotalHonorarios' => $honorarios,
+        ];
+    }
+
+    /**
+     * Fechas de la práctica del estudiante, con las reglas del formulario de
+     * Sura: la final es opcional —sin ella el portal envía «31/12/3000»—, no
+     * puede ser anterior al inicio de la cobertura ni pasar de un año después.
+     * Una fecha de retiro fuera de ese rango se omite en vez de bloquear.
+     */
+    private function datosEstudiante(Contrato $contrato, Carbon $inicioCobertura): array
+    {
+        $fin = $contrato->fecha_retiro ?: null;
+
+        if ($fin && ($fin->lt($inicioCobertura) || $fin->gt($inicioCobertura->copy()->addYear()))) {
+            $fin = null;
+        }
+
+        return [
+            'fechaInicialPractica' => $inicioCobertura->format('d/m/Y'),
+            'fechaFinalPractica'   => $fin?->format('d/m/Y') ?? '31/12/3000',
         ];
     }
 
