@@ -4,6 +4,7 @@ namespace App\Services\ArlSura;
 
 use App\Models\ArlCentroTrabajo;
 use App\Models\Contrato;
+use App\Models\Pension;
 use App\Models\TipoModalidad;
 use App\Services\Afiliaciones\DatosAfiliacion;
 use Illuminate\Support\Carbon;
@@ -35,6 +36,10 @@ class ArlSuraPayloadBuilder
 
     /** El plan que marca al trabajador de Gestión ARL como independiente. */
     private const PLAN_ARL_INDEPENDIENTE = 'SOLO_ARL_IND';
+
+    /** «NINGUNA AFP» y Colpensiones en el catálogo de Sura. */
+    private const AFP_NINGUNA_SURA      = '000';
+    private const AFP_COLPENSIONES_SURA = '031';
 
     /** La modalidad K: estudiante que solo cotiza a riesgos (Dec. 1072). */
     private const MODALIDAD_ESTUDIANTE = -1;
@@ -322,7 +327,7 @@ class ArlSuraPayloadBuilder
     private function afiliado(Contrato $contrato, $cliente, $rs): array
     {
         $eps = $contrato->eps ?: $cliente->eps;
-        $afp = $contrato->pension ?: $cliente->pension;
+        $afp = $this->afpParaSura($contrato->pension ?: $cliente->pension);
 
         $direccion = $this->direccionValida(
             $cliente->direccion_vivienda,
@@ -431,6 +436,20 @@ class ArlSuraPayloadBuilder
 
         return self::TIPOS_DOC[$tipo]
             ?? throw new RuntimeException("Tipo de documento '{$tipo}' sin equivalencia en ARL Sura.");
+    }
+
+    /**
+     * Quien no tiene fondo de pensión va ante Sura con Colpensiones, no con
+     * «NINGUNA AFP»: decisión del 8-oct-2026. En la ficha sigue figurando
+     * NINGUNA, que es lo que dice el RUAF; el cambio es solo en el envío.
+     */
+    private function afpParaSura(?Pension $afp): ?Pension
+    {
+        if ($afp?->codigo_sura !== self::AFP_NINGUNA_SURA) {
+            return $afp;
+        }
+
+        return Pension::where('codigo_sura', self::AFP_COLPENSIONES_SURA)->first() ?? $afp;
     }
 
     /**
