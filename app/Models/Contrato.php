@@ -57,6 +57,24 @@ class Contrato extends BaseModel
         'paga_mes_actual' => 'boolean',
     ];
 
+    /**
+     * Comienzo de la descripción con que la bitácora anota quién ingresó el
+     * contrato. El historial de afiliación la busca por este texto: los robots
+     * de ARL también anotan `created` sobre el contrato y no son el ingreso.
+     */
+    const BITACORA_INGRESO = 'Ingresó el contrato';
+
+    protected static function booted(): void
+    {
+        // Sin esto, el historial no sabía quién ingresó el contrato y tomaba lo
+        // primero que encontrara (la afiliación a la ARL de días después).
+        static::created(function (Contrato $c) {
+            $ingreso = $c->fecha_ingreso ? ' con ingreso del '.$c->fecha_ingreso->format('d/m/Y') : '';
+
+            Bitacora::registrar('created', 'Contrato', (int) $c->id, self::BITACORA_INGRESO.$ingreso, null, (int) $c->aliado_id);
+        });
+    }
+
     // ── Relaciones ──
 
     public function aliado(): BelongsTo

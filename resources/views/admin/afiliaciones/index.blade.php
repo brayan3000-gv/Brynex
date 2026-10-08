@@ -99,6 +99,7 @@ body {
 .badge-tramite   { background:#dbeafe;color:#1e40af;border-color:#93c5fd; }
 .badge-traslado  { background:#fed7aa;color:#c2410c;border-color:#fb923c; }
 .badge-error     { background:#fee2e2;color:#b91c1c;border-color:#fca5a5; }
+.badge-info      { background:#f1f5f9;color:#475569;border-color:#cbd5e1; }
 .badge-ok        { background:#dcfce7;color:#15803d;border-color:#86efac; }
 /* OK confirmado por la entidad (portal/API): verde fuerte. El OK a mano queda en verde claro. */
 .badge-ok-confirmado { background:#15803d;color:#fff;border-color:#166534; }
@@ -2529,16 +2530,19 @@ function abrirHistorialAfiliacion(contratoId) {
                             else if (h.estado_raw === 'tramite') badgeClass = 'badge-tramite';
                             else if (h.estado_raw === 'traslado') badgeClass = 'badge-traslado';
                             else if (h.estado_raw === 'error') badgeClass = 'badge-error';
+                            else if (h.estado_raw === 'info') badgeClass = 'badge-info';
+                            // Las observaciones las escribe la gente: van como texto, no como HTML.
+                            const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
                             return `
                             <tr style="border-bottom: 1px solid #f1f5f9; background: #fff; transition: background .12s;">
-                                <td style="padding: 0.45rem 0.5rem; font-weight: 700; color: #1e40af; white-space: nowrap;">${h.fecha}</td>
-                                <td style="padding: 0.45rem 0.5rem; color: #475569; white-space: nowrap;">${h.hora}</td>
-                                <td style="padding: 0.45rem 0.5rem; font-weight: 600; color: #1e3a5f;">${h.usuario}</td>
-                                <td style="padding: 0.45rem 0.5rem; color: #334155; white-space: normal; min-width: 200px;">${h.descripcion}</td>
+                                <td style="padding: 0.45rem 0.5rem; font-weight: 700; color: #1e40af; white-space: nowrap;">${esc(h.fecha)}</td>
+                                <td style="padding: 0.45rem 0.5rem; color: #475569; white-space: nowrap;">${esc(h.hora)}</td>
+                                <td style="padding: 0.45rem 0.5rem; font-weight: 600; color: #1e3a5f;">${esc(h.usuario)}</td>
+                                <td style="padding: 0.45rem 0.5rem; color: #334155; white-space: normal; min-width: 200px;">${esc(h.descripcion)}</td>
                                 <td style="padding: 0.45rem 0.5rem; text-align: center; white-space: nowrap;">
                                     <span class="badge-estado ${badgeClass}" style="cursor: default; font-size: 0.65rem; padding: 0.15rem 0.4rem; min-width: 75px; display: inline-block;">
-                                        ${h.estado}
+                                        ${esc(h.estado)}
                                     </span>
                                 </td>
                             </tr>

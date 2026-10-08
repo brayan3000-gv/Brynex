@@ -546,7 +546,9 @@ class AfiliacionController extends Controller
     }
 
     /**
-     * Retorna el historial completo de una afiliación (contrato + modificaciones + movimientos de radicados).
+     * Historial completo de una afiliación, en orden: quién ingresó el contrato,
+     * lo que la bitácora anotó sobre él (afiliaciones y anulaciones de ARL por
+     * API, modificaciones) y cada cambio de estado de EPS, ARL, caja y pensión.
      */
     public function historial($id)
     {
@@ -555,129 +557,126 @@ class AfiliacionController extends Controller
             'encargado:id,nombre',
         ]);
 
-        $historial = collect();
-
         $meses = [
             1 => 'ENERO', 2 => 'FEBRERO', 3 => 'MARZO', 4 => 'ABRIL',
             5 => 'MAYO', 6 => 'JUNIO', 7 => 'JULIO', 8 => 'AGOSTO',
-            9 => 'SEPTIEMBRE', 10 => 'OCTUBRE', 11 => 'NOVIEMBRE', 12 => 'DICIEMBRE'
+            9 => 'SEPTIEMBRE', 10 => 'OCTUBRE', 11 => 'NOVIEMBRE', 12 => 'DICIEMBRE',
+        ];
+        $estados = [
+            'pendiente' => 'PENDIENTE',
+            'tramite' => 'EN TRÁMITE',
+            'traslado' => 'TRASLADO',
+            'error' => 'ERROR',
+            'ok' => 'OK',
         ];
 
-        $formatear = function($timestamp) use ($meses) {
-            $dt = \Carbon\Carbon::parse($timestamp);
-            return [
-                'fecha' => $dt->day . '-' . $meses[$dt->month] . '-' . $dt->year,
-                'hora'  => str_replace(' ', '', $dt->format('g:i A')),
-            ];
+        $historial = collect();
+        // $orden desempata los eventos del mismo segundo: el ingreso va primero.
+        $agregar = function ($momento, ?string $usuario, string $descripcion, string $estado, string $estadoRaw, int $orden = 1) use ($historial, $meses) {
+            $dt = \Carbon\Carbon::parse($momento);
+            $historial->push([
+                'fecha' => $dt->day.'-'.$meses[$dt->month].'-'.$dt->year,
+                'hora' => str_replace(' ', '', $dt->format('g:i A')),
+                'usuario' => $usuario ?: 'Sistema',
+                'descripcion' => $descripcion,
+                'estado' => $estado,
+                'estado_raw' => $estadoRaw,
+                'orden' => [$dt->getTimestamp(), $orden],
+            ]);
         };
 
-        // 1. Obtener evento de creación del contrato en bitacora
-        $creadoBitacora = DB::table('bitacora')
+        // 1. Bitácora del contrato
+        $bitacora = DB::table('bitacora')
             ->leftJoin('users', 'bitacora.user_id', '=', 'users.id')
             ->where('bitacora.modelo', 'Contrato')
             ->where('bitacora.registro_id', $contrato->id)
-            ->where('bitacora.accion', 'created')
-            ->select('bitacora.created_at', 'users.nombre as usuario', 'bitacora.descripcion')
-            ->first();
-
-        if ($creadoBitacora) {
-            $fmt = $formatear($creadoBitacora->created_at);
-            $historial->push([
-                'fecha'       => $fmt['fecha'],
-                'hora'        => $fmt['hora'],
-                'usuario'     => $creadoBitacora->usuario ?? 'Sistema',
-                'descripcion' => 'SE CREÓ LA AFILIACIÓN: ' . $creadoBitacora->descripcion,
-                'estado'      => 'PENDIENTE',
-                'estado_raw'  => 'pendiente',
-                'timestamp'   => $creadoBitacora->created_at,
-            ]);
-        } else {
-            // Fallback usando el created_at del contrato
-            $fechaC = $contrato->created_at ?? $contrato->fecha_created ?? now();
-            $fmt = $formatear($fechaC);
-            $historial->push([
-                'fecha'       => $fmt['fecha'],
-                'hora'        => $fmt['hora'],
-                'usuario'     => $contrato->encargado?->nombre ?? 'Sistema',
-                'descripcion' => 'SE CREÓ LA AFILIACIÓN',
-                'estado'      => 'PENDIENTE',
-                'estado_raw'  => 'pendiente',
-                'timestamp'   => $fechaC,
-            ]);
-        }
-
-        // 2. Obtener actualizaciones del contrato en bitacora
-        $actualizacionesBitacora = DB::table('bitacora')
-            ->leftJoin('users', 'bitacora.user_id', '=', 'users.id')
-            ->where('bitacora.modelo', 'Contrato')
-            ->where('bitacora.registro_id', $contrato->id)
-            ->where('bitacora.accion', 'updated')
-            ->select('bitacora.created_at', 'users.nombre as usuario', 'bitacora.descripcion')
+            ->orderBy('bitacora.created_at')
+            ->select('bitacora.id', 'bitacora.accion', 'bitacora.created_at', 'users.nombre as usuario', 'bitacora.descripcion')
             ->get();
 
-        foreach ($actualizacionesBitacora as $act) {
-            $fmt = $formatear($act->created_at);
-            $historial->push([
-                'fecha'       => $fmt['fecha'],
-                'hora'        => $fmt['hora'],
-                'usuario'     => $act->usuario ?? 'Sistema',
-                'descripcion' => 'MODIFICACIÓN AFILIACIÓN: ' . $act->descripcion,
-                'estado'      => 'VIGENTE',
-                'estado_raw'  => 'tramite',
-                'timestamp'   => $act->created_at,
-            ]);
+        $ingreso = $bitacora->first(fn ($b) => $b->accion === 'created'
+            && str_starts_with((string) $b->descripcion, Contrato::BITACORA_INGRESO));
+
+        if ($ingreso) {
+            $agregar($ingreso->created_at, $ingreso->usuario, 'SE INGRESÓ EL CONTRATO'.mb_substr($ingreso->descripcion, mb_strlen(Contrato::BITACORA_INGRESO)), 'INGRESO', 'info', 0);
+        } else {
+            // Los contratos de antes de oct-2026 no anotaban quién los ingresó:
+            // queda la fecha real del contrato y su encargado, dicho como tal.
+            $agregar(
+                $contrato->created_at ?? $contrato->fecha_created ?? now(),
+                $contrato->encargado ? $contrato->encargado->nombre.' (encargado)' : null,
+                'SE INGRESÓ EL CONTRATO'.($contrato->fecha_ingreso ? ' con ingreso del '.$contrato->fecha_ingreso->format('d/m/Y') : ''),
+                'INGRESO', 'info', 0
+            );
         }
 
-        // 3. Obtener movimientos de radicados asociados al contrato
-        $movimientosRadicados = RadicadoMovimiento::with(['user:id,nombre', 'radicado'])
+        foreach ($bitacora as $b) {
+            if ($ingreso && $b->id === $ingreso->id) {
+                continue;
+            }
+            [$prefijo, $etiqueta] = match ($b->accion) {
+                'created' => ['', 'REGISTRO'],
+                'deleted' => ['SE QUITÓ: ', 'ANULACIÓN'],
+                default => ['MODIFICACIÓN: ', 'CAMBIO'],
+            };
+            $agregar($b->created_at, $b->usuario, $prefijo.$b->descripcion, $etiqueta, 'info');
+        }
+
+        // 2. Cambios de estado de cada radicado (EPS, ARL, caja, pensión)
+        $movimientos = RadicadoMovimiento::with('user:id,nombre')
             ->where('contrato_id', $contrato->id)
             ->get();
 
-        $estadoMap = [
-            'pendiente' => 'PENDIENTE',
-            'tramite'   => 'EN TRAMITE',
-            'traslado'  => 'TRASLADO',
-            'error'     => 'ERROR',
-            'ok'        => 'OK',
-        ];
-
-        foreach ($movimientosRadicados as $m) {
-            $fmt = $formatear($m->created_at);
+        foreach ($movimientos as $m) {
             $entidad = strtoupper($m->entidadLabel());
-            
-            // Descripción personalizada
-            $accion = "SE ACTUALIZÓ ESTADO DE {$entidad}";
-            if ($m->estado_nuevo === 'tramite') {
-                $accion = "RE RADICÓ {$entidad}";
-            } else if ($m->estado_nuevo === 'ok') {
-                $accion = "RE RADICÓ {$entidad}"; // Para coincidir con el estilo del usuario que quiere ver "RE RADICO ARL , OK"
-            } else if ($m->estado_nuevo === 'error') {
-                $accion = "ERROR EN {$entidad}";
-            } else if ($m->estado_nuevo === 'traslado') {
-                $accion = "TRASLADO EN {$entidad}";
-            }
+            $nuevo = $estados[$m->estado_nuevo] ?? strtoupper((string) $m->estado_nuevo);
 
+            if ($m->estado_anterior && $m->estado_anterior !== $m->estado_nuevo) {
+                $texto = "{$entidad}: ".($estados[$m->estado_anterior] ?? strtoupper($m->estado_anterior))." → {$nuevo}";
+            } elseif (! $m->estado_anterior) {
+                $texto = "{$entidad}: quedó en {$nuevo}";
+            } else {
+                $texto = $entidad; // sin cambio de estado: PDF subido, enviado al cliente…
+            }
             if ($m->observacion) {
-                $accion .= " (" . $m->observacion . ")";
+                $texto .= ' ('.$m->observacion.')';
             }
 
-            $historial->push([
-                'fecha'       => $fmt['fecha'],
-                'hora'        => $fmt['hora'],
-                'usuario'     => $m->user?->nombre ?? 'Sistema',
-                'descripcion' => $accion,
-                'estado'      => $estadoMap[$m->estado_nuevo] ?? strtoupper($m->estado_nuevo),
-                'estado_raw'  => $m->estado_nuevo,
-                'timestamp'   => $m->created_at,
-            ]);
+            $agregar($m->created_at, $m->user?->nombre, $texto, $nuevo, (string) $m->estado_nuevo);
         }
 
-        // Ordenar historial cronológicamente (ascendente)
-        $historialOrdenado = $historial->sortBy('timestamp')->values();
+        // 3. Radicados cuyo estado actual no tiene movimiento que lo explique
+        // (los robots de ARL no los dejaban antes de oct-2026, ni la migración).
+        $radicados = Radicado::with('user:id,nombre')
+            ->where('contrato_id', $contrato->id)
+            ->where('estado', '!=', Radicado::ESTADO_PENDIENTE)
+            ->get();
+
+        foreach ($radicados as $r) {
+            $tieneMovimiento = $movimientos->contains(fn ($m) => (int) $m->radicado_id === (int) $r->id
+                && $m->estado_nuevo === $r->estado);
+            if ($tieneMovimiento) {
+                continue;
+            }
+
+            $nuevo = $estados[$r->estado] ?? strtoupper((string) $r->estado);
+            $detalle = $r->textoConfirmacion()
+                ?? ($r->numero_radicado ? 'radicación '.$r->numero_radicado : null);
+            $agregar(
+                $r->confirmado_en ?? $r->fecha_confirmacion ?? $r->updated_at ?? $r->created_at,
+                $r->user?->nombre,
+                strtoupper($r->tipoLabel()).": quedó en {$nuevo}".($detalle ? " ({$detalle})" : ''),
+                $nuevo,
+                (string) $r->estado
+            );
+        }
+
+        $historialOrdenado = $historial->sortBy(fn ($h) => sprintf('%012d-%d', ...$h['orden']))->values()
+            ->map(fn ($h) => collect($h)->except('orden')->all());
 
         return response()->json([
-            'cotizante' => $contrato->cliente ? trim($contrato->cliente->primer_nombre . ' ' . $contrato->cliente->primer_apellido) : 'Cotizante',
-            'cedula'    => $contrato->cedula,
+            'cotizante' => $contrato->cliente ? trim($contrato->cliente->primer_nombre.' '.$contrato->cliente->primer_apellido) : 'Cotizante',
+            'cedula' => $contrato->cedula,
             'historial' => $historialOrdenado,
         ]);
     }

@@ -58,6 +58,17 @@ class Radicado extends BaseModel
                 $r->confirmado_en = null;
             }
         });
+
+        // Todo cambio de estado deja su movimiento, lo haga quien lo haga: los
+        // robots de ARL dejaban el radicado en OK sin rastro y el historial de
+        // la afiliación lo seguía mostrando pendiente.
+        static::saved(function (Radicado $r) {
+            if ($r->wasRecentlyCreated ? $r->estado === self::ESTADO_PENDIENTE : ! $r->wasChanged('estado')) {
+                return;
+            }
+
+            RadicadoMovimiento::registrarAutomatico($r);
+        });
     }
 
     /**
