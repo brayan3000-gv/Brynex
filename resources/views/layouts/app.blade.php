@@ -1491,6 +1491,10 @@
     </style>
 
     @auth
+        @if(session('aliado_id_activo') && auth()->user()->can('operadores_planilla.credenciales') && !request()->has('iframe'))
+            @include('components.credencial-operador-rechazada')
+        @endif
+
         @php($__iaAlidoId = session('aliado_id_activo'))
         @php($__iaConfig = $__iaAlidoId ? \App\Models\IaConfiguracionAliado::where('aliado_id', $__iaAlidoId)->where('activo_web', true)->first() : null)
         @if($__iaConfig)

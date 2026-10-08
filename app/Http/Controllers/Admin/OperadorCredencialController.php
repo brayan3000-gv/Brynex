@@ -65,12 +65,16 @@ class OperadorCredencialController extends Controller
                 return back()->with('cred_error', '⚠️ La contraseña y la clave secreta son obligatorias la primera vez.');
             }
 
-            OperadorCredencial::create($datos + [
+            $credencial = OperadorCredencial::create($datos + [
                 'aliado_id'            => $aliadoId,
                 'razon_social_id'      => null,
                 'operador_planilla_id' => $operador->id,
             ]);
         }
+
+        // Quien la guarda la está corrigiendo: aunque sea la misma de antes,
+        // se le vuelve a dar una oportunidad.
+        self::apiDe($credencial)?->olvidarRechazo();
 
         return back()->with('success', "🔑 Credenciales de {$operador->nombre} guardadas para todo el aliado.");
     }
@@ -172,6 +176,116 @@ class OperadorCredencialController extends Controller
             ->keyBy('operador_planilla_id');
     }
 
+    // ── Contraseña rechazada por el operador ─────────────────────────────
+    // Cuando Enlace rechaza la contraseña, SuaporteApiService deja de
+    // intentar con ella (cada intento cuenta para el bloqueo de la cuenta) y
+    // el layout abre un modal que la pide de nuevo. Ver `rechazadasDelAliado`.
+
+    /** Cliente de la plataforma para una credencial, o null si el operador no tiene API. */
+    private static function apiDe(OperadorCredencial $credencial): ?SuaporteApiService
+    {
+        $operador = OperadorPlanilla::find($credencial->operador_planilla_id);
+
+        if (!$operador || !SuaporteApiService::soportaOperador($operador->codigo)) {
+            return null;
+        }
+
+        return new SuaporteApiService([
+            'operador'      => $operador->codigo,
+            'usuario'       => $credencial->usuario,
+            'contrasena'    => (string) $credencial->contrasena,
+            'clave_secreta' => (string) $credencial->clave_secreta,
+        ]);
+    }
+
+    /**
+     * Credenciales del aliado que el operador rechazó (clave inválida o
+     * cuenta bloqueada), para el modal del layout. Son pocas filas por aliado.
+     */
+    public static function rechazadasDelAliado(int $aliadoId): array
+    {
+        $rechazadas = [];
+
+        $credenciales = OperadorCredencial::with('operadorPlanilla', 'razonSocial')
+            ->where('aliado_id', $aliadoId)
+            ->get();
+
+        foreach ($credenciales as $credencial) {
+            $rechazo = self::apiDe($credencial)?->rechazoVigente();
+
+            if ($rechazo) {
+                $rechazadas[] = [
+                    'id'       => $credencial->id,
+                    'operador' => $credencial->operadorPlanilla?->nombre,
+                    'usuario'  => $credencial->usuario,
+                    'razon'    => $credencial->razonSocial?->razon_social,
+                    'tipo'     => $rechazo['tipo'],
+                    'mensaje'  => $rechazo['mensaje'],
+                    'en'       => \Carbon\Carbon::parse($rechazo['en'])->format('d/m g:i a'),
+                    'hasta'    => $rechazo['hasta'] ? \Carbon\Carbon::parse($rechazo['hasta'])->format('g:i a') : null,
+                    'marca'    => $credencial->id . '|' . $rechazo['en'],
+                ];
+            }
+        }
+
+        return $rechazadas;
+    }
+
+    /**
+     * Guarda la contraseña nueva desde el modal y la prueba con un solo login.
+     *
+     * Se copia también a las otras credenciales del mismo usuario y operador
+     * que tenían exactamente la misma contraseña vieja (la cuenta de Brayan
+     * está en los aliados 1 y 2): solo quien conoce la cuenta las comparte,
+     * y así no queda una copia vieja que la vuelva a bloquear.
+     */
+    public function actualizarContrasena(Request $request, int $credencialId)
+    {
+        $aliadoId = session('aliado_id_activo');
+
+        $validated = $request->validate([
+            'contrasena' => 'required|string|max:200',
+        ]);
+
+        $credencial = OperadorCredencial::where('aliado_id', $aliadoId)->findOrFail($credencialId);
+        $vieja      = (string) $credencial->contrasena;
+
+        $copias = OperadorCredencial::where('id', '<>', $credencial->id)
+            ->where('operador_planilla_id', $credencial->operador_planilla_id)
+            ->where('usuario', $credencial->usuario)
+            ->get()
+            ->filter(fn ($c) => (string) $c->contrasena === $vieja);
+
+        foreach ($copias->prepend($credencial) as $c) {
+            $c->update(['contrasena' => $validated['contrasena']]);
+            self::apiDe($c)?->olvidarRechazo();
+        }
+
+        $operador = $credencial->operadorPlanilla?->nombre ?? 'el operador';
+        $extra    = $copias->count() > 1 ? ' (también en ' . ($copias->count() - 1) . ' copia(s) del mismo usuario)' : '';
+
+        $api = self::apiDe($credencial);
+
+        if (!$api) {
+            return back()->with('success', "🔑 Contraseña de {$operador} guardada{$extra}.");
+        }
+
+        // Si la cuenta sigue bloqueada no se prueba: sería otro intento fallido.
+        if (($rechazo = $api->rechazoVigente()) && $rechazo['tipo'] === 'bloqueo') {
+            return back()->with('success', "🔑 Contraseña de {$operador} guardada{$extra}. "
+                . 'La cuenta sigue bloqueada por Enlace; se usará sola desde las '
+                . \Carbon\Carbon::parse($rechazo['hasta'])->format('g:i a') . '.');
+        }
+
+        $auth = $api->autenticar(forzar: true);
+
+        if (!$auth['success']) {
+            return back()->with('cred_modal_error', "Se guardó, pero {$operador} rechazó el login: " . $auth['message']);
+        }
+
+        return back()->with('success', "✅ Contraseña de {$operador} actualizada y probada{$extra}.");
+    }
+
     // ── Credenciales por razón social (excepción) ────────────────────────
 
     /**
@@ -233,12 +347,14 @@ class OperadorCredencialController extends Controller
                 return back()->with('cred_error', '⚠️ La contraseña y la clave secreta son obligatorias la primera vez.');
             }
 
-            OperadorCredencial::create($datos + [
+            $credencial = OperadorCredencial::create($datos + [
                 'aliado_id'            => $aliadoId,
                 'razon_social_id'      => $alcance,
                 'operador_planilla_id' => $operador->id,
             ]);
         }
+
+        self::apiDe($credencial)?->olvidarRechazo();
 
         $destino = $alcance === null
             ? 'todas las razones sociales del aliado'

@@ -217,6 +217,74 @@ class SuaporteApiService
         }
     }
 
+    // ── 0c. Credenciales rechazadas ──────────────────────────────────────
+
+    /** Minutos que se respeta el bloqueo; Enlace dice 10, se deja margen. */
+    private const MINUTOS_BLOQUEO = 15;
+
+    /**
+     * El rechazo de clave se ata a la combinación exacta usuario+contraseña+
+     * clave secreta: al guardar una contraseña distinta la llave cambia y se
+     * vuelve a intentar sola. El bloqueo es de la cuenta, sin importar la clave.
+     */
+    private function llaveRechazo(): string
+    {
+        return 'suaporte_rechazo_'.md5($this->authUrl.'|'.$this->usuario.'|'
+            .hash('sha256', $this->contrasena.'|'.$this->claveSecreta));
+    }
+
+    private function llaveBloqueo(): string
+    {
+        return 'suaporte_bloqueo_'.md5($this->authUrl.'|'.$this->usuario);
+    }
+
+    /**
+     * Si el mensaje del login dice que la clave no sirve o que la cuenta
+     * quedó bloqueada, lo anota para no volver a intentar. Devuelve si lo anotó.
+     */
+    private function registrarRechazo(string $mensaje): bool
+    {
+        $texto = mb_strtolower($mensaje);
+        $ahora = now();
+
+        if (str_contains($texto, 'bloquead')) {
+            $hasta = $ahora->copy()->addMinutes(self::MINUTOS_BLOQUEO);
+            $this->cacheGuardar($this->llaveBloqueo(), [
+                'tipo' => 'bloqueo', 'mensaje' => $mensaje,
+                'en' => $ahora->toIso8601String(), 'hasta' => $hasta->toIso8601String(),
+            ], self::MINUTOS_BLOQUEO * 60);
+
+            return true;
+        }
+
+        if (str_contains($texto, 'no es válida') || str_contains($texto, 'no es valida')) {
+            $this->cacheGuardar($this->llaveRechazo(), [
+                'tipo' => 'clave', 'mensaje' => $mensaje,
+                'en' => $ahora->toIso8601String(), 'hasta' => null,
+            ], 60 * 60 * 24 * 60);
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Rechazo vigente para estas credenciales, o null.
+     *
+     * @return array{tipo: string, mensaje: string, en: string, hasta: ?string}|null
+     */
+    public function rechazoVigente(): ?array
+    {
+        return $this->cacheLeer($this->llaveBloqueo()) ?: ($this->cacheLeer($this->llaveRechazo()) ?: null);
+    }
+
+    /** Olvida el rechazo de clave (no el bloqueo, que es de Enlace y corre su tiempo). */
+    public function olvidarRechazo(): void
+    {
+        $this->cacheOlvidar($this->llaveRechazo());
+    }
+
     // ── 1. Autenticación ─────────────────────────────────────────────────
 
     /**
@@ -243,6 +311,22 @@ class SuaporteApiService
         }
 
         $sesion = $this->cacheLeer($cacheKey);
+
+        // Freno: con una clave que Enlace ya rechazó no se vuelve a intentar.
+        // Cada intento fallido cuenta para el bloqueo de la cuenta, y un
+        // comando que consulta cliente por cliente la bloqueaba en segundos
+        // (8-oct-2026: `clientes:completar-ruaf` hizo 14 logins con la clave
+        // vieja a las 16:00 y Enlace mandó cuatro correos de bloqueo).
+        if (! $sesion && ($rechazo = $this->rechazoVigente())) {
+            return [
+                'success' => false,
+                'credencial_rechazada' => true,
+                'message' => $rechazo['tipo'] === 'bloqueo'
+                    ? 'Enlace bloqueó la cuenta '.$this->usuario.' por intentos fallidos. No se reintenta hasta '
+                        .\Carbon\Carbon::parse($rechazo['hasta'])->format('g:i a').'.'
+                    : 'Enlace rechazó la contraseña de '.$this->usuario.'. Actualízala en BryNex: no se vuelve a intentar con la misma.',
+            ];
+        }
 
         if (! $sesion) {
             // La documentación dice que el login acepta la contraseña en plano,
@@ -274,11 +358,17 @@ class SuaporteApiService
                         'body' => $response->body(),
                     ]);
 
+                    $mensaje = $this->mensajeError($response, 'No fue posible autenticar en Enlace Operativo.');
+                    $rechazada = $this->registrarRechazo($mensaje);
+
                     return [
                         'success' => false,
-                        'message' => $this->mensajeError($response, 'No fue posible autenticar en Enlace Operativo.'),
+                        'credencial_rechazada' => $rechazada,
+                        'message' => $mensaje,
                     ];
                 }
+
+                $this->cacheOlvidar($this->llaveBloqueo());
 
                 $sesion = $this->extraerHeaders($response, self::HEADERS_SESION);
 

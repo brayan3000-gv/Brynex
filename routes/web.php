@@ -447,6 +447,7 @@ Route::middleware('auth')->group(function () {
             Route::post('configuracion/operadores-planilla/{operador}/credenciales', [$opcr, 'storeAliado'])->name('configuracion.operadores.credenciales.store');
             Route::post('configuracion/operadores-planilla/{operador}/credenciales/probar', [$opcr, 'probarAliado'])->name('configuracion.operadores.credenciales.probar');
             Route::delete('configuracion/operadores-planilla/{operador}/credenciales', [$opcr, 'destroyAliado'])->name('configuracion.operadores.credenciales.destroy');
+            Route::post('configuracion/operadores-credenciales/{credencial}/contrasena', [$opcr, 'actualizarContrasena'])->name('configuracion.operadores.credenciales.contrasena');
         });
 
         // Catálogo de cargos por razón social: alimenta el selector del contrato,
