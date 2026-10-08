@@ -279,6 +279,40 @@ class SuaporteApiService
         return $this->cacheLeer($this->llaveBloqueo()) ?: ($this->cacheLeer($this->llaveRechazo()) ?: null);
     }
 
+    /**
+     * Para quien hace su propio login al portal (soportes PDF, corrección de
+     * salud): mensaje del freno si no se debe intentar, o null si se puede.
+     */
+    public function mensajeFreno(): ?string
+    {
+        $rechazo = $this->rechazoVigente();
+
+        if (! $rechazo) {
+            return null;
+        }
+
+        return $rechazo['tipo'] === 'bloqueo'
+            ? 'Enlace tiene bloqueada la cuenta '.$this->usuario.'; no se reintenta hasta '
+                .\Carbon\Carbon::parse($rechazo['hasta'])->format('g:i a').'.'
+            : 'Enlace rechazó la contraseña de '.$this->usuario.'; actualízala en BryNex.';
+    }
+
+    /** Anota el resultado de un login hecho por fuera de autenticar(). */
+    public function anotarLogin(bool $exitoso, string $cuerpo = ''): void
+    {
+        if ($exitoso) {
+            $this->cacheOlvidar($this->llaveBloqueo());
+
+            return;
+        }
+
+        $mensaje = json_decode($cuerpo, true)['message'] ?? '';
+
+        if (is_string($mensaje) && $mensaje !== '') {
+            $this->registrarRechazo($mensaje);
+        }
+    }
+
     /** Olvida el rechazo de clave (no el bloqueo, que es de Enlace y corre su tiempo). */
     public function olvidarRechazo(): void
     {

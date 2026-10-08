@@ -973,7 +973,19 @@ class EnlaceInformeIndividualService
     /** Login, aportante y autorización. El mismo jar de cookies sirve después para el portal. */
     private function abrirSesion(Client $http, string $host, string $codigoOperador, OperadorCredencial $cred, string $tipoAportante, string $numeroAportante): void
     {
-        $cifrador = new SuaporteApiService(['operador' => $codigoOperador]);
+        // Con las credenciales completas para respetar el freno de claves
+        // rechazadas: cada intento fallido cuenta para el bloqueo de la cuenta.
+        $cifrador = new SuaporteApiService([
+            'operador'      => $codigoOperador,
+            'usuario'       => $cred->usuario,
+            'contrasena'    => (string) $cred->contrasena,
+            'clave_secreta' => (string) $cred->clave_secreta,
+        ]);
+
+        if ($freno = $cifrador->mensajeFreno()) {
+            throw new RuntimeException($freno);
+        }
+
         $contrasena = $cifrador->cifrarDato((string) $cred->contrasena)
             ?? throw new RuntimeException('no se pudo cifrar la contraseña.');
 
@@ -982,7 +994,10 @@ class EnlaceInformeIndividualService
             'json'    => ['usuario' => SuaporteApiService::usuarioPortal($cred->usuario), 'contrasena' => $contrasena],
         ]);
 
-        if ($login->getStatusCode() !== 200 || ! $login->getHeaderLine('token')) {
+        $exitoso = $login->getStatusCode() === 200 && $login->getHeaderLine('token');
+        $cifrador->anotarLogin((bool) $exitoso, (string) $login->getBody());
+
+        if (! $exitoso) {
             throw new RuntimeException('el login fue rechazado.');
         }
 

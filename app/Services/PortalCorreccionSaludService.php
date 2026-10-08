@@ -202,7 +202,19 @@ class PortalCorreccionSaludService
             'headers' => ['User-Agent' => 'Mozilla/5.0', 'Accept-Language' => 'es-CO,es;q=0.9'],
         ]);
 
-        $cifrador = new SuaporteApiService(['operador' => $operador->codigo]);
+        // Con las credenciales completas para respetar el freno de claves
+        // rechazadas: cada intento fallido cuenta para el bloqueo de la cuenta.
+        $cifrador = new SuaporteApiService([
+            'operador'      => $operador->codigo,
+            'usuario'       => $credencial->usuario,
+            'contrasena'    => (string) $credencial->contrasena,
+            'clave_secreta' => (string) $credencial->clave_secreta,
+        ]);
+
+        if ($freno = $cifrador->mensajeFreno()) {
+            throw new RuntimeException($freno);
+        }
+
         $contrasena = $cifrador->cifrarDato((string) $credencial->contrasena)
             ?? throw new RuntimeException('No se pudo cifrar la contraseña del operador.');
 
@@ -214,7 +226,10 @@ class PortalCorreccionSaludService
             ],
         ]);
 
-        if ($login->getStatusCode() !== 200 || ! $login->getHeaderLine('token')) {
+        $exitoso = $login->getStatusCode() === 200 && $login->getHeaderLine('token');
+        $cifrador->anotarLogin((bool) $exitoso, (string) $login->getBody());
+
+        if (! $exitoso) {
             throw new RuntimeException('El operador rechazó el inicio de sesión.');
         }
 
