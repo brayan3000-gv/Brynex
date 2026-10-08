@@ -213,6 +213,13 @@ class OperadorCredencialController extends Controller
         foreach ($credenciales as $credencial) {
             $rechazo = self::apiDe($credencial)?->rechazoVigente();
 
+            // Un bloqueo sigue corriendo aunque ya se haya guardado la clave
+            // nueva; si se guardó después, no hay nada más que pedir.
+            if ($rechazo && $rechazo['tipo'] === 'bloqueo' && $credencial->updated_at
+                && $credencial->updated_at->greaterThan(\Carbon\Carbon::parse($rechazo['en']))) {
+                continue;
+            }
+
             if ($rechazo) {
                 $rechazadas[] = [
                     'id'       => $credencial->id,
