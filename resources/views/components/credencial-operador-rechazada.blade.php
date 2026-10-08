@@ -13,7 +13,11 @@
     <div x-show="abierto" class="cr-overlay" @keydown.escape.window="despues()">
         <div class="cr-box" role="dialog" aria-modal="true" aria-labelledby="cr-titulo">
             <template x-if="actual">
-                <form method="POST" :action="'{{ url('admin/configuracion/operadores-credenciales') }}/' + actual.id + '/contrasena'">
+                {{-- `enviando` se marca en @submit, no en el clic del botón: si el
+                     botón queda deshabilitado durante su propio clic, Chrome
+                     cancela el envío y el modal se queda en «Guardando…». --}}
+                <form method="POST" :action="'{{ url('admin/configuracion/operadores-credenciales') }}/' + actual.id + '/contrasena'"
+                      @submit="enviando = true">
                     @csrf
                     <div class="cr-head">
                         <span class="cr-ico" x-text="actual.tipo === 'bloqueo' ? '🔒' : '🔑'"></span>
@@ -46,7 +50,7 @@
 
                     <div class="cr-foot">
                         <button type="button" class="cr-btn-ghost" @click="despues()">Más tarde</button>
-                        <button type="submit" class="cr-btn" @click="enviando = true" :disabled="enviando"
+                        <button type="submit" class="cr-btn" :disabled="enviando"
                                 x-text="enviando ? 'Guardando…' : 'Guardar y probar'"></button>
                     </div>
                 </form>
