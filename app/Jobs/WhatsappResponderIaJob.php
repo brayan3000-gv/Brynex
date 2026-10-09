@@ -80,7 +80,13 @@ class WhatsappResponderIaJob implements ShouldQueue
 
         $mensajesPendientes = WhatsappMensaje::where('conversacion_id', $conversacion->id)
             ->where('direccion', 'entrante')
-            ->whereIn('tipo', ['text', 'button'])
+            // Las notas de voz y las fotos o PDF entran cuando ya tienen texto (transcripción o
+            // lectura de la IA). Hasta oct-2026 solo entraban texto y botón, y por eso ninguna nota
+            // de voz transcrita le llegó nunca a la IA: el 30-sep un prospecto mandó «Hola, quiero
+            // información» y 12 audios, y el bot contestó solo al saludo.
+            ->whereIn('tipo', ['text', 'button', 'audio', 'image', 'document'])
+            ->whereNotNull('contenido')
+            ->where('contenido', '<>', '')
             ->when($ultimoAtendidoId > 0, fn ($q) => $q->where('id', '>', $ultimoAtendidoId))
             ->when($ultimoAtendidoId === 0 && $ultimoUsuario, fn ($q) => $q->where('created_at', '>', $ultimoUsuario->created_at))
             ->when($ultimoAtendidoId === 0 && ! $ultimoUsuario && $ultimaRespuesta, fn ($q) => $q->where('created_at', '>', $ultimaRespuesta->created_at))

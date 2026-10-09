@@ -90,6 +90,27 @@ Claude responda 400 y la respuesta entera falle. `ClaudeProvider` y
 `GeminiProvider` lo convierten a `new \stdClass()`; cualquier proveedor nuevo
 tiene que hacer lo mismo.
 
+### Notas de voz, fotos y PDF por WhatsApp
+
+Todo archivo que llega se vuelve texto del mensaje (`whatsapp_mensajes.contenido`):
+lo ve la persona en el inbox y lo lee la IA, que solo recibe texto.
+
+- **Audio:** `WhatsappTranscribirAudioJob`, siempre.
+- **Fotos y PDF:** `WhatsappLeerImagenJob` + `LecturaImagenService`, solo si el
+  aliado tiene la IA de WhatsApp activa y conversa con Claude o Gemini. Lo leído
+  queda como «[Imagen leída por la IA: …]», «[PDF leído por la IA: …]» o
+  «[Comprobante de pago leído por la IA: $X · fecha · medio · ref.]».
+- **Comprobante con el bot activo:** recibe un mensaje armado con lo leído (no
+  lo redacta la IA) y la conversación pasa a una persona, que confirma y
+  registra el pago. Nada registra plata sola.
+- **Otras imágenes** (cédula, cotización de otro lado…): la IA sigue
+  conversando con ellas.
+- **Sin lectura** (PDF de más de 5 páginas o 4 MB, video, proveedor OpenAI):
+  mensaje fijo y pasa a una persona (`WhatsappEscalarMultimediaJob`).
+- **`WhatsappResponderIaJob` junta texto, botón, audio, imagen y documento con
+  `contenido`.** Hasta oct-2026 solo juntaba texto y botón, y ninguna nota de
+  voz transcrita le llegó nunca a la IA.
+
 ### Modelos (batería del 8-oct-2026, 31 mensajes reales de Brygar)
 
 - Conversar: `claude-haiku-5-5`. Fue la más correcta y la más barata (≈COP 3–12

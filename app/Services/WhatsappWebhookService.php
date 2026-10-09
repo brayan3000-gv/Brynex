@@ -8,6 +8,7 @@ use App\Jobs\MarketingConfirmarBloqueoJob;
 use App\Jobs\ResolverCaptchaAdresJob;
 use App\Jobs\WhatsappDescargarMediaJob;
 use App\Jobs\WhatsappEscalarMultimediaJob;
+use App\Jobs\WhatsappLeerImagenJob;
 use App\Jobs\WhatsappResponderIaJob;
 use App\Jobs\WhatsappTranscribirAudioJob;
 use App\Models\{
@@ -22,6 +23,7 @@ use App\Models\{
 };
 use App\Services\Adres\RespuestaCaptcha;
 use App\Services\GarvisService;
+use App\Services\Ia\LecturaImagenService;
 use App\Services\Cumplimiento\DetectorBajaPublicidad;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Cache;
@@ -390,6 +392,14 @@ class WhatsappWebhookService
             WhatsappTranscribirAudioJob::dispatch($mensaje->id)->delay(now()->addSeconds(5));
         }
 
+        // Fotos y PDF, lo mismo, pero solo donde la IA está activa (Brygar): la lectura queda en
+        // el inbox aunque atienda una persona, y si atiende el bot, el job decide qué responder.
+        $seLeeLaImagen = in_array($tipo, ['image', 'document'], true) && !$esRechazoPublicidad
+            && LecturaImagenService::puedeLeer($alidoId, $dataMensaje['media_mime_type'] ?? null);
+        if ($seLeeLaImagen) {
+            WhatsappLeerImagenJob::dispatch($mensaje->id)->delay(now()->addSeconds(5));
+        }
+
         $iaActiva = (bool) IaConfiguracionAliado::where('aliado_id', $alidoId)->value('activo_whatsapp');
 
         // En los aliados sin IA aquí NO sale ninguna respuesta automática, y es a propósito.
@@ -432,7 +442,7 @@ class WhatsappWebhookService
                     Cache::put(self::claveDebounce($conversacion->id), $mensaje->id, now()->addSeconds(30));
                     WhatsappResponderIaJob::dispatch($conversacion->id, $mensaje->id)
                         ->delay(now()->addSeconds($delay));
-                } elseif (in_array($tipo, ['image', 'document', 'video'], true)) {
+                } elseif (in_array($tipo, ['image', 'document', 'video'], true) && !$seLeeLaImagen) {
                     // El bot no puede leer multimedia: avisa al cliente y escala a un humano
                     // en vez de quedarse en silencio (ej. comprobantes de pago requieren revisión humana).
                     dispatch(new WhatsappEscalarMultimediaJob($conversacion->id, $tipo));

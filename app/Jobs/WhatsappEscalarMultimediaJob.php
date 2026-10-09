@@ -13,10 +13,10 @@ use Illuminate\Queue\{InteractsWithQueue, SerializesModels};
 use Illuminate\Support\Facades\Log;
 
 /**
- * El Asistente IA no puede leer audio/imagen/documento/video. En vez de quedarse
- * en silencio, se avisa al cliente y se escala la conversación a un humano — nunca
- * se intenta "interpretar" el archivo (ej. validar un comprobante de pago requiere
- * revisión humana, no automatización).
+ * Un archivo que la IA no pudo leer (o un comprobante ya leído): en vez de quedarse en
+ * silencio, se avisa al cliente y se escala la conversación a un humano. Desde oct-2026 las
+ * fotos y los PDF se leen primero (WhatsappLeerImagenJob) y este job queda para lo que no
+ * se pudo leer y para los comprobantes; validar un pago sigue siendo de una persona.
  */
 class WhatsappEscalarMultimediaJob implements ShouldQueue
 {
@@ -39,7 +39,16 @@ class WhatsappEscalarMultimediaJob implements ShouldQueue
         'audio'    => 'Envió un audio — revisar adjunto.',
     ];
 
-    public function __construct(protected int $conversacionId, protected string $tipo) {}
+    /**
+     * $texto y $motivo reemplazan los fijos cuando ya se sabe qué es el archivo: un comprobante
+     * leído por la IA llega con el valor y la fecha (ver WhatsappLeerImagenJob).
+     */
+    public function __construct(
+        protected int $conversacionId,
+        protected string $tipo,
+        protected ?string $texto = null,
+        protected ?string $motivo = null,
+    ) {}
 
     public function handle(WhatsappApiService $whatsappApi): void
     {
@@ -49,12 +58,12 @@ class WhatsappEscalarMultimediaJob implements ShouldQueue
         $config = WhatsappConfig::paraAliado($conversacion->aliado_id);
         if (!$config->credencialesCompletas()) return;
 
-        $conversacion->escalarAHumano(self::MOTIVOS[$this->tipo] ?? 'Envió un archivo que la IA no puede leer.');
+        $conversacion->escalarAHumano(mb_substr($this->motivo ?? self::MOTIVOS[$this->tipo] ?? 'Envió un archivo que la IA no puede leer.', 0, 255));
 
         $iaConfig = \App\Models\IaConfiguracionAliado::where('aliado_id', $conversacion->aliado_id)->first();
         $nombreBot = $iaConfig?->nombreBot() ?? 'Asistente Virtual';
 
-        $texto = self::MENSAJES[$this->tipo] ?? 'Recibí tu archivo. Ya avisé a nuestro equipo para que te contacte. 🙏';
+        $texto = $this->texto ?? self::MENSAJES[$this->tipo] ?? 'Recibí tu archivo. Ya avisé a nuestro equipo para que te contacte. 🙏';
         $textoFirmado = "🤖 *{$nombreBot}:*\n" . $texto;
 
         $envio = $whatsappApi->enviarTexto($conversacion->wa_contact_id, $textoFirmado, $config);
