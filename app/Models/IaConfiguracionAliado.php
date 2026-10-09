@@ -117,7 +117,7 @@ class IaConfiguracionAliado extends BaseModel
         $default = match ($proveedor) {
             'openai' => 'gpt-4o-mini',
             'gemini' => 'gemini-3.6-flash',
-            default  => 'claude-haiku-4-5-20251001',
+            default  => 'claude-haiku-5-5',
         };
         return (string) ConfiguracionBrynex::obtener($clave, $default);
     }

@@ -10,10 +10,12 @@ class GeminiProvider implements IaProviderInterface
 {
     private const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-    public function chat(string $apiKey, string $modelo, string $systemPrompt, array $messages, array $tools): array
+    public function chat(string $apiKey, string $modelo, string|array $systemPrompt, array $messages, array $tools): array
     {
         $payload = [
-            'systemInstruction' => ['parts' => [['text' => $systemPrompt]]],
+            // Los trozos van pegados en orden: la caché automática de Gemini cobra a una décima
+            // parte el comienzo que se repite, así que lo fijo tiene que ir primero.
+            'systemInstruction' => ['parts' => [['text' => implode("\n\n", (array) $systemPrompt)]]],
             'contents'          => $this->traducirMensajes($messages),
         ];
 
@@ -58,13 +60,18 @@ class GeminiProvider implements IaProviderInterface
             }
         }
 
+        // promptTokenCount incluye lo que salió de la caché; aquí van separados, como en Claude.
+        $cache = (int) data_get($data, 'usageMetadata.cachedContentTokenCount', 0);
+
         return [
-            'content'        => $texto,
-            'tool_calls'     => $toolCalls,
-            'tokens_entrada' => (int) data_get($data, 'usageMetadata.promptTokenCount', 0),
+            'content'                => $texto,
+            'tool_calls'             => $toolCalls,
+            'tokens_entrada'         => max(0, (int) data_get($data, 'usageMetadata.promptTokenCount', 0) - $cache),
             // Los tokens de "pensamiento" (thinking) se facturan como salida, igual que Claude.
-            'tokens_salida'  => (int) data_get($data, 'usageMetadata.candidatesTokenCount', 0)
+            'tokens_salida'          => (int) data_get($data, 'usageMetadata.candidatesTokenCount', 0)
                 + (int) data_get($data, 'usageMetadata.thoughtsTokenCount', 0),
+            'tokens_cache_lectura'   => $cache,
+            'tokens_cache_escritura' => 0,
         ];
     }
 

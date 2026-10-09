@@ -10,12 +10,12 @@ class OpenAiProvider implements IaProviderInterface
 {
     private const API_URL = 'https://api.openai.com/v1/chat/completions';
 
-    public function chat(string $apiKey, string $modelo, string $systemPrompt, array $messages, array $tools): array
+    public function chat(string $apiKey, string $modelo, string|array $systemPrompt, array $messages, array $tools): array
     {
         $payload = [
             'model'    => $modelo,
             'messages' => array_merge(
-                [['role' => 'system', 'content' => $systemPrompt]],
+                [['role' => 'system', 'content' => implode("\n\n", (array) $systemPrompt)]],
                 $this->traducirMensajes($messages)
             ),
         ];
@@ -50,11 +50,16 @@ class OpenAiProvider implements IaProviderInterface
             ];
         }
 
+        // prompt_tokens incluye lo que salió de la caché; aquí van separados, como en Claude.
+        $cache = (int) ($data['usage']['prompt_tokens_details']['cached_tokens'] ?? 0);
+
         return [
-            'content'        => $mensaje['content'] ?? null,
-            'tool_calls'     => $toolCalls,
-            'tokens_entrada' => (int) ($data['usage']['prompt_tokens'] ?? 0),
-            'tokens_salida'  => (int) ($data['usage']['completion_tokens'] ?? 0),
+            'content'                => $mensaje['content'] ?? null,
+            'tool_calls'             => $toolCalls,
+            'tokens_entrada'         => max(0, (int) ($data['usage']['prompt_tokens'] ?? 0) - $cache),
+            'tokens_salida'          => (int) ($data['usage']['completion_tokens'] ?? 0),
+            'tokens_cache_lectura'   => $cache,
+            'tokens_cache_escritura' => 0,
         ];
     }
 

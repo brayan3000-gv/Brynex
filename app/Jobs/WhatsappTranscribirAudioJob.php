@@ -91,6 +91,7 @@ class WhatsappTranscribirAudioJob implements ShouldQueue
             Storage::disk('local')->path($mensaje->media_url),
             $mensaje->media_mime_type
         );
+        TranscripcionAudioService::registrarConsumo($conversacion->aliado_id, 'whatsapp_audio', $r);
 
         if (! $r['ok']) {
             Log::warning("No se pudo transcribir el audio del mensaje {$mensaje->id}: {$r['error']}");

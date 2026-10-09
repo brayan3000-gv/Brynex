@@ -385,7 +385,7 @@ class AsistenteIaService
     private function ejecutarTurno(
         IaConversacion $conversacion,
         string $mensajeUsuario,
-        string $systemPrompt,
+        string|array $systemPrompt,
         array $tools,
         array $credenciales,
         array $contextoExtra,
@@ -410,6 +410,9 @@ class AsistenteIaService
 
         $tokensEntradaTotal = 0;
         $tokensSalidaTotal = 0;
+        $tokensCacheLectura = 0;
+        $tokensCacheEscritura = 0;
+        $inicio = microtime(true);
         $accionesSugeridas = [];
         $herramientasUsadas = [];
         $textoFinal = '';
@@ -432,6 +435,8 @@ class AsistenteIaService
 
             $tokensEntradaTotal += $resp['tokens_entrada'];
             $tokensSalidaTotal += $resp['tokens_salida'];
+            $tokensCacheLectura += $resp['tokens_cache_lectura'] ?? 0;
+            $tokensCacheEscritura += $resp['tokens_cache_escritura'] ?? 0;
 
             if (empty($resp['tool_calls'])) {
                 // Raro pero real (visto con Gemini en pruebas): a veces el proveedor devuelve un
@@ -500,7 +505,13 @@ class AsistenteIaService
             $textoFinal = 'No pude completar la consulta, intenta reformular la pregunta.';
         }
 
-        $this->registrarConsumo($conversacion->aliado_id, $conversacion->id, $canalConsumo, $credenciales, $tokensEntradaTotal, $tokensSalidaTotal);
+        $this->registrarConsumo($conversacion->aliado_id, $conversacion->id, $canalConsumo, $credenciales, [
+            'entrada' => $tokensEntradaTotal,
+            'salida' => $tokensSalidaTotal,
+            'cache_lectura' => $tokensCacheLectura,
+            'cache_escritura' => $tokensCacheEscritura,
+            'latencia_ms' => (int) ((microtime(true) - $inicio) * 1000),
+        ]);
 
         return [
             'respuesta' => $textoFinal,
@@ -586,6 +597,16 @@ class AsistenteIaService
         PROMPT;
     }
 
+    /**
+     * El prompt va en trozos, de lo fijo a lo que cambia: [reglas, bloque de aliados (solo
+     * prospectos), contexto de esta conversación]. Claude guarda en caché los primeros y los lee
+     * a una décima parte del precio, y Gemini hace lo mismo solo con un comienzo que se repite.
+     * Hasta oct-2026 quién escribe, el anuncio y la campaña iban al comienzo, y por eso ninguna
+     * llamada aprovechaba la caché: cada respuesta pagaba completos los ~10.000 tokens de reglas
+     * (19.500 contados por Claude).
+     *
+     * @return string[]
+     */
     private function construirSystemPromptWhatsapp(
         string $nombreAliado,
         string $nombreBot,
@@ -596,7 +617,7 @@ class AsistenteIaService
         ?array $ultimoEnvio = null,
         ?\App\Models\Publicacion $piezaOrigen = null,
         string $retomaAliado = ''
-    ): string {
+    ): array {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
         $esCliente = $clienteInfo['es_cliente'] ?? false;
         $empresa = $clienteInfo['empresa'] ?? null;
@@ -631,7 +652,7 @@ class AsistenteIaService
                 ."nuevo o adicional (ej. afiliar a alguien más, cambiar de plan).\n";
         } else {
             $contextoContacto = "\n## Quién te escribe: es un PROSPECTO (no tiene contrato activo con nosotros). "
-                ."Aquí sí aplica todo el enfoque de venta de abajo.\n";
+                ."Aquí sí aplica todo el enfoque de venta de las reglas.\n";
         }
 
         // Lead que llegó de una pieza de publicidad (el "ref: P##" del anuncio). Se antepone a
@@ -648,7 +669,7 @@ class AsistenteIaService
 
             NO es alguien que quiera afiliarse: ya vende seguridad social o tiene gente a cargo y está
             viendo si le conviene trabajar con nosotros. Salúdalo reconociendo a qué vino, en media línea,
-            y sigue el bloque «Quienes quieren trabajar con nosotros» de abajo. NO le cotices ni le mandes
+            y sigue el bloque «Quienes quieren TRABAJAR CON NOSOTROS». NO le cotices ni le mandes
             la tabla de planes.
 
             ASESOR;
@@ -763,7 +784,9 @@ class AsistenteIaService
           explica todo y se deja listo para empezar. No le prometas que «le activamos la cuenta» ni le
           expliques el proceso por pasos: ofrécele la reunión y pregúntale qué día y hora le queda bien.
           Cuando acepte o dé día y hora, usa hablar_con_asesor con «agendar reunión virtual» y lo que propuso,
-          y respóndele repitiendo el día y la hora que pidió y que por este chat le confirmamos el enlace.
+          y respóndele que le pasaste a quien te devuelva la herramienta el día y la hora que él propuso, y que
+          esa persona se los confirma por este chat junto con el enlace. Es una propuesta suya, no una cita: no
+          digas «tomo nota», «anotado», «agendado» ni «quedó para mañana», porque quien confirma es esa persona.
         - Para quién aplica: para todos. Cualquier persona puede ser asesor, no pide requisitos ni experiencia,
           y puede afiliar a cualquier cliente (independientes, dependientes, contratistas, empleadores).
         - Precios al cliente: los de {$nombreAliado} (la administración más común es \$46.000 al mes; la
@@ -839,11 +862,15 @@ class AsistenteIaService
             }
         }
 
-        return <<<PROMPT
+        $reglas = <<<PROMPT
         Eres {$nombreBot}, asesora comercial experta en seguridad social de "{$nombreAliado}", atendiendo por
         WhatsApp a un cliente o prospecto externo. Hoy es {$fecha}. Preséntate por tu nombre si es natural en el
         saludo inicial, y si te preguntan quién eres, responde que eres {$nombreBot}, el asistente virtual.
-        {$contextoContacto}{$contextoPieza}{$contextoAliados}{$contextoRetoma}{$contextoCampana}
+
+        Lo que se sabe de quien te escribe (si es prospecto, cliente o empleador, de qué anuncio o mensaje
+        nuestro viene, dónde quedó la conversación) va al final, en «Contexto de esta conversación». Léelo
+        antes de responder: cuando choca con una regla general, manda ese contexto.
+
         ## Cómo cotizar (usa cotizar_plan) — simplifica al máximo, el cliente casi nunca sabe estos términos:
         - Si pregunta por planes o precios EN GENERAL, sin haber dicho aún qué componentes quiere (ej. "¿qué
           planes tienen?", "quiero info de precios", "cuánto cuesta afiliarme"), arranca la conversación con
@@ -1017,6 +1044,11 @@ class AsistenteIaService
           afiliación|||¿Iniciamos con la afiliación?" — cada parte entre "|||" debe tener sentido leída sola, sin
           cortar una frase a la mitad. No uses "|||" si la respuesta es corta y cabe natural en un solo mensaje.
         PROMPT;
+
+        $contexto = "# Contexto de esta conversación\n"
+            .trim($contextoContacto.$contextoPieza.$contextoRetoma.$contextoCampana)."\n";
+
+        return array_values(array_filter([$reglas, trim($contextoAliados), $contexto], fn ($t) => $t !== ''));
     }
 
     /**
@@ -1099,7 +1131,10 @@ class AsistenteIaService
         return $normalizado;
     }
 
-    private function registrarConsumo(int $alidoId, int $conversacionId, string $canal, array $credenciales, int $tokensIn, int $tokensOut): void
+    /**
+     * @param  array{entrada: int, salida: int, cache_lectura: int, cache_escritura: int, latencia_ms: int}  $uso
+     */
+    private function registrarConsumo(int $alidoId, int $conversacionId, string $canal, array $credenciales, array $uso): void
     {
         try {
             IaConsumo::create([
@@ -1108,55 +1143,15 @@ class AsistenteIaService
                 'conversacion_id' => $conversacionId,
                 'proveedor' => $credenciales['proveedor'],
                 'modelo' => $credenciales['modelo'],
-                'tokens_entrada' => $tokensIn,
-                'tokens_salida' => $tokensOut,
-                'costo_estimado_usd' => $this->estimarCosto($credenciales['proveedor'], $credenciales['modelo'], $tokensIn, $tokensOut),
+                'tokens_entrada' => $uso['entrada'],
+                'tokens_salida' => $uso['salida'],
+                'tokens_cache_lectura' => $uso['cache_lectura'],
+                'tokens_cache_escritura' => $uso['cache_escritura'],
+                'latencia_ms' => $uso['latencia_ms'],
+                'costo_estimado_usd' => PreciosIa::costo($credenciales['modelo'], $uso['entrada'], $uso['salida'], $uso['cache_lectura'], $uso['cache_escritura']),
             ]);
         } catch (\Exception $e) {
             Log::warning('IA: no se pudo registrar el consumo', ['error' => $e->getMessage()]);
         }
-    }
-
-    /**
-     * Estimación aproximada en USD (precios por millón de tokens, jul-2026). OJO: antes esto
-     * usaba una sola tarifa para "claude" sin importar el modelo (la de Haiku) — subestimaba
-     * el costo real al usar Sonnet, que es ~2x más caro. Ahora distingue por modelo.
-     * Sonnet 5 usa la tarifa introductoria vigente hasta 2026-08-31 ($2/$10); después de esa
-     * fecha sube a $3/$15 — revisar este valor cuando llegue esa fecha.
-     */
-    private function estimarCosto(string $proveedor, ?string $modelo, int $tokensIn, int $tokensOut): float
-    {
-        $precios = [
-            'claude' => [
-                'sonnet' => ['in' => 2.0, 'out' => 10.0],  // Claude Sonnet 5 (introductorio, hasta 2026-08-31)
-                'haiku' => ['in' => 1.0, 'out' => 5.0],   // Claude Haiku 4.5
-                'default' => ['in' => 1.0, 'out' => 5.0],
-            ],
-            'openai' => [
-                'default' => ['in' => 0.15, 'out' => 0.60], // gpt-4o-mini aprox
-            ],
-            'gemini' => [
-                // Ojo con el orden: "3.5-flash-lite" tiene que ir antes que "3.5-flash" porque
-                // ese nombre de modelo también contiene la subcadena "3.5-flash" (stripos matchearía
-                // el precio equivocado, mucho más caro, si "3.5-flash" fuera primero).
-                '3.6-flash' => ['in' => 1.5,  'out' => 7.5],  // Gemini 3.6 Flash
-                '3.5-flash-lite' => ['in' => 0.3,  'out' => 2.5],  // Gemini 3.5 Flash-Lite
-                '3.5-flash' => ['in' => 1.5,  'out' => 9.0],  // Gemini 3.5 Flash
-                '2.5-flash' => ['in' => 0.3,  'out' => 2.5],  // Gemini 2.5 Flash
-                '2.5-pro' => ['in' => 1.25, 'out' => 10.0], // Gemini 2.5 Pro, tramo <=200k tokens
-                'default' => ['in' => 1.5,  'out' => 7.5],
-            ],
-        ];
-
-        $tabla = $precios[$proveedor] ?? $precios['claude'];
-        $p = $tabla['default'];
-        foreach ($tabla as $clave => $valores) {
-            if ($clave !== 'default' && $modelo && stripos($modelo, $clave) !== false) {
-                $p = $valores;
-                break;
-            }
-        }
-
-        return round(($tokensIn / 1_000_000 * $p['in']) + ($tokensOut / 1_000_000 * $p['out']), 5);
     }
 }

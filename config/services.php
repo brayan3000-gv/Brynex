@@ -177,8 +177,11 @@ return [
 
     // Llave global de Gemini para material gráfico (brynex:imagen-gemini);
     // el asistente de IA sigue usando la llave por aliado.
+    // modelo_transcribir: con el que se pasan a texto las notas de voz (ver
+    // TranscripcionAudioService); si falla, se usa gemini-2.5-flash.
     'gemini' => [
         'api_key' => env('GEMINI_API_KEY'),
+        'modelo_transcribir' => env('GEMINI_MODELO_TRANSCRIBIR', 'gemini-3.1-flash-lite'),
     ],
 
 ];

@@ -58,7 +58,8 @@ class HablarConAsesorTool implements IaToolInterface
                 'ok'      => true,
                 'mensaje' => "{$responsable['nombre']} quedó avisado y va a continuar esta conversación por este mismo WhatsApp. "
                     . 'Dile al cliente SOLO eso, en una o dos frases.' . $numero
-                    . ' NO prometas día ni hora ni digas que algo quedó agendado.',
+                    . ' Si propuso día y hora para una reunión, puedes decirle que se los pasaste para que se los confirme,'
+                    . ' pero NO digas «tomo nota», «anotado» ni que algo quedó agendado: quien confirma es esa persona.',
             ];
         }
 

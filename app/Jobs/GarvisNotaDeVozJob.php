@@ -56,6 +56,7 @@ class GarvisNotaDeVozJob implements ShouldQueue
 
         try {
             $r = TranscripcionAudioService::transcribir($apiKey, Storage::disk('local')->path($ruta), $this->mimeType);
+            TranscripcionAudioService::registrarConsumo(GarvisService::ALIADO_ID, 'garvis_audio', $r);
         } finally {
             Storage::disk('local')->delete($ruta);
         }

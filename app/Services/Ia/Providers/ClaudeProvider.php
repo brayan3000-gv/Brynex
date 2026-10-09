@@ -11,7 +11,7 @@ class ClaudeProvider implements IaProviderInterface
     private const API_URL = 'https://api.anthropic.com/v1/messages';
     private const API_VERSION = '2023-06-01';
 
-    public function chat(string $apiKey, string $modelo, string $systemPrompt, array $messages, array $tools): array
+    public function chat(string $apiKey, string $modelo, string|array $systemPrompt, array $messages, array $tools): array
     {
         $payload = [
             'model'      => $modelo,
@@ -20,7 +20,7 @@ class ClaudeProvider implements IaProviderInterface
             // confirmado viendo la respuesta cruda truncada. Un techo más alto no fuerza
             // respuestas más largas, solo evita el corte cuando de verdad hacen falta.
             'max_tokens' => 4096,
-            'system'     => $systemPrompt,
+            'system'     => $this->bloquesSistema($systemPrompt),
             'messages'   => $this->traducirMensajes($messages),
         ];
 
@@ -28,8 +28,11 @@ class ClaudeProvider implements IaProviderInterface
             $payload['tools'] = array_map(fn ($t) => [
                 'name'         => $t['name'],
                 'description'  => $t['description'],
-                'input_schema' => $t['input_schema'],
+                'input_schema' => $this->esquema($t['input_schema']),
             ], $tools);
+            // Las herramientas van antes que el system en la caché de Claude: marcar la última
+            // las guarda a todas, y así cada llamada solo paga completo lo que cambió.
+            $payload['tools'][count($payload['tools']) - 1]['cache_control'] = ['type' => 'ephemeral'];
         }
 
         $response = Http::withHeaders([
@@ -60,11 +63,53 @@ class ClaudeProvider implements IaProviderInterface
         }
 
         return [
-            'content'        => $texto,
-            'tool_calls'     => $toolCalls,
-            'tokens_entrada' => (int) ($data['usage']['input_tokens'] ?? 0),
-            'tokens_salida'  => (int) ($data['usage']['output_tokens'] ?? 0),
+            'content'                => $texto,
+            'tool_calls'             => $toolCalls,
+            // input_tokens de Claude ya excluye lo que salió de la caché o se escribió en ella.
+            'tokens_entrada'         => (int) ($data['usage']['input_tokens'] ?? 0),
+            'tokens_salida'          => (int) ($data['usage']['output_tokens'] ?? 0),
+            'tokens_cache_lectura'   => (int) ($data['usage']['cache_read_input_tokens'] ?? 0),
+            'tokens_cache_escritura' => (int) ($data['usage']['cache_creation_input_tokens'] ?? 0),
         ];
+    }
+
+    /**
+     * Un bloque por trozo del system, con marca de caché en todos menos el último: ese es el
+     * que cambia en cada conversación (quién escribe, de qué anuncio llegó…). Claude acepta
+     * hasta 4 marcas y una ya la usa la última herramienta, así que como mucho se marcan 3.
+     */
+    private function bloquesSistema(string|array $systemPrompt): array
+    {
+        $trozos = array_values(array_filter((array) $systemPrompt, fn ($t) => trim((string) $t) !== ''));
+        $ultimo = count($trozos) - 1;
+
+        $bloques = [];
+        foreach ($trozos as $i => $texto) {
+            $bloque = ['type' => 'text', 'text' => $texto];
+            // Un system de un solo trozo es fijo (los generadores de publicidad): se guarda entero.
+            if (($i < $ultimo || $ultimo === 0) && $i < 3) {
+                $bloque['cache_control'] = ['type' => 'ephemeral'];
+            }
+            $bloques[] = $bloque;
+        }
+
+        return $bloques;
+    }
+
+    /**
+     * Una tool sin parámetros (ej. enviar_tabla_planes) trae properties=[], que PHP serializa
+     * como lista JSON; Claude lo rechaza con 400 "input_schema.properties: Input should be an
+     * object" y con eso TODA la llamada falla. Visto en la batería del 8-oct-2026: el
+     * GeminiProvider ya tenía este mismo arreglo, el de Claude no, y nadie lo notó porque
+     * ningún aliado activo usaba Claude.
+     */
+    private function esquema(array $schema): array
+    {
+        if (array_key_exists('properties', $schema) && empty($schema['properties'])) {
+            $schema['properties'] = new \stdClass();
+        }
+
+        return $schema;
     }
 
     /**
@@ -137,7 +182,10 @@ class ClaudeProvider implements IaProviderInterface
                         'type'  => 'tool_use',
                         'id'    => $tc['id'],
                         'name'  => $tc['name'],
-                        'input' => $tc['input'],
+                        // Mismo problema que con el esquema: una llamada sin argumentos llega
+                        // con input=[] y en el turno siguiente Claude responde 400 "tool_use.input:
+                        // Input should be an object". Pasaba en 5 de 31 casos de la batería.
+                        'input' => empty($tc['input']) ? new \stdClass() : $tc['input'],
                     ];
                 }
                 $out[] = ['role' => 'assistant', 'content' => $blocks];

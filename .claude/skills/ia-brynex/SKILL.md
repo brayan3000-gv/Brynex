@@ -64,10 +64,39 @@ es una decisión de producto, no un descuido.
 
 ## Consumo y costo
 
-`IaConsumo` registra tokens de entrada/salida y `costo_estimado_usd` por
-`aliado_id` + `canal` + `proveedor` + `modelo`. Cualquier llamada nueva al
-LLM debe loguear aquí — es lo que alimenta `BrynexConsumoController` (cobro
-a aliados por uso de IA).
+`IaConsumo` registra tokens de entrada/salida, los de caché (lectura y
+escritura), la latencia del turno y `costo_estimado_usd`, por `aliado_id` +
+`canal` + `proveedor` + `modelo`. Canales: `web`, `whatsapp`, `whatsapp_audio`
+y `garvis_audio` (transcripciones). Cualquier llamada nueva al LLM debe
+loguear aquí. Los precios viven en `PreciosIa` (oficiales, 8-oct-2026); hasta
+esa fecha Gemini 3.6 Flash se registraba al doble del precio real.
+`BrynexConsumoService` (el cobro a los aliados) **no** lee esta tabla.
+
+### Caché y orden del prompt
+
+El system prompt va en trozos, de lo fijo a lo variable
+(`construirSystemPromptWhatsapp` devuelve `[reglas, bloque de aliados,
+contexto de la conversación]`). `ClaudeProvider` marca con `cache_control` la
+última herramienta y todos los trozos menos el último; Gemini y OpenAI los
+pegan y aprovechan su caché automática. **Nada que cambie por conversación
+(fecha con hora, nombre del cliente, anuncio, campaña) puede ir en las
+reglas**: rompe la caché de todas las respuestas.
+
+### Trampa: `[]` vs `{}` en Claude
+
+PHP serializa un array vacío como lista. Una tool sin parámetros
+(`properties: []`) o un `tool_use` sin argumentos (`input: []`) hacen que
+Claude responda 400 y la respuesta entera falle. `ClaudeProvider` y
+`GeminiProvider` lo convierten a `new \stdClass()`; cualquier proveedor nuevo
+tiene que hacer lo mismo.
+
+### Modelos (batería del 8-oct-2026, 31 mensajes reales de Brygar)
+
+- Conversar: `claude-haiku-5-5`. Fue la más correcta y la más barata (≈COP 3–12
+  por respuesta frente a ≈45–62 de `gemini-3.6-flash`). `gemini-3.1-flash-lite`
+  es rápida, pero inventa cifras.
+- Notas de voz: `gemini-3.1-flash-lite` (`GEMINI_MODELO_TRANSCRIBIR`), con
+  respaldo en `gemini-2.5-flash`. Claude no oye audio.
 
 ## Canales
 

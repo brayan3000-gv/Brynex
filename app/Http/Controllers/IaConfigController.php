@@ -29,7 +29,7 @@ class IaConfigController extends Controller
 
         $global = [
             'proveedor_default'   => ConfiguracionBrynex::obtener('ia_proveedor_default', 'claude'),
-            'modelo_claude'       => ConfiguracionBrynex::obtener('ia_modelo_claude_default', 'claude-haiku-4-5-20251001'),
+            'modelo_claude'       => ConfiguracionBrynex::obtener('ia_modelo_claude_default', 'claude-haiku-5-5'),
             'modelo_openai'       => ConfiguracionBrynex::obtener('ia_modelo_openai_default', 'gpt-4o-mini'),
             'modelo_gemini'       => ConfiguracionBrynex::obtener('ia_modelo_gemini_default', 'gemini-3.6-flash'),
             'tiene_key_claude'    => (bool) ConfiguracionBrynex::obtener('ia_global_claude_api_key'),

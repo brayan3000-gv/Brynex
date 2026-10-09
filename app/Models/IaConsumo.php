@@ -11,7 +11,8 @@ class IaConsumo extends BaseModel
 
     protected $fillable = [
         'aliado_id', 'canal', 'conversacion_id', 'proveedor', 'modelo',
-        'tokens_entrada', 'tokens_salida', 'costo_estimado_usd',
+        'tokens_entrada', 'tokens_salida', 'tokens_cache_lectura', 'tokens_cache_escritura',
+        'latencia_ms', 'costo_estimado_usd',
     ];
 
     public function aliado(): BelongsTo
