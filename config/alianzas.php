@@ -46,6 +46,8 @@ return [
     'contactos' => [
         2 => [ // Brygar
             'mayores_de' => 50,
+            // Quien organiza la agenda de las reuniones virtuales, sin importar cuántas personas maneje el prospecto.
+            'agenda' => 'menor',
             'mayor' => ['nombre' => 'Brayan García', 'numero' => '3117762689', 'user_id' => 2, 'compartir' => true],
             'menor' => ['nombre' => 'Angela Ortiz', 'numero' => '3123561665', 'user_id' => null, 'compartir' => false],
         ],

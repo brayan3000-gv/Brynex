@@ -30,6 +30,7 @@ class HablarConAsesorTool implements IaToolInterface
             'type'       => 'object',
             'properties' => [
                 'motivo' => ['type' => 'string', 'description' => 'Resumen breve (una frase) de por qué se transfiere, para que el asesor humano tenga contexto al abrir la conversación.'],
+                'reunion' => ['type' => 'boolean', 'description' => 'true si el prospecto aceptó una reunión virtual: pasa a quien organiza la agenda.'],
             ],
         ];
     }
@@ -43,7 +44,7 @@ class HablarConAsesorTool implements IaToolInterface
             // Un prospecto que quiere trabajar con nosotros va a quien lo atiende según su tamaño,
             // no al inbox general; el resto sigue el camino de siempre.
             $responsable = $conv && empty($contexto['modo_prueba'])
-                ? app(ProspectoAliadoService::class)->pasarAlResponsable($conv, $motivo)
+                ? app(ProspectoAliadoService::class)->pasarAlResponsable($conv, $motivo, ! empty($input['reunion']))
                 : null;
             if ($conv && ! $responsable && empty($contexto['modo_prueba'])) {
                 $conv->escalarAHumano($motivo);
@@ -58,8 +59,8 @@ class HablarConAsesorTool implements IaToolInterface
                 'ok'      => true,
                 'mensaje' => "{$responsable['nombre']} quedó avisado y va a continuar esta conversación por este mismo WhatsApp. "
                     . 'Dile al cliente SOLO eso, en una o dos frases.' . $numero
-                    . ' Si propuso día y hora para una reunión, puedes decirle que se los pasaste para que se los confirme,'
-                    . ' pero NO digas «tomo nota», «anotado» ni que algo quedó agendado: quien confirma es esa persona.',
+                    . ' Si quiere una reunión, dile que esa persona le escribe para ponerse de acuerdo en el día y la hora,'
+                    . ' pero NO digas «tomo nota», «anotado» ni que algo quedó agendado: la agenda la organiza esa persona.',
             ];
         }
 

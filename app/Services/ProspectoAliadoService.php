@@ -325,12 +325,17 @@ class ProspectoAliadoService
      * (asignada si esa persona es usuario del programa) y con el motivo claro para
      * que nadie más la tome.
      */
-    public function pasarAlResponsable(WhatsappConversacion $conv, ?string $motivo = null): ?array
+    public function pasarAlResponsable(WhatsappConversacion $conv, ?string $motivo = null, bool $reunion = false): ?array
     {
         if (! in_array($conv->perfil_aliado, ['asesor', 'empresa'], true)) {
             return null;
         }
         $responsable = $this->responsable((int) $conv->aliado_id, (int) $conv->personas_declaradas);
+        // Las reuniones las agenda una sola persona con cada prospecto, no la IA ni según el tamaño.
+        $agenda = config("alianzas.contactos.{$conv->aliado_id}.agenda");
+        if ($reunion && $agenda) {
+            $responsable = config("alianzas.contactos.{$conv->aliado_id}.$agenda") ?: $responsable;
+        }
         if (! $responsable) {
             return null;
         }
