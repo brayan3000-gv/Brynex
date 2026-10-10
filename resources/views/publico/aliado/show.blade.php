@@ -426,6 +426,16 @@
     .hero-foto .orbita.o2 { top: 8%; right: -18px; }
     .hero-foto .orbita.o3 { top: 34%; left: -26px; bottom: auto; }
 
+    /* ── Mapa en contacto ── */
+    .mapa-contacto { margin-top: 2.5rem; }
+    .mapa-contacto iframe { display: block; width: 100%; height: 300px; border: 0; border-radius: 20px 20px 0 0; filter: saturate(.85); }
+    .mapa-contacto a {
+        display: flex; align-items: center; justify-content: center; gap: .4rem; padding: .75rem;
+        font-size: .85rem; font-weight: 600; color: white;
+        border: 1px solid rgba(255,255,255,.18); border-top: 0; border-radius: 0 0 20px 20px; background: rgba(255,255,255,.06);
+    }
+    .mapa-contacto a:hover { background: rgba(255,255,255,.08); }
+
     /* Tarjeta de marca: el logo del aliado al centro del hero, con los cuatro servicios orbitando. */
     .tarjeta-marca {
         position: relative; z-index: 1; width: min(300px, 82%);
@@ -937,6 +947,17 @@
                 @endif
             </div>
         </div>
+        @if($aliado->direccion)
+            @php $consultaMapa = rawurlencode(trim($aliado->direccion . ', ' . ($aliado->ubicacion_publica ?? '') . ', Colombia', ', ')); @endphp
+            <div class="contenedor mapa-contacto revelar">
+                <iframe src="https://maps.google.com/maps?q={{ $consultaMapa }}&z=16&output=embed" loading="lazy"
+                        referrerpolicy="no-referrer-when-downgrade" title="Ubicación de {{ $aliado->nombre }}"></iframe>
+                <a href="https://www.google.com/maps/search/?api=1&query={{ $consultaMapa }}" target="_blank" rel="noopener">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg>
+                    Cómo llegar
+                </a>
+            </div>
+        @endif
     </section>
 
     <footer>
