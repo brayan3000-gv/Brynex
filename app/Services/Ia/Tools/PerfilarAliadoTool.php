@@ -22,7 +22,7 @@ class PerfilarAliadoTool implements IaToolInterface
     {
         return 'Para prospectos que quieren TRABAJAR CON NOSOTROS: asesores con cartera propia, empresas que quieren '
             .'su marca con nuestra plataforma, o negocios que quieren afiliar a sus propios empleados. Llámala en '
-            .'cuanto sepas dos cosas: qué es (asesor, empresa o empleador) y cuántas personas maneja hoy. Guarda ese '
+            .'cuanto sepas dos cosas —y solo entonces—: qué es (asesor, empresa o empleador) y cuántas personas maneja hoy. Guarda ese '
             .'perfil, te devuelve el camino que le conviene con los números públicos de brynex.co/aliados y el enlace '
             .'con su número ya puesto, y avisa a la persona del equipo que lo va a atender. Vuelve a llamarla si el '
             .'prospecto corrige la cantidad. NO la uses con quien quiere afiliarse él mismo: a ese se le cotiza.';
@@ -38,7 +38,7 @@ class PerfilarAliadoTool implements IaToolInterface
                     'enum' => ['asesor', 'empresa', 'empleador'],
                     'description' => 'asesor: trabaja por su cuenta y afilia a sus propios clientes. empresa: tiene empresa y quiere su propia marca con la plataforma. empleador: quiere afiliar a SUS trabajadores (es cliente).',
                 ],
-                'personas' => ['type' => 'integer', 'description' => 'Cuántas personas o afiliados maneja hoy, según él. Si dio un rango, el menor; si dijo "más de 30", 30.'],
+                'personas' => ['type' => 'integer', 'description' => 'Cuántas personas o afiliados maneja hoy, según él. Si dio un rango, el menor; si dijo "más de 30", 30. Si todavía NO dijo cuántas, no llames la herramienta: pregúntale primero (nunca pongas 0 ni 1 por suponer). Si dejó el negocio pero tuvo cartera ("antes manejaba 3000"), usa la que tenía y acláralo en detalle.'],
                 'detalle' => ['type' => 'string', 'description' => 'Una frase con lo que contó (a qué se dedica, ciudad, qué le interesa), para quien lo atienda.'],
             ],
             'required' => ['tipo', 'personas'],
@@ -57,7 +57,7 @@ class PerfilarAliadoTool implements IaToolInterface
             : $servicio->orientar(2, $tipo, $personas) + ['responsable' => null];
 
         if (! empty($input['detalle']) && $conv && empty($contexto['modo_prueba'])) {
-            $conv->forceFill(['pendiente_motivo' => mb_substr('🤝 '.ucfirst($tipo).' · '.$personas.' personas · '.$input['detalle'], 0, 255)])->save();
+            $conv->forceFill(['pendiente_motivo' => '🤝 '.ucfirst($tipo).' · '.$personas.' personas · '.$input['detalle']])->save();
         }
 
         return [

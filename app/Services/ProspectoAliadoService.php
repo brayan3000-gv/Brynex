@@ -336,7 +336,7 @@ class ProspectoAliadoService
         }
         $texto = '🤝 Prospecto '.strtolower(self::TIPOS[$conv->perfil_aliado]).' · '.$conv->personas_declaradas.' personas → lo atiende '
             .$responsable['nombre'].($motivo ? '. '.$motivo : '');
-        $datos = ['bot_activo' => false, 'pendiente_atencion' => true, 'pendiente_motivo' => mb_substr($texto, 0, 255)];
+        $datos = ['bot_activo' => false, 'pendiente_atencion' => true, 'pendiente_motivo' => $texto];
         if (! empty($responsable['user_id'])) {
             $datos += ['asignado_a' => $responsable['user_id'], 'asignado_at' => now(), 'estado' => 'asignada'];
         }

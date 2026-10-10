@@ -290,6 +290,23 @@ class WhatsappConversacion extends BaseModel
      * El Asistente IA transfiere la conversación a un humano (ej: el cliente lo pidió).
      * Queda sin asignar en el inbox General, marcada como pendiente por atender.
      */
+    /**
+     * pendiente_motivo es nvarchar(255), que cuenta en UTF-16: un emoji como 🤝 ocupa dos
+     * posiciones y un mb_substr(…, 0, 255) se pasaba por una. El 9-oct-2026 eso tumbó el
+     * traspaso de un prospecto de 90 personas («String or binary data would be truncated»)
+     * y el cliente recibió el mensaje de falla técnica. Se recorta aquí para cualquier escritura.
+     */
+    public function setPendienteMotivoAttribute(?string $valor): void
+    {
+        if ($valor !== null) {
+            $valor = mb_substr($valor, 0, 255);
+            while (strlen(mb_convert_encoding($valor, 'UTF-16LE', 'UTF-8')) > 510) {
+                $valor = mb_substr($valor, 0, -1);
+            }
+        }
+        $this->attributes['pendiente_motivo'] = $valor;
+    }
+
     public function escalarAHumano(?string $motivo = null): void
     {
         $this->update([

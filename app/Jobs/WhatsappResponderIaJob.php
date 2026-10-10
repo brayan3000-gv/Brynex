@@ -119,7 +119,22 @@ class WhatsappResponderIaJob implements ShouldQueue
                 'conversacion_id' => $conversacion->id,
             ]);
 
-            $conversacion->escalarAHumano('El asistente tuvo un problema técnico y no pudo responder.');
+            // Un prospecto aliado ya perfilado va a quien lo atiende según su tamaño, con aviso
+            // por WhatsApp; si no, quedaba en el inbox general sin que esa persona se enterara
+            // (9-oct-2026: el de 90 personas esperó un día entero).
+            $motivo = 'El asistente tuvo un problema técnico y no pudo responder.';
+            $responsable = null;
+            try {
+                $responsable = app(\App\Services\ProspectoAliadoService::class)->pasarAlResponsable($conversacion->fresh(), $motivo);
+            } catch (\Throwable $e2) {
+                Log::error('IA WhatsApp: tampoco se pudo pasar el prospecto a su responsable', [
+                    'error' => $e2->getMessage(),
+                    'conversacion_id' => $conversacion->id,
+                ]);
+            }
+            if (! $responsable) {
+                $conversacion->escalarAHumano($motivo);
+            }
             $this->enviarYRegistrar(
                 $conversacion,
                 $config,
