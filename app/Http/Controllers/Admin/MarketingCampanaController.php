@@ -8,6 +8,7 @@ use App\Models\{
     ConfiguracionAliado, MarketingCampana, MarketingContacto, MarketingLista,
     WhatsappConfig, WhatsappEnvioMasivo, WhatsappEnvioMasivoDetalle, WhatsappPlantilla
 };
+use App\Services\WhatsappBandejaCompartida;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB};
 
@@ -42,7 +43,7 @@ class MarketingCampanaController extends Controller
         $this->autorizarAdmin();
         $alidoId = session('aliado_id_activo');
 
-        $plantillas = WhatsappPlantilla::delAliado($alidoId)->aprobadas()->orderBy('nombre_display')->get();
+        $plantillas = WhatsappPlantilla::delAliado($this->aliadoDuenoPlantillas($alidoId))->aprobadas()->deMarketing()->orderBy('nombre_display')->get();
 
         return view('admin.marketing.campanas.create', compact('plantillas'));
     }
@@ -62,7 +63,7 @@ class MarketingCampanaController extends Controller
             'incluir_clientes_vigentes'  => 'nullable|boolean',
         ]);
 
-        $plantilla = WhatsappPlantilla::delAliado($alidoId)->aprobadas()->findOrFail($validated['plantilla_id']);
+        $plantilla = WhatsappPlantilla::delAliado($this->aliadoDuenoPlantillas($alidoId))->aprobadas()->deMarketing()->findOrFail($validated['plantilla_id']);
 
         $guiaBotones = [];
         foreach ($validated['boton_texto'] ?? [] as $i => $texto) {
@@ -327,6 +328,18 @@ class MarketingCampanaController extends Controller
             $numero = '57' . $numero;
         }
         return '+' . $numero;
+    }
+
+    /**
+     * Las plantillas de la cuenta compartida se guardan a nombre de BryNex (así las crea
+     * WhatsappPlantillaController), no del aliado que las usa: sin esto un aliado en la
+     * cuenta compartida no ve ninguna plantilla al crear la campaña.
+     */
+    private function aliadoDuenoPlantillas(int $alidoId): int
+    {
+        return WhatsappConfig::paraAliado($alidoId)->usa_cuenta_brynex
+            ? WhatsappBandejaCompartida::aliadoBandeja()
+            : $alidoId;
     }
 
     private function autorizarAdmin(): void

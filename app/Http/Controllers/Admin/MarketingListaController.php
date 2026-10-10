@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\{MarketingBloqueado, MarketingContacto, MarketingLista};
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\{Auth, DB};
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
 /**
@@ -52,10 +52,11 @@ class MarketingListaController extends Controller
             'descripcion'   => 'nullable|string|max:500',
             'numeros_texto' => 'nullable|string',
             'archivo'       => 'nullable|file|mimes:xlsx,xls,csv|max:10240',
+            'clientes_vigentes' => 'nullable|boolean',
         ]);
 
-        if (empty($validated['numeros_texto']) && !$request->hasFile('archivo')) {
-            return back()->withErrors(['carga' => 'Pega números o sube un archivo — necesitas al menos una fuente de contactos.'])->withInput();
+        if (empty($validated['numeros_texto']) && !$request->hasFile('archivo') && !$request->boolean('clientes_vigentes')) {
+            return back()->withErrors(['carga' => 'Pega números, sube un archivo o marca tus clientes vigentes — necesitas al menos una fuente de contactos.'])->withInput();
         }
 
         $lista = MarketingLista::firstOrCreate(
@@ -69,6 +70,9 @@ class MarketingListaController extends Controller
         }
         if ($request->hasFile('archivo')) {
             $filas = array_merge($filas, $this->parsearArchivo($request->file('archivo')));
+        }
+        if ($request->boolean('clientes_vigentes')) {
+            $filas = array_merge($filas, $this->filasClientesVigentes($alidoId));
         }
 
         $resumen = $this->cargarContactos($alidoId, $lista, $filas);
@@ -190,6 +194,36 @@ class MarketingListaController extends Controller
             ];
         }
         return $filas;
+    }
+
+    /**
+     * Clientes del aliado con al menos un contrato vigente y celular registrado. Varios
+     * clientes pueden compartir celular (el de la empresa o un familiar): el pool guarda
+     * el número una sola vez, así que les llega un solo mensaje.
+     */
+    private function filasClientesVigentes(int $alidoId): array
+    {
+        return DB::table('clientes as cl')
+            ->leftJoin('departamentos as d', 'd.id', '=', 'cl.departamento_id')
+            ->leftJoin('ciudades as ci', 'ci.id', '=', 'cl.municipio_id')
+            ->where('cl.aliado_id', $alidoId)
+            ->whereNotNull('cl.celular')
+            ->where('cl.celular', '<>', '')
+            ->whereExists(fn ($q) => $q->from('contratos as c')
+                ->whereColumn('c.cedula', 'cl.cedula')
+                ->where('c.aliado_id', $alidoId)
+                ->whereIn('c.estado', ['vigente', 'activo']))
+            ->orderBy('cl.id')
+            ->get(['cl.celular', 'cl.cedula', 'cl.primer_nombre', 'cl.primer_apellido', 'd.nombre as departamento', 'ci.nombre as ciudad'])
+            ->map(fn ($c) => [
+                'celular'      => (string) $c->celular,
+                'cedula'       => $c->cedula,
+                'nombres'      => mb_convert_case(trim("{$c->primer_nombre} {$c->primer_apellido}"), MB_CASE_TITLE, 'UTF-8'),
+                'departamento' => $c->departamento,
+                'ciudad'       => $c->ciudad,
+                'observacion'  => 'Cliente vigente',
+            ])
+            ->all();
     }
 
     /**

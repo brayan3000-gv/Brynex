@@ -68,6 +68,19 @@ textarea.form-control { min-height:160px; resize:vertical; font-family:ui-monosp
             </div>
         </div>
 
+        <div class="divider-or">Y / O</div>
+
+        <div class="form-card">
+            <div class="section-title">👥 Mis clientes vigentes</div>
+            <div class="form-group">
+                <label style="display:flex;gap:.5rem;align-items:flex-start;font-size:.83rem;color:#374151;cursor:pointer">
+                    <input type="checkbox" name="clientes_vigentes" value="1" @checked(old('clientes_vigentes')) style="margin-top:.2rem">
+                    <span>Agregar a todos los clientes con contrato vigente que tengan celular registrado</span>
+                </label>
+                <div class="form-hint">Se cargan con su nombre, departamento y ciudad, y la observación «Cliente vigente». Un celular compartido por varios clientes recibe un solo mensaje. Al crear la campaña marca «Incluir también a clientes actuales», o la tanda los va a excluir.</div>
+            </div>
+        </div>
+
         <button type="submit" class="btn btn-primary">Cargar contactos</button>
     </form>
 </div>

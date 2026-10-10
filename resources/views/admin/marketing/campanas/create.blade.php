@@ -49,7 +49,7 @@ textarea.form-control { min-height:90px; resize:vertical; }
                     @endforeach
                 </select>
                 @if($plantillas->isEmpty())
-                    <div class="form-hint">No tienes plantillas aprobadas todavía — créalas en WhatsApp → Plantillas.</div>
+                    <div class="form-hint">No tienes plantillas de marketing aprobadas todavía — créalas en WhatsApp → Plantillas con la categoría Marketing.</div>
                 @endif
             </div>
         </div>
@@ -82,7 +82,7 @@ textarea.form-control { min-height:90px; resize:vertical; }
 
             <div class="form-group checkbox-row">
                 <input type="checkbox" name="incluir_clientes_vigentes" id="incluir_clientes" value="1">
-                <label for="incluir_clientes" style="font-size:.82rem;color:#374151">Incluir también a clientes actuales (por defecto se excluyen)</label>
+                <label for="incluir_clientes" style="font-size:.82rem;color:#374151">Incluir también a clientes actuales (por defecto se excluyen). Márcalo si la campaña es para tus propios clientes, por ejemplo con la lista de clientes vigentes.</label>
             </div>
         </div>
 

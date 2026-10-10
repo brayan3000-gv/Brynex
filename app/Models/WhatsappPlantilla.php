@@ -62,6 +62,16 @@ class WhatsappPlantilla extends BaseModel
         return $query->where('estado', 'approved');
     }
 
+    /**
+     * Solo las de categoría MARKETING. Las campañas no pueden salir con una de utilidad:
+     * el envío masivo respeta la lista de baja solo en las de marketing, y en la cuenta
+     * compartida la lista traería las de cobro y las del sistema.
+     */
+    public function scopeDeMarketing($query)
+    {
+        return $query->where('categoria', 'MARKETING');
+    }
+
     public function scopeDelAliado($query, int $alidoId)
     {
         return $query->where('aliado_id', $alidoId);
