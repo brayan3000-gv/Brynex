@@ -6,10 +6,23 @@
 
     @include('admin.partials.table-header', [
         'titulo'    => '🏢 Empresas Aliadas',
-        'subtitulo' => $aliados->count() . ' aliados registrados',
+        'subtitulo' => $total . ' aliados registrados',
         'btnTexto'  => 'Nuevo Aliado',
         'btnRuta'   => route('admin.aliados.create'),
     ])
+
+    {{-- Filtro de estado: por defecto solo los activos --}}
+    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:1rem;">
+        @foreach (['activos' => 'Activos', 'pausados' => 'Pausados', 'inactivos' => 'Inactivos', 'todos' => 'Todos'] as $clave => $etiqueta)
+            @php $sel = $estado === $clave; @endphp
+            <a href="{{ route('admin.aliados.index', ['estado' => $clave]) }}"
+                style="padding:0.35rem 0.85rem;border-radius:999px;font-size:0.78rem;font-weight:600;text-decoration:none;
+                       border:1px solid {{ $sel ? '#2563eb' : '#e2e8f0' }};background:{{ $sel ? '#2563eb' : '#fff' }};color:{{ $sel ? '#fff' : '#475569' }};">
+                {{ $etiqueta }}
+                <span style="opacity:0.75;">{{ $clave === 'todos' ? $total : ($conteos[$clave] ?? 0) }}</span>
+            </a>
+        @endforeach
+    </div>
 
 <div style="overflow-x:auto;">
         <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
@@ -93,8 +106,12 @@
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="7" style="text-align:center;padding:2rem;color:#94a3b8;">
+                    <td colspan="8" style="text-align:center;padding:2rem;color:#94a3b8;">
+                        @if ($total > 0)
+                            No hay aliados en este estado.
+                        @else
                         No hay aliados registrados. <a href="{{ route('admin.aliados.create') }}" style="color:#2563eb;">Crear el primero →</a>
+                        @endif
                     </td>
                 </tr>
                 @endforelse

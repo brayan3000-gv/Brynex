@@ -24,13 +24,23 @@ class AlidoController extends Controller
         $this->middleware(['auth', 'role:superadmin']);
     }
 
-    public function index()
+    /** Estados del listado: activo, pausado (activo = 0) e inactivo (borrado suave). */
+    private const ESTADOS = ['activos', 'pausados', 'inactivos', 'todos'];
+
+    public function index(Request $request)
     {
-        $aliados = Aliado::withCount('usuarios')
+        $estado = in_array($request->query('estado'), self::ESTADOS, true) ? $request->query('estado') : 'activos';
+
+        $todos = Aliado::withCount('usuarios')
             ->withTrashed()
             ->orderBy('nombre')
             ->get();
-        return view('admin.aliados.index', compact('aliados'));
+
+        $porEstado = fn ($a) => $a->trashed() ? 'inactivos' : ($a->activo ? 'activos' : 'pausados');
+        $conteos = $todos->countBy($porEstado);
+        $aliados = $estado === 'todos' ? $todos : $todos->filter(fn ($a) => $porEstado($a) === $estado);
+
+        return view('admin.aliados.index', compact('aliados', 'estado', 'conteos') + ['total' => $todos->count()]);
     }
 
     public function create()
