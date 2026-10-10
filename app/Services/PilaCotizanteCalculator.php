@@ -28,7 +28,7 @@ class PilaCotizanteCalculator
 
     // ── tipo_modalidad_id especiales ────────────────────────────────────────
     private const TIPO_K_MATRIZ        = -1; // Planilla K: solo ARL, tipo cotizante 23
-    private const TIPOS_INDEPENDIENTE  = [10, 11]; // tipo cotizante 2
+    private const TIPOS_INDEPENDIENTE  = [10, 11]; // tipo cotizante 3 (o 59 con ARL)
     /**
      * Tiempo Parcial Independiente → tipo cotizante 76 (Resolución 1529 de 2026).
      * La señal es la modalidad y no la razón social: hay planos de tiempo
@@ -55,7 +55,7 @@ class PilaCotizanteCalculator
      *                    es la AFP de la ficha del cliente, que sirve de
      *                    respaldo cuando el plano va sin fondo de pensión.
      * @return array {
-     *   tipoCotizante: int,       // 1=dep, 2=indep, 23=K
+     *   tipoCotizante: int,       // 1=dep, 3=indep, 59=indep con ARL, 23=K
      *   subtipoCotizante: int,    // 0, 3, 4
      *   tienePension: bool,
      *   esKMatriz: bool,          // true si tipo_modalidad_id = -1
@@ -89,7 +89,7 @@ class PilaCotizanteCalculator
      *   ibcOtros: int,            // IBC parafiscales (SENA/ICBF)
      *   vSena: int,
      *   vIcbf: int,
-     *   tipoSalarioAplica: bool,  // false en 23, 51 y 59: PILA prohíbe marcarlo
+     *   tipoSalarioAplica: bool,  // false en 3, 23, 51 y 59: PILA prohíbe marcarlo
      *   horasLaboradas: int,      // 0 cuando no hay aporte a CCF (23 y modalidad 8)
      *   sinCaja: bool,            // true si codCcfPila='CCF68' (sin caja propia)
      *   ibcCcf: int,              // 100 si sin caja, ibcProp si tiene caja, 0 si K
@@ -112,7 +112,9 @@ class PilaCotizanteCalculator
         // La ARL distingue los dos tipos de independiente: quien la lleva
         // tiene contrato de prestación de servicios de más de un mes, y ese
         // contrato obliga a afiliarlo a riesgos (Decreto 723/2013) → tipo 59.
-        // Sin ARL es un independiente por cuenta propia → tipo 2.
+        // Sin ARL es un independiente por cuenta propia → tipo 3. El 2 es
+        // "Servicio doméstico" en el tipo de cotizante; el 2 que significa
+        // independiente es el del tipo de aportante, que es otro campo.
         $codArlRaw = trim((string)($p->cod_arl ?? ''));
         $llevaArl  = $codArlRaw !== '' && $codArlRaw !== '0';
 
@@ -122,7 +124,7 @@ class PilaCotizanteCalculator
         } elseif ($esTiempoParcial) {
             $tipoCotizante = 51;
         } elseif ($esIndependiente || $esIndep) {
-            $tipoCotizante = $llevaArl ? 59 : 2;
+            $tipoCotizante = $llevaArl ? 59 : 3;
         } else {
             $tipoCotizante = 1;
         }
@@ -557,8 +559,10 @@ class PilaCotizanteCalculator
             'munCod'           => $munCod,
             // PILA prohíbe marcar el tipo de salario en el cotizante 59
             // (independiente con contrato de prestación de servicios), venga
-            // de la planilla Y o de la I: error `eo.val.2.237` de Enlace.
-            'tipoSalarioAplica' => $tipoCotizante !== 59,
+            // de la planilla Y o de la I: error `eo.val.2.237` de Enlace. Al
+            // independiente 3 tampoco le aplica: el campo 41 solo se llena
+            // para los cotizantes 1, 2, 20, 22, 32 y 58 (Anexo Técnico 2).
+            'tipoSalarioAplica' => ! in_array($tipoCotizante, [3, 59], true),
             'horasLaboradas'   => $dias * 8,    // Normal: num_dias × 8
         ];
 

@@ -553,7 +553,7 @@ class PlanoPilaTxtService
 
         $esPlanillaY = ((int) $p->tipo_modalidad_id === 8);
 
-        $tipoCot = str_pad((string) $c['tipoCotizante'], 2, '0', STR_PAD_LEFT); // '01','02','23'
+        $tipoCot = str_pad((string) $c['tipoCotizante'], 2, '0', STR_PAD_LEFT); // '01','03','59','23'
         $subtipo = $esPlanillaY ? '00' : str_pad((string) $c['subtipoCotizante'], 2, '0', STR_PAD_LEFT);
         $exonerado = $c['exonerado'];
         $tienePension = $c['tienePension'];
@@ -570,7 +570,7 @@ class PlanoPilaTxtService
         $ibcProp = $c['ibcProp'];
         $dias = $c['dias'];
         // Tipo salario: blank para los tipos de cotizante a los que PILA le
-        // prohíbe marcar el campo — 51 (tiempo parcial), 23 (estudiante K,
+        // prohíbe marcar el campo — 3 (independiente), 51 (tiempo parcial), 23 (estudiante K,
         // Decreto 055/2015, que solo aporta a riesgos) y 59 (contratista con
         // prestación de servicios). Marcarlo es el error `eo.val.2.237`.
         $esIntegral = ! $c['tipoSalarioAplica']

@@ -249,7 +249,7 @@ class ExcelAsopagosService
             16 => $c['nivelRiesgo'],                                                          // Código Centro de trabajo
             17 => $c['depCod'],                                                               // Código Departamento de la ubicación laboral
             18 => $c['munCod'],                                                               // Código de municipio de la ubicación laboral
-            19 => $c['tipoCotizante'] === 2 ? 'N' : 'S',                                      // Acogido a exoneración en parafiscales
+            19 => $c['tipoCotizante'] === 3 ? 'N' : 'S',                                      // Acogido a exoneración en parafiscales
             20 => null,                                                                       // Indicador de tarifa especial de pensión
             21 => $esPlanillaY ? null : ($c['tipoCotizante'] === 23 ? null : ($p->nombre_asopagos_eps ?: $c['codEpsPila'])), // EPS (nombre)
             22 => $esPlanillaY ? null : ($c['tienePension'] ? ($p->nombre_asopagos_afp ?: $c['codAfpPila']) : 'SINAFP_SINAFP'), // AFP (nombre)
@@ -258,7 +258,7 @@ class ExcelAsopagosService
             25 => null,                                                                       // Tipo de identificación del cotizante titular UPC
             26 => null,                                                                       // Número de identificación del cotizante titular UPC
             27 => $c['tienePension'] ? rtrim(rtrim($c['tarifaAfpStr'] ?? '0.16', '0'), '.') : '0.00', // Tarifa pensión (el cotizante 33 trae la suya)
-            28 => $c['tipoCotizante'] === 23 ? '0.00' : ($c['tipoCotizante'] === 2 ? '0.125' : '0.04'), // Tarifa salud
+            28 => $c['tipoCotizante'] === 23 ? '0.00' : ($c['tipoCotizante'] === 3 ? '0.125' : '0.04'), // Tarifa salud
             29 => '0.00',                                                                     // Tarifa Sena
             30 => '0.00',                                                                     // Tarifa ICBF
             31 => $c['tipoCotizante'] === 23 ? '0.00' : '0.04',                               // Tarifa de Caja de compensación

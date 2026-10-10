@@ -489,7 +489,7 @@ class ExcelPlanoNIService
             /*  2 */ $seq,                                             // Secuencia
             /*  3 */ $tipoDocNorm,                                     // Tipo documento
             /*  4 */ (string)$p->no_identifi,                          // Documento
-            /*  5 */ $c['tipoCotizante'],                              // Tipo cotizante (1/2/23)
+            /*  5 */ $c['tipoCotizante'],                              // Tipo cotizante (1/3/59/23)
             /*  6 */ $esPlanillaY ? 0 : (int)$c['subtipoCotizante'],   // Subtipo (0/3/4) — 0 cuando no aplica excepción
             /*  7 */ $esExtranjero,                                    // Extranjero
             /*  8 */ null,                                             // Colombiano exterior
