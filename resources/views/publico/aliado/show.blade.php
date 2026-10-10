@@ -217,29 +217,78 @@
         border-radius: 24px;
         padding: 2rem;
     }
-    .cotizador-pasos { display: flex; gap: 0.5rem; margin-bottom: 1.75rem; }
-    .cotizador-pasos span {
-        flex: 1; height: 5px; border-radius: 999px; background: var(--borde);
-        transition: background .2s ease;
-    }
-    .cotizador-pasos span.activo { background: var(--brand); }
+    /* Indicador de pasos con nombre: 1 Arma tu plan — 2 Tu precio */
+    .cot-pasos { display: flex; align-items: center; gap: .75rem; margin-bottom: 1.75rem; }
+    .cot-pi { display: flex; align-items: center; gap: .5rem; font-size: .8rem; font-weight: 700; color: var(--tinta-suave); white-space: nowrap; }
+    .cot-pi b { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .8rem; background: var(--borde); color: var(--tinta-suave); transition: background .3s ease, color .3s ease, box-shadow .3s ease; }
+    .cot-pi.activo { color: var(--tinta); }
+    .cot-pi.activo b { background: var(--brand); color: var(--brand-text); box-shadow: 0 0 0 5px var(--brand-soft); }
+    .cot-pi-linea { flex: 1; height: 4px; border-radius: 999px; background: var(--borde); overflow: hidden; }
+    .cot-pi-linea i { display: block; height: 100%; width: 0; background: var(--brand); border-radius: inherit; transition: width .5s cubic-bezier(.2,.7,.2,1); }
+    .caja-cotizador[data-paso="2"] .cot-pi-linea i { width: 100%; }
+
     .cot-paso { display: none; }
-    .cot-paso.activo { display: block; }
-    .cot-titulo { font-size: 1.15rem; font-weight: 800; margin-bottom: 0.3rem; }
+    .cot-paso.activo { display: block; animation: pasoEntra .45s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes pasoEntra { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+    .cot-titulo { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: 1.25rem; font-weight: 800; margin-bottom: 0.3rem; }
     .cot-sub { font-size: 0.85rem; color: var(--tinta-suave); margin-bottom: 1.25rem; }
-    .lista-coberturas { display: flex; flex-direction: column; gap: 0.6rem; margin-bottom: 1.25rem; }
-    .cobertura {
-        display: flex; align-items: center; gap: 0.65rem;
-        border: 1.5px solid var(--borde); border-radius: 12px; padding: 0.75rem 0.9rem;
-        background: var(--blanco); cursor: pointer;
+
+    /* Coberturas como fichas que se tocan */
+    .grid-cob { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-bottom: 1rem; }
+    .cob {
+        position: relative; display: flex; align-items: center; gap: .75rem; cursor: pointer;
+        background: var(--blanco); border: 1.5px solid var(--borde); border-radius: 16px; padding: .9rem 1rem;
+        transition: border-color .2s ease, box-shadow .2s ease, transform .15s ease, background .2s ease;
+        user-select: none;
     }
-    .cobertura input { width: 17px; height: 17px; accent-color: var(--brand); }
-    .cobertura span { font-size: 0.88rem; font-weight: 600; }
-    .cobertura-arl span { flex: 1; }
-    .cobertura-arl .nivel-arl-inline {
-        width: auto; padding: 0.35rem 0.55rem; border: 1.5px solid var(--borde); border-radius: 8px;
-        font-size: 0.8rem; font-family: inherit; background: var(--blanco); cursor: pointer;
+    .cob:hover { border-color: var(--brand-line); transform: translateY(-2px); }
+    .cob input { position: absolute; opacity: 0; pointer-events: none; }
+    .cob-ico { flex-shrink: 0; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-dark); transition: background .2s ease, color .2s ease, transform .3s cubic-bezier(.3,1.6,.5,1); }
+    .cob-ico svg { width: 22px; height: 22px; }
+    .cob-txt { flex: 1; min-width: 0; }
+    .cob-txt strong { display: block; font-size: .9rem; }
+    .cob-txt small { display: block; font-size: .74rem; color: var(--tinta-suave); line-height: 1.3; margin-top: .1rem; }
+    .cob-check { flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--borde); display: flex; align-items: center; justify-content: center; color: transparent; transition: all .2s ease; }
+    .cob-check svg { width: 13px; height: 13px; }
+    .cob:has(input:checked) { border-color: var(--brand); background: var(--brand-softer); box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--brand) 70%, transparent); }
+    .cob:has(input:checked) .cob-ico { background: var(--brand); color: var(--brand-text); transform: scale(1.08) rotate(-4deg); }
+    .cob:has(input:checked) .cob-check { background: var(--brand); border-color: var(--brand); color: var(--brand-text); animation: chequeo .35s cubic-bezier(.3,1.6,.5,1); }
+    .cob:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+    @keyframes chequeo { 0% { transform: scale(.4); } 100% { transform: scale(1); } }
+
+    /* Nivel de riesgo ARL: aparece solo con ARL marcada */
+    .panel-arl { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows .35s ease, opacity .3s ease, margin .35s ease; margin-bottom: 0; }
+    .panel-arl.abierto { grid-template-rows: 1fr; opacity: 1; margin-bottom: 1rem; }
+    .panel-arl > div { overflow: hidden; }
+    .panel-arl-caja { background: var(--blanco); border: 1.5px dashed var(--brand-line); border-radius: 16px; padding: .9rem 1rem; }
+    .panel-arl-tit { font-size: .8rem; font-weight: 700; margin-bottom: .6rem; }
+    .niveles-arl { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; }
+    .niveles-arl button {
+        font: 800 .9rem 'Plus Jakarta Sans', 'Inter', sans-serif; padding: .55rem 0; border-radius: 10px; cursor: pointer;
+        border: 1.5px solid var(--borde); background: var(--blanco); color: var(--tinta-suave); transition: all .2s ease;
     }
+    .niveles-arl button:hover { border-color: var(--brand-line); color: var(--tinta); }
+    .niveles-arl button.activo { background: var(--brand); border-color: var(--brand); color: var(--brand-text); transform: translateY(-2px); box-shadow: 0 8px 16px -10px color-mix(in srgb, var(--brand) 80%, transparent); }
+    .nivel-desc { font-size: .78rem; color: var(--tinta-suave); margin-top: .55rem; min-height: 1.2em; }
+    .nivel-desc strong { color: var(--tinta); }
+
+    /* Ingresos con formato de pesos y atajos */
+    .input-dinero { display: flex; align-items: center; border: 1.5px solid var(--borde); border-radius: 12px; background: var(--blanco); transition: border-color .2s ease, box-shadow .2s ease; }
+    .input-dinero:focus-within { border-color: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+    .input-dinero span { padding-left: .9rem; font-weight: 800; color: var(--tinta-suave); }
+    .input-dinero input { border: 0 !important; background: transparent !important; font: 700 1.05rem 'Plus Jakarta Sans', 'Inter', sans-serif !important; padding: .7rem .6rem !important; outline: none; }
+    .chips-ingreso { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .55rem; }
+    .chips-ingreso button { font: 600 .75rem 'Inter', sans-serif; padding: .35rem .75rem; border-radius: 999px; border: 1px solid var(--borde); background: var(--blanco); color: var(--tinta-suave); cursor: pointer; transition: all .15s ease; }
+    .chips-ingreso button:hover { border-color: var(--brand-line); color: var(--tinta); }
+    .chips-ingreso button.activo { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-dark); }
+
+    /* Resumen vivo de lo escogido */
+    .cot-resumen { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; min-height: 1.9rem; margin-top: .25rem; font-size: .78rem; color: var(--tinta-suave); }
+    .cot-resumen .pill { background: var(--brand-soft); color: var(--brand-dark); font-weight: 700; padding: .25rem .65rem; border-radius: 999px; animation: chequeo .3s cubic-bezier(.3,1.6,.5,1); }
+    .giro { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; display: inline-block; animation: girar .7s linear infinite; }
+    @keyframes girar { to { transform: rotate(360deg); } }
+    #btnVerPlan .flecha { display: inline-block; transition: transform .2s ease; }
+    #btnVerPlan:hover .flecha { transform: translateX(4px); }
     .cot-aviso {
         background: color-mix(in srgb, #d97706 10%, white); border: 1px solid color-mix(in srgb, #d97706 30%, white);
         border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 1.25rem; font-size: 0.8rem; color: #92400e;
@@ -253,13 +302,20 @@
     .ayuda-cot { font-size: 0.75rem; color: var(--tinta-suave); margin-top: 0.35rem; }
     .cot-nav { display: flex; justify-content: space-between; gap: 0.75rem; margin-top: 1.25rem; }
     .cot-nav .btn-volver { background: none; border: none; color: var(--tinta-suave); font-size: 0.85rem; font-weight: 600; cursor: pointer; padding: 0.6rem; }
+    .cot-resultado-cab { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+    .cot-resultado-cab .btn-volver { white-space: nowrap; flex-shrink: 0; background: none; border: 1px solid var(--borde); border-radius: 999px; color: var(--tinta-suave); font-size: .8rem; font-weight: 600; cursor: pointer; padding: .4rem .85rem; }
+    .cot-resultado-cab .btn-volver:hover { border-color: var(--brand-line); color: var(--tinta); }
     .resultado-columnas { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; margin-bottom: 1.25rem; }
     .resultado-columnas.una-sola { grid-template-columns: 1fr; }
-    .resultado-cot { background: var(--blanco); border: 1.5px solid var(--borde); border-radius: 16px; padding: 1.5rem; display: flex; flex-direction: column; transition: border-color .15s ease, box-shadow .15s ease; }
+    .resultado-cot { background: var(--blanco); border: 1.5px solid var(--borde); border-radius: 16px; padding: 1.5rem; display: flex; flex-direction: column; transition: border-color .15s ease, box-shadow .15s ease, transform .2s ease; animation: pasoEntraArriba .5s cubic-bezier(.2,.7,.2,1) both; }
+    .resultado-cot:nth-child(2) { animation-delay: .12s; }
+    .resultado-cot.seleccionado { transform: translateY(-3px); }
+    @keyframes pasoEntraArriba { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+    #cotFormLeadWrap.visible { animation: pasoEntraArriba .45s cubic-bezier(.2,.7,.2,1) both; }
     .resultado-cot.seleccionado { border-color: var(--brand); box-shadow: 0 12px 28px -18px color-mix(in srgb, var(--brand) 50%, transparent); }
     .resultado-cot .etiqueta-perfil { font-size: 0.72rem; font-weight: 700; color: var(--tinta-suave); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.3rem; }
     .resultado-cot .plan-elegido { font-size: 0.95rem; font-weight: 700; color: var(--brand-dark); margin-bottom: 0.5rem; }
-    .resultado-cot .valor-grande { font-size: 1.8rem; font-weight: 800; color: var(--tinta); }
+    .resultado-cot .valor-grande { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: 1.9rem; font-weight: 800; letter-spacing: -.02em; color: var(--tinta); }
     .resultado-cot .valor-grande small { font-size: 0.85rem; font-weight: 600; color: var(--tinta-suave); }
     .resultado-cot .linea { display: flex; justify-content: space-between; font-size: 0.82rem; padding: 0.45rem 0; border-top: 1px dashed var(--borde); color: var(--tinta-suave); }
     .resultado-cot .base-cot { font-size: 0.76rem; color: var(--tinta-suave); margin-top: 0.4rem; }
@@ -272,7 +328,15 @@
     .form-lead input[type=checkbox] { margin-top: 0.15rem; }
     .cot-error { background: #fee2e2; color: #991b1b; border-radius: 10px; padding: 0.7rem 0.9rem; font-size: 0.82rem; margin-bottom: 1rem; }
     .cot-ok { text-align: center; padding: 1.5rem 0; }
-    .cot-ok .icono-ok { width: 56px; height: 56px; border-radius: 50%; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; }
+    .cot-ok .icono-ok { width: 64px; height: 64px; border-radius: 50%; background: #dcfce7; color: #16a34a; font-size: 1.6rem; font-weight: 800; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; animation: chequeo .5s cubic-bezier(.3,1.6,.5,1) both; box-shadow: 0 0 0 10px #f0fdf4; }
+    @media (max-width: 560px) {
+        .grid-cob { grid-template-columns: 1fr; }
+        .cot-pi span { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .cot-paso.activo, .resultado-cot, #cotFormLeadWrap.visible, .cob-check, .cot-resumen .pill, .cot-ok .icono-ok { animation: none; }
+        .cob:hover { transform: none; }
+    }
 
     .promos { background: var(--blanco); }
     .grid-promos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
@@ -765,39 +829,51 @@
                  data-mensaje-base="{{ $config->whatsapp_mensaje_base ?: ('Hola ' . $aliado->nombre . ', quiero información sobre afiliación a seguridad social.') }}"
                  data-salario-minimo="{{ (int) $salarioMinimo }}">
 
-                <div class="cotizador-pasos">
-                    <span class="paso-ind activo" data-paso="1"></span>
-                    <span class="paso-ind" data-paso="2"></span>
+                <div class="cot-pasos" aria-hidden="true">
+                    <div class="cot-pi paso-ind activo" data-paso="1"><b>1</b><span>Arma tu plan</span></div>
+                    <div class="cot-pi-linea"><i></i></div>
+                    <div class="cot-pi paso-ind" data-paso="2"><b>2</b><span>Tu precio</span></div>
                 </div>
 
                 {{-- Paso 1: coberturas --}}
                 <div class="cot-paso activo" data-paso="1">
-                    <div class="cot-titulo">¿Qué necesitas?</div>
-                    <div class="cot-sub">Selecciona todo lo que quieras incluir — te mostramos el valor como empleado y como independiente.</div>
-                    <div class="lista-coberturas">
-                        <label class="cobertura"><input type="checkbox" data-cob="incluye_eps" checked> <span>Salud (EPS)</span></label>
-                        <div class="cobertura cobertura-arl" id="filaArl">
-                            <input type="checkbox" data-cob="incluye_arl" id="chkArlEntrada">
-                            <span>Riesgos laborales (ARL)</span>
-                            <select id="cotNivelArl" class="nivel-arl-inline" style="display:none;">
-                                <option value="1">Nivel 1</option>
-                                <option value="2">Nivel 2</option>
-                                <option value="3">Nivel 3</option>
-                                <option value="4">Nivel 4</option>
-                                <option value="5">Nivel 5</option>
-                            </select>
-                        </div>
-                        <label class="cobertura"><input type="checkbox" data-cob="incluye_pension"> <span>Pensión (AFP)</span></label>
-                        <label class="cobertura"><input type="checkbox" data-cob="incluye_caja"> <span>Caja de compensación</span></label>
+                    <div class="cot-titulo">¿Qué quieres cubrir?</div>
+                    <div class="cot-sub">Toca las que necesites. Te mostramos el valor como empleado y como independiente.</div>
+                    <div class="grid-cob">
+                        <label class="cob"><input type="checkbox" data-cob="incluye_eps" checked><span class="cob-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.5-1.5 3-3.5 3-6a5 5 0 0 0-10 0 5 5 0 0 0-10 0c0 2.5 1.5 4.5 3 6l7 7z"/></svg></span><span class="cob-txt"><strong>Salud (EPS)</strong><small>Médico, urgencias y medicamentos</small></span><span class="cob-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></label>
+                        <label class="cob"><input type="checkbox" data-cob="incluye_arl" id="chkArlEntrada"><span class="cob-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20M4 18v-3a8 8 0 0 1 16 0v3M12 7V4M9 7.5V5.5M15 7.5V5.5"/></svg></span><span class="cob-txt"><strong>Riesgos laborales</strong><small>Accidentes y enfermedades del trabajo</small></span><span class="cob-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></label>
+                        <label class="cob"><input type="checkbox" data-cob="incluye_pension"><span class="cob-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span class="cob-txt"><strong>Pensión</strong><small>Tu ahorro para la vejez</small></span><span class="cob-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></label>
+                        <label class="cob"><input type="checkbox" data-cob="incluye_caja"><span class="cob-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5M5 9.5V20h14V9.5M9.5 20v-5h5v5"/></svg></span><span class="cob-txt"><strong>Caja de compensación</strong><small>Subsidios, recreación y beneficios</small></span><span class="cob-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span></label>
                     </div>
+
+                    <div class="panel-arl" id="panelArl">
+                        <div>
+                            <div class="panel-arl-caja">
+                                <div class="panel-arl-tit">¿Qué tan riesgoso es tu trabajo?</div>
+                                <div class="niveles-arl" role="radiogroup" aria-label="Nivel de riesgo ARL">
+                                    <button type="button" data-nivel="1" class="activo" role="radio" aria-checked="true">I</button>
+                                    <button type="button" data-nivel="2" role="radio" aria-checked="false">II</button>
+                                    <button type="button" data-nivel="3" role="radio" aria-checked="false">III</button>
+                                    <button type="button" data-nivel="4" role="radio" aria-checked="false">IV</button>
+                                    <button type="button" data-nivel="5" role="radio" aria-checked="false">V</button>
+                                </div>
+                                <p class="nivel-desc" id="nivelDesc"></p>
+                                <input type="hidden" id="cotNivelArl" value="1">
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="campo-cot">
-                        <label>Tus ingresos mensuales (opcional)</label>
-                        <input type="number" id="cotIngresos" min="0">
+                        <label for="cotIngresosVista">¿Cuánto ganas al mes? <span style="font-weight:500;">(opcional)</span></label>
+                        <div class="input-dinero"><span>$</span><input type="text" inputmode="numeric" id="cotIngresosVista" autocomplete="off"></div>
+                        <input type="hidden" id="cotIngresos">
+                        <div class="chips-ingreso" id="chipsIngreso"></div>
                         <p class="ayuda-cot">Como empleado se cotiza sobre este valor; como independiente, sobre el 40% (mínimo legal).</p>
                     </div>
                     <div id="cotError"></div>
-                    <div class="cot-nav" style="justify-content:flex-end;">
-                        <button type="button" class="btn btn-brand" id="btnVerPlan">Ver mi plan</button>
+                    <div class="cot-nav" style="align-items:center;">
+                        <div class="cot-resumen" id="cotResumen" aria-live="polite"></div>
+                        <button type="button" class="btn btn-brand" id="btnVerPlan">Ver mi plan <span class="flecha">→</span></button>
                     </div>
                 </div>
 
@@ -999,29 +1075,83 @@
     var mensajeBase = app.dataset.mensajeBase;
     var salarioMinimo = app.dataset.salarioMinimo;
 
-    var chkArl        = app.querySelector('[data-cob="incluye_arl"]');
+    var chkArl         = app.querySelector('[data-cob="incluye_arl"]');
     var selectNivelArl = document.getElementById('cotNivelArl');
-    var filaArl        = document.getElementById('filaArl');
+    var panelArl       = document.getElementById('panelArl');
+    var nivelDesc      = document.getElementById('nivelDesc');
+    var cotIngresos    = document.getElementById('cotIngresos');
+    var vistaIngresos  = document.getElementById('cotIngresosVista');
+    var chipsIngreso   = document.getElementById('chipsIngreso');
+    var resumen        = document.getElementById('cotResumen');
 
-    var cotIngresos = document.getElementById('cotIngresos');
-    if (salarioMinimo && !cotIngresos.value) {
-        cotIngresos.value = salarioMinimo;
+    var NIVELES = {
+        1: '<strong>Nivel I:</strong> oficina, asesores, docentes.',
+        2: '<strong>Nivel II:</strong> comercio, ventas, telemercadeo.',
+        3: '<strong>Nivel III:</strong> conductores, operarios, mantenimiento.',
+        4: '<strong>Nivel IV:</strong> transporte de carga, construcción liviana, vigilancia.',
+        5: '<strong>Nivel V:</strong> construcción pesada, alturas, minería.'
+    };
+    var NOMBRES = { incluye_eps: 'Salud', incluye_arl: 'ARL', incluye_pension: 'Pensión', incluye_caja: 'Caja' };
+
+    function miles(n) { return Math.round(n).toLocaleString('es-CO'); }
+
+    function ponerIngreso(valor) {
+        cotIngresos.value = valor ? String(valor) : '';
+        vistaIngresos.value = valor ? miles(valor) : '';
+        chipsIngreso.querySelectorAll('button').forEach(function (b) { b.classList.toggle('activo', +b.dataset.valor === +valor); });
     }
 
-    // La fila de ARL ya no es un <label> (para poder anidar el select de nivel de riesgo sin
-    // que un clic en el select dispare también el toggle del checkbox) — se replica a mano el
-    // comportamiento de "clic en toda la fila" de las demás coberturas.
-    filaArl.addEventListener('click', function (e) {
-        if (e.target === chkArl || e.target === selectNivelArl) return;
-        chkArl.checked = !chkArl.checked;
-        chkArl.dispatchEvent(new Event('change'));
+    function actualizarResumen() {
+        var partes = [];
+        app.querySelectorAll('[data-cob]').forEach(function (c) {
+            if (!c.checked) return;
+            var t = NOMBRES[c.dataset.cob];
+            if (c.dataset.cob === 'incluye_arl') t += ' ' + ['I', 'II', 'III', 'IV', 'V'][(+selectNivelArl.value || 1) - 1];
+            partes.push('<span class="pill">' + t + '</span>');
+        });
+        resumen.innerHTML = partes.length ? partes.join('') : 'Escoge al menos una cobertura';
+    }
+
+    // Atajos de ingreso: el mínimo y montos redondos comunes.
+    var atajos = [[+salarioMinimo, 'Mínimo'], [2000000, '$2 M'], [3000000, '$3 M'], [5000000, '$5 M']];
+    atajos.forEach(function (a) {
+        if (!a[0]) return;
+        var b = document.createElement('button');
+        b.type = 'button'; b.dataset.valor = a[0]; b.textContent = a[1];
+        b.addEventListener('click', function () { ponerIngreso(a[0]); });
+        chipsIngreso.appendChild(b);
     });
+    vistaIngresos.addEventListener('input', function () {
+        var n = parseInt(vistaIngresos.value.replace(/\D/g, ''), 10);
+        ponerIngreso(isNaN(n) ? '' : n);
+    });
+    if (salarioMinimo) ponerIngreso(+salarioMinimo);
+
+    function ponerNivel(n) {
+        selectNivelArl.value = n;
+        nivelDesc.innerHTML = NIVELES[n];
+        panelArl.querySelectorAll('[data-nivel]').forEach(function (b) {
+            var sel = +b.dataset.nivel === +n;
+            b.classList.toggle('activo', sel);
+            b.setAttribute('aria-checked', sel ? 'true' : 'false');
+        });
+        actualizarResumen();
+    }
+    panelArl.querySelectorAll('[data-nivel]').forEach(function (b) {
+        b.addEventListener('click', function () { ponerNivel(b.dataset.nivel); });
+    });
+    ponerNivel(1);
 
     chkArl.addEventListener('change', function () {
-        selectNivelArl.style.display = chkArl.checked ? 'inline-block' : 'none';
+        panelArl.classList.toggle('abierto', chkArl.checked);
     });
+    app.querySelectorAll('[data-cob]').forEach(function (c) { c.addEventListener('change', actualizarResumen); });
+    actualizarResumen();
 
     function irAPaso(n) {
+        app.dataset.paso = n;
+        var arriba = app.getBoundingClientRect().top;
+        if (arriba < 0) app.scrollIntoView({ behavior: 'smooth', block: 'start' });
         app.querySelectorAll('.cot-paso').forEach(function (el) {
             el.classList.toggle('activo', el.dataset.paso === String(n));
         });
@@ -1055,7 +1185,7 @@
         estado.resultado = null;
 
         btn.disabled = true;
-        btn.textContent = 'Calculando...';
+        btn.innerHTML = '<span class="giro"></span> Calculando…';
 
         var body = Object.assign({}, cobs, {
             nivel_arl: estado.nivel_arl,
@@ -1070,7 +1200,7 @@
         .then(function (r) { return r.json().then(function (data) { return { status: r.status, data: data }; }); })
         .then(function (res) {
             btn.disabled = false;
-            btn.textContent = 'Ver mi plan';
+            btn.innerHTML = 'Ver mi plan <span class="flecha">→</span>';
             if (res.status !== 200) {
                 errorBox.innerHTML = '<div class="cot-error">' + (res.data.error || 'No pudimos calcular tu plan.') + '</div>';
                 return;
@@ -1080,7 +1210,7 @@
         })
         .catch(function () {
             btn.disabled = false;
-            btn.textContent = 'Ver mi plan';
+            btn.innerHTML = 'Ver mi plan <span class="flecha">→</span>';
             errorBox.innerHTML = '<div class="cot-error">Hubo un problema de conexión. Intenta de nuevo.</div>';
         });
     });
@@ -1095,7 +1225,7 @@
 
         if (precios_visibles) {
             html += '<div class="valor-grande">' + (precios_modo === 'desde' ? 'Desde ' : '')
-                  + formatoMoneda(info.valor_mensual_total) + '<small>/mes</small></div>';
+                  + '<span data-monto="' + Math.round(info.valor_mensual_total) + '">' + formatoMoneda(info.valor_mensual_total) + '</span><small>/mes</small></div>';
 
             if (info.costo_afiliacion_sugerido > 0) {
                 html += '<div class="linea"><span>Afiliación (referencia)</span><strong>' + formatoMoneda(info.costo_afiliacion_sugerido) + '</strong></div>';
@@ -1126,7 +1256,8 @@
             { key: 'independiente', etiqueta: 'Como independiente', info: data.independiente }
         ].filter(function (p) { return !!p.info; });
 
-        var html = '';
+        var html = '<div class="cot-resultado-cab"><div class="cot-titulo" style="margin:0;">Tu precio estimado</div>'
+                 + '<button type="button" class="btn-volver" data-volver="1">← Cambiar</button></div>';
         var multiples = perfiles.length > 1;
 
         html += '<div class="resultado-columnas' + (multiples ? '' : ' una-sola') + '">';
@@ -1155,6 +1286,7 @@
               + '</div>';
 
         document.getElementById('cotResultado').innerHTML = html;
+        contarMontos();
 
         var formWrap = document.getElementById('cotFormLeadWrap');
 
@@ -1165,6 +1297,7 @@
                 card.classList.toggle('seleccionado', card.dataset.perfil === perfil);
             });
             formWrap.style.display = 'block';
+            formWrap.classList.add('visible');
         }
 
         document.querySelectorAll('#cotResultado .btn-elegir').forEach(function (btn) {
@@ -1183,6 +1316,21 @@
         document.getElementById('formLead').addEventListener('submit', function (e) {
             e.preventDefault();
             enviarLead();
+        });
+    }
+
+    /** Los valores del resultado suben desde cero hasta el precio. */
+    function contarMontos() {
+        if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        document.querySelectorAll('#cotResultado [data-monto]').forEach(function (el) {
+            var fin = +el.dataset.monto, t0 = null;
+            var paso = function (t) {
+                if (!t0) t0 = t;
+                var p = Math.min(1, (t - t0) / 900);
+                el.textContent = formatoMoneda(fin * (1 - Math.pow(1 - p, 3)));
+                if (p < 1) requestAnimationFrame(paso);
+            };
+            requestAnimationFrame(paso);
         });
     }
 
