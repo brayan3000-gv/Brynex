@@ -61,6 +61,27 @@ class Aliado extends BaseModel
         'logo_marca_recorte'  => 'array',
     ];
 
+    /**
+     * El slug es único y SQL Server solo deja UN NULL en un índice único: un
+     * aliado creado sin slug bloqueaba la creación de todos los siguientes.
+     * Se arma del nombre, igual que el backfill de la migración del slug.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Aliado $aliado) {
+            if (! empty($aliado->slug)) {
+                return;
+            }
+
+            $base = \Illuminate\Support\Str::limit(\Illuminate\Support\Str::slug($aliado->nombre) ?: 'aliado', 70, '');
+            $slug = $base;
+            for ($i = 2; static::withTrashed()->where('slug', $slug)->exists(); $i++) {
+                $slug = "{$base}-{$i}";
+            }
+            $aliado->slug = $slug;
+        });
+    }
+
     // Usuario BryNex asignado por defecto como encargado de afiliación
     public function encargadoAfiliacion(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
