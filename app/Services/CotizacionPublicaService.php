@@ -711,6 +711,14 @@ class CotizacionPublicaService
             }
         }
 
+        // Sin afiliación configurada en ningún lado (ni por plan, ni general, ni por nivel ARL, ni
+        // promoción), se cotiza la afiliación al valor mensual del plan. Apenas el aliado configure
+        // la suya, esta manda. Una promoción o un nivel ARL en $0 sí son configuración: se respetan.
+        if (!$cfgConPromo && ($costoPorNivel ?? null) === null && $resultado['costo_afiliacion_normal'] <= 0) {
+            $resultado['costo_afiliacion_normal']   = (float) $resultado['total'];
+            $resultado['costo_afiliacion_sugerido'] = (float) $resultado['total'];
+        }
+
         try {
             $fechaAfiliacion = !empty($opciones['fecha_afiliacion']) ? Carbon::parse($opciones['fecha_afiliacion']) : now();
         } catch (\Throwable $e) {
