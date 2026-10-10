@@ -15,6 +15,7 @@ class PaginaAliadoConfig extends BaseModel
         'hero_titulo',
         'hero_subtitulo',
         'hero_cta_texto',
+        'hero_imagen',
         'seo_titulo',
         'seo_descripcion',
         'mostrar_precios',

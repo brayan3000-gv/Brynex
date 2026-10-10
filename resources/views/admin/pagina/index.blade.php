@@ -61,7 +61,7 @@
 </div>
 @endif
 
-<form method="POST" action="{{ route('admin.pagina.update') }}">
+<form method="POST" action="{{ route('admin.pagina.update') }}" enctype="multipart/form-data">
 @csrf
 
 {{-- ══ PUBLICACIÓN ══ --}}
@@ -111,6 +111,24 @@
     <input type="text" name="hero_cta_texto" maxlength="60" value="{{ old('hero_cta_texto', $config->hero_cta_texto) }}"
            placeholder="Quiero afiliarme"
            style="width:100%;max-width:320px;padding:0.5rem 0.7rem;border:1px solid #cbd5e1;border-radius:8px;font-size:0.85rem;">
+  </div>
+
+  <div style="margin-top:0.85rem;">
+    <label style="display:block;font-size:0.75rem;font-weight:600;color:#334155;margin-bottom:0.3rem;">Foto del encabezado</label>
+    <div style="display:flex;gap:0.85rem;align-items:flex-start;flex-wrap:wrap;">
+      @if($config->hero_imagen)
+        <img src="{{ asset('storage/' . $config->hero_imagen) }}" alt="" style="width:96px;height:120px;object-fit:cover;border-radius:10px;border:1px solid #e2e8f0;">
+      @endif
+      <div>
+        <input type="file" name="hero_imagen" accept="image/jpeg,image/png,image/webp" style="font-size:0.8rem;">
+        <p style="font-size:0.72rem;color:#94a3b8;margin:0.35rem 0 0;">Vertical (4:5) y con la persona a un lado se ve mejor. Sin foto se muestra el logo.</p>
+        @if($config->hero_imagen)
+          <label style="display:flex;align-items:center;gap:0.4rem;font-size:0.75rem;color:#b91c1c;margin-top:0.4rem;cursor:pointer;">
+            <input type="checkbox" name="quitar_hero_imagen" value="1"> Quitar la foto
+          </label>
+        @endif
+      </div>
+    </div>
   </div>
 
   <p style="font-size:0.72rem;color:#94a3b8;margin:0.75rem 0 0;">Deja un campo vacío para usar el texto por defecto.</p>

@@ -402,6 +402,30 @@
     .hero-onda { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: 70px; display: block; }
     .hero-onda path { fill: var(--blanco); }
 
+    /* Foto del encabezado: recortada en 4:5, con una lámina del color de marca detrás y el
+       logo del aliado en una ficha encima. */
+    .hero-foto { position: relative; z-index: 1; width: min(380px, 88%); aspect-ratio: 4 / 5; }
+    .hero-foto::before {
+        content: ''; position: absolute; inset: 0; border-radius: 34px;
+        background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #06b6d4));
+        transform: translate(18px, 18px) rotate(3deg); opacity: .9;
+    }
+    .hero-foto img.foto {
+        position: relative; width: 100%; height: 100%; object-fit: cover; border-radius: 34px;
+        box-shadow: 0 30px 60px -28px rgba(10,22,40,.55);
+    }
+    .hero-foto .ficha-marca {
+        position: absolute; left: -22px; bottom: 26px; z-index: 2;
+        display: flex; align-items: center; gap: .6rem; max-width: 78%;
+        background: var(--blanco); border-radius: 18px; padding: .55rem .9rem .55rem .55rem;
+        box-shadow: 0 18px 36px -18px rgba(10,22,40,.5);
+    }
+    .hero-foto .ficha-marca img { width: 46px; height: 46px; object-fit: contain; border-radius: 10px; }
+    .hero-foto .ficha-marca strong { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: .85rem; line-height: 1.2; display: block; }
+    .hero-foto .ficha-marca small { display: block; color: var(--tinta-suave); font-size: .72rem; line-height: 1.3; }
+    .hero-foto .orbita.o2 { top: 8%; right: -18px; }
+    .hero-foto .orbita.o3 { top: 34%; left: -26px; bottom: auto; }
+
     /* Tarjeta de marca: el logo del aliado al centro del hero, con los cuatro servicios orbitando. */
     .tarjeta-marca {
         position: relative; z-index: 1; width: min(300px, 82%);
@@ -476,6 +500,14 @@
         .orbita.o3 { bottom: 10%; left: 0; }
         .orbita.o4 { bottom: 0; right: 0; }
         .hero { padding-bottom: 5.5rem; }
+        .hero-foto { width: 78%; }
+        .hero-foto .ficha-marca { left: -12px; bottom: -16px; padding: .4rem .7rem .4rem .4rem; border-radius: 14px; }
+        .hero-foto .ficha-marca img { width: 32px; height: 32px; }
+        .hero-foto .ficha-marca strong { font-size: .78rem; }
+        .hero-foto .ficha-marca small { display: none; }
+        .hero-foto .orbita.o3 { top: 46%; }
+        .hero-foto .orbita.o2 { right: -10px; }
+        .hero-foto .orbita.o3 { left: -14px; }
     }
     @media (max-width: 480px) {
         .servicios .grid-servicios { grid-template-columns: 1fr; }
@@ -549,7 +581,17 @@
                 </div>
             </div>
             <div class="hero-art entrada" style="animation-delay:.15s" aria-hidden="true">
-                @if($aliado->logo_marca_claro)
+                @if($config->hero_imagen)
+                    <div class="hero-foto">
+                        <img class="foto" src="{{ asset('storage/' . $config->hero_imagen) }}" alt="" fetchpriority="high">
+                        <span class="orbita o2"><i></i>Salud · ARL · Pensión</span>
+                        <span class="orbita o3"><i></i>100% en línea</span>
+                        <div class="ficha-marca">
+                            @if($aliado->logo)<img src="{{ asset('storage/' . $aliado->logo) }}" alt="">@endif
+                            <div><strong>{{ $aliado->nombre }}</strong><small>Tu aliado en seguridad social</small></div>
+                        </div>
+                    </div>
+                @elseif($aliado->logo_marca_claro)
                     <div class="hero-glow"></div>
                     <svg class="hero-logo-flotante" viewBox="0 0 320 320" width="100%" style="max-width:380px;">
                         <image href="{{ asset('storage/' . $aliado->logo_marca_claro) }}"

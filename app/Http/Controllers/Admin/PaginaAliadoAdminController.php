@@ -58,6 +58,7 @@ class PaginaAliadoAdminController extends Controller
             'seo_descripcion'        => 'nullable|string|max:300',
             'precios_modo'           => 'required|in:exacto,desde',
             'whatsapp_mensaje_base'  => 'nullable|string|max:500',
+            'hero_imagen'            => 'nullable|image|mimes:jpg,jpeg,png,webp|max:10240',
             'dominio_propio'         => [
                 'nullable', 'string', 'max:150',
                 'regex:/^(?!www\.)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i',
@@ -76,6 +77,13 @@ class PaginaAliadoAdminController extends Controller
         }
 
         $config = PaginaAliadoConfig::firstOrNew(['aliado_id' => $aliado->id]);
+
+        unset($validated['hero_imagen']);
+        if ($request->hasFile('hero_imagen')) {
+            $config->hero_imagen = self::guardarFotoHero($request->file('hero_imagen'), $aliado->id);
+        } elseif ($request->boolean('quitar_hero_imagen')) {
+            $config->hero_imagen = null;
+        }
 
         // Las secciones no editadas por este formulario (hero/contacto/planes/cotizador/ahorro/
         // promos) conservan su valor actual — solo se sobrescriben las que sí tienen checkbox aquí.
@@ -97,6 +105,41 @@ class PaginaAliadoAdminController extends Controller
         PaginaAliadoController::invalidarCache($aliado->slug);
 
         return redirect()->route('admin.pagina.index')->with('success', 'Configuración de la página guardada.');
+    }
+
+    /**
+     * La foto del encabezado se guarda en JPEG de máximo 1000 px: llega como foto de celular o
+     * imagen generada de varios MB y se pinta a ~480 px. Si GD no puede leerla, va el original.
+     */
+    public static function guardarFotoHero(\Illuminate\Http\UploadedFile $file, int $aliadoId): string
+    {
+        $dir = public_path('storage/pagina-hero');
+        if (! is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        $base = $aliadoId . '_' . time();
+
+        $img = @imagecreatefromstring((string) @file_get_contents($file->getRealPath()));
+        if (! $img) {
+            $ext = strtolower($file->getClientOriginalExtension() ?: 'jpg');
+            $file->move($dir, "{$base}.{$ext}");
+
+            return "pagina-hero/{$base}.{$ext}";
+        }
+
+        $w = imagesx($img);
+        $h = imagesy($img);
+        $escala = min(1, 1000 / max($w, $h));
+        if ($escala < 1) {
+            $nueva = imagecreatetruecolor((int) round($w * $escala), (int) round($h * $escala));
+            imagecopyresampled($nueva, $img, 0, 0, 0, 0, imagesx($nueva), imagesy($nueva), $w, $h);
+            imagedestroy($img);
+            $img = $nueva;
+        }
+        imagejpeg($img, "{$dir}/{$base}.jpg", 84);
+        imagedestroy($img);
+
+        return "pagina-hero/{$base}.jpg";
     }
 
     public function faqs()
