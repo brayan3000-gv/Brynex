@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('titulo', $aliado->nombre)</title>
+    <script>document.documentElement.classList.add('js');</script>
     <meta name="description" content="@yield('descripcion', $config->seo_descripcion ?? ($aliado->nombre . ' — Afiliación a seguridad social'))">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
@@ -36,7 +37,9 @@
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) !!}
     </script>
 
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
 
     <style>
         :root {
@@ -64,6 +67,9 @@
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
         }
+
+        /* Títulos con una letra de más carácter; el texto corrido sigue en Inter. */
+        h1, h2, h3, .titulo-display { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; }
 
         a { color: inherit; text-decoration: none; }
         img { max-width: 100%; display: block; }
@@ -98,9 +104,22 @@
 
         section { padding: 4.5rem 0; }
 
+        /* Aparición al bajar: solo con JS (la clase `js` la pone el script del <head>), así
+           sin JS nada queda oculto. */
+        .js .revelar { opacity: 0; transform: translateY(26px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1); transition-delay: var(--retraso, 0s); }
+        .js .revelar.visible { opacity: 1; transform: none; }
+
+        .wa-flotante::before {
+            content: ''; position: absolute; inset: 0; border-radius: 50%;
+            background: #25D366; z-index: -1; animation: waLatido 2.4s ease-out infinite;
+        }
+        @keyframes waLatido { 0% { transform: scale(1); opacity: .55; } 80%, 100% { transform: scale(1.6); opacity: 0; } }
+
         @media (prefers-reduced-motion: reduce) {
             html { scroll-behavior: auto; }
             .btn:hover { transform: none; }
+            .js .revelar { opacity: 1; transform: none; transition: none; }
+            .wa-flotante::before { animation: none; }
         }
 
         @media (max-width: 720px) {
@@ -125,6 +144,7 @@
            target="_blank" rel="noopener"
            aria-label="Escribir por WhatsApp"
            onclick="registrarClicWa()"
+           class="wa-flotante"
            style="position:fixed; bottom:1.5rem; right:1.5rem; width:58px; height:58px; border-radius:50%;
                   background:#25D366; display:flex; align-items:center; justify-content:center;
                   box-shadow:0 10px 24px -6px rgba(0,0,0,0.35); z-index:50;">
@@ -149,6 +169,18 @@
                 }).catch(function () {});
             } catch (e) {}
         }
+    </script>
+
+    <script>
+        // Aparición de secciones y tarjetas al entrar en pantalla.
+        (function () {
+            var els = document.querySelectorAll('.revelar');
+            if (!('IntersectionObserver' in window)) { els.forEach(function (e) { e.classList.add('visible'); }); return; }
+            var io = new IntersectionObserver(function (entradas) {
+                entradas.forEach(function (en) { if (en.isIntersecting) { en.target.classList.add('visible'); io.unobserve(en.target); } });
+            }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+            els.forEach(function (e) { io.observe(e); });
+        })();
     </script>
 
     @yield('scripts')

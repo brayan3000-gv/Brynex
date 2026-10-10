@@ -361,6 +361,130 @@
     }
     footer strong { color: rgba(255,255,255,0.8); }
 
+    /* ── Encabezado fijo ── */
+    .barra-top {
+        position: sticky; top: 0; z-index: 40;
+        background: color-mix(in srgb, var(--blanco) 82%, transparent);
+        backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px);
+        border-bottom: 1px solid transparent;
+        transition: border-color .2s ease, box-shadow .2s ease;
+    }
+    .barra-top.con-sombra { border-color: var(--borde); box-shadow: 0 8px 24px -18px rgba(10,22,40,.35); }
+    .barra-top .contenedor { display: flex; align-items: center; gap: 1rem; padding-top: .7rem; padding-bottom: .7rem; }
+    .barra-marca { display: flex; align-items: center; gap: .65rem; min-width: 0; margin-right: auto; }
+    .barra-marca img { height: 42px; width: auto; max-width: 140px; object-fit: contain; border-radius: 8px; }
+    .barra-marca strong { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: 1.02rem; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .barra-nav { display: flex; gap: 1.4rem; font-size: .9rem; font-weight: 600; color: var(--tinta-suave); }
+    .barra-nav a { position: relative; padding: .3rem 0; }
+    .barra-nav a::after { content: ''; position: absolute; left: 0; right: 100%; bottom: -2px; height: 2px; background: var(--brand); border-radius: 2px; transition: right .25s ease; }
+    .barra-nav a:hover { color: var(--tinta); }
+    .barra-nav a:hover::after { right: 0; }
+    .barra-top .btn { padding: .6rem 1.15rem; font-size: .85rem; }
+
+    /* ── Hero con más vida ── */
+    .hero { padding-bottom: 7rem; }
+    .hero::before {
+        content: ''; position: absolute; inset: 0; pointer-events: none;
+        background-image: radial-gradient(color-mix(in srgb, var(--brand) 22%, transparent) 1.2px, transparent 1.2px);
+        background-size: 22px 22px;
+        -webkit-mask-image: radial-gradient(ellipse 60% 70% at 85% 30%, #000 20%, transparent 75%);
+                mask-image: radial-gradient(ellipse 60% 70% at 85% 30%, #000 20%, transparent 75%);
+    }
+    .hero-mancha { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .45; pointer-events: none; animation: manchaDeriva 14s ease-in-out infinite alternate; }
+    .hero-mancha.m1 { width: 420px; height: 420px; background: color-mix(in srgb, var(--brand) 35%, white); top: -140px; left: -120px; }
+    .hero-mancha.m2 { width: 300px; height: 300px; background: color-mix(in srgb, var(--brand) 25%, #a5f3fc); bottom: -60px; right: 30%; animation-delay: -6s; }
+    @keyframes manchaDeriva { from { transform: translate(0, 0) scale(1); } to { transform: translate(40px, 30px) scale(1.12); } }
+    .hero .contenedor { position: relative; z-index: 1; }
+    .hero h1 .resaltado {
+        background: linear-gradient(120deg, var(--brand), color-mix(in srgb, var(--brand) 55%, #06b6d4));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .hero-onda { position: absolute; left: 0; right: 0; bottom: -1px; width: 100%; height: 70px; display: block; }
+    .hero-onda path { fill: var(--blanco); }
+
+    /* Tarjeta de marca: el logo del aliado al centro del hero, con los cuatro servicios orbitando. */
+    .tarjeta-marca {
+        position: relative; z-index: 1; width: min(300px, 82%);
+        background: var(--blanco); border: 1px solid var(--brand-line); border-radius: 28px;
+        padding: 2rem 1.5rem 1.6rem; text-align: center;
+        box-shadow: 0 30px 60px -30px color-mix(in srgb, var(--brand) 55%, transparent);
+    }
+    .tarjeta-marca img { width: 150px; height: 150px; object-fit: contain; margin: 0 auto 1rem; }
+    .tarjeta-marca .inicial { width: 110px; height: 110px; margin: 0 auto 1rem; border-radius: 30px; display: flex; align-items: center; justify-content: center; font: 800 3rem 'Plus Jakarta Sans', sans-serif; color: var(--brand-text); background: linear-gradient(135deg, var(--brand), var(--brand-dark)); }
+    .tarjeta-marca strong { display: block; font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; font-size: 1.05rem; line-height: 1.25; }
+    .tarjeta-marca small { display: block; color: var(--tinta-suave); font-size: .8rem; margin-top: .3rem; }
+    .orbita {
+        position: absolute; z-index: 2; display: inline-flex; align-items: center; gap: .4rem;
+        background: var(--blanco); border: 1px solid var(--borde); border-radius: 999px;
+        padding: .45rem .85rem; font-size: .78rem; font-weight: 700; color: var(--tinta);
+        box-shadow: 0 12px 26px -14px rgba(10,22,40,.4);
+        animation: orbitaFlota 5s ease-in-out infinite;
+    }
+    .orbita i { width: 9px; height: 9px; border-radius: 50%; background: var(--brand); }
+    .orbita.o1 { top: 6%;  left: 2%; }
+    .orbita.o2 { top: 16%; right: 0;  animation-delay: -1.2s; }
+    .orbita.o2 i { background: #f59e0b; }
+    .orbita.o3 { bottom: 14%; left: 0; animation-delay: -2.4s; }
+    .orbita.o3 i { background: #10b981; }
+    .orbita.o4 { bottom: 4%; right: 6%; animation-delay: -3.6s; }
+    .orbita.o4 i { background: #ec4899; }
+    /* El hero entra al cargar, sin esperar a JS ni al scroll. */
+    .entrada { animation: entradaSube .8s cubic-bezier(.2,.7,.2,1) both; }
+    @keyframes entradaSube { from { opacity: 0; transform: translateY(22px); } to { opacity: 1; transform: none; } }
+    @keyframes orbitaFlota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+
+    /* ── Títulos de sección con «ceja» ── */
+    .ceja {
+        display: inline-block; margin-bottom: .7rem;
+        font-size: .74rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase;
+        color: var(--brand-dark); background: var(--brand-soft); border-radius: 999px; padding: .3rem .8rem;
+    }
+    .titulo-seccion h2 { letter-spacing: -.025em; }
+
+    /* ── Servicios ── */
+    .card-servicio { position: relative; overflow: hidden; background: var(--blanco); }
+    .card-servicio::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: linear-gradient(90deg, var(--brand), color-mix(in srgb, var(--brand) 50%, #06b6d4)); transform: scaleX(0); transform-origin: left; transition: transform .35s ease; }
+    .card-servicio:hover::after { transform: scaleX(1); }
+    .card-servicio:hover { border-color: var(--brand-line); }
+    .card-servicio .icono { width: 52px; height: 52px; border-radius: 16px; background: linear-gradient(135deg, var(--brand), var(--brand-dark)); color: var(--brand-text); box-shadow: 0 10px 20px -10px color-mix(in srgb, var(--brand) 70%, transparent); }
+
+    /* ── Planes y cotizador ── */
+    .card-plan { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+    .card-plan:hover { transform: translateY(-6px); box-shadow: 0 24px 44px -24px rgba(10,22,40,.3); border-color: var(--brand-line); }
+    .card-plan.destacado:hover { transform: translateY(-10px); }
+    .precio-plan .valor { font-family: 'Plus Jakarta Sans', 'Inter', sans-serif; letter-spacing: -.02em; }
+    .cotizador { background: radial-gradient(900px 400px at 10% 0%, var(--brand-softer), transparent 70%), var(--blanco); }
+    .caja-cotizador { background: var(--blanco); box-shadow: 0 30px 60px -40px rgba(10,22,40,.35); }
+
+    /* ── Pasos unidos por una línea ── */
+    .grid-pasos { position: relative; }
+    .grid-pasos::before { content: ''; position: absolute; top: 3.1rem; left: 16%; right: 16%; height: 2px; background: repeating-linear-gradient(90deg, var(--brand-line) 0 10px, transparent 10px 18px); }
+    .paso { z-index: 1; transition: transform .2s ease, box-shadow .2s ease; }
+    .paso:hover { transform: translateY(-4px); box-shadow: 0 20px 36px -24px rgba(10,22,40,.3); }
+    .paso .num { width: 44px; height: 44px; font-size: 1.1rem; box-shadow: 0 0 0 6px var(--brand-soft); }
+
+    @media (max-width: 860px) {
+        .barra-nav { display: none; }
+        .barra-marca strong { font-size: .92rem; }
+        .grid-pasos::before { display: none; }
+        .tarjeta-marca { width: 60%; padding: 1.4rem 1rem 1.2rem; }
+        .tarjeta-marca img { width: 96px; height: 96px; margin-bottom: .7rem; }
+        .tarjeta-marca strong { font-size: .92rem; }
+        .orbita { font-size: .68rem; padding: .3rem .6rem; }
+        .orbita.o1 { top: 0; left: 0; }
+        .orbita.o2 { top: 10%; right: 0; }
+        .orbita.o3 { bottom: 10%; left: 0; }
+        .orbita.o4 { bottom: 0; right: 0; }
+        .hero { padding-bottom: 5.5rem; }
+    }
+    @media (max-width: 480px) {
+        .servicios .grid-servicios { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .hero-mancha, .orbita, .entrada { animation: none; }
+        .card-plan:hover, .paso:hover { transform: none; }
+    }
+
     @media (max-width: 1024px) and (min-width: 861px) {
         .carrusel-slide { flex: 0 0 calc((100% - 1.5rem) / 2); }
     }
@@ -381,30 +505,50 @@
 
 @section('contenido')
 
-    <header class="contenedor logo-top">
-        @if($aliado->logo)
-            <img src="{{ asset('storage/' . $aliado->logo) }}" alt="{{ $aliado->nombre }}">
-        @endif
-        <strong>{{ $aliado->nombre }}</strong>
+    <header class="barra-top" id="barraTop">
+        <div class="contenedor">
+            <a href="#" class="barra-marca">
+                @if($aliado->logo)
+                    <img src="{{ asset('storage/' . $aliado->logo) }}" alt="{{ $aliado->nombre }}">
+                @endif
+                <strong>{{ $aliado->nombre }}</strong>
+            </a>
+            <nav class="barra-nav">
+                @if($config->seccionActiva('planes'))<a href="#planes">Planes</a>@endif
+                @if($config->seccionActiva('cotizador'))<a href="#cotizador">Cotizar</a>@endif
+                <a href="#contacto">Contacto</a>
+            </nav>
+            <a href="#contacto" class="btn btn-brand">Afiliarme</a>
+        </div>
     </header>
 
     <section class="hero">
+        <span class="hero-mancha m1" aria-hidden="true"></span>
+        <span class="hero-mancha m2" aria-hidden="true"></span>
         <div class="contenedor hero-grid">
-            <div>
+            <div class="entrada">
                 <span class="badge">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>
-                    Afiliación 100% en línea
+                    Afiliación 100% en línea @if($aliado->ciudad)· {{ $aliado->ciudad }}@endif
                 </span>
-                <h1>{{ $config->hero_titulo ?: 'Tu seguridad social, sin filas ni papeleo' }}</h1>
+                @if($config->hero_titulo)
+                    <h1>{{ $config->hero_titulo }}</h1>
+                @else
+                    <h1>Tu seguridad social, <span class="resaltado">sin filas ni papeleo</span></h1>
+                @endif
                 <p class="lead">
                     {{ $config->hero_subtitulo ?: ($aliado->nombre . ' te afilia a EPS, ARL, pensión y caja de compensación de forma rápida y segura, desde donde estés.') }}
                 </p>
                 <div class="hero-actions">
                     <a href="#contacto" class="btn btn-brand">{{ $config->hero_cta_texto ?: 'Quiero afiliarme' }}</a>
-                    <a href="#faq" class="btn btn-ghost">Ver preguntas frecuentes</a>
+                    @if($config->seccionActiva('faq') && $faqs->isNotEmpty())
+                        <a href="#faq" class="btn btn-ghost">Ver preguntas frecuentes</a>
+                    @elseif($config->seccionActiva('planes'))
+                        <a href="#planes" class="btn btn-ghost">Ver planes</a>
+                    @endif
                 </div>
             </div>
-            <div class="hero-art" aria-hidden="true">
+            <div class="hero-art entrada" style="animation-delay:.15s" aria-hidden="true">
                 @if($aliado->logo_marca_claro)
                     <div class="hero-glow"></div>
                     <svg class="hero-logo-flotante" viewBox="0 0 320 320" width="100%" style="max-width:380px;">
@@ -414,50 +558,51 @@
                         <circle class="hero-punto-acento hero-punto-acento-2" cx="35" cy="285" r="11" fill="var(--brand)" opacity="0.4"/>
                     </svg>
                 @else
-                    <svg viewBox="0 0 320 320" width="100%" style="max-width:320px;">
-                        <defs>
-                            <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0" stop-color="var(--brand)"/>
-                                <stop offset="1" stop-color="var(--brand-dark)"/>
-                            </linearGradient>
-                        </defs>
-                        <circle cx="160" cy="160" r="150" fill="var(--brand-soft)"/>
-                        <path d="M160 45 L245 80 V165 C245 220 205 255 160 275 C115 255 75 220 75 165 V80 Z"
-                              fill="url(#g1)" opacity="0.95"/>
-                        <path d="M125 165 L150 190 L200 130" stroke="white" stroke-width="10"
-                              stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                        <circle cx="245" cy="90" r="14" fill="var(--brand-dark)" opacity="0.5"/>
-                        <circle cx="70" cy="230" r="10" fill="var(--brand)" opacity="0.4"/>
-                    </svg>
+                    <div class="hero-glow"></div>
+                    <div class="tarjeta-marca hero-logo-flotante">
+                        @if($aliado->logo)
+                            <img src="{{ asset('storage/' . $aliado->logo) }}" alt="">
+                        @else
+                            <span class="inicial">{{ mb_strtoupper(mb_substr($aliado->nombre, 0, 1)) }}</span>
+                        @endif
+                        <strong>{{ $aliado->nombre }}</strong>
+                        <small>Tu aliado en seguridad social</small>
+                    </div>
+                    <span class="orbita o1"><i></i>Salud (EPS)</span>
+                    <span class="orbita o2"><i></i>ARL</span>
+                    <span class="orbita o3"><i></i>Pensión</span>
+                    <span class="orbita o4"><i></i>Caja</span>
                 @endif
             </div>
         </div>
+        <svg class="hero-onda" viewBox="0 0 1440 70" preserveAspectRatio="none" aria-hidden="true"><path d="M0,40 C240,80 480,0 720,28 C960,56 1200,70 1440,22 L1440,70 L0,70 Z"/></svg>
     </section>
 
     @if($config->seccionActiva('servicios'))
     <section class="servicios">
         <div class="contenedor">
-            <div class="titulo-seccion">
+            <div class="titulo-seccion revelar">
+                <span class="ceja">Servicios</span>
                 <h2>Todo lo que necesitas, en un solo lugar</h2>
                 <p>Gestionamos tu afiliación completa al sistema de seguridad social colombiano.</p>
             </div>
             <div class="grid-servicios">
-                <div class="card-servicio">
+                <div class="card-servicio revelar" style="--retraso:0.0s">
                     <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 14c1.5-1.5 3-3.5 3-6a5 5 0 0 0-10 0 5 5 0 0 0-10 0c0 2.5 1.5 4.5 3 6l7 7z"/></svg></div>
                     <h3>Salud (EPS)</h3>
                     <p>Afiliación a la entidad promotora de salud de tu elección.</p>
                 </div>
-                <div class="card-servicio">
+                <div class="card-servicio revelar" style="--retraso:0.1s">
                     <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg></div>
                     <h3>Riesgos laborales (ARL)</h3>
                     <p>Protección ante accidentes de trabajo según tu nivel de riesgo.</p>
                 </div>
-                <div class="card-servicio">
+                <div class="card-servicio revelar" style="--retraso:0.2s">
                     <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg></div>
                     <h3>Pensión (AFP)</h3>
                     <p>Aportes a tu fondo de pensión para tu futuro.</p>
                 </div>
-                <div class="card-servicio">
+                <div class="card-servicio revelar" style="--retraso:0.3s">
                     <div class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></div>
                     <h3>Caja de compensación</h3>
                     <p>Acceso a subsidios y beneficios familiares.</p>
@@ -476,7 +621,8 @@
     @if($config->seccionActiva('planes') && $gruposPlanVisibles->isNotEmpty())
     <section class="planes" id="planes">
         <div class="contenedor">
-            <div class="titulo-seccion">
+            <div class="titulo-seccion revelar">
+                <span class="ceja">Planes</span>
                 <h2>Planes disponibles</h2>
                 <p>Precios configurados directamente por {{ $aliado->nombre }} — se actualizan automáticamente.</p>
             </div>
@@ -491,7 +637,7 @@
 
             @foreach($gruposPlanVisibles as $grupo)
                 <div class="panel-grupo-plan {{ $loop->first ? 'activo' : '' }}" data-panel-grupo="{{ $grupo }}">
-                    <div class="carrusel-planes" data-grupo="{{ $grupo }}">
+                    <div class="carrusel-planes revelar" data-grupo="{{ $grupo }}">
                         <button type="button" class="carrusel-nav prev" aria-label="Plan anterior">‹</button>
                         <div class="carrusel-viewport">
                             <div class="carrusel-track">
@@ -554,11 +700,12 @@
     @if($config->seccionActiva('cotizador'))
     <section class="cotizador" id="cotizador">
         <div class="contenedor">
-            <div class="titulo-seccion">
+            <div class="titulo-seccion revelar">
+                <span class="ceja">Cotizador</span>
                 <h2>Arma tu plan</h2>
                 <p>Responde 2 preguntas y calculamos tu valor mensual al instante.</p>
             </div>
-            <div class="caja-cotizador"
+            <div class="caja-cotizador revelar"
                  id="cotizadorApp"
                  data-cotizar-url="{{ route('publico.aliado.cotizar', $aliado->slug) }}"
                  data-lead-url="{{ route('publico.aliado.lead', $aliado->slug) }}"
@@ -662,22 +809,23 @@
     @if($config->seccionActiva('pasos'))
     <section class="pasos">
         <div class="contenedor">
-            <div class="titulo-seccion">
+            <div class="titulo-seccion revelar">
+                <span class="ceja">Cómo funciona</span>
                 <h2>Así de simple funciona</h2>
                 <p>Tres pasos y quedas afiliado, sin moverte de donde estás.</p>
             </div>
             <div class="grid-pasos">
-                <div class="paso">
+                <div class="paso revelar" style="--retraso:0.0s">
                     <div class="num">1</div>
                     <h3>Escríbenos</h3>
                     <p>Cuéntanos qué necesitas por WhatsApp y te asesoramos sin costo.</p>
                 </div>
-                <div class="paso">
+                <div class="paso revelar" style="--retraso:0.1s">
                     <div class="num">2</div>
                     <h3>Envía tus datos</h3>
                     <p>Comparte tu documentación de forma segura, sin desplazarte.</p>
                 </div>
-                <div class="paso">
+                <div class="paso revelar" style="--retraso:0.2s">
                     <div class="num">3</div>
                     <h3>Quedas afiliado</h3>
                     <p>Recibes la confirmación y el soporte de tu afiliación.</p>
@@ -690,7 +838,8 @@
     @if($config->seccionActiva('faq') && $faqs->isNotEmpty())
         <section class="faq" id="faq">
             <div class="contenedor">
-                <div class="titulo-seccion">
+                <div class="titulo-seccion revelar">
+                    <span class="ceja">Dudas</span>
                     <h2>Preguntas frecuentes</h2>
                 </div>
                 <div class="lista-faq">
@@ -706,7 +855,7 @@
     @endif
 
     <section class="contacto" id="contacto">
-        <div class="contenedor grid-contacto">
+        <div class="contenedor grid-contacto revelar">
             <div>
                 <h2>Hablemos</h2>
                 <p class="sub">Escríbenos y un asesor te contacta para resolver tus dudas y afiliarte.</p>
@@ -765,6 +914,15 @@
 @endsection
 
 @section('scripts')
+<script>
+(function () {
+    var barra = document.getElementById('barraTop');
+    if (!barra) return;
+    var marcar = function () { barra.classList.toggle('con-sombra', window.scrollY > 8); };
+    window.addEventListener('scroll', marcar, { passive: true });
+    marcar();
+})();
+</script>
 <script>
 (function () {
     var app = document.getElementById('cotizadorApp');
