@@ -82,6 +82,36 @@ class Aliado extends BaseModel
         });
     }
 
+    /**
+     * Ciudad con su departamento para la página pública («Duitama, Boyacá»). La tabla
+     * departamentos guarda los nombres en mayúscula y sin tilde; aquí se les devuelve.
+     * Bogotá no lleva departamento: «Bogotá D.C., Bogotá» sobra.
+     */
+    public function getUbicacionPublicaAttribute(): ?string
+    {
+        if (! $this->ciudad) {
+            return null;
+        }
+
+        $depto = $this->departamento_id
+            ? \Illuminate\Support\Facades\DB::table('departamentos')->where('id', $this->departamento_id)->value('nombre')
+            : null;
+        if (! $depto || (int) $this->departamento_id === 11) {
+            return $this->ciudad;
+        }
+
+        $conTilde = [
+            'ATLANTICO' => 'Atlántico', 'BOLIVAR' => 'Bolívar', 'BOYACA' => 'Boyacá', 'CAQUETA' => 'Caquetá',
+            'CHOCO' => 'Chocó', 'CORDOBA' => 'Córdoba', 'GUAINIA' => 'Guainía', 'NARIÑO' => 'Nariño',
+            'NARINO' => 'Nariño', 'QUINDIO' => 'Quindío', 'VAUPES' => 'Vaupés',
+        ];
+        $clave = mb_strtoupper(trim($depto));
+        $depto = $conTilde[$clave]
+            ?? str_replace([' Del ', ' De ', ' Y '], [' del ', ' de ', ' y '], mb_convert_case(mb_strtolower(trim($depto)), MB_CASE_TITLE));
+
+        return str_contains(mb_strtolower($this->ciudad), mb_strtolower($depto)) ? $this->ciudad : "{$this->ciudad}, {$depto}";
+    }
+
     // Usuario BryNex asignado por defecto como encargado de afiliación
     public function encargadoAfiliacion(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

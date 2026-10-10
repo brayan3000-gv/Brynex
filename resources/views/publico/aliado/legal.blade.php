@@ -54,7 +54,7 @@
                 <p>
                     Esta Política de Privacidad describe cómo <strong>{{ $aliado->nombre }}</strong>
                     ({{ $aliado->razon_social ?: $aliado->nombre }}@if($aliado->nit), NIT {{ $aliado->nit }}@endif),
-                    con domicilio en {{ $aliado->direccion ?: 'Colombia' }}@if($aliado->ciudad), {{ $aliado->ciudad }}@endif,
+                    con domicilio en {{ $aliado->direccion ?: 'Colombia' }}@if($aliado->ubicacion_publica), {{ $aliado->ubicacion_publica }}@endif,
                     recolecta, usa, almacena y protege los datos personales de las personas que nos contactan para
                     afiliación a EPS, ARL, fondo de pensión y caja de compensación familiar, o que interactúan con
                     nosotros a través de este sitio web, WhatsApp, Facebook o Instagram.

@@ -529,7 +529,7 @@
             <div class="entrada">
                 <span class="badge">
                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>
-                    Afiliación 100% en línea @if($aliado->ciudad)· {{ $aliado->ciudad }}@endif
+                    Afiliación 100% en línea @if($aliado->ubicacion_publica)· {{ $aliado->ubicacion_publica }}@endif
                 </span>
                 @if($config->hero_titulo)
                     <h1>{{ $config->hero_titulo }}</h1>
@@ -863,7 +863,7 @@
                     @if($aliado->direccion)
                         <div class="dato">
                             <span class="icono"><svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="9" r="2.5"/></svg></span>
-                            <div class="dato-texto"><small>Dirección</small>{{ $aliado->direccion }}@if($aliado->ciudad), {{ $aliado->ciudad }}@endif</div>
+                            <div class="dato-texto"><small>Dirección</small>{{ $aliado->direccion }}@if($aliado->ubicacion_publica), {{ $aliado->ubicacion_publica }}@endif</div>
                         </div>
                     @endif
                     @if($whatsapp)
