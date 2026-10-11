@@ -83,7 +83,15 @@ class WhatsappLeerImagenJob implements ShouldQueue
         $mensaje->update(['contenido' => $r['texto']]);
 
         if (! $contestaElBot) {
-            return; // la lleva una persona: la lectura ya quedó en el inbox
+            // La lleva una persona: la lectura ya quedó en el inbox. Pero un comprobante sin
+            // «pendiente» no sale en la bandeja: el 10-oct-2026 dos pagos ($475.600 y $123.000)
+            // quedaron sin «recibido». Al responder, trasEnvioHumano() limpia el pendiente.
+            if ($r['comprobante'] && ! $conversacion->pendiente_atencion) {
+                $resumen = LecturaImagenService::resumenComprobante($r['comprobante']);
+                $conversacion->marcarPendiente('Comprobante de pago: '.($resumen ?: 'sin datos legibles').' — confirmar y registrar el pago.');
+            }
+
+            return;
         }
 
         if ($r['comprobante']) {

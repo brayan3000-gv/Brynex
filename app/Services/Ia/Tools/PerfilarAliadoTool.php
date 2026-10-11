@@ -25,7 +25,8 @@ class PerfilarAliadoTool implements IaToolInterface
             .'cuanto sepas dos cosas —y solo entonces—: qué es (asesor, empresa o empleador) y cuántas personas maneja hoy. Guarda ese '
             .'perfil, te devuelve el camino que le conviene con los números públicos de brynex.co/aliados y el enlace '
             .'con su número ya puesto, y avisa a la persona del equipo que lo va a atender. Vuelve a llamarla si el '
-            .'prospecto corrige la cantidad. NO la uses con quien quiere afiliarse él mismo: a ese se le cotiza.';
+            .'prospecto corrige su cantidad real; si solo pregunta por otra («¿y si tengo 100?»), llámala con '
+            .'hipotetico en true, que trae las cifras sin cambiar su perfil ni avisar a nadie. NO la uses con quien quiere afiliarse él mismo: a ese se le cotiza.';
     }
 
     public function schema(): array
@@ -40,6 +41,7 @@ class PerfilarAliadoTool implements IaToolInterface
                 ],
                 'personas' => ['type' => 'integer', 'description' => 'Cuántas personas o afiliados maneja hoy, según él. Si dio un rango, el menor; si dijo "más de 30", 30. Si todavía NO dijo cuántas, no llames la herramienta: pregúntale primero (nunca pongas 0 ni 1 por suponer). Si dejó el negocio pero tuvo cartera ("antes manejaba 3000"), usa la que tenía y acláralo en detalle.'],
                 'detalle' => ['type' => 'string', 'description' => 'Una frase con lo que contó (a qué se dedica, ciudad, qué le interesa), para quien lo atienda.'],
+                'hipotetico' => ['type' => 'boolean', 'description' => 'true si pregunta por una cantidad que NO tiene hoy («¿y si llego a 100?»): trae las cifras de esa cantidad sin guardarla ni avisar al equipo.'],
             ],
             'required' => ['tipo', 'personas'],
         ];
@@ -49,7 +51,11 @@ class PerfilarAliadoTool implements IaToolInterface
     {
         $tipo = (string) ($input['tipo'] ?? 'asesor');
         $personas = max(0, (int) ($input['personas'] ?? 0));
-        $conv = ! empty($contexto['wa_conversacion_id']) ? WhatsappConversacion::find($contexto['wa_conversacion_id']) : null;
+        // Una pregunta («¿y si tengo 100?») no es su cartera: el 10-oct-2026 una empresa de 50
+        // quedó guardada con 100 y asignada a quien atiende las grandes. Sin conversación, solo orienta.
+        $conv = ! empty($contexto['wa_conversacion_id']) && empty($input['hipotetico'])
+            ? WhatsappConversacion::find($contexto['wa_conversacion_id'])
+            : null;
         $servicio = app(ProspectoAliadoService::class);
 
         $r = $conv
@@ -65,7 +71,7 @@ class PerfilarAliadoTool implements IaToolInterface
             'camino' => $r['camino'],
             'resumen' => $r['resumen'],
             'enlace' => $r['url'],
-            'instrucciones' => trim(($r['camino'] === 'cliente' ? '' : 'Responde con el camino y las cifras por unidad, en lenguaje natural y breve, y pásale el enlace para que juegue con la calculadora. ')
+            'instrucciones' => trim(($r['camino'] === 'cliente' ? '' : 'Responde con el camino y las cifras por unidad, en lenguaje natural y breve, y pásale el enlace para que juegue con la calculadora. Si el resumen menciona otro camino posible, nómbralo también. ')
                 .'TÚ sigues atendiendo: NO le digas que alguien del equipo le va a escribir ni le des ningún teléfono. '
                 .'Usa solo estas cifras; si pregunta cómo empezar, ofrécele una reunión virtual; si la acepta, pide hablar con una persona o condiciones distintas, ahí sí usa hablar_con_asesor.'),
         ];
