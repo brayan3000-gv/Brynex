@@ -25,6 +25,14 @@ return [
         'integral' => ['nombre' => 'Alianza Integral', 'valor' => 15000, 'incluye' => 'toda la operación gestionada por Brygar, afiliaciones incluidas'],
     ],
 
+    // Lo que hace la plataforma, como lo lista la página («Todo lo que necesita, en un solo lugar»).
+    // La IA lo usa para contarle al aliado que hace sus propias afiliaciones qué recibe en la Esencial.
+    'plataforma_incluye' => [
+        'afiliaciones y novedades', 'salud, pensión, riesgos laborales y parafiscales', 'gestión documental',
+        'incapacidades y licencias', 'cambios de salario', 'traslados, inclusiones y reingresos',
+        'razones sociales', 'reportes y seguimiento',
+    ],
+
     // Complemento de afiliaciones, una sola vez por contrato nuevo
     'afiliacion' => ['equipo' => 3000, 'brygar' => 6000, 'brygar_volumen' => 5000, 'tramo' => 300],
 

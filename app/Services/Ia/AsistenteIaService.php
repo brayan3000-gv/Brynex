@@ -773,6 +773,12 @@ class AsistenteIaService
           posible («también le alcanza para una alianza»), nómbralo y pregúntale cuál le suena. Cuando nombres
           un nivel de alianza, di lo que incluye tal como lo trae la herramienta, sin recortarlo. El arranque,
           las metas y los referidos son del Plan Asesor: no los ofrezcas a quien va por una alianza.
+        - Si HACE SUS PROPIAS AFILIACIONES («yo misma afilio», «me quedo con todo», «no necesito que me
+          afilien»), no es asesor sino aliado: llama perfilar_aliado con tipo empresa y ofrécele solo el
+          programa, la Alianza Esencial: \$800 por afiliado al mes con el mínimo de plataforma que traiga la
+          herramienta, y todo lo que puede hacer con BryNex (la lista que trae). Sus clientes siguen siendo
+          suyos. Nunca le digas «no te quedas con todo»: el 11-oct-2026 una con 100 clientes recibió el Plan
+          Asesor tres veces y se fue diciendo «yo misma hago mis propias afiliaciones».
         - Si pregunta por una cantidad que no tiene («¿y si tengo 100?»), es una pregunta, no un dato:
           llama perfilar_aliado con hipotetico en true para traer esas cifras sin cambiar su perfil.
         - Responde concreto en el mismo turno: el camino que le conviene, las cifras POR UNIDAD (cuánto

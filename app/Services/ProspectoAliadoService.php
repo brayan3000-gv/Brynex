@@ -47,8 +47,13 @@ class ProspectoAliadoService
         if ($tipo === 'empresa' && $n >= $cerca) {
             $base = max($n, $umbral);
             $precios = [];
+            // El precio de la página es por afiliado; el total va al lado para que no sorprenda
+            // el mínimo de plataforma (con 100 en la Esencial son $80.000, pero se factura $180.000).
             foreach ($c['planes'] as $p) {
-                $precios[] = $p['nombre'].' $'.number_format(max($base * $p['valor'], $c['min_plataforma']), 0, ',', '.').' al mes ('.$p['incluye'].')';
+                $total = max($base * $p['valor'], $c['min_plataforma']);
+                $precios[] = $p['nombre'].': $'.number_format($p['valor'], 0, ',', '.').' por afiliado al mes'
+                    .($total > $base * $p['valor'] ? ', con el mínimo de plataforma: $' : ', con '.$base.' afiliados: $')
+                    .number_format($total, 0, ',', '.').' al mes ('.$p['incluye'].')';
             }
             $faltan = max($umbral - $n, 0);
             $resumen = ($faltan
@@ -57,7 +62,9 @@ class ProspectoAliadoService
                 .'Valores al mes con su propia marca: '.implode('; ', $precios).'. '
                 .'Si además quiere que Brygar le haga las afiliaciones: $'.number_format($c['afiliacion']['brygar'], 0, ',', '.').' por contrato una sola vez (o $'
                 .number_format($c['afiliacion']['equipo'], 0, ',', '.').' si las hace su equipo con la plataforma); en la Integral van incluidas. '
-                .'La plataforma dedicada tiene un mínimo de $'.number_format($c['min_plataforma'], 0, ',', '.').' al mes. Valores antes de IVA.';
+                .'La plataforma dedicada tiene un mínimo de $'.number_format($c['min_plataforma'], 0, ',', '.').' al mes. Valores antes de IVA. '
+                .'Si hace sus propias afiliaciones y solo necesita el programa, es la Alianza Esencial, que le sirve para: '
+                .implode(', ', $c['plataforma_incluye'] ?? []).'; con su propio logo y sus propias razones sociales.';
 
             return ['camino' => 'alianza', 'sugerencia' => $faltan ? "Alianza (le faltan {$faltan} para 100)" : 'Alianza para empresas', 'resumen' => $resumen, 'url' => $url];
         }
