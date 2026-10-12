@@ -208,6 +208,86 @@ class FinanzasWhatsappService
     }
 
     /**
+     * Envía el aviso de un préstamo que lleva Luca (Avappi). Desde el 11-oct-2026 los
+     * préstamos de Brayan viven en Luca: Luca decide a quién le toca y con qué valores
+     * (GET /api/luca/cobros) y aquí solo se manda, por la cuenta y con las plantillas
+     * aprobadas del aliado, y queda en su bandeja como cualquier otro mensaje.
+     *
+     * @param  array  $m  Un mensaje de Luca: deudor, telefono, plantilla, variables (4), texto.
+     * @return array ['ok' => bool, 'message' => string, 'error' => string|null]
+     */
+    public function enviarRecordatorioDesdeLuca(array $m, \App\Models\User $user): array
+    {
+        $numero = preg_replace('/[^0-9]/', '', (string) ($m['telefono'] ?? ''));
+        if (strlen($numero) === 10) {
+            $numero = '57'.$numero;
+        }
+        if (strlen($numero) < 11) {
+            return ['ok' => false, 'message' => 'El deudor no tiene un celular válido.'];
+        }
+        $nombrePlantilla = in_array($m['plantilla'] ?? '', ['aviso_previo_prestamo', 'recordatorio_prestamo'], true) ? $m['plantilla'] : null;
+        $params = array_map('strval', array_slice((array) ($m['variables'] ?? []), 0, 4));
+        if (! $nombrePlantilla || count($params) !== 4) {
+            return ['ok' => false, 'message' => 'El mensaje de Luca no trae la plantilla o sus 4 variables.'];
+        }
+
+        $aliadoId = $user->aliado_id;
+        $config = WhatsappConfig::paraAliado($aliadoId);
+        if (! $config->credencialesCompletas()) {
+            return ['ok' => false, 'message' => 'No hay credenciales de WhatsApp configuradas para el aliado.'];
+        }
+
+        try {
+            $conversacion = WhatsappConversacion::firstOrCreate(
+                ['aliado_id' => $aliadoId, 'wa_contact_id' => $numero],
+                ['nombre_contacto' => $m['deudor'] ?? $numero, 'estado' => 'abierta']
+            );
+            $conversacion->update(['asignado_a' => $user->id, 'estado' => 'asignada', 'bot_activo' => false]);
+
+            $plantilla = \App\Models\WhatsappPlantilla::delAliado($aliadoId)->aprobadas()->where('nombre', $nombrePlantilla)->first();
+            if ($plantilla) {
+                $res = $this->apiService->enviarTemplate($numero, $plantilla, $params, $config);
+                $tipoMensaje = 'template';
+                $contenidoMensaje = $plantilla->cuerpo;
+                foreach ($params as $i => $valor) {
+                    $contenidoMensaje = str_replace('{{'.($i + 1).'}}', $valor, $contenidoMensaje);
+                }
+            } else {
+                // Sin plantilla solo sale si hay ventana de 24 h abierta.
+                $res = $this->apiService->enviarTexto($numero, (string) ($m['texto'] ?? ''), $config);
+                $tipoMensaje = 'text';
+                $contenidoMensaje = (string) ($m['texto'] ?? '');
+            }
+
+            if (! $res['ok']) {
+                return [
+                    'ok' => false,
+                    'message' => 'Meta API rechazó el mensaje.'.($plantilla ? " Revisa las variables de «{$nombrePlantilla}»." : " Falta la plantilla aprobada «{$nombrePlantilla}»."),
+                    'error' => $res['error'] ?? 'Desconocido',
+                ];
+            }
+
+            WhatsappMensaje::create([
+                'conversacion_id' => $conversacion->id,
+                'aliado_id' => $aliadoId,
+                'wa_message_id' => $res['wa_message_id'] ?? 'fin_wa_'.uniqid(),
+                'direccion' => 'saliente',
+                'tipo' => $tipoMensaje,
+                'contenido' => $contenidoMensaje,
+                'estado' => 'enviado',
+                'usuario_id' => $user->id,
+            ]);
+            $conversacion->update(['ultimo_mensaje_at' => now()]);
+
+            return ['ok' => true, 'message' => 'Enviado.'];
+        } catch (\Exception $e) {
+            Log::error('Error enviando aviso de préstamo de Luca por WhatsApp: '.$e->getMessage());
+
+            return ['ok' => false, 'message' => 'Error interno al enviar.', 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Envía UN solo recordatorio al cliente de cuenta corriente con el consolidado
      * de sus trabajos pendientes, en vez de un mensaje por trabajo.
      *

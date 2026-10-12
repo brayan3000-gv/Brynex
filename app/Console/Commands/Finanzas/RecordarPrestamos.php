@@ -6,6 +6,7 @@ use App\Models\Finanzas\Prestamo;
 use App\Services\Finanzas\FinanzasWhatsappService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
 
 class RecordarPrestamos extends Command
 {
@@ -37,6 +38,12 @@ class RecordarPrestamos extends Command
 
     public function handle(FinanzasWhatsappService $whatsapp): int
     {
+        // Desde el 11-oct-2026 los préstamos de Brayan viven en Luca (Avappi): si está configurado,
+        // Luca decide a quién escribir y aquí solo se manda (los préstamos de Brynex ya no se usan).
+        if (config('services.luca.cobros_url') && config('services.luca.cobros_token')) {
+            return $this->desdeLuca($whatsapp);
+        }
+
         $dias = max(0, (int) $this->option('dias'));
         $margen = max(0, (int) $this->option('margen'));
         $seco = $this->option('dry-run');
@@ -87,6 +94,62 @@ class RecordarPrestamos extends Command
 
         $prefijo = $seco ? '[DRY] ' : '';
         $this->info("{$prefijo}Listo. Avisos previos: {$avisos}. Cobros: {$cobros}. Fallos: {$fallos}.");
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Los avisos que Luca dice que tocan hoy: se mandan con las plantillas del aliado y
+     * se le confirma a Luca cada uno enviado (así no se repite ese ciclo). Un fallo de
+     * Meta no se confirma: mañana ya no es el día, la gestión queda manual (como antes).
+     */
+    private function desdeLuca(FinanzasWhatsappService $whatsapp): int
+    {
+        $seco = $this->option('dry-run');
+        $url = rtrim(config('services.luca.cobros_url'), '/');
+        $token = config('services.luca.cobros_token');
+        $user = \App\Models\User::find(config('services.luca.cobros_user_id'));
+        if (! $user) {
+            $this->error('LUCA_COBROS_USER_ID no es un usuario de Brynex.');
+
+            return self::FAILURE;
+        }
+
+        $r = Http::withToken($token)->acceptJson()->timeout(30)->get("{$url}/api/luca/cobros");
+        if (! $r->ok() || ! $r->json('ok')) {
+            $this->error("Luca no respondió la lista de cobros (HTTP {$r->status()}).");
+
+            return self::FAILURE;
+        }
+
+        $avisos = $cobros = $fallos = 0;
+        foreach ($r->json('mensajes', []) as $m) {
+            $tipo = $m['tipo'] === 'cobro' ? 'COBRO' : 'AVISO';
+            $detalle = "{$m['deudor']} · corte {$m['corte']} · ".implode(' | ', $m['variables'] ?? []);
+            if ($seco) {
+                $this->line("[DRY] {$tipo} → Luca #{$m['id']} {$detalle}");
+                $tipo === 'AVISO' ? $avisos++ : $cobros++;
+
+                continue;
+            }
+            $res = $whatsapp->enviarRecordatorioDesdeLuca($m, $user);
+            if (! $res['ok']) {
+                $fallos++;
+                $this->error("Luca #{$m['id']} {$m['deudor']}: {$res['message']}");
+
+                continue;
+            }
+            $ok = Http::withToken($token)->acceptJson()->timeout(15)
+                ->post("{$url}/api/luca/cobros/{$m['id']}/enviado", ['tipo' => $m['tipo'], 'corte' => $m['corte']]);
+            if (! $ok->ok()) {
+                $this->error("Luca #{$m['id']}: enviado, pero Luca no lo marcó (HTTP {$ok->status()}).");
+            }
+            $tipo === 'AVISO' ? $avisos++ : $cobros++;
+            $this->info("{$tipo} → Luca #{$m['id']} {$detalle}");
+        }
+
+        $prefijo = $seco ? '[DRY] ' : '';
+        $this->info("{$prefijo}Listo (desde Luca). Avisos previos: {$avisos}. Cobros: {$cobros}. Fallos: {$fallos}.");
 
         return self::SUCCESS;
     }

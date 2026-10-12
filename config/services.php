@@ -50,6 +50,14 @@ return [
     | de texto al número de Brygar se desvían al repo en vez de entrar a las
     | conversaciones. Ver App\Services\GarvisService.
     */
+    // Luca (Avappi) lleva los préstamos de Brayan desde el 11-oct-2026: el aviso a los deudores le pregunta
+    // a Luca a quién escribir (finanzas:recordar-prestamos). Vacío = se usan los préstamos de Brynex.
+    'luca' => [
+        'cobros_url' => env('LUCA_COBROS_URL'),
+        'cobros_token' => env('LUCA_COBROS_TOKEN'),
+        'cobros_user_id' => (int) env('LUCA_COBROS_USER_ID', 2),
+    ],
+
     'garvis' => [
         'activo' => env('GARVIS_ACTIVO', false),
         'numero' => env('GARVIS_NUMERO', env('WHATSAPP_ALERTAS_NUMERO', '3117762689')),
