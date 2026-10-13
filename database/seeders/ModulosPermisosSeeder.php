@@ -77,6 +77,8 @@ class ModulosPermisosSeeder extends Seeder
                 // toca sin que el dueño lo sepa.
                 'editar_radicado' => ['Editar contrato ya radicado',  []],
                 'retirar' => ['Retirar contratos',            ['A', 'U']],
+                // Declaración de la empresa ante terceros: no la trae el rol usuario.
+                'carta_laboral' => ['Generar cartas laborales',   ['A']],
             ]],
             ['afiliaciones', 'Afiliaciones', 'operacion', '🤝', 'admin.afiliaciones.index', [
                 'ver' => ['Ver afiliaciones',      ['A', 'U']],

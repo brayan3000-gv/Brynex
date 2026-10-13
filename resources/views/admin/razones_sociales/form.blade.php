@@ -573,6 +573,45 @@
         @enderror
     </div>
 
+    {{-- ── Logo de la empresa (membrete de las cartas laborales) ── --}}
+    @php
+        $rutaLogo  = \App\Services\CartaLaboralService::rutaLogo((string) $nitSello);
+        $tieneLogo = file_exists($rutaLogo);
+    @endphp
+    <div class="card" id="cardLogo">
+        <div class="card-title">🏷️ Logo de la empresa</div>
+        <p style="font-size:.72rem;color:#64748b;margin:0 0 .6rem">Va en el membrete de las cartas laborales, junto al nombre y el NIT.</p>
+
+        <div style="display:flex;gap:1.2rem;align-items:center;flex-wrap:wrap">
+            @if($tieneLogo)
+            <div style="flex:0 0 auto;text-align:center;border:1px solid #e2e8f0;border-radius:10px;padding:.6rem .8rem;background:#f8fafc">
+                <p style="font-size:.62rem;color:#64748b;margin:0 0 .4rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em">Logo actual</p>
+                <img src="data:image/png;base64,{{ base64_encode(file_get_contents($rutaLogo)) }}" style="max-height:70px;max-width:180px;object-fit:contain">
+            </div>
+            @else
+            <div style="flex:0 0 auto;text-align:center;border:1.5px dashed #cbd5e1;border-radius:10px;padding:1.2rem 1.8rem;color:#94a3b8;font-size:.75rem;background:#f8fafc;font-weight:600">
+                📭 Sin logo registrado
+            </div>
+            @endif
+
+            <form method="POST" action="{{ route('admin.configuracion.razones.logo', $rs->id) }}" enctype="multipart/form-data"
+                  style="flex:1;min-width:260px;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+                @csrf
+                <input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp" required style="font-size:.75rem;flex:1;min-width:180px">
+                <button type="submit" style="padding:.45rem .9rem;background:linear-gradient(135deg,#0369a1,#0284c7);color:#fff;border:none;border-radius:6px;font-size:.78rem;font-weight:700;cursor:pointer">
+                    💾 Guardar logo
+                </button>
+            </form>
+        </div>
+
+        @if(session('success') && str_contains(session('success'), 'Logo'))
+        <div style="margin-top:.6rem;font-size:.72rem;color:#15803d;font-weight:700;text-align:center">{{ session('success') }}</div>
+        @endif
+        @error('logo')
+        <div style="margin-top:.4rem;font-size:.72rem;color:#dc2626;text-align:center">⚠️ {{ $message }}</div>
+        @enderror
+    </div>
+
     @include('admin.razones_sociales.partials.documentos')
 </div>
 

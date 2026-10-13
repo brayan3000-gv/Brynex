@@ -1161,6 +1161,11 @@
                 <span class="di-icon">💬</span> WhatsApp
             </a>
             @endcan
+            @can('contratos.carta_laboral')
+            <a href="{{ route('admin.cartas_laborales.index') }}" class="drawer-item {{ request()->routeIs('admin.cartas_laborales*') ? 'activo' : '' }}">
+                <span class="di-icon">📝</span> Cartas laborales
+            </a>
+            @endcan
         </div>
 
         {{-- Sección financiero --}}

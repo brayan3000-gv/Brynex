@@ -368,6 +368,31 @@ class RazonSocialController extends Controller
         ]);
     }
 
+    // ─── Subir logo (membrete de las cartas laborales) ────────────
+    public function subirLogo(Request $request, int $id)
+    {
+        $rs = DB::table('razones_sociales')
+            ->where('id', $id)
+            ->where('aliado_id', session('aliado_id_activo'))
+            ->first();
+
+        abort_if(!$rs, 404);
+
+        $request->validate([
+            'logo' => 'required|file|mimes:png,jpg,jpeg,webp|max:5120',
+        ], [
+            'logo.required' => 'Selecciona una imagen para el logo.',
+            'logo.mimes'    => 'El logo debe ser PNG, JPG o WEBP.',
+            'logo.max'      => 'El logo no puede pesar más de 5 MB.',
+        ]);
+
+        // Por NIT, como el sello: las copias prestadas de la empresa lo comparten.
+        $nit = (string) ($rs->nit ?? $rs->id);
+        \App\Services\CartaLaboralService::guardarPng($request->file('logo'), \App\Services\CartaLaboralService::rutaLogo($nit));
+
+        return back()->with('success', "✅ Logo guardado para las cartas laborales");
+    }
+
     // ─── Subir sello ──────────────────────────────────────────────
     public function subirSello(Request $request, int $id)
     {

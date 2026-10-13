@@ -373,6 +373,18 @@ Route::middleware('auth')->group(function () {
         });
         Route::patch('contratos/{contrato}/retirar', [\App\Http\Controllers\Admin\ContratoController::class, 'retirar'])->name('contratos.retirar')->middleware('permiso:contratos.retirar');
 
+        // Cartas laborales a nombre de la razón social (caja de compensación o certificación)
+        $clc = \App\Http\Controllers\Admin\CartaLaboralController::class;
+        Route::middleware('permiso:contratos.carta_laboral')->prefix('cartas-laborales')->name('cartas_laborales.')->group(function () use ($clc) {
+            Route::get('/', [$clc, 'index'])->name('index');
+            Route::get('buscar', [$clc, 'buscar'])->name('buscar');
+            Route::get('contrato/{id}', [$clc, 'contrato'])->whereNumber('id')->name('contrato');
+            Route::post('revisar', [$clc, 'revisar'])->name('revisar');
+            Route::post('generar', [$clc, 'generar'])->name('generar');
+            Route::get('{id}/descargar', [$clc, 'descargar'])->whereNumber('id')->name('descargar');
+            Route::post('firma', [$clc, 'guardarFirma'])->name('firma');
+        });
+
         // Configuración del aliado (tarifas, admon, ARL)
         // ── Configuración del aliado ──────────────────────────────────────
         // ver: admin (solo lectura) · editar: solo superadmin
@@ -481,6 +493,7 @@ Route::middleware('auth')->group(function () {
             Route::patch('configuracion/razones-sociales/{id}/estado', [$rsc, 'toggleEstado'])->name('configuracion.razones.estado');
             Route::patch('configuracion/razones-sociales/{id}/inactivar', [$rsc, 'inactivar'])->name('configuracion.razones.inactivar');
             Route::post('configuracion/razones-sociales/{id}/sello', [$rsc, 'subirSello'])->name('configuracion.razones.sello');
+            Route::post('configuracion/razones-sociales/{id}/logo', [$rsc, 'subirLogo'])->whereNumber('id')->name('configuracion.razones.logo');
             Route::post('configuracion/razones-sociales/{id}/cajas', [$rsc, 'agregarCaja'])->whereNumber('id')->name('configuracion.razones.cajas.agregar');
             // Prestar la razón social a otro aliado (solo superadmin BryNex, ver RazonSocialCompartida)
             Route::get('configuracion/razones-sociales/{id}/aliados', [$rsc, 'aliadosCompartida'])->whereNumber('id')->name('configuracion.razones.aliados');

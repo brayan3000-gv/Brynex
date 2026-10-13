@@ -85,6 +85,10 @@
             if(auth()->user()?->can('comisiones.ver')){
                 $modulos[] = ['icono'=>'💼', 'nombre'=>'Comisiones', 'color'=>'#f59e0b', 'url'=>route('admin.informes.comisiones.index')];
             }
+            // Cartas laborales a nombre de la razón social (caja de compensación o certificación)
+            if(auth()->user()?->can('contratos.carta_laboral')){
+                $modulos[] = ['icono'=>'📝', 'nombre'=>'Cartas laborales', 'color'=>'#0f766e', 'url'=>route('admin.cartas_laborales.index')];
+            }
             // Marketing: solo si el aliado tiene el módulo contratado y activo con Brynex
             if(auth()->user()?->can('marketing.ver')){
                 $moduloMarketingActivo = \App\Models\BrynexModuloAliado::where('aliado_id', session('aliado_id_activo'))
