@@ -111,3 +111,38 @@ Correo: [CORREO]      Teléfono: [TELÉFONO]
 3. Si el operador rechaza con `eo.val.2.655`, escala citando la nulidad parcial
    del numeral 8 de la Resolución 3559 de 2018 (Consejo de Estado, Sección
    Segunda, Subsección A, 17-mar-2021).
+
+---
+
+## Si el operador rechaza: cómo se escala
+
+**Antes de nada:** tener el rechazo por escrito y con el código. El
+`eo.val.2.655` se reproduce por API y por el portal, y está documentado sobre
+una persona real que figura con subtipo 4 en una planilla **pagada** del
+21-ago-2026 por ese mismo operador. Esa contradicción —aceptó y cobró lo que
+hoy rechaza— es la evidencia más fuerte disponible.
+
+**1. El operador — PQR formal.** La Superfinanciera obliga a los operadores de
+información a llevar registro de las PQR y a conservarlo mientras la queja esté
+viva, así que hay que exigir que quede **radicada como PQR**, no como consulta.
+Pedir justificación escrita del rechazo y la norma vigente que lo sustenta,
+frente a la nulidad parcial del numeral 8 de la Resolución 3559 de 2018.
+
+**2. Superintendencia Financiera.** Desde el 10-jul-2012 (Decreto 19 de 2012)
+ejerce inspección y vigilancia sobre la actividad de los operadores de
+información de la PILA. Es el siguiente escalón si el operador no resuelve.
+
+**3. Ministerio de Salud y Protección Social.** Es quien autoriza a los
+operadores y quien expide las resoluciones de PILA y sus anexos técnicos. Si lo
+que se discute es que el operador aplica una validación anulada o superada por
+la Resolución 1740 de 2019, es el lugar donde se aclara la norma. (La
+Superintendencia Nacional de Salud **no** tiene ese rol aquí.)
+
+Antecedente útil: el Ministerio ya sostuvo que las dificultades de los
+operadores "no pueden ser excusa para la negación de servicios de salud, ni
+pueden generar intereses de mora a los aportantes".
+
+> Los pasos 2 y 3 son inferencia de quién vigila a quién, no un procedimiento
+> publicado. Confirmar los canales oficiales antes de radicar, y que un abogado
+> maneje la escalera: el argumento de fondo es una nulidad de acto
+> administrativo.
