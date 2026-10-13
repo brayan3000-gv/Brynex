@@ -207,3 +207,20 @@ Verificado el 24-ago-2026 con un cotizante de 73 años: planillas `87718511` y
 pensión es opcional por diseño y no hay registro externo de por medio. El
 subtipo 4 es justo el que el operador rechaza sin inscripción en la UGPP, así
 que las planillas de UPC podrían estar fallando por esto. Sin corregir.
+
+## Los tipos de planilla, ahora sí completos
+
+El primer barrido se quedó corto. Catálogo entero probado: **E, A, B, F, H, I,
+J, K, M, N, O, S, T, U, X, Y, Z**. Las que no son la E mueren así:
+
+| Tipo | Qué lo cierra |
+|---|---|
+| **B** Piso Protección Social | `eo.val.2.067` — el cotizante 65 **no puede aportar a salud**: solo va a BEPS (código 251471), y la salud del Piso es del régimen subsidiado, fuera de PILA. Además `eo.val.1.009`: no es válida según la normatividad vigente |
+| **O** Beneficios tributarios | Es la única donde la salud es **opcional** para el cotizante 01, pero `eo.val.1.173` y `2.530` exigen que **aportante y cotizante** estén en la base de la UGPP, y `2.588` manda la salud a **MIN001 - ADRES**, no a la EPS. Es la planilla de las obligaciones que la UGPP determina en fiscalización |
+| **Z** Cálculo actuarial | Para pasivos pensionales |
+| **F**, **X** | `eo.val.1.009` — derogadas |
+| **M** | `eo.val.1.161` — solo períodos anteriores a febrero de 2014 |
+| **J** | `eo.val.1.179` — exige seleccionar una sentencia judicial |
+| **K**, **Y** | Solo riesgos laborales |
+| **A**, **S**, **T**, **H** | Repiten el `eo.val.2.066` de la E |
+| **U** | No existe: el operador devuelve respuesta vacía sin crear planilla |
