@@ -146,3 +146,84 @@ pueden generar intereses de mora a los aportantes".
 > publicado. Confirmar los canales oficiales antes de radicar, y que un abogado
 > maneje la escalera: el argumento de fondo es una nulidad de acto
 > administrativo.
+
+---
+
+## Borrador de PQR al operador
+
+> **No radicar sin un caso concreto.** Una PQR que solo cita normas se responde
+> con "la validación aplica". La que pesa es la que nombra un trabajador que
+> cumple requisitos, notificó por escrito, fue reportado con subtipo 4 y fue
+> rechazado. Y antes de radicar, revisar que la ficha del aportante esté
+> correcta: el operador va a mirar eso primero.
+
+```
+Señores
+[OPERADOR DE INFORMACIÓN]
+
+Asunto: Solicitud de revisión del rechazo eo.val.2.655 — subtipo de cotizante 04
+        Aportante [RAZÓN SOCIAL], NIT [NIT]
+        Radicación como PQR
+
+En nuestra condición de aportante registrado ante ustedes, solicitamos revisión
+del rechazo que su plataforma aplica al subtipo de cotizante 04, en los
+siguientes términos:
+
+HECHOS
+
+1. El trabajador [NOMBRE], identificado con [DOC], acredita [SEMANAS] semanas
+   cotizadas y [EDAD] años de edad, cumpliendo los requisitos mínimos para el
+   reconocimiento de la pensión de vejez.
+
+2. El [FECHA] nos notificó por escrito su decisión de no continuar cotizando al
+   Sistema General de Pensiones, en ejercicio del derecho previsto en el inciso
+   2 del artículo 17 de la Ley 100 de 1993, aportando los soportes
+   correspondientes. Copia de la notificación se anexa.
+
+3. Al reportarlo con subtipo de cotizante 04 en la planilla del período
+   [PERÍODO], su plataforma devolvió:
+
+      eo.val.2.655 — "El cotizante no puede hacer uso del subtipo de cotizante 4.
+      Puede dirigirse a los canales de atención dispuestos por la UGPP..."
+
+FUNDAMENTOS
+
+4. La Resolución 1740 de 2019 del Ministerio de Salud y Protección Social
+   establece que no se exige al cotizante que cumple los requisitos iniciar el
+   trámite administrativo de reconocimiento de la pensión.
+
+5. El Consejo de Estado, Sección Segunda, Subsección A, en sentencia del 17 de
+   marzo de 2021, declaró la nulidad parcial del numeral 8 de la Resolución
+   3559 de 2018, incluyendo el aparte que obligaba al operador de información a
+   validar al cotizante contra un reporte externo, por imponer un requisito que
+   el artículo 17 de la Ley 100 de 1993 no establece.
+
+6. En la misma providencia se sostuvo que la obligación de cotizar al Sistema
+   General de Pensiones cesa cuando el afiliado reúne los requisitos mínimos,
+   sin que sea necesario el reconocimiento previo de la prestación.
+
+SOLICITUDES
+
+PRIMERA.  Que se registre esta comunicación como PQR y se nos informe su número
+          de radicado.
+
+SEGUNDA.  Que se nos indique por escrito la norma vigente que sustenta la
+          validación que origina el rechazo eo.val.2.655, precisando su
+          compatibilidad con la nulidad parcial señalada en el numeral 5.
+
+TERCERA.  Que se permita el reporte del trabajador referido con subtipo de
+          cotizante 04 para el período [PERÍODO] y los siguientes, conforme a
+          la notificación que se anexa.
+
+CUARTA.   Que se nos informe el procedimiento que su plataforma dispone para
+          que un cotizante reporte esta novedad, conforme a la Resolución 1740
+          de 2019.
+
+Anexos: notificación del trabajador y soportes; captura del rechazo.
+
+Atentamente,
+[REPRESENTANTE LEGAL / APODERADO]
+```
+
+Si la respuesta no resuelve, los escalones siguientes son la Superintendencia
+Financiera y el Ministerio de Salud — ver la sección anterior.
