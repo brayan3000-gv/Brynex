@@ -224,3 +224,26 @@ J, K, M, N, O, S, T, U, X, Y, Z**. Las que no son la E mueren así:
 | **K**, **Y** | Solo riesgos laborales |
 | **A**, **S**, **T**, **H** | Repiten el `eo.val.2.066` de la E |
 | **U** | No existe: el operador devuelve respuesta vacía sin crear planilla |
+
+## Cómo se ejerce el derecho (procedimiento, oct-2026)
+
+No es un trámite ante el operador ni ante la UGPP: ocurre **entre el trabajador
+y el empleador**.
+
+1. El trabajador **notifica por escrito al empleador** que ejercerá el derecho
+   del inciso 2 del artículo 17 de la Ley 100 de dejar de cotizar a pensión.
+2. Entrega los **documentos que acreditan el cumplimiento** de requisitos —
+   distintos de los que acreditan el inicio del trámite pensional.
+3. Declara que son veraces y **mantiene indemne al empleador**.
+4. El empleador **marca el subtipo 4** y cesa el aporte a pensión.
+
+Borrador del formato en `formato-notificacion-subtipo-4.md`, junto con la
+respuesta a dónde se radica (en ninguna parte: se entrega al empleador) y los
+tiempos del camino alterno.
+
+El nudo sigue siendo este: la Resolución 1740 de 2019 dice que **no se puede
+exigir** tramitar la solicitud de pensión, pero el operador valida contra el
+"Reporte de Información de Personas que están en Trámite de Solicitud de
+Pensión" — alimentado por las administradoras vía PISIS, con corte el día 24 de
+cada mes. Quien no tramitó no está en el reporte, y sale `eo.val.2.655`. Esa es
+justamente la validación que el Consejo de Estado anuló.
