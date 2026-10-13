@@ -51,21 +51,45 @@ HECHOS
    Es decir: su sistema rechaza hoy, sobre la misma persona, el subtipo que
    aceptó y cobró hace menos de dos meses.
 
+4. De forma independiente, la planilla tipo N número 1084672324, del aportante
+   SUPPLIESALUD SAS (NIT 901413785, sucursal 11), liquidada y pagada a través de
+   su plataforma el 27 de agosto de 2026, reporta al cotizante CC 80105117 con
+   una línea de corrección C con los siguientes valores:
+
+      Días    — pensión 1, salud 30, riesgos 30, caja 1
+      IBC     — pensión $58.364, salud $1.750.905, riesgos $1.750.905
+      Aportes — pensión $9.400, salud $70.100, riesgos $9.200, caja $2.400
+
+   Esa línea no modifica el subtipo de cotizante y no reporta novedades
+   distintas de ING.
+
+5. Al enviar nosotros una planilla tipo N con esa misma estructura —mismos
+   días, mismos IBC, sin cambio de subtipo y sin novedades adicionales—, su
+   plataforma la rechaza con:
+
+      eo.val.2.244 — "Los días de pensión, salud y riesgos deben ser iguales
+                      (1, 30, 30)."
+      eo.val.2.198 — "Los IBC de pensión, salud y riesgos deben ser iguales
+                      (58364, 1750905, 1750905) respectivamente."
+
+   La estructura rechazada es idéntica a la aceptada y pagada el 27 de agosto
+   de 2026, y nuestro envío es posterior a esa fecha.
+
 FUNDAMENTOS
 
-4. La Resolución 1740 de 2019 del Ministerio de Salud y Protección Social
+6. La Resolución 1740 de 2019 del Ministerio de Salud y Protección Social
    establece que no se exige al cotizante que cumple los requisitos mínimos de
    pensión de vejez iniciar el trámite administrativo de reconocimiento de la
    prestación para ejercer el derecho del inciso 2 del artículo 17 de la Ley 100
    de 1993.
 
-5. El Consejo de Estado, Sección Segunda, Subsección A, en sentencia del 17 de
+7. El Consejo de Estado, Sección Segunda, Subsección A, en sentencia del 17 de
    marzo de 2021, declaró la nulidad parcial del numeral 8 de la Resolución 3559
    de 2018, incluyendo el aparte que obligaba al operador de información a
    validar al cotizante contra un reporte externo, por imponer un requisito que
    el artículo 17 de la Ley 100 de 1993 no establece.
 
-6. En la misma providencia se sostuvo que la obligación de cotizar al Sistema
+8. En la misma providencia se sostuvo que la obligación de cotizar al Sistema
    General de Pensiones cesa cuando el afiliado reúne los requisitos mínimos
    para acceder a la pensión de vejez, sin que sea necesario el reconocimiento
    previo de la prestación.
@@ -77,7 +101,7 @@ PRIMERA.  Que se registre esta comunicación como PQR y se nos informe el númer
 
 SEGUNDA.  Que se nos indique por escrito cuál es la norma vigente que sustenta
           la validación que origina el rechazo eo.val.2.655, precisando su
-          compatibilidad con la nulidad parcial señalada en el numeral 5.
+          compatibilidad con la nulidad parcial señalada en el numeral 7.
 
 TERCERA.  Que se nos explique por qué la planilla 1084543500 fue aceptada y
           pagada el 21 de agosto de 2026 con el subtipo 04 sobre el cotizante
@@ -86,12 +110,22 @@ TERCERA.  Que se nos explique por qué la planilla 1084543500 fue aceptada y
           plataforma entre esas dos fechas, y en virtud de qué acto
           administrativo.
 
-CUARTA.   Que se nos informe el procedimiento que su plataforma dispone para que
+CUARTA.   Que se nos explique por qué la planilla 1084672324 fue aceptada y
+          pagada el 27 de agosto de 2026 con una línea de corrección cuyos días
+          e IBC de pensión, salud y riesgos no son iguales entre sí, mientras
+          que a este aportante se le rechaza esa misma estructura con las reglas
+          eo.val.2.244 y eo.val.2.198.
+
+          En particular, si las validaciones eo.val.2.244 y eo.val.2.198 se
+          aplican de manera diferenciada según el aportante, y conforme a qué
+          criterio o acto administrativo se determina esa diferenciación.
+
+QUINTA.   Que se nos informe el procedimiento que su plataforma dispone para que
           un cotizante reporte ante ustedes la novedad correspondiente al
           subtipo 04, conforme a la Resolución 1740 de 2019, dado que no
           encontramos esa opción en el portal del aportante.
 
-QUINTA.   Que, de existir dicho procedimiento, se nos indiquen los requisitos,
+SEXTA.    Que, de existir dicho procedimiento, se nos indiquen los requisitos,
           el canal y los términos de respuesta.
 
 Quedamos atentos dentro de los términos de ley.
@@ -115,7 +149,13 @@ Anexos: capturas del rechazo eo.val.2.655 por API y por portal.
 - **No pide marcar a nadie.** Pide información. Un aportante tiene derecho a
   saber con qué norma se le rechaza un archivo, y eso no depende de que el
   cotizante sea suyo.
-- **La tercera solicitud es la que muerde.** No es una opinión jurídica: es su
+- **La cuarta solicitud es la que más muerde**, más que la tercera: el caso de
+  SUPPLIESALUD no usa el subtipo 4 ni ninguna figura discutible. Es la misma
+  estructura de días e IBC que este aportante envía y que la plataforma
+  rechaza, aceptada y pagada el 27-ago-2026 — es decir, **después** de los
+  rechazos. O las validaciones 2.244 y 2.198 se aplican distinto según el
+  aportante, o hay que explicar cómo pasó esa planilla.
+- **La tercera solicitud** No es una opinión jurídica: es su
   propio registro contra su propio sistema, con número de planilla y fecha. Si
   responden que hubo un cambio de validación, hay que ver en virtud de qué acto.
   Si responden que no hubo cambio, quedan explicando cómo aceptaron y cobraron
