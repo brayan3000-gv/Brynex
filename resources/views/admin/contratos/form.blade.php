@@ -2198,9 +2198,9 @@ console.log('[AFP] tipo_doc en BD:', CLIENTE_TIPO_DOC, '| exento AFP:', CLIENTE_
 // (a menos que el cliente esté exento por tipo_doc o edad)
 const REGLA_AFP_ACTIVA           = {{ ($reglaAfpActiva ?? false) ? 'true' : 'false' }};
 const MODALIDADES_AFP_OBLIGATORIO = @json($modalidadesAfpObligatorio ?? [0, 10]);
-// Tipo E - X1: salud sin pensión en UNA planilla. Es para quien NO cumple
-// requisitos — al exento le sirve Tipo E normal, que liquida en cualquier
-// operador, así que a él se le esconde.
+// Tipo E - X1: salud sin pensión en UNA planilla. Pensada para quien NO cumple
+// requisitos —al exento le basta Tipo E normal, que liquida en cualquier
+// operador—, pero se le ofrece a todos.
 const MODALIDAD_EX1 = {{ (int) ($modalidadEx1 ?? -13) }};
 @php
 // Construir mapa de días TP antes de inyectarlo como JS
@@ -2805,17 +2805,9 @@ function filtrarModalidades(soloIndependiente, evitarRecalcular = false) {
             return;
         }
         const esIndepOpt = MODALIDADES_INDEP.includes(parseInt(value));
-        let mostrar = MODALIDADES_SIN_FILTRO_RS.includes(parseInt(value))
+        const mostrar = MODALIDADES_SIN_FILTRO_RS.includes(parseInt(value))
                      || (soloIndependiente ? esIndepOpt : !esIndepOpt);
 
-        // Tipo E - X1 solo tiene sentido para quien NO está exento. Al exento
-        // se le esconde: su planilla sin pensión sale por Tipo E normal y
-        // liquida en cualquier operador, no solo en Simple. Si el contrato ya
-        // venía guardado en X1 no se toca, o se guardaría sin modalidad.
-        if (mostrar && parseInt(value) === MODALIDAD_EX1
-            && CLIENTE_EXENTO_AFP && value !== valorActual) {
-            mostrar = false;
-        }
         if (mostrar) {
             selMod.appendChild(el);
             if (!primerValido) primerValido = value;

@@ -180,14 +180,15 @@ class TipoModalidad extends BaseModel
      * pagan en dos liquidaciones encadenadas contra la API del operador, así
      * que ofrecerlas a un aliado que no las conoce es venderle algo que no va a
      * poder pagar. Para abrirlas a otro aliado basta agregar su id aquí.
+     *
+     * Tipo E - X1 no está: es una planilla E ordinaria que liquida por Simple,
+     * así que se ofrece en todos los aliados (14-oct-2026).
      */
     const ALIADOS_POR_MODALIDAD = [
         self::ID_CAJA_30 => [2],
         self::ID_CAJA_14 => [2],
         self::ID_PENSION_30 => [2],
         self::ID_EXTRAS => [2],
-        self::ID_EX1 => [2],
-        self::ID_EX1_TP => [2],
     ];
 
     /**
