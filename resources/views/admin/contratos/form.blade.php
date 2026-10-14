@@ -4529,6 +4529,9 @@ if (typeof MF !== 'undefined' && FC_CONTRATO_ID) {
         fechaIngresoDia:   FC_FECHA_ING_DIA,
         esIndependiente:   FC_ES_INDEP,
         tipoModalidadId:   FC_TIPO_MODALIDAD_ID,
+        // Piso de "Otros planilla": Tipo E - X1 cobra un cargo propio que el
+        // usuario puede subir pero no bajar. Ver PilaCotizanteEX1.
+        otrosMin:          {{ (int) (\App\Services\PilaCotizanteEX1::llevaOtros($contrato->tipo_modalidad_id ?? null) ? \App\Services\PilaCotizanteEX1::otrosPlanilla() : 0) }},
         pagaMesActual:     FC_PAGA_MES_ACTUAL,
         costoAfiliacion:   FC_COSTO_AFIL,
         tieneIva:          FC_TIENE_IVA,

@@ -33,6 +33,10 @@ const MF = (function () {
 
     // ── Estado interno ────────────────────────────────────────────
     let _cfg = {};
+    // Piso de "Otros planilla": Tipo E - X1 cobra un cargo propio de planilla
+    // que el usuario puede SUBIR pero no bajar. En lote es la suma de los pisos
+    // de los contratos seleccionados. Ver PilaCotizanteEX1.
+    let _otrosMin = 0;
     let _selContratos = [];        // array de {id, data-* del <tr>} seleccionados
     let _total = 0;                // total calculado (planilla o afiliación)
     let _totalAfil = 0;            // costo afiliación
@@ -456,6 +460,21 @@ const MF = (function () {
             }
         });
 
+        // "Otros planilla" tiene piso: al salir del campo se devuelve al mínimo
+        // si lo bajaron. Durante la escritura no se toca, o no dejaría borrar
+        // para escribir otro número.
+        const inpOtrosPiso = el('mf-otros');
+        if (inpOtrosPiso && !inpOtrosPiso._pisoBound) {
+            inpOtrosPiso.addEventListener('blur', function () {
+                const v = parseInt(String(this.value).replace(/[^0-9]/g, '')) || 0;
+                if (_otrosMin > 0 && v < _otrosMin) {
+                    this.value = String(_otrosMin);
+                    recalc();
+                }
+            });
+            inpOtrosPiso._pisoBound = true;
+        }
+
         // Subtítulo
         setText('mf-subtitle', subtitulo || '');
 
@@ -464,7 +483,10 @@ const MF = (function () {
         setVal('mf-efectivo', '0');
         setVal('mf-prestamo', '0');
         setVal('mf-obs', '');
-        setVal('mf-otros', '0');
+        _otrosMin = _selContratos.reduce(
+            (t, c) => t + (parseInt(c && c.otros_min) || 0), 0
+        ) || parseInt(_cfg.otrosMin || 0);
+        setVal('mf-otros', String(_otrosMin));
         setVal('mf-otros-admon', '0');
         setVal('mf-estado', 'pagada');
         setVal('mf-nplano', '');
@@ -1584,7 +1606,15 @@ const MF = (function () {
 
             const seg    = parse(el('mf-v-seg')?.textContent);
             const iva    = parse(el('mf-v-iva')?.textContent);
-            const otros  = parse(el('mf-otros')?.value);
+            // El piso no se puede mermar: si lo bajaron, se devuelve al mínimo.
+            const inpOtros = el('mf-otros');
+            let otros = parse(inpOtros?.value);
+            if (_otrosMin > 0 && otros < _otrosMin) {
+                otros = _otrosMin;
+                if (inpOtros && document.activeElement !== inpOtros) {
+                    inpOtros.value = String(_otrosMin);
+                }
+            }
             const otrosA = parse(el('mf-otros-admon')?.value);
             const mora   = parse(el('mf-mora')?.value);   // mora editable por usuario
             const afilVal = parse(el('mf-v-afil')?.textContent);
@@ -2231,7 +2261,7 @@ const MF = (function () {
                 consignaciones: consignaciones,   // ← array dinámico
                 valor_efectivo: efect,
                 valor_prestamo: prest,
-                otros: parse(el('mf-otros')?.value),
+                otros: Math.max(parse(el('mf-otros')?.value), _otrosMin),
                 otros_admon: parse(el('mf-otros-admon')?.value),
                 mora: _mora,  // mora cobrada al cliente (NO es ingreso)
                 // El usuario edito la mora a mano. En el lote de empresa el backend

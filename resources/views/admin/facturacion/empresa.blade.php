@@ -479,6 +479,9 @@ if ($esAfilDeRetirado && !$fact) {
     data-tipo="{{ ($esAfil && !$esIndActPrimerMes) ? 'afiliacion' : 'planilla' }}"
     data-tipomod="{{ $tipoMod }}"
     data-tipo_modalidad_id="{{ $c->tipo_modalidad_id }}"
+    {{-- Piso de "Otros planilla": Tipo E - X1 cobra un cargo propio que el
+         usuario puede subir pero no bajar. Ver PilaCotizanteEX1. --}}
+    data-otrosmin="{{ (int) (\App\Services\PilaCotizanteEX1::llevaOtros($c->tipo_modalidad_id ?? null) ? \App\Services\PilaCotizanteEX1::otrosPlanilla() : 0) }}"
     data-rs="{{ $rs }}"
     data-fecha_ingreso_retiro="{{ $esRetirado && $c->fecha_retiro ? $c->fecha_retiro->format('Y-m-d') : ($c->fecha_ingreso ? $c->fecha_ingreso->format('Y-m-d') : '') }}"
     data-tiene-retiro-pendiente="{{ $tieneRetiroPendiente ? '1' : '0' }}"
@@ -1993,6 +1996,9 @@ function _buildContratosSelec() {
             nombre:    r.dataset.nombre || '',
             tipo:      r.dataset.tipo   || 'planilla',
             afiliacion: parseInt(r.dataset.afiliacion || 0),
+            // Piso de "Otros planilla" del contrato (Tipo E - X1). Se suma
+            // entre los seleccionados para formar el piso del lote.
+            otros_min: parseInt(r.dataset.otrosmin || 0),
             esindact:  r.dataset.esindact === '1',
             tipo_modalidad_id: parseInt(r.dataset.tipo_modalidad_id || 0),
             es_retiro_facturable: esRetFacturable,

@@ -418,8 +418,15 @@ class Contrato extends BaseModel
     {
         $mod = $this->tipoModalidad;
 
-        if (! $mod || ! $mod->esTiempoParcial()) {
+        $codigoPlan = $this->plan?->codigo;
+
+        if (! $mod || ! $mod->esTiempoParcialPara($codigoPlan)) {
             return ['arl' => 30, 'afp' => 30, 'caja' => 30];
+        }
+
+        // Tipo E - X1: los días los pone el plan, no el catálogo.
+        if (! $mod->esTiempoParcial()) {
+            return $mod->diasPorEntidad($codigoPlan);
         }
 
         $afp = $this->dias_tp_afp ?? $mod->dias_afp ?? 30;
@@ -516,7 +523,11 @@ class Contrato extends BaseModel
         $nivelArl = (int) ($this->n_arl ?? 1);
         $esIndep = $this->esIndependiente();
         $mod = $this->tipoModalidad;
-        $esTP = $mod && $mod->esTiempoParcial();
+        // El tiempo parcial lo puede decidir el PLAN y no la modalidad: Tipo E -
+        // X1 es de dependientes y vende ARL + caja de 14 días. Sin esto, este
+        // método —que es el que FACTURA y arma la cuenta de cobro— lo costearía
+        // como un mes completo de dependiente. Ver TipoModalidad::esTiempoParcialPara().
+        $esTP = $mod && $mod->esTiempoParcialPara($this->plan?->codigo);
 
         // Independientes cotizan sobre IBC; dependientes (razón social) sobre salario.
         // Si el campo principal es 0 (legacy), usar el otro como fallback.

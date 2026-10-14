@@ -1218,13 +1218,17 @@ class FacturacionController extends Controller
         $otrosPorContrato = self::_repartirProporcional($otrosLote, $totalesRealesPorContrato, $baseReparto);
         $otrosAdmonPorContrato = self::_repartirProporcional($otrosAdmonLote, $totalesRealesPorContrato, $baseReparto);
 
-        // El cargo de Tipo E - X1 NO se reparte: es de cada contrato y se suma
-        // entero al suyo. Entra aquí, antes de que la bolsa se vuelque sobre el
-        // total, para que también cuente en el reparto de la consignación, el
-        // efectivo y el saldo a favor — si entrara después, el pago no cuadraría
-        // con lo facturado.
-        foreach ($otrosEx1PorContrato as $cId => $v) {
-            $otrosPorContrato[$cId] = ($otrosPorContrato[$cId] ?? 0) + $v;
+        // El cargo de Tipo E - X1 es un PISO, no un extra: lo que el usuario
+        // escriba en "Otros planilla" puede subirlo pero no bajarlo. Si se
+        // sumara encima, el modal mostraría un total y se cobraría otro — y si
+        // se ignorara, bastaría dejar el campo en cero para no cobrarlo.
+        //
+        // Entra aquí, antes de que la bolsa se vuelque sobre el total, para que
+        // también cuente en el reparto de la consignación, el efectivo y el
+        // saldo a favor; si entrara después, el pago no cuadraría con lo
+        // facturado.
+        foreach ($otrosEx1PorContrato as $cId => $piso) {
+            $otrosPorContrato[$cId] = max($otrosPorContrato[$cId] ?? 0, $piso);
         }
         foreach ($totalesRealesPorContrato as $cId => $v) {
             $totalesRealesPorContrato[$cId] = $v
@@ -4744,6 +4748,19 @@ class FacturacionController extends Controller
         // El IVA NO se redondea a centena: es impuesto, va exacto como se factura.
         $rIva = fn ($v) => (int) round($v ?? 0);
 
+        // Cargo de planilla de Tipo E - X1: el cliente lo ve como seguridad
+        // social, así que la cuenta de cobro lo tiene que incluir en el total o
+        // mostraría menos de lo que se va a facturar. Sigue la misma regla que
+        // la SS: se prorratea por días. Ver PilaCotizanteEX1.
+        $otrosEx1 = function ($contrato, int $dias): int {
+            if (! \App\Services\PilaCotizanteEX1::llevaOtros($contrato->tipo_modalidad_id ?? null)) {
+                return 0;
+            }
+            $mes = \App\Services\PilaCotizanteEX1::otrosPlanilla();
+
+            return $dias >= 30 ? $mes : (int) (ceil($mes * max(0, $dias) / 30 / 100) * 100);
+        };
+
         // ── Pre-calcular mora estimada por contrato en lote ──
         $moraPorContrato = [];
         $filasMora = [];
@@ -4994,7 +5011,8 @@ class FacturacionController extends Controller
                        + \App\Services\IvaService::calcular((int) ($c->costo_afiliacion ?? 0), $tieneIva);
                 $vSS = $r100($cotiz['ss']);
                 $vAdm = (int) (($c->administracion ?? 0) + ($c->admon_asesor ?? 0));
-                $vTot = $vSS + $vAdm + $vIva + (int) (($c->costo_afiliacion ?? 0) + ($c->seguro ?? 0)) + $vMora;
+                $vOtros = $otrosEx1($c, $diasCotizar);
+                $vTot = $vSS + $vAdm + $vIva + $vOtros + (int) (($c->costo_afiliacion ?? 0) + ($c->seguro ?? 0)) + $vMora;
                 $estado = 'sin_factura';
             } elseif ($esAfil) {
                 $vEps = $vArl = $vAFP = $vCaja = $vAdm = 0;
@@ -5015,7 +5033,8 @@ class FacturacionController extends Controller
                 $vAdm = (int) (($c->administracion ?? 0) + ($c->admon_asesor ?? 0));
                 $vIva = $rIva($cotiz['iva'] ?? 0);
                 $vSS = $r100($cotiz['ss'] ?? 0);
-                $vTot = $vSS + $vAdm + $vIva + $vMora;
+                $vOtros = $otrosEx1($c, $diasCotizar);
+                $vTot = $vSS + $vAdm + $vIva + $vOtros + $vMora;
                 $estado = 'sin_factura';
             }
 
