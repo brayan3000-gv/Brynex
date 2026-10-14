@@ -4863,7 +4863,7 @@ class FacturacionController extends Controller
             }
         }
 
-        $items = $contratos->map(function ($c) use ($mes, $anio, $facturasExistentes, $facturasRetiro0, $admonRetiroCompleta, $r100, $rIva, $aliadoId, $moraPorContrato, $ivaClientes, $incluirMora) {
+        $items = $contratos->map(function ($c) use ($mes, $anio, $facturasExistentes, $facturasRetiro0, $admonRetiroCompleta, $r100, $rIva, $aliadoId, $moraPorContrato, $ivaClientes, $incluirMora, $otrosEx1) {
             $fact = $facturasExistentes->get($c->id);
             $factRetiro0 = $facturasRetiro0->get($c->id);
             $nombre = $c->cliente?->nombre_completo
