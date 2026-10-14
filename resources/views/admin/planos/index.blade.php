@@ -2783,9 +2783,10 @@ async function cargarEstadoEnlace() {
         // rechaza. Ver PlanillaDosPasosService::tandaMezclada.
         if (data.mezcla_extraordinaria) {
             cont.innerHTML = avisoEnlace('#fffbeb', '#fde68a', '#92400e',
-                '⚠️ Esta tanda mezcla modalidades <strong>extraordinarias</strong> (Tipo E - Caja / Pensión) '
-                + 'con las normales, y esas van en su propio archivo. Marque arriba, en el filtro de '
-                + 'modalidades, solo las extraordinarias y liquídelas aparte; después las demás.');
+                '⚠️ Esta tanda mezcla modalidades que van en <strong>su propio archivo</strong> con las '
+                + 'normales: <strong>Tipo E - Caja / Pensión</strong> (se pagan en dos planillas encadenadas) y '
+                + '<strong>Tipo E - X1 / X1 TP14</strong> (solo las liquida Simple). Marque arriba, en el filtro '
+                + 'de modalidades, solo las de una familia y liquídelas aparte; después las demás.');
             return;
         }
 

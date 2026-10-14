@@ -334,11 +334,12 @@ class PlanillaApiController extends Controller
         )) {
             return response()->json([
                 'success' => false,
-                'message' => 'Esta tanda mezcla modalidades extraordinarias (Tipo E - Caja / Pensión) '
-                    .'con las normales, y esas van en su propio archivo: en el paso 1 se reportan sin '
-                    .'salud, y su corrección se busca después por el mismo filtro con el que se '
-                    .'liquidaron. Marque en el filtro de modalidades solo las extraordinarias, '
-                    .'liquide, y después las demás.',
+                'message' => 'Esta tanda mezcla modalidades que van en su propio archivo con las '
+                    .'normales. Tipo E - Caja y Tipo E - Pensión porque en el paso 1 se reportan sin '
+                    .'salud y su corrección se busca después por el mismo filtro con el que se '
+                    .'liquidaron; Tipo E - X1 y X1 TP14 porque solo las liquida Simple y basta un '
+                    .'cotizante suyo para que el otro operador rechace el archivo entero. Marque en '
+                    .'el filtro de modalidades solo las de una familia, liquide, y después las demás.',
             ], 422);
         }
 
