@@ -284,6 +284,24 @@ class TipoModalidad extends BaseModel
     }
 
     /**
+     * ¿Esta combinación se cotiza como tiempo parcial?
+     *
+     * La bandera `es_tiempo_parcial` es de la modalidad, pero Tipo E - X1 es de
+     * dependientes y vende además un plan de tiempo parcial (ARL + caja de 14
+     * días): ahí lo decide el PLAN, igual que en Tipo E - Extras. Sin el código
+     * del plan se comporta como siempre.
+     */
+    public function esTiempoParcialPara(?string $codigoPlan = null): bool
+    {
+        if ($this->esTiempoParcial()) {
+            return true;
+        }
+
+        return (int) $this->id === self::ID_EX1
+            && $codigoPlan === \App\Services\PilaCotizanteEX1::PLAN_ARL_CCF;
+    }
+
+    /**
      * Retorna los días a cotizar por entidad para este plan de Tiempo Parcial.
      * Array: ['arl' => X, 'afp' => Y, 'caja' => Z]
      *
@@ -294,8 +312,18 @@ class TipoModalidad extends BaseModel
      *
      * Si no es TP, retorna 30 para todas (mes completo).
      */
-    public function diasPorEntidad(): array
+    public function diasPorEntidad(?string $codigoPlan = null): array
     {
+        // Tipo E - X1: su plan de tiempo parcial trae los días fijos del plan,
+        // no del catálogo — la modalidad no está marcada como tiempo parcial.
+        if (! $this->esTiempoParcial() && $this->esTiempoParcialPara($codigoPlan)) {
+            return [
+                'arl' => 30,                                       // la ARL siempre va completa
+                'afp' => 0,                                        // el plan no vende pensión
+                'caja' => \App\Services\PilaCotizanteEX1::DIAS_CAJA_TP,
+            ];
+        }
+
         if ($this->esTiempoParcial()) {
             return [
                 'arl' => 30,                    // ARL siempre mensual completa

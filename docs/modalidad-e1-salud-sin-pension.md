@@ -193,10 +193,29 @@ corresponde.
 | Fechas de la novedad VAC | `PlanoPilaTxtService`, campos 89/90 |
 | Selección en el formulario | `ContratoController` + `form.blade.php` |
 | Solo Simple por API | `PlanillaApiController::operadoresParaTanda()` |
+| Cargo de planilla ($9.500) | `PilaCotizanteEX1::otrosPlanilla()` → `CotizadorService` → `FacturacionController` |
 
 **No se mezcla con gente normal en un plano** (`IDS_TANDA_APARTE`): toda la
 planilla va a un solo operador y basta un cotizante X1 para que Enlace tumbe la
 tanda entera con `2.655`.
+
+### El cargo de planilla
+
+Los cuatro planes llevan un cargo propio —$9.500 por defecto, en la clave de
+configuración `otros_planilla_ex1`, cambiable sin desplegar—. El cliente lo ve
+como **seguridad social**: suma dentro del total de S. Social del cotizador, no
+en la administración, y al facturar aterriza en `facturas.otros`, que es la
+bolsa que suma al total junto a `total_ss`. Se prorratea por días igual que la
+seguridad social, y en un mes de pura afiliación no se cobra.
+
+**No confundir con el `otros` del tarifario** (`afiliacion_arl_modalidad.otros`):
+ese es un reparto de la afiliación —`público − retiro − otros − asesor`— y
+meterle este valor descuadraría esa cuenta. Tampoco es `facturas.otros_admon`,
+que es la bolsa de administración.
+
+En el lote, el cargo **no se reparte**: es de cada contrato y se suma entero al
+suyo, antes de que la bolsa se vuelque sobre el total, para que también cuente
+en el reparto de la consignación, el efectivo y el saldo a favor.
 
 ## 9. Lo que esto declara, y quién responde
 

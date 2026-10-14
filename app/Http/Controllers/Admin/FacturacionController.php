@@ -992,6 +992,9 @@ class FacturacionController extends Controller
         // Seguridad social de los contratos que pueden llevar mora (planilla, no
         // afiliacion): es la base para repartir la mora que el usuario escribio.
         $ssParaMora = [];
+        // Cargo de planilla propio de Tipo E - X1, por contrato. No es del lote
+        // ni se escribe a mano: sale del contrato. Ver PilaCotizanteEX1.
+        $otrosEx1PorContrato = [];
         foreach ($validated['contratos'] as $cId) {
             $c = $contratosCargados->get($cId);
             if (! $c) {
@@ -1121,6 +1124,20 @@ class FacturacionController extends Controller
                     }
                 }
 
+                // ── Cargo de planilla de Tipo E - X1 ───────────────────
+                // Lo llevan sus cuatro planes. No es del lote ni se escribe a
+                // mano: es del contrato, y sigue la misma regla que la seguridad
+                // social —en un mes de pura afiliación no se cobra, y si el mes
+                // va por días se prorratea igual—. Se suma a la bolsa "otros"
+                // más abajo, junto con la del lote. Ver PilaCotizanteEX1.
+                if (\App\Services\PilaCotizanteEX1::llevaOtros($c->tipo_modalidad_id ?? null)
+                    && (! $esAfiliacion || $esIndActPrimerMes)) {
+                    $otrosMesEx1 = \App\Services\PilaCotizanteEX1::otrosPlanilla();
+                    $otrosEx1PorContrato[$cId] = $diasCotizar >= 30
+                        ? $otrosMesEx1
+                        : (int) (ceil($otrosMesEx1 * max(0, $diasCotizar) / 30 / 100) * 100);
+                }
+
                 $afiliacion = ($esAfiliacion || $esIndActPrimerMes) ? (int) ($c->costo_afiliacion ?? 0) : 0;
                 $seguro = (int) ($c->seguro ?? 0);
                 $admon = ($esAfiliacion && ! $esIndActPrimerMes) ? 0 : intval($c->administracion ?? 0);
@@ -1200,6 +1217,15 @@ class FacturacionController extends Controller
         $baseReparto = array_sum($totalesRealesPorContrato);
         $otrosPorContrato = self::_repartirProporcional($otrosLote, $totalesRealesPorContrato, $baseReparto);
         $otrosAdmonPorContrato = self::_repartirProporcional($otrosAdmonLote, $totalesRealesPorContrato, $baseReparto);
+
+        // El cargo de Tipo E - X1 NO se reparte: es de cada contrato y se suma
+        // entero al suyo. Entra aquí, antes de que la bolsa se vuelque sobre el
+        // total, para que también cuente en el reparto de la consignación, el
+        // efectivo y el saldo a favor — si entrara después, el pago no cuadraría
+        // con lo facturado.
+        foreach ($otrosEx1PorContrato as $cId => $v) {
+            $otrosPorContrato[$cId] = ($otrosPorContrato[$cId] ?? 0) + $v;
+        }
         foreach ($totalesRealesPorContrato as $cId => $v) {
             $totalesRealesPorContrato[$cId] = $v
                 + ($otrosPorContrato[$cId] ?? 0)

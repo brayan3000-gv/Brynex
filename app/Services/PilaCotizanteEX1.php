@@ -81,6 +81,39 @@ class PilaCotizanteEX1
     /** Código PILA del único operador que liquida esta modalidad. */
     public const OPERADOR_PILA = '88';
 
+    /** Clave de configuración del cargo de planilla propio de la modalidad. */
+    public const CONFIG_OTROS = 'otros_planilla_ex1';
+
+    /** Valor por defecto del cargo, si nadie lo ha configurado. */
+    public const OTROS_POR_DEFECTO = 9500;
+
+    /**
+     * Cargo de planilla que llevan TODOS los planes de Tipo E - X1.
+     *
+     * El cliente lo ve como seguridad social —va dentro del total de S. Social
+     * del cotizador, no en la administración— y al facturar aterriza en
+     * `facturas.otros`, que es la bolsa que suma al total junto a `total_ss`.
+     * `otros_admon` es la otra, la de administración, y no es esta.
+     *
+     * Ojo: NO es el `otros` del tarifario (`afiliacion_arl_modalidad.otros`).
+     * Ese es un reparto de la afiliación —público menos retiro, otros y
+     * asesor— y meterle este valor descuadraría esa cuenta.
+     *
+     * Vive en configuración para poder cambiarlo sin desplegar.
+     */
+    public static function otrosPlanilla(): int
+    {
+        return (int) \App\Models\ConfiguracionBrynex::obtener(
+            self::CONFIG_OTROS, self::OTROS_POR_DEFECTO
+        );
+    }
+
+    /** ¿Esta modalidad lleva el cargo de planilla? Los cuatro planes de X1. */
+    public static function llevaOtros(?int $tipoModalidadId): bool
+    {
+        return (int) $tipoModalidadId === TipoModalidad::ID_EX1;
+    }
+
     /**
      * Ajusta lo que la rama general ya calculó. Para EPS+ARL y EPS+ARL+CCF no
      * toca nada: la planilla que el operador acepta es la que el motor ya hace.

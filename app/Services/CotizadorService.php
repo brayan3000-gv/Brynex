@@ -99,7 +99,11 @@ class CotizadorService
         $cedula = $p['cedula'] ?? null;
 
         $esIndep = $tipoModalidad && $tipoModalidad->esIndependiente();
-        $esTP = $tipoModalidad && $tipoModalidad->esTiempoParcial();
+        // El tiempo parcial lo puede decidir la modalidad (las 8 de siempre) o el
+        // PLAN: Tipo E - X1 es de dependientes y vende además ARL + caja de 14
+        // días. Ver TipoModalidad::esTiempoParcialPara().
+        $codigoPlan = $plan?->codigo;
+        $esTP = $tipoModalidad && $tipoModalidad->esTiempoParcialPara($codigoPlan);
 
         // Porcentajes
         $pctEps = $esIndep ? ConfiguracionBrynex::pctSaludIndependiente() : ConfiguracionBrynex::pctSaludDependiente();
@@ -128,7 +132,7 @@ class CotizadorService
 
         if ($esTP) {
             // ── Tiempo Parcial: IBC diferente por entidad, sin EPS ─────────
-            $diasP = $tipoModalidad->diasPorEntidad();
+            $diasP = $tipoModalidad->diasPorEntidad($codigoPlan);
 
             // Tiempo Parcial Independiente: los días no están en el catálogo,
             // los elige el contrato mes a mes y llegan en la petición.
@@ -228,6 +232,20 @@ class CotizadorService
             $ss = $eps + $arl + $pen + $caja;
         }
 
+        // ── Cargo de planilla de Tipo E - X1 ───────────────────────────────
+        // Lo llevan sus cuatro planes. El cliente lo ve como seguridad social,
+        // así que suma dentro de $ss y no en la administración; al facturar
+        // aterriza en `facturas.otros`, que es la bolsa que suma al total junto
+        // a `total_ss` (`otros_admon` es la de administración, y no es esta).
+        // Se prorratea por días igual que el resto de la SS en una modalidad
+        // normal; en tiempo parcial va completo, como sus demás aportes.
+        $otros = 0;
+        if (PilaCotizanteEX1::llevaOtros($p['tipo_modalidad_id'] ?? null)) {
+            $otrosMes = PilaCotizanteEX1::otrosPlanilla();
+            $otros = $esTP ? $otrosMes : (int) $r($otrosMes * $dias / 30);
+            $ss += $otros;
+        }
+
         // Admon total = administracion + admon_asesor
         $admonTotal = $admon + $admonAsesor;
         $tieneIva = false;
@@ -261,6 +279,9 @@ class CotizadorService
             'pen' => $pen,
             'caja' => $caja,
             'ss' => $ss,
+            // Cargo propio de Tipo E - X1, ya sumado dentro de 'ss'. Se devuelve
+            // aparte para poder pintarlo como una línea más del cotizador.
+            'otros' => $otros,
             'seguro' => $seguro,
             'admon' => $admonTotal,
             'admonBase' => $admon,

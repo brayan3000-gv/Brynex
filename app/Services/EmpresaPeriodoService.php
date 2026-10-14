@@ -491,8 +491,12 @@ class EmpresaPeriodoService
             $dias = 0;
         }
         // Tiempo Parcial: detectar y obtener días por entidad
-        $esTP = $c->tipoModalidad?->esTiempoParcial() ?? false;
-        $diasTP = $esTP ? $c->tipoModalidad->diasPorEntidad() : null;
+        // El tiempo parcial lo puede decidir el PLAN y no la modalidad: Tipo E -
+        // X1 es de dependientes y vende ARL + caja de 14 días. Sin esto, ese
+        // contrato se facturaría como un mes completo de dependiente.
+        $codPlanTP = $c->plan?->codigo;
+        $esTP = $c->tipoModalidad?->esTiempoParcialPara($codPlanTP) ?? false;
+        $diasTP = $esTP ? $c->tipoModalidad->diasPorEntidad($codPlanTP) : null;
         // Valores: si hay factura usar los reales; si es retirado facturable → usar factura_0;
         // Si es retiro pendiente → calcular SS proporcional con los días del retiro pendiente;
         // si activo sin factura → estimar

@@ -922,6 +922,13 @@
         </span>
         <strong x-text="fmt(result.caja)">$0</strong>
       </div>
+      {{-- OTROS: cargo de planilla propio de Tipo E - X1. Va ARRIBA de la línea
+           de S. Social porque está sumado dentro de ella: el cliente lo ve como
+           seguridad social, no como administración. Ver PilaCotizanteEX1. --}}
+      <div class="cr" x-show="!esSeguros && result.otros > 0">
+        <span style="color:#fdba74;">OTROS <span class="cp2">(planilla)</span></span>
+        <strong x-text="fmt(result.otros)">$0</strong>
+      </div>
       {{-- S. Social --}}
       <div class="cr" x-show="!esSeguros" style="border-bottom:2px solid rgba(255,255,255,0.18);padding-bottom:0.35rem;margin-bottom:0.1rem;font-weight:700;">
         <span>S. Social
@@ -3755,7 +3762,7 @@ function cotizador() {
         pctEps:0, pctPen:0, pctArl:0, pctCajaCalc:0,
         diasCotizar: 30,
         diasArl: 0, diasAfp: 0, diasCaja: 0,
-        result: { eps:0, arl:0, pen:0, caja:0, ss:0, seguro:0, admon:0, iva:0, total:0 },
+        result: { eps:0, arl:0, pen:0, caja:0, ss:0, otros:0, seguro:0, admon:0, iva:0, total:0 },
 
         fmt(v) {
             // Formato colombiano: punto de miles, sin decimales (ej: 1.750.905)

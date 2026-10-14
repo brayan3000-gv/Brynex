@@ -505,13 +505,17 @@ class CobrosController extends Controller
                 }
                 $pctArl = $getArlPct((int)($c->n_arl ?? 1));
 
-                if ($c->tipoModalidad?->esTiempoParcial()) {
+                // El tiempo parcial lo puede decidir el plan y no la modalidad
+                // (Tipo E - X1 vende ARL + caja de 14 días). Ver
+                // TipoModalidad::esTiempoParcialPara().
+                $codPlanTP = $c->plan?->codigo;
+                if ($c->tipoModalidad?->esTiempoParcialPara($codPlanTP)) {
                     // ── Tiempo Parcial: IBC distinto por entidad y sin EPS ─────
                     // Misma regla que Contrato::calcularCotizacion(): la ARL
                     // cotiza siempre sobre el SM completo (mes entero) y AFP/CAJA
                     // sobre el SM prorrateado por sus días. Nunca se prorratea
                     // por $diasCotizar.
-                    $diasP     = $c->tipoModalidad->diasPorEntidad();
+                    $diasP     = $c->tipoModalidad->diasPorEntidad($codPlanTP);
                     $factorMap = [7 => 0.25, 14 => 0.50, 21 => 0.75, 30 => 1.00];
                     $sm        = (float) ConfiguracionBrynex::obtener('salario_minimo', 1423500);
                     $ibcAfp    = round($sm * ($factorMap[$diasP['afp']]  ?? 1.0));
