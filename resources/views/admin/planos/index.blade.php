@@ -2455,6 +2455,15 @@ const GRUPOS_COMPATIBILIDAD = [
     { id: 'D', nombre: 'ARL Planilla Y',                tipos: [8],                   modo: 'solo'  },
     { id: 'E', nombre: 'Tipo 13',                       tipos: [13],                  modo: 'solo'  },
     { id: 'F', nombre: 'Independientes (pago individual)', tipos: [10, 11, 14],       modo: 'individual' },
+    // Tipo E - X1 va sola: su planilla lleva el subtipo de cotizante 03/04 y
+    // SOLO la liquida Simple —Enlace la rechaza con eo.val.2.655—, así que un
+    // cotizante suyo mezclado condena el archivo entero. Dentro de X1 conviven
+    // sus cuatro planes, igual que el grupo A junta dependientes con tiempo
+    // parcial. Ver PilaCotizanteEX1 y TipoModalidad::IDS_TANDA_APARTE.
+    { id: 'G', nombre: 'Tipo E - X1 (solo Simple)',     tipos: [-13],                 modo: 'solo'  },
+    // Tipo E - Extras se paga en dos planillas encadenadas y su corrección se
+    // busca por el mismo filtro con el que se liquidó: tampoco se mezcla.
+    { id: 'H', nombre: 'Tipo E - Extras (2 planillas)', tipos: [-12, -5, -10, -11],   modo: 'solo'  },
 ];
 
 /**
@@ -2520,7 +2529,7 @@ function validarCompatibilidadYAbrir(accion) {
         // Rellenar el panel de tipos detectados
         const contenedor = document.getElementById('incompat-tipos-detectados');
         if (contenedor) {
-            const coloresGrupo = { A:'#dcfce7|#15803d', B:'#e0f2fe|#0369a1', C:'#fef9c3|#92400e', D:'#ffe4e6|#be123c', E:'#f3e8ff|#7e22ce', F:'#dbeafe|#1d4ed8' };
+            const coloresGrupo = { A:'#dcfce7|#15803d', B:'#e0f2fe|#0369a1', C:'#fef9c3|#92400e', D:'#ffe4e6|#be123c', E:'#f3e8ff|#7e22ce', F:'#dbeafe|#1d4ed8', G:'#ffedd5|#c2410c', H:'#ede9fe|#6d28d9' };
             contenedor.innerHTML = result.tiposConGrupo.map(t => {
                 const [bg, fg] = (coloresGrupo[t.grupo.id] || '#f1f5f9|#475569').split('|');
                 const modoLabel = t.grupo.modo === 'solo' ? '🔒 Solo' : (t.grupo.modo === 'individual' ? '💳 Individual' : '✅ Grupo ' + t.grupo.id);
