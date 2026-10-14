@@ -686,6 +686,17 @@ class PlanoPilaTxtService
             }
         }
 
+        // La licencia remunerada del mes completo (plan "Solo EPS" de Tipo E -
+        // X1) va con sus fechas, y tienen que caer en el **período de
+        // cotización** —el mes vencido, campo 15 del registro tipo 1—, no en el
+        // de salud: fuera de ahí el operador responde eo.val.2.429 una vez por
+        // fecha. Ver PilaCotizanteEX1.
+        $vacIni = $vacFin = $blanco10;
+        if (! empty($c['vacMesCompleto']) && $periodoLiq !== '') {
+            $vacIni = $periodoLiq.'-01';
+            $vacFin = date('Y-m-t', strtotime($vacIni));
+        }
+
         // Novedades que una variante de prueba quiera encender explícitamente.
         $nov = $c['novedades'] ?? [];
         if (isset($nov['ING'])) {
@@ -781,8 +792,8 @@ class PlanoPilaTxtService
             .str_repeat(' ', 10)                               // 86 fecha IGE fin 575-584
             .str_repeat(' ', 10)                               // 87 fecha LMA ini 585-594
             .str_repeat(' ', 10)                               // 88 fecha LMA fin 595-604
-            .str_repeat(' ', 10)                               // 89 fecha VAC ini 605-614
-            .str_repeat(' ', 10)                               // 90 fecha VAC fin 615-624
+            .$this->A($vacIni, 10)                             // 89 fecha VAC ini 605-614
+            .$this->A($vacFin, 10)                             // 90 fecha VAC fin 615-624
             .str_repeat(' ', 10)                               // 91 fecha VCT ini 625-634
             .str_repeat(' ', 10)                               // 92 fecha VCT fin 635-644
             .str_repeat(' ', 10)                               // 93 fecha IRL ini 645-654

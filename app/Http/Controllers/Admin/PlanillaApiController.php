@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\{OperadorCredencial, OperadorPlanilla, OperadorPlanillaApi, RazonSocial};
+use App\Services\PilaCotizanteEX1;
 use App\Services\CorreccionEnlaceService;
 use App\Services\CorreccionNovedadesService;
 use App\Services\CorreccionPensionFaltanteService;
@@ -84,7 +85,7 @@ class PlanillaApiController extends Controller
 
         $operadores = [];
 
-        foreach ($this->operadoresConApi($aliadoId) as $operador) {
+        foreach ($this->operadoresParaTanda($aliadoId, $validated['tipos_modalidad'] ?? []) as $operador) {
             $credencial = $this->credencial($aliadoId, $operador->id, (int) $validated['razon_social_id']);
 
             // Solo se ofrecen los que ya tienen credencial cargada.
@@ -356,10 +357,21 @@ class PlanillaApiController extends Controller
             ], 422);
         }
 
-        $operador = $this->operadoresConApi($aliadoId)
+        $tiposTanda = $validated['tipos_modalidad'] ?? [];
+
+        $operador = $this->operadoresParaTanda($aliadoId, $tiposTanda)
             ->firstWhere('id', (int) $validated['operador_planilla_id']);
 
         if (!$operador) {
+            // Decirlo con el motivo real: en X1 el operador existe y está
+            // activo, pero esa planilla no puede ir por ahí.
+            if (PilaCotizanteEX1::esTanda($tiposTanda)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Tipo E - X1 solo liquida por Simple: los demás operadores validan contra la UGPP y rechazan el subtipo de cotizante (eo.val.2.655).',
+                ], 422);
+            }
+
             return response()->json([
                 'success' => false,
                 'message' => 'Ese operador no está activo para este aliado o no tiene integración por API.',
@@ -1328,11 +1340,35 @@ class PlanillaApiController extends Controller
      * Respeta el pivot `aliado_operadores_planilla`: qué operadores usa el
      * aliado para las planillas de sus empresas.
      */
+    /** Único operador que liquida Tipo E - X1. Ver operadoresParaTanda(). */
+    private const OPERADOR_EX1 = 'SIMPLE';
+
     private function operadoresConApi(int $aliadoId)
     {
         return OperadorPlanilla::paraAliado($aliadoId)
             ->whereIn('codigo', array_keys(SuaporteApiService::HOSTS))
             ->get();
+    }
+
+    /**
+     * Los operadores a los que esta tanda puede ir de verdad.
+     *
+     * Tipo E - X1 solo liquida por **Simple**: su planilla va con el subtipo de
+     * cotizante 03/04 para alguien que no cumple requisitos, y Enlace consulta
+     * la base de la UGPP y la rechaza con `eo.val.2.655` venga de la empresa que
+     * venga (probado el 13-oct-2026 sobre dos razones sociales distintas). Si se
+     * ofreciera Enlace, el botón liquidaría y el operador devolvería un error
+     * por cada cotizante sin que nadie entienda por qué.
+     */
+    private function operadoresParaTanda(int $aliadoId, array $tiposModalidad)
+    {
+        $operadores = $this->operadoresConApi($aliadoId);
+
+        if (! PilaCotizanteEX1::esTanda($tiposModalidad)) {
+            return $operadores;
+        }
+
+        return $operadores->where('codigo', self::OPERADOR_EX1)->values();
     }
 
     /**

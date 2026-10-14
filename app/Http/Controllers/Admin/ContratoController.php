@@ -1535,6 +1535,11 @@ class ContratoController extends Controller
             // Regla AFP obligatorio
             'reglaAfpActiva' => ConfiguracionBrynex::reglaAfpObligatorio(),
             'modalidadesAfpObligatorio' => $modalidadesAfpObligatorio,
+            // Tipo E - X1 paga salud sin pensión en una sola planilla y existe
+            // SOLO para quien no cumple requisitos de exención: al exento le
+            // sirve Tipo E normal, que además liquida en cualquier operador.
+            // El formulario la esconde cuando el cliente ya está exento.
+            'modalidadEx1' => TipoModalidad::ID_EX1,
             // Defaults de tarifas
             'defaultTarifas' => Contrato::tarifasParaAliado($alidoId, null),
             'bancos' => BancoCuenta::paraFacturacion($alidoId),

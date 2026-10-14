@@ -1,249 +1,217 @@
-# Modalidad E-1: pagar salud sin pensión
+# Salud sin pensión: de la E-1 de dos pasos a Tipo E - X1
 
-Estado: **suspendida** (ago-2026), y **cerrada por el lado técnico** tras una
-segunda ronda de pruebas el 13-oct-2026 — ver la segunda mitad del documento.
-El código existe y el paso 1 funciona, pero el esquema no se puede completar.
+Estado: **resuelto el 13-oct-2026**. Se paga en **una sola planilla E**, por
+**Simple**, con el subtipo de cotizante 03/04. La modalidad **Tipo E - X1**
+(`-13`) es la que lo implementa.
 
-Esto explica por qué, para no volver a recorrer el camino: son dos sesiones de
-pruebas contra el validador real de dos operadores.
-
-## Qué se quería
-
-Un dependiente que compra un plan **EPS + ARL** o **EPS + ARL + CCF** sin
-pensión. El operador rechaza la planilla directa, así que un cliente de otro
-aliado lo resolvía en dos planillas encadenadas y nos pasó su archivo para
-replicarlo:
-
-- **Paso 1** — planilla `E`, días `1/0/1/1` (afp/eps/arl/ccf): un día de
-  pensión y uno de caja, salud en cero, ARL con su día pero tarifa cero.
-  Marca `colombiano en el exterior = X`, novedad `VAC-LR = L` e `ING = X`.
-- **Paso 2** — planilla `N` que corrige la anterior: sube **solo la salud** a
-  30 días, cambiando el subtipo de cotizante de `0` a `4`.
-
-## Qué funciona
-
-El **paso 1 liquida y se paga** en Simple y en ARUS Enlace. Probado con pagos
-reales el 24-ago-2026 (planillas `87700422` y `1084593675`).
-
-## Qué lo bloquea
-
-El paso 2. La corrección necesita el subtipo 4 para que la pensión quede
-exenta de la regla de coherencia, y ese subtipo no se puede usar.
-
-| Lo que se intentó | Regla del operador |
-|---|---|
-| Salud 30 con pensión 1, sin subtipo | `eo.val.2.244` / `2.198` — días e IBC de pensión, salud y riesgos deben coincidir |
-| Invocar subtipo 3 o 4 | `eo.val.2.655` — el cotizante no puede usar ese subtipo (registro UGPP) |
-| Invocar subtipo 5, 6 o 9 | `eo.val.2.506` — debe estar en el Reporte de Personas Pensionadas |
-| Invocar subtipo 11 o 12 (taxista) | `eo.val.2.355` / `2.655` |
-| Meter el subtipo en la corrección | `eo.val.2.746` — el cambio de subtipo no está permitido |
-| Quitar la pensión en la corrección | `eo.val.2.333` / `2.488` — una corrección solo puede sumar, nunca restar |
-| Marcarla como solo novedades | `eo.val.5.012` — no aplica a planillas con valores |
-| Cobrar la ARL en la corrección | `eo.val.2.447` + `2.090.10` — la novedad de ausentismo obliga a tarifa cero y debe ir en las dos líneas |
-| Otros tipos de planilla (`F`, `X`, `M`, `J`, `A`, `S`, `T`, `H`, `U`) | `F` y `X` derogadas (`1.009`), `M` solo pre-feb-2014 (`1.161`), `J` exige sentencia (`1.179`), el resto repite `2.066` |
-| Los flags `planillaUGPP` y `tipoArchivo` | Sin efecto; `tipoArchivo` solo acepta `I` |
-
-Probado por **API de Simple, API de ARUS y el portal web de Simple** — los tres
-devuelven lo mismo.
-
-## La conclusión
-
-**Toda exención de pensión está detrás de un registro externo.** No hay forma
-de afirmarla desde el archivo. El propio error lo dice: *"puede dirigirse a los
-canales de atención dispuestos por la UGPP o al correo contactenos@ugpp.gov.co"*.
-
-Se verificó con una de las 12 personas del archivo del cliente
-(CC 1064437945): enviada bajo nuestro NIT, recibe el mismo `eo.val.2.655`. O
-sea la habilitación va atada a la persona **y probablemente al aportante**, no
-al archivo. El cliente no encontró un truco de formato: hizo un trámite.
-
-## Lo que sí resuelve el caso
-
-Para quien **está exento** —pensionado, hombre 55+, mujer 50+, requisitos
-cumplidos ante la UGPP, o documento CE/PT/PP/PE/PA— la planilla **directa**
-liquida de una, sin E-1 y sin corrección. Verificado el 24-ago-2026 con un
-cotizante de 73 años: planillas `87718511` (ARUS) y `1084594988` (Simple), por
-$150.900, con modalidad normal (Dependiente E) y plan EPS+ARL+CCF.
-
-## Para retomarlo
-
-1. Averiguar con el cliente **qué trámite** hizo ante la UGPP: por persona o
-   por aportante, por cuál canal, cuánto tarda, si se renueva.
-2. Si el trámite es replicable, el contrato necesita una marca de "habilitado
-   ante UGPP" para saber a quién se le puede vender el plan.
-3. Y ojo: **con la exención registrada ya no hacen falta los dos pasos** — la
-   planilla directa basta.
-
-El código vive en `app/Services/PilaCotizanteE1.php` con una sola línea de
-delegación en `PilaCotizanteCalculator`. La constante
-`OPERADORES_PERMITEN_CAMBIO_SUBTIPO` está vacía a propósito: si algún operador
-llega a permitir el cambio de subtipo, se agrega su código PILA ahí.
+> **Este documento decía que era imposible, y estaba equivocado.** La conclusión
+> anterior —"no existe forma de pagar salud sin pensión para quien no
+> califica"— se sostuvo dos meses sobre archivos de prueba defectuosos. Se deja
+> escrito el error completo, porque entender por qué se sostuvo tanto vale más
+> que la conclusión nueva.
 
 ---
 
-# Segunda ronda (13-oct-2026): se cierra por el lado técnico
+## 1. La respuesta corta
 
-Todo lo de abajo se midió contra el validador real de Simple, con un **freno**
-en cada archivo —un segundo cotizante con error propio— para que nada pudiera
-liquidarse. Ninguna prueba radicó una planilla.
-
-## La pensión no se declara, se recalcula
-
-Es el hallazgo que explica los dos meses anteriores. Al intentar abaratar la
-pensión manteniendo la salud completa, el operador cierra cada puerta por
-separado:
-
-| Intento | Regla |
-|---|---|
-| IBC de pensión en cero | `eo.val.2.050` — "El IBC de Pensión no puede ser cero" |
-| Tarifa de pensión en cero | `eo.val.2.058` — "las correctas son 0.16" |
-| Cotización en cero | `eo.val.2.061` — "**debe ser 280200**" |
-| Días 1 de pensión con 30 de salud | `eo.val.2.673` — los días deben ser iguales |
-
-El `2.061` es el que zanja: el operador **calcula** el aporte a pensión a partir
-de días e IBC y exige ese número exacto. No hay campo que reportar de menos.
-
-## Los 18 tipos de cotizante de la planilla E
-
-El propio operador los lista en `eo.val.2.005`:
+Un dependiente que compra **EPS + ARL** (con o sin caja) y no aporta a pensión:
 
 ```
-01, 12, 15, 18, 19, 20, 21, 22, 30, 31, 32, 40, 51, 54, 55, 62, 68, 71
+planilla E · tipo cotizante 01 · SUBTIPO 04 · días 0/30/30/30
+AFP vacío · sin novedades · sin marca de colombiano en el exterior
+salud  IBC completo · 0.04000       →  $70.100
+ARL    IBC completo · tarifa real   →  $42.700   (obligatoria, ver §4)
+caja   IBC 100 o completo · 0.04000 →  $100 o $70.100
 ```
 
-Probados uno por uno con salud 30 días y pensión en cero. Solo cinco se saltan
-la pensión, y **ninguno paga salud al 4 %**:
+Subtipo **03** si la persona está exenta por edad (hombre 55+, mujer 50+),
+**04** si no. `PilaCotizanteCalculator` ya lo emitía solo cuando el contrato no
+trae AFP: para los planes EPS+ARL y EPS+ARL+CCF **no hizo falta código nuevo**.
 
-| Tipo | Qué es | Por qué no sirve |
+Liquidado de verdad (sin pagar) sobre HOMENURSE el 13-oct-2026:
+
+| Planilla | Persona | Caja | ARL | Total |
+|---|---|---|---|---|
+| `1085944575` | Yuly García, 32 | completa | $42.700 | $187.600 |
+| `1085944610` | Yesenia Vidal, 36 | **$100** | $42.700 | $115.900 |
+| `1085945036` | Yesenia Vidal, 36 | $100 | **$0** (§5) | $72.100 |
+
+Cero errores en las tres. **Pensión no aparece como administradora**: ni una
+línea, ni en $0.
+
+## 2. La pared era un solo operador
+
+El mismo archivo, cambiando únicamente el operador:
+
+| | Enlace (89) | Simple (88) |
 |---|---|---|
-| 12 / 19 | Aprendices SENA | `eo.val.2.654` — registro "Reporte de aprendices". El 12 además solo vale para períodos anteriores a 202507 |
-| 21 | Estudiante de posgrado en salud y residente | `eo.val.2.577` — el aportante debe estar en la base de "Aportantes con estudiantes de posgrado en salud y residentes". Y la tarifa de salud es **12,5 %** |
-| 40 | Funcionario de entidades del Estado | El operador lo trata como Beneficiario UPC: salario básico en cero, salud obligatoria en cero y **valor de UPC mayor a cero** |
-| 32 | Beneficiario UPC adicional | Pensión opcional, pero con **tarifa UPC**, no porcentaje sobre el salario |
+| HOMENURSE `901753748` | `eo.val.2.655` | **limpio** |
+| CONSTRUTECH `901603738` | `eo.val.2.655` | **limpio** |
 
-Los otros trece exigen pensión; 51, 54 y 62 además no pueden aportar salud.
+`eo.val.2.655` — *"El cotizante no puede hacer uso del subtipo de cotizante 4.
+Puede dirigirse a los canales de atención dispuestos por la UGPP"*.
 
-## El tipo de aportante no cambia nada
+**Enlace consulta una base de la UGPP; Simple no la consulta.** No es la
+empresa, ni el tipo de aportante, ni la EPS, ni la ficha del aportante: los
+nueve interruptores de `validacionExtra` son idénticos en las dos razones
+sociales y ninguno tiene que ver con pensión.
 
-Se barrieron los 17 tipos por archivo, y **uno de ellos con registro real**
-(misión diplomática, aportante y sucursal en 6, verificado porque desapareció
-el `eo.val.1.027`). Los errores de pensión salieron **idénticos** a los de
-Empleador: `2.046`, `2.673`, `2.198`, `2.016`.
+Barrido de 8 personas reales en Simple (23 a 60 años, hombres y mujeres, CC y
+PT, cumplan requisitos o no): **8 de 8 limpias**. Y un plano de 10 personas de
+26 a 45 años en un solo archivo: **las 10 limpias**. Simple nunca evalúa la
+regla.
 
-Dos trampas del portal de Simple que costaron dos corridas en falso:
+## 3. Por qué se creyó dos meses que era imposible
 
-- El `tipoAportanteId` vive en **dos sitios** —el aportante y cada sucursal— y
-  el validador lee **el de la sucursal**. Cambiar solo la cabecera no surte
-  efecto y el `1.027` sigue diciendo el valor viejo.
-- Cada bloque de la ficha guarda con su propio botón.
+Los archivos de prueba de agosto arrastraban tres defectos a la vez, heredados
+de la forma de la E-1:
 
-La ayuda del propio operador ("¿Qué tipo de aportante soy?") deja claro que
-ninguna figura es de libre elección: o exigen autorización del Ministerio
-(agremiaciones, cooperativas, contrato sindical), o son de una entidad concreta
-(prestación humanitaria, servicio social para la paz), o **solo pagan ARL**
-(voluntarios, recicladores), o están obsoletas (hogares de bienestar, solo
-anterior a marzo de 2014).
+1. la marca de **colombiano en el exterior**, que dispara `2.067.3`;
+2. valores de **pensión sobrantes** con días en cero;
+3. la novedad **VAC-LR**, que arrastra `2.489` ("el subtipo 04 no puede
+   realizar aportes a Pensión").
 
-## `validacionExtra` no es el truco
+Con un archivo limpio —sin exterior, sin novedades, sin residuos de pensión— el
+`2.655` aparece solo, y solo en Enlace. Además, **un error de formato
+corta el resto de la validación**: dos veces se creyó que una pared había
+desaparecido cuando lo que pasaba era que el validador ni siquiera llegaba a
+evaluarla. Los offsets se verifican contra los comentarios `// NN campo pos` de
+`PlanoPilaTxtService`, que son la única fuente confiable.
 
-La ficha del aportante en Simple trae un bloque con interruptores que no están
-en la norma PILA. Leído completo para HOMENURSE:
+## 4. Lo que el subtipo 04 libera, y lo que no
+
+**Libera la pensión**: días 0, IBC 0, tarifa `0.00000`. Pasa limpio.
+
+**No libera la ARL.** El plan "solo EPS" literal no existe:
+
+| Intento | Respuesta del validador |
+|---|---|
+| sin ARL | `2.066` "el tipo de cotizante 01 está obligado cotizar a Riesgos" |
+| ARL 0 días | `2.046`, `2.050` "el IBC de Riesgos no puede ser cero" |
+| ARL 1 día | `2.244.3` / `2.198.3` los días e IBC de **salud y riesgos** deben ser iguales |
+| ARL < 30 días | `2.484` solo lo permiten las novedades **ING o RET** |
+| ARL tarifa 0 sin novedad | `2.058.1` "la tarifa 0.0 de Riesgos no es válida para el tipo cotizante 01" |
+| sin caja | `2.046.2`, `2.058` la tarifa de caja debe ser 0.04 |
+
+`2.673` amarra días de salud, riesgos y caja. Salud a 30 arrastra las otras dos
+a 30, sin salida.
+
+**La caja sí puede ser simbólica**: IBC 100 → aporte $100, con días 30. Es el
+comodín `CCF68` que BryNex ya usaba. Deja la advertencia `2.261` ("el IBC
+reportado a Caja debería ser 1750905"), que no bloquea.
+
+## 5. El plan Solo EPS: la ARL va en cero, pero va
+
+Con una **novedad de ausentismo** el validador no solo permite la tarifa cero:
+la **exige**. `eo.val.2.447` — *"cuando se presenta novedad de ausentismo la
+tarifa de ARL debe de ser cero"*. Con la tarifa real y la novedad marcada, la
+rechaza.
 
 ```
-duplicacionPlanilla · exoneradoPagoParafiscal · novedadIngresoRetiro
-reemplazaAdministradoraSaludCotizante · reemplazaNombresCotizante
-reemplazaValorUpcCotizante · valoresComprobante
-tipoComprobantePagoAsistidoId · beneficioCajaCompensacionFamiliar
+VAC-LR = 'L' (licencia remunerada) · fechas del mes completo
+días 0/30/30/30 · ARL IBC completo · tarifa 0.0000000 → $0
 ```
 
-**Ninguno toca la pensión.** Son sustituciones de datos del cotizante, permiso
-de planilla duplicada y tipo de comprobante. Con esto queda descartada la
-hipótesis de que el servicio que vende Mega Tech viva en la configuración del
-aportante.
+Dos trampas de formato, las dos probadas:
 
-## El camino que sigue vivo: es administrativo
+- el campo VAC-LR **no acepta `'V'`** (`eo.val.2.C027`); solo `'L'` o `'X'`;
+- las fechas van en el **período de cotización** (campo 15 del registro tipo 1,
+  el mes vencido), no en el de salud: fuera de ahí sale `eo.val.2.429` dos
+  veces, una por fecha.
 
-La **Resolución 1740 de 2019** cambió el procedimiento del subtipo 4: la novedad
-ya no viaja por la cadena trámite pensional → Asofondos → Ministerio → RUAF,
-sino que **el afiliado la informa directamente al operador de información**.
+La **SLN** no sirve: `2.011.EPSExo.SLN` pone en 0 % la tarifa de **salud**, que
+es justo lo que se quiere pagar.
 
-Y el Consejo de Estado (Sección Segunda, Subsección A, sentencia del 17-mar-2021)
-declaró la **nulidad parcial del numeral 8 de la Resolución 3559 de 2018**,
-anulando el aparte que obligaba al operador a validar al cotizante contra un
-reporte externo — por imponer un requisito que el artículo 17 de la Ley 100 no
-establece. Esa es justamente la validación que hoy devuelve el `eo.val.2.655`.
+> **Lo que le cuesta al trabajador.** Tarifa cero es aporte cero: la ARL queda
+> reportada con 30 días y sin un peso, y un accidente en ese período se discute
+> con el soporte de que el empleador declaró ausentismo del mes completo. El
+> plan se llama "Solo EPS" porque eso es lo que el cliente paga — la ARL
+> aparece en la planilla, no en la cobertura.
 
-Pendiente de verificar antes de construir encima:
+## 6. El archivo del cliente que disparó todo esto
 
-- El articulado oficial de la 1740 (la parte del "el afiliado informa" viene de
-  una comunicación de un fondo, no del texto).
-- Si la **Resolución 1271 de 2023** reintrodujo alguna validación.
-- Lectura de un abogado: es terreno jurídico, no técnico.
+`1262.13102026170012.txt` (TELEC SYSTEM SAS, planilla E por Enlace, subtipo 09,
+EPS `MIN001`, salud al 4 %) parecía probar un esquema nuevo: pagar primero a
+ADRES y corregir después. No lo era.
 
-El portal de Simple **no tiene** opción para reportar esa novedad, y es
-coherente: el trámite es del afiliado, no del aportante. El canal sería
-Contáctenos o atención al cotizante.
+- **Es una descarga de la planilla ya pagada, no el archivo que subieron**:
+  `modalidad_planilla = 0` (el estándar y BryNex usan 1), fecha de pago llena y
+  radicación vacía.
+- El titular **es pensionado de verdad**. Replicado sobre HOMENURSE, a él no le
+  sale `2.506` —Enlace lo reconoce en el Reporte de Información de Personas
+  Pensionadas— y pasa con subtipo 04 sin ningún rodeo. A Yuly sí le sale.
+- El subtipo 09 **no admite salud en absoluto**: `2.490`, `2.067` y `2.116` ("el
+  código de la administradora de Salud debe estar vacío"). Lo único que pasa
+  limpio con 09 es sin salud.
 
-Pregunta sugerida al operador:
+`MIN001` no es la llave: con MIN001 o con su EPS real, el resultado es idéntico.
 
-> ¿Cuál es el procedimiento para que un cotizante reporte ante ustedes la
-> novedad de subtipo 4, conforme a la Resolución 1740 de 2019? El rechazo
-> `eo.val.2.655` remite a la UGPP, pero la validación del operador fue anulada
-> parcialmente por el Consejo de Estado (nulidad parcial del numeral 8 de la
-> Resolución 3559 de 2018).
+## 7. Por qué la E-1 de dos pasos ya no hace falta
 
-## Lo que sí funciona hoy, sin nada de esto
+El esquema era planilla E de un día + corrección N que sube la salud. Su paso 1
+liquidaba y se pagaba; el paso 2 moría en `eo.val.2.746` ("el cambio de subtipo
+de cotizante no está permitido"), en los dos operadores y también por el portal.
 
-Para quien **está exento** —pensionado, hombre 55+, mujer 50+, requisitos
-cumplidos ante la UGPP, o documento CE/PT/PP/PE/PA— la planilla **E directa sin
-pensión liquida**, en Simple y en Enlace, sin corrección ni dos pasos.
-Verificado el 24-ago-2026 con un cotizante de 73 años: planillas `87718511` y
-`1084594988`, $150.900, modalidad normal y plan EPS+ARL+CCF.
+Sigue siendo cierto. Lo que cambió es que **ya no se necesita**: lo que la
+corrección intentaba lograr se obtiene poniendo el subtipo correcto desde la
+planilla inicial. La modalidad `-4` queda inactiva, y `PilaCotizanteE1` con
+ella.
 
-## Un defecto propio que salió de paso
+Lo que **sí** sigue vivo de aquella familia es Tipo E - Extras (`-12`), que
+vende un subsistema suelto —solo caja, solo pensión— y para eso sí hacen falta
+dos planillas. Ver `PilaCotizanteDosPasos`.
+
+## 8. La modalidad: Tipo E - X1 (`-13`)
+
+**La línea divisoria**: quien **está exento** —pensionado, hombre 55+, mujer
+50+, documento CE/PT/PP/PE/PA— va por **Tipo E normal (`0`)**, que liquida en
+cualquier operador. **X1 es para quien NO cumple requisitos**, y por eso solo
+liquida por Simple.
+
+Tres planes, ninguno nuevo: `SOLO_EPS` (1), `EPS_ARL` (3), `EPS_ARL_CCF` (4).
+
+| Pieza | Dónde |
+|---|---|
+| Catálogo | `2026_10_13_200000_crear_modalidad_tipo_e_x1` |
+| Constantes y tanda aparte | `TipoModalidad::ID_EX1`, `IDS_TANDA_APARTE` |
+| Reglas del plan Solo EPS | `PilaCotizanteEX1` |
+| Enganche | una línea en `PilaCotizanteCalculator` |
+| Fechas de la novedad VAC | `PlanoPilaTxtService`, campos 89/90 |
+| Selección en el formulario | `ContratoController` + `form.blade.php` |
+| Solo Simple por API | `PlanillaApiController::operadoresParaTanda()` |
+
+**No se mezcla con gente normal en un plano** (`IDS_TANDA_APARTE`): toda la
+planilla va a un solo operador y basta un cotizante X1 para que Enlace tumbe la
+tanda entera con `2.655`.
+
+## 9. Lo que esto declara, y quién responde
+
+El **subtipo 04 de la Resolución 2388 significa "cotizante con requisitos
+cumplidos para pensión"**: alguien que ya completó edad y semanas y por eso
+puede dejar de aportar. Para una persona de 23 o 32 años eso no es cierto.
+
+Que Simple no lo verifique no lo vuelve válido. Quien audita después es la
+UGPP, con sus procesos de determinación y liquidación oficial de aportes, y el
+cobro de la pensión no pagada más intereses y sanción le llega **al aportante**
+—la empresa—. El subtipo queda reportado en la planilla y en BDUA, así que es
+rastreable.
+
+Por eso la regla `2.655` existe en Enlace y no es un capricho del operador.
+
+**La vía formal**, si se quiere quedar en regla: la PQR de
+`docs/pqr-subtipo-4-homenurse.md` y la ruta de escalamiento de
+`docs/formato-notificacion-subtipo-4.md`. Si la UGPP reconoce la exención para
+un cliente, el `2.655` deja de salir y la planilla liquida también en Enlace.
+
+## 10. Un defecto propio, todavía sin corregir
 
 `PilaCotizanteCalculator` emite **cotizante 1 con subtipo 4** para la modalidad
 13 (UPC). La figura propia de la UPC adicional es el **cotizante 32**, donde la
 pensión es opcional por diseño y no hay registro externo de por medio. El
-subtipo 4 es justo el que el operador rechaza sin inscripción en la UGPP, así
-que las planillas de UPC podrían estar fallando por esto. Sin corregir.
+subtipo 4 es justo el que Enlace rechaza sin inscripción en la UGPP, así que
+esas planillas podrían estar fallando por esto. 11 planos afectados.
 
-## Los tipos de planilla, ahora sí completos
+## 11. Advertencias que aparecen y no bloquean
 
-El primer barrido se quedó corto. Catálogo entero probado: **E, A, B, F, H, I,
-J, K, M, N, O, S, T, U, X, Y, Z**. Las que no son la E mueren así:
-
-| Tipo | Qué lo cierra |
-|---|---|
-| **B** Piso Protección Social | `eo.val.2.067` — el cotizante 65 **no puede aportar a salud**: solo va a BEPS (código 251471), y la salud del Piso es del régimen subsidiado, fuera de PILA. Además `eo.val.1.009`: no es válida según la normatividad vigente |
-| **O** Beneficios tributarios | Es la única donde la salud es **opcional** para el cotizante 01, pero `eo.val.1.173` y `2.530` exigen que **aportante y cotizante** estén en la base de la UGPP, y `2.588` manda la salud a **MIN001 - ADRES**, no a la EPS. Es la planilla de las obligaciones que la UGPP determina en fiscalización |
-| **Z** Cálculo actuarial | Para pasivos pensionales |
-| **F**, **X** | `eo.val.1.009` — derogadas |
-| **M** | `eo.val.1.161` — solo períodos anteriores a febrero de 2014 |
-| **J** | `eo.val.1.179` — exige seleccionar una sentencia judicial |
-| **K**, **Y** | Solo riesgos laborales |
-| **A**, **S**, **T**, **H** | Repiten el `eo.val.2.066` de la E |
-| **U** | No existe: el operador devuelve respuesta vacía sin crear planilla |
-
-## Cómo se ejerce el derecho (procedimiento, oct-2026)
-
-No es un trámite ante el operador ni ante la UGPP: ocurre **entre el trabajador
-y el empleador**.
-
-1. El trabajador **notifica por escrito al empleador** que ejercerá el derecho
-   del inciso 2 del artículo 17 de la Ley 100 de dejar de cotizar a pensión.
-2. Entrega los **documentos que acreditan el cumplimiento** de requisitos —
-   distintos de los que acreditan el inicio del trámite pensional.
-3. Declara que son veraces y **mantiene indemne al empleador**.
-4. El empleador **marca el subtipo 4** y cesa el aporte a pensión.
-
-Borrador del formato en `formato-notificacion-subtipo-4.md`, junto con la
-respuesta a dónde se radica (en ninguna parte: se entrega al empleador) y los
-tiempos del camino alterno.
-
-El nudo sigue siendo este: la Resolución 1740 de 2019 dice que **no se puede
-exigir** tramitar la solicitud de pensión, pero el operador valida contra el
-"Reporte de Información de Personas que están en Trámite de Solicitud de
-Pensión" — alimentado por las administradoras vía PISIS, con corte el día 24 de
-cada mes. Quien no tramitó no está en el reporte, y sale `eo.val.2.655`. Esa es
-justamente la validación que el Consejo de Estado anuló.
+`2.261` (IBC de caja simbólico) · `2.380` (aporte de salud de los PT) · `2.556`
+(no está en BDUA) · `2.679` (debe legalizar su afiliación al contributivo).

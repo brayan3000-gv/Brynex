@@ -620,6 +620,15 @@ class PilaCotizanteCalculator
             $res = PilaCotizanteDosPasos::ajustar($res, $p, $ibcFull, $codAfpPila);
         }
 
+        // ── Tipo E - X1: salud sin pensión, en una sola planilla ────────────
+        // La rama general ya emite el subtipo 03/04 que exime de pensión, así
+        // que los planes EPS+ARL y EPS+ARL+CCF salen de ahí tal cual el
+        // operador los acepta. Esto solo agrega el plan "Solo EPS", que pone la
+        // ARL en cero con una novedad de ausentismo. Ver PilaCotizanteEX1.
+        if ($tipoModalidad === TipoModalidad::ID_EX1) {
+            $res = PilaCotizanteEX1::ajustar($res, $p);
+        }
+
         return $res;
     }
 

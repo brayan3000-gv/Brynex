@@ -80,6 +80,12 @@ class PlanillaDosPasosService
      * Por eso el archivo se arma con estas modalidades solas, y esta consulta
      * es la que deja avisarlo antes de gastar.
      *
+     * Tipo E - X1 entró a la misma lista por otra razón: no se paga en dos
+     * planillas, pero **toda la tanda tiene que ir por Simple** —Enlace rechaza
+     * su subtipo de cotizante con eo.val.2.655—, así que un cotizante suyo
+     * mezclado con gente normal condena el archivo entero. Ver
+     * TipoModalidad::IDS_TANDA_APARTE.
+     *
      * @param  array  $tiposFiltro  Modalidades marcadas en pantalla; vacío = todas
      */
     public static function tandaMezclada(
@@ -109,10 +115,10 @@ class PlanillaDosPasosService
             ->pluck('p.tipo_modalidad_id')
             ->map(fn ($id) => (int) $id);
 
-        $dosPasos = \App\Models\TipoModalidad::IDS_DOS_PASOS;
+        $aparte = \App\Models\TipoModalidad::IDS_TANDA_APARTE;
 
-        return $modalidades->contains(fn ($id) => in_array($id, $dosPasos, true))
-            && $modalidades->contains(fn ($id) => ! in_array($id, $dosPasos, true));
+        return $modalidades->contains(fn ($id) => in_array($id, $aparte, true))
+            && $modalidades->contains(fn ($id) => ! in_array($id, $aparte, true));
     }
 
     /**

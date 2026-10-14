@@ -124,6 +124,36 @@ class TipoModalidad extends BaseModel
         'SOLO_AFP' => ['dias' => 30, 'api' => true],
     ];
 
+    /**
+     * Tipo E - X1: salud sin pensión en UNA sola planilla.
+     *
+     * La contraparte de Tipo E - Extras. Allá se vende un subsistema suelto y
+     * hacen falta dos liquidaciones encadenadas; aquí todo entra en una
+     * planilla E ordinaria que el operador liquida de una vez, apoyada en el
+     * subtipo de cotizante 03/04 que exime del aporte a pensión.
+     *
+     * **Para quién es.** Quien está exento —ya pensionado, hombre 55+, mujer
+     * 50+, o documento CE/PT/PP/PE/PA— no la necesita: va por Tipo E normal
+     * (modalidad 0) con los planes EPS+ARL o EPS+ARL+CCF, que liquidan en
+     * cualquier operador. Esta modalidad es para **quien no cumple requisitos**.
+     *
+     * Ver PilaCotizanteEX1, que tiene el detalle de cada plan y lo que cuesta.
+     */
+    const ID_EX1 = -13;
+
+    /**
+     * Modalidades que no se mezclan con gente normal en un mismo plano.
+     *
+     * Las de dos pasos porque su corrección se busca después por el mismo
+     * filtro con el que se liquidó. Tipo E - X1 por otra razón: **toda la
+     * planilla tiene que ir por Simple**, y basta un cotizante suyo para que
+     * Enlace rechace la tanda entera con `eo.val.2.655`.
+     */
+    const IDS_TANDA_APARTE = [
+        self::ID_CAJA_30, self::ID_CAJA_14, self::ID_PENSION_30, self::ID_EXTRAS,
+        self::ID_EX1,
+    ];
+
     /** Las que se pagan en dos liquidaciones encadenadas contra el operador. */
     const IDS_DOS_PASOS = [self::ID_CAJA_30, self::ID_CAJA_14, self::ID_PENSION_30, self::ID_EXTRAS];
 
@@ -141,6 +171,7 @@ class TipoModalidad extends BaseModel
         self::ID_CAJA_14 => [2],
         self::ID_PENSION_30 => [2],
         self::ID_EXTRAS => [2],
+        self::ID_EX1 => [2],
     ];
 
     /**
