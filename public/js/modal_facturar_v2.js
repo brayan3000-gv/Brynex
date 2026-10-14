@@ -2261,8 +2261,11 @@ const MF = (function () {
                 consignaciones: consignaciones,   // ← array dinámico
                 valor_efectivo: efect,
                 valor_prestamo: prest,
-                otros: Math.max(parse(el('mf-otros')?.value), _otrosMin),
-                otros_admon: parse(el('mf-otros-admon')?.value),
+                // En afiliación el total en pantalla no suma los "otros" (ni el
+                // piso de Tipo E - X1): mandarlos cobraba de más y el pago
+                // quedaba incompleto.
+                otros: tipoActual === 'afiliacion' ? 0 : Math.max(parse(el('mf-otros')?.value), _otrosMin),
+                otros_admon: tipoActual === 'afiliacion' ? 0 : parse(el('mf-otros-admon')?.value),
                 mora: _mora,  // mora cobrada al cliente (NO es ingreso)
                 // El usuario edito la mora a mano. En el lote de empresa el backend
                 // la recalcula por contrato, y sin esta bandera no hay forma de saber
