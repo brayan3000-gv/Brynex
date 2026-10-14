@@ -65,7 +65,18 @@ class PilaCotizanteEX1
 
     public const PLAN_EPS_ARL_CCF = 'EPS_ARL_CCF';
 
-    public const PLANES = [self::PLAN_SOLO_EPS, self::PLAN_EPS_ARL, self::PLAN_EPS_ARL_CCF];
+    /**
+     * Tiempo parcial: ARL del mes completo + caja de 14 días, sin pensión y sin
+     * salud. Es el único plan de la modalidad que NO va con el cotizante 01.
+     */
+    public const PLAN_ARL_CCF = 'ARL_CCF';
+
+    /** Días de caja del plan de tiempo parcial. La ARL siempre va a 30. */
+    public const DIAS_CAJA_TP = 14;
+
+    public const PLANES = [
+        self::PLAN_SOLO_EPS, self::PLAN_EPS_ARL, self::PLAN_EPS_ARL_CCF, self::PLAN_ARL_CCF,
+    ];
 
     /** Código PILA del único operador que liquida esta modalidad. */
     public const OPERADOR_PILA = '88';
@@ -121,6 +132,25 @@ class PilaCotizanteEX1
         }
 
         return false;
+    }
+
+    /**
+     * ¿Esta fila es el plan de tiempo parcial de Tipo E - X1?
+     *
+     * La bandera `es_tiempo_parcial` es de la modalidad y Tipo E - X1 es de
+     * dependientes, así que no puede estar marcada: quien lo decide es el plan.
+     * PilaCotizanteCalculator consulta esto para encender su rama de tiempo
+     * parcial, que ya produce la forma correcta sin cambiarle nada.
+     *
+     * Probado contra Simple el 13-oct-2026: cotizante 51 con subtipo 04, días
+     * 0/0/30/14, sin AFP y sin EPS, ARL sobre el mínimo completo. Limpio. Con
+     * subtipo 00 el validador exige la pensión (`eo.val.2.066`), y con el
+     * cotizante 01 se cae con 16 errores: la salud y los parafiscales son
+     * obligatorios para el dependiente.
+     */
+    public static function esTiempoParcial(object $p): bool
+    {
+        return self::aplica($p) && self::planVendido($p) === self::PLAN_ARL_CCF;
     }
 
     /** ¿Este plano es de la modalidad Tipo E - X1? */

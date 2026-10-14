@@ -333,6 +333,17 @@ class TipoModalidad extends BaseModel
      */
     public function factorSalario(?int $diasAfp = null, ?string $codigoPlan = null): float
     {
+        // Tipo E - X1: su plan de tiempo parcial (ARL + caja de 14 días) admite
+        // medio mínimo, igual que un TP(14). La modalidad no está marcada como
+        // tiempo parcial —es de dependientes— así que el piso lo tiene que
+        // decidir el plan, o el contrato no deja guardarse. Ver
+        // PilaCotizanteEX1::esTiempoParcial().
+        if ((int) $this->id === self::ID_EX1) {
+            return $codigoPlan === \App\Services\PilaCotizanteEX1::PLAN_ARL_CCF
+                ? (self::FACTOR_SALARIO_POR_DIAS[\App\Services\PilaCotizanteEX1::DIAS_CAJA_TP] ?? 1.0)
+                : 1.0;
+        }
+
         // Tipo E - Extras: los días los dice el plan, no el catálogo. "Solo CCF
         // 14" admite medio mínimo por la misma razón que Caja 14 lo admitía
         // cuando era su propia modalidad.

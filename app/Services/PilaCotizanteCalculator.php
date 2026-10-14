@@ -107,6 +107,21 @@ class PilaCotizanteCalculator
         $esIndep         = in_array($tipoModalidad, self::TIPOS_INDEPENDIENTE);
         $esTiempoParcial = (bool)($p->es_tiempo_parcial ?? false);
 
+        // Tipo E - X1 vende un plan de tiempo parcial —ARL + caja de 14 días,
+        // sin pensión— aunque la modalidad no esté marcada como tal en el
+        // catálogo: ahí la bandera es del dependiente y no puede ser las dos
+        // cosas. Lo decide el PLAN, igual que en Tipo E - Extras.
+        //
+        // Se enciende el mismo interruptor de siempre en vez de duplicar la
+        // rama: esa rama ya emite el cotizante 51 con subtipo 03/04, la pensión
+        // y la salud en cero y la ARL sobre el mínimo completo, que es
+        // exactamente la forma que el operador aceptó. Ver PilaCotizanteEX1.
+        if (PilaCotizanteEX1::esTiempoParcial($p)) {
+            $esTiempoParcial = true;
+            $p->dias_afp     = 0;
+            $p->dias_caja    = PilaCotizanteEX1::DIAS_CAJA_TP;
+        }
+
         $esIndependiente = (bool)($p->razonSocial?->es_independiente ?? false);
 
         // La ARL distingue los dos tipos de independiente: quien la lleva

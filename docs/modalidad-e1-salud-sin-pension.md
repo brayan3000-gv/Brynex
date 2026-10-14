@@ -168,7 +168,21 @@ dos planillas. Ver `PilaCotizanteDosPasos`.
 cualquier operador. **X1 es para quien NO cumple requisitos**, y por eso solo
 liquida por Simple.
 
-Tres planes, ninguno nuevo: `SOLO_EPS` (1), `EPS_ARL` (3), `EPS_ARL_CCF` (4).
+Cuatro planes, ninguno nuevo: `SOLO_EPS` (1), `EPS_ARL` (3), `EPS_ARL_CCF` (4)
+y `ARL_CCF` (13).
+
+**`ARL_CCF` es el de tiempo parcial**: ARL del mes completo + caja de 14 días,
+sin pensión y sin salud. Es el único de la modalidad que va con el **cotizante
+51**, porque el 01 no puede ir sin salud ni sin parafiscales —16 errores, entre
+ellos `2.043`, `2.066` (Salud, SENA, ICBF) y `2.158`—. El 51 sí, y con subtipo
+04 queda limpio; con subtipo 00 el validador exige la pensión (`2.066`).
+
+La bandera `es_tiempo_parcial` es de la **modalidad**, no del plan, y X1 es de
+dependientes: no puede estar marcada. Así que lo decide el plan, igual que en
+Tipo E - Extras. `PilaCotizanteCalculator` enciende su propia rama de tiempo
+parcial —que ya produce la forma correcta— en vez de duplicarla, y
+`TipoModalidad::factorSalario()` le da el piso de medio mínimo que le
+corresponde.
 
 | Pieza | Dónde |
 |---|---|
