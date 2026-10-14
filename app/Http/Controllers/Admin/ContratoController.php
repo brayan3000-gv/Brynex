@@ -1475,7 +1475,11 @@ class ContratoController extends Controller
         //   - Dependiente E (0), I Venc (10)
         //   - TODAS las modalidades con es_tiempo_parcial=1 (independiente del ID)
         //     → el plan "ARL+CCF" sin AFP (APTP) solo es válido para clientes exentos
-        $idsTP = TipoModalidad::where('es_tiempo_parcial', true)->pluck('id')->map(fn ($id) => (int) $id)->toArray();
+        //   - Menos Tipo E - X1 TP14: es tiempo parcial, pero existe justamente
+        //     para ir sin pensión; con la regla su único plan se borraba.
+        $idsTP = TipoModalidad::where('es_tiempo_parcial', true)
+            ->whereNotIn('id', TipoModalidad::IDS_EX1)
+            ->pluck('id')->map(fn ($id) => (int) $id)->toArray();
         $modalidadesAfpObligatorio = array_values(array_unique(array_merge([0, 10], $idsTP)));
 
         // Razones sociales: activas primero (ordenadas por nombre), inactivas al final
