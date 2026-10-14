@@ -4451,6 +4451,9 @@ function cotizador() {
                     pen:    d.pen    ?? 0,
                     caja:   d.caja   ?? 0,
                     ss:     d.ss     ?? 0,
+                    // Cargo propio de Tipo E - X1, ya sumado dentro de ss. Va
+                    // aparte para poder pintarlo como una línea más.
+                    otros:  d.otros  ?? 0,
                     seguro: d.seguro ?? 0,
                     admon:  d.admon  ?? 0,
                     iva:    d.iva    ?? 0,
