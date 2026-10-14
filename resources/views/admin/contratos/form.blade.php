@@ -2202,6 +2202,13 @@ const MODALIDADES_AFP_OBLIGATORIO = @json($modalidadesAfpObligatorio ?? [0, 10])
 // requisitos —al exento le basta Tipo E normal, que liquida en cualquier
 // operador—, pero se le ofrece a todos.
 const MODALIDAD_EX1 = {{ (int) ($modalidadEx1 ?? -13) }};
+// Su variante de tiempo parcial vive en otra modalidad (-14) porque la pantalla
+// de planos y el TXT la necesitan aparte, pero en el formulario es UNA sola
+// modalidad: la lista muestra un único "Tipo E - X1" y el TP14 aparece como un
+// plan más. Al elegir ese plan el contrato pasa por debajo a la -14, y al
+// elegir cualquier otro vuelve a la -13. Ver caraX1DelPlan().
+const MODALIDAD_EX1_TP = {{ \App\Models\TipoModalidad::ID_EX1_TP }};
+const MODALIDADES_EX1  = [MODALIDAD_EX1, MODALIDAD_EX1_TP];
 @php
 // Construir mapa de días TP antes de inyectarlo como JS
 // factor_salario: fraccion del salario mínimo a usar como salario mensual.
@@ -2751,6 +2758,28 @@ function _initOptsStore() {
             _OPTS_PLAN.push({ el: opt, value: opt.value, text: opt.textContent.trim() });
         });
     }
+    if (selMod) {
+        // Las dos caras de X1 se llaman igual y solo una queda en la lista.
+        const nombreX1 = _OPTS_MODALIDAD.find(o => parseInt(o.value) === MODALIDAD_EX1)?.el.textContent;
+        const tp = _OPTS_MODALIDAD.find(o => parseInt(o.value) === MODALIDAD_EX1_TP);
+        if (tp && nombreX1) tp.el.textContent = nombreX1;
+        const sobra = caraX1Oculta(selMod.value);
+        const optSobra = sobra && selMod.querySelector(`option[value="${sobra}"]`);
+        if (optSobra) optSobra.remove();
+    }
+}
+
+/** La cara de X1 que NO va en la lista: la que no está elegida (por defecto, la TP14). */
+function caraX1Oculta(valorActual) {
+    return parseInt(valorActual) === MODALIDAD_EX1_TP ? MODALIDAD_EX1 : MODALIDAD_EX1_TP;
+}
+
+/** A qué cara de X1 pertenece un plan: la -14 solo si es su plan (el TP14). */
+function caraX1DelPlan(planId) {
+    const delTp = (MODALIDAD_PLANES[MODALIDAD_EX1_TP] || []).map(Number);
+    const delX1 = (MODALIDAD_PLANES[MODALIDAD_EX1] || []).map(Number);
+    const id = parseInt(planId);
+    return delTp.includes(id) && !delX1.includes(id) ? MODALIDAD_EX1_TP : MODALIDAD_EX1;
 }
 
 /**
@@ -2798,12 +2827,14 @@ function filtrarModalidades(soloIndependiente, evitarRecalcular = false) {
 
     let primerValido = null;
     let valorSigueDisponible = false;
+    const x1Oculta = caraX1Oculta(valorActual);
 
     _OPTS_MODALIDAD.forEach(({ el, value }) => {
         if (!value) {
             selMod.appendChild(el);  // siempre: opción vacía
             return;
         }
+        if (parseInt(value) === x1Oculta) return;
         const esIndepOpt = MODALIDADES_INDEP.includes(parseInt(value));
         const mostrar = MODALIDADES_SIN_FILTRO_RS.includes(parseInt(value))
                      || (soloIndependiente ? esIndepOpt : !esIndepOpt);
@@ -2870,7 +2901,7 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
         // Sin modalidad: restaurar todas las opciones. Las de AFP igual se van si
         // el cliente ya está pensionado — la exclusión es del cliente, no de la
         // modalidad, así que no depende de haber elegido una.
-        _OPTS_PLAN.forEach(({ el }) => selPlan.appendChild(el));
+        _OPTS_PLAN.forEach(({ el, text }) => { if (el.value) el.textContent = text; selPlan.appendChild(el); });
         // Reinsertar las options deja seleccionada la última: hay que devolver el
         // select al valor que traía (o a vacío), o el plan queda elegido a dedo
         // sin que nadie lo haya tocado.
@@ -2880,8 +2911,14 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
         return;
     }
 
-    const permitidos = (MODALIDAD_PLANES[modalidadId] || []).map(Number);
-    const esTP       = !!MODALIDADES_TP[parseInt(modalidadId)];
+    // En Tipo E - X1 se ofrecen los planes de sus dos caras, y no se filtra como
+    // tiempo parcial aunque esté parado en la TP14: esa regla tumbaría los planes
+    // con EPS, que son los de la otra cara.
+    const esX1       = MODALIDADES_EX1.includes(parseInt(modalidadId));
+    const permitidos = (esX1
+        ? MODALIDADES_EX1.flatMap(id => MODALIDAD_PLANES[id] || [])
+        : (MODALIDAD_PLANES[modalidadId] || [])).map(Number);
+    const esTP       = !esX1 && !!MODALIDADES_TP[parseInt(modalidadId)];
     if (divNota) divNota.style.display = 'none';
 
     // ── Regla AFP obligatorio ──────────────────────────────────
@@ -2964,6 +3001,7 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
         }
 
         el.textContent = text;  // restaurar texto original
+        if (esX1 && caraX1DelPlan(planId) === MODALIDAD_EX1_TP) el.textContent = text + ' (TP14)';
 
         selPlan.appendChild(el);
         planesAgregados.push(planId);
@@ -2980,7 +3018,7 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
     const notaX1 = document.getElementById('nota-afp-x1');
     if (notaX1) {
         const x1EsAlternativa = planesOcultosSinAfp > 0
-            && modalidadIdInt !== MODALIDAD_EX1
+            && !esX1
             && !esIndepMod && !esTP && !esIndepRS;
         notaX1.style.display = x1EsAlternativa ? 'block' : 'none';
     }
@@ -4141,6 +4179,14 @@ function cotizador() {
             }
             actualizarBloqueoArl();
             filtrarPlanes(e.target.value);
+            // Llegar a X1 con un plan que ya traía (ej. ARL + CCF desde TP(14)):
+            // el plan sobrevive al filtro, así que la cara tiene que seguirlo.
+            // cambiarCaraX1 vuelve a entrar aquí con la cara correcta y termina.
+            const planX1 = document.getElementById('sel_plan')?.value;
+            if (MODALIDADES_EX1.includes(id) && planX1 && caraX1DelPlan(planX1) !== id) {
+                this.tipoModalidadId = String(id);
+                if (this.cambiarCaraX1(planX1)) return;
+            }
             // Recalcular días según la nueva modalidad (especialmente ARL → 0 días)
             this.calcularDiasDesde(document.querySelector('input[name=fecha_ingreso]')?.value);
             // El tarifario cambia por modalidad, no solo por plan.
@@ -4277,6 +4323,7 @@ function cotizador() {
         },
 
         onPlanChange(e) {
+            this.cambiarCaraX1(e.target.value);
             this.planNombre = e.target.options[e.target.selectedIndex]?.textContent?.trim() || '';
             bloquearEntidadesPorPlan(this.planId);
             actualizarAvisoPensionado();
@@ -4285,6 +4332,30 @@ function cotizador() {
             // vez de quedar por debajo y reventar al guardar.
             if (parseInt(this.tipoModalidadId || 0) === MODALIDAD_EXTRAS) this.ajustarSalarioAlPiso();
             this.refrescarTarifas();
+        },
+
+        /**
+         * Tipo E - X1: el plan decide en cuál de sus dos modalidades queda el
+         * contrato. Se cambia la opción de la lista por la de la otra cara —se
+         * llaman igual, así que no se nota— y se corre el cambio de modalidad
+         * completo, que pone o quita el tiempo parcial (días y medio mínimo).
+         */
+        cambiarCaraX1(planId) {
+            const actual = parseInt(this.tipoModalidadId || 0);
+            if (!MODALIDADES_EX1.includes(actual) || !planId) return false;
+            const destino = caraX1DelPlan(planId);
+            if (destino === actual) return false;
+
+            const selMod = document.getElementById('sel_modalidad');
+            const vieja  = selMod?.querySelector(`option[value="${actual}"]`);
+            const nueva  = _OPTS_MODALIDAD.find(o => parseInt(o.value) === destino)?.el;
+            if (!vieja || !nueva) return false;
+
+            vieja.replaceWith(nueva);
+            selMod.value = String(destino);
+            this.tipoModalidadId = String(destino);
+            this.onModalidadChange({ target: selMod });
+            return true;
         },
 
         /**
