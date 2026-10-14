@@ -142,6 +142,21 @@ class TipoModalidad extends BaseModel
     const ID_EX1 = -13;
 
     /**
+     * Tipo E - X1 TP14: la variante de tiempo parcial de la anterior — ARL del
+     * mes completo + caja de 14 días, sin pensión y sin salud, con cotizante 51.
+     *
+     * Vive aparte porque `es_tiempo_parcial` es una columna de la modalidad y
+     * una no puede ser dependiente y tiempo parcial a la vez; además la pantalla
+     * de planos filtra por modalidad, así que juntas no se podían descargar por
+     * separado. Siendo un tiempo parcial normal, toda la maquinaria que ya
+     * existe la entiende sin ayuda.
+     */
+    const ID_EX1_TP = -14;
+
+    /** Las dos caras de Tipo E - X1: solo liquidan por Simple. */
+    const IDS_EX1 = [self::ID_EX1, self::ID_EX1_TP];
+
+    /**
      * Modalidades que no se mezclan con gente normal en un mismo plano.
      *
      * Las de dos pasos porque su corrección se busca después por el mismo
@@ -151,7 +166,7 @@ class TipoModalidad extends BaseModel
      */
     const IDS_TANDA_APARTE = [
         self::ID_CAJA_30, self::ID_CAJA_14, self::ID_PENSION_30, self::ID_EXTRAS,
-        self::ID_EX1,
+        self::ID_EX1, self::ID_EX1_TP,
     ];
 
     /** Las que se pagan en dos liquidaciones encadenadas contra el operador. */
@@ -172,6 +187,7 @@ class TipoModalidad extends BaseModel
         self::ID_PENSION_30 => [2],
         self::ID_EXTRAS => [2],
         self::ID_EX1 => [2],
+        self::ID_EX1_TP => [2],
     ];
 
     /**
@@ -283,23 +299,6 @@ class TipoModalidad extends BaseModel
         return (bool) $this->es_tiempo_parcial;
     }
 
-    /**
-     * ¿Esta combinación se cotiza como tiempo parcial?
-     *
-     * La bandera `es_tiempo_parcial` es de la modalidad, pero Tipo E - X1 es de
-     * dependientes y vende además un plan de tiempo parcial (ARL + caja de 14
-     * días): ahí lo decide el PLAN, igual que en Tipo E - Extras. Sin el código
-     * del plan se comporta como siempre.
-     */
-    public function esTiempoParcialPara(?string $codigoPlan = null): bool
-    {
-        if ($this->esTiempoParcial()) {
-            return true;
-        }
-
-        return (int) $this->id === self::ID_EX1
-            && $codigoPlan === \App\Services\PilaCotizanteEX1::PLAN_ARL_CCF;
-    }
 
     /**
      * Retorna los días a cotizar por entidad para este plan de Tiempo Parcial.
@@ -312,18 +311,8 @@ class TipoModalidad extends BaseModel
      *
      * Si no es TP, retorna 30 para todas (mes completo).
      */
-    public function diasPorEntidad(?string $codigoPlan = null): array
+    public function diasPorEntidad(): array
     {
-        // Tipo E - X1: su plan de tiempo parcial trae los días fijos del plan,
-        // no del catálogo — la modalidad no está marcada como tiempo parcial.
-        if (! $this->esTiempoParcial() && $this->esTiempoParcialPara($codigoPlan)) {
-            return [
-                'arl' => 30,                                       // la ARL siempre va completa
-                'afp' => 0,                                        // el plan no vende pensión
-                'caja' => \App\Services\PilaCotizanteEX1::DIAS_CAJA_TP,
-            ];
-        }
-
         if ($this->esTiempoParcial()) {
             return [
                 'arl' => 30,                    // ARL siempre mensual completa
@@ -361,17 +350,6 @@ class TipoModalidad extends BaseModel
      */
     public function factorSalario(?int $diasAfp = null, ?string $codigoPlan = null): float
     {
-        // Tipo E - X1: su plan de tiempo parcial (ARL + caja de 14 días) admite
-        // medio mínimo, igual que un TP(14). La modalidad no está marcada como
-        // tiempo parcial —es de dependientes— así que el piso lo tiene que
-        // decidir el plan, o el contrato no deja guardarse. Ver
-        // PilaCotizanteEX1::esTiempoParcial().
-        if ((int) $this->id === self::ID_EX1) {
-            return $codigoPlan === \App\Services\PilaCotizanteEX1::PLAN_ARL_CCF
-                ? (self::FACTOR_SALARIO_POR_DIAS[\App\Services\PilaCotizanteEX1::DIAS_CAJA_TP] ?? 1.0)
-                : 1.0;
-        }
-
         // Tipo E - Extras: los días los dice el plan, no el catálogo. "Solo CCF
         // 14" admite medio mínimo por la misma razón que Caja 14 lo admitía
         // cuando era su propia modalidad.

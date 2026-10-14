@@ -168,21 +168,23 @@ dos planillas. Ver `PilaCotizanteDosPasos`.
 cualquier operador. **X1 es para quien NO cumple requisitos**, y por eso solo
 liquida por Simple.
 
-Cuatro planes, ninguno nuevo: `SOLO_EPS` (1), `EPS_ARL` (3), `EPS_ARL_CCF` (4)
-y `ARL_CCF` (13).
+**Son dos modalidades**, porque `es_tiempo_parcial` es una columna de la
+modalidad y una no puede ser dependiente y tiempo parcial a la vez — y porque la
+pantalla de planos filtra por modalidad, así que juntas no se podían descargar
+por separado:
 
-**`ARL_CCF` es el de tiempo parcial**: ARL del mes completo + caja de 14 días,
-sin pensión y sin salud. Es el único de la modalidad que va con el **cotizante
-51**, porque el 01 no puede ir sin salud ni sin parafiscales —16 errores, entre
-ellos `2.043`, `2.066` (Salud, SENA, ICBF) y `2.158`—. El 51 sí, y con subtipo
-04 queda limpio; con subtipo 00 el validador exige la pensión (`2.066`).
+| | Planes | Cotizante |
+|---|---|---|
+| **Tipo E - X1** (`-13`) | `SOLO_EPS`, `EPS_ARL`, `EPS_ARL_CCF` | 01 |
+| **Tipo E - X1 TP14** (`-14`) | `ARL_CCF` | **51** |
 
-La bandera `es_tiempo_parcial` es de la **modalidad**, no del plan, y X1 es de
-dependientes: no puede estar marcada. Así que lo decide el plan, igual que en
-Tipo E - Extras. `PilaCotizanteCalculator` enciende su propia rama de tiempo
-parcial —que ya produce la forma correcta— en vez de duplicarla, y
-`TipoModalidad::factorSalario()` le da el piso de medio mínimo que le
-corresponde.
+Ninguno de los cuatro planes es nuevo. La `-14` es un tiempo parcial normal
+—misma configuración de días que TP(14)— así que toda la maquinaria existente la
+entiende sin ayuda: días, piso de medio mínimo, cotizante 51 y subtipo 03/04.
+
+El plan `ARL_CCF` va con el **cotizante 51** porque el 01 no puede ir sin salud
+ni sin parafiscales: 16 errores, entre ellos `2.043`, `2.066` (Salud, SENA,
+ICBF) y `2.158`. Con subtipo 00 el validador exige la pensión (`2.066`).
 
 | Pieza | Dónde |
 |---|---|

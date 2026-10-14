@@ -99,11 +99,7 @@ class CotizadorService
         $cedula = $p['cedula'] ?? null;
 
         $esIndep = $tipoModalidad && $tipoModalidad->esIndependiente();
-        // El tiempo parcial lo puede decidir la modalidad (las 8 de siempre) o el
-        // PLAN: Tipo E - X1 es de dependientes y vende además ARL + caja de 14
-        // días. Ver TipoModalidad::esTiempoParcialPara().
-        $codigoPlan = $plan?->codigo;
-        $esTP = $tipoModalidad && $tipoModalidad->esTiempoParcialPara($codigoPlan);
+        $esTP = $tipoModalidad && $tipoModalidad->esTiempoParcial();
 
         // Porcentajes
         $pctEps = $esIndep ? ConfiguracionBrynex::pctSaludIndependiente() : ConfiguracionBrynex::pctSaludDependiente();
@@ -132,7 +128,7 @@ class CotizadorService
 
         if ($esTP) {
             // ── Tiempo Parcial: IBC diferente por entidad, sin EPS ─────────
-            $diasP = $tipoModalidad->diasPorEntidad($codigoPlan);
+            $diasP = $tipoModalidad->diasPorEntidad();
 
             // Tiempo Parcial Independiente: los días no están en el catálogo,
             // los elige el contrato mes a mes y llegan en la petición.
