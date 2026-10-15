@@ -442,6 +442,71 @@ class MarketingVideoGuion extends Command
         // El público no es solo quien vende seguridad social: es quien YA tiene la relación con
         // el cliente y hoy le dice "eso yo no lo manejo". Un contador tiene decenas de
         // independientes y empresas pequeñas preguntándole por EPS, ARL y planillas.
+        // Asesores y aliados, pero esta vez el protagonista es el SOFTWARE: lo que el sistema
+        // hace solo mientras ellos venden. Existe porque la retención dijo que el video no se
+        // ve —4 segundos de promedio en #90— y aun así trae leads: el gancho de los 3 primeros
+        // segundos y el texto en pantalla son lo que decide. Por eso abre con la pregunta al
+        // asesor, con la frase grande desde el primer cuadro, y las dos escenas de capturas
+        // enseñan la plataforma real y la calculadora pública de brynex.co/aliados.
+        //
+        // Las cifras son las públicas de /aliados (ver memoria plan-asesor-brygar): mitad de la
+        // afiliación y 20/30/40/50 % de administración según cartera. Por unidad, nunca un
+        // total, y sin «garantizado».
+        'aliados-plataforma' => [
+            'tema' => 'asesores con cartera propia: el software hace afiliaciones, planillas e IA por WhatsApp; ganan hasta el 50 %',
+            'titulo' => '¿Cuántos clientes manejas hoy? El software hace el resto',
+            'escenas' => [
+                'Vertical 9:16 cinematic shot. A Colombian woman in her 30s, a sales advisor, sits at a '
+                .'cafe table with a phone in one hand and a thick folder of forms in the other, glancing '
+                .'between them with mild frustration, a coffee going cold. Natural window light, medium '
+                .'close-up, shallow depth of field, slow push in. Ambient cafe sounds only. No text on '
+                .'screen, nobody speaks.',
+
+                // La plataforma real: módulos, cobros y tendencia.
+                'CAPTURAS',
+
+                'Vertical 9:16 cinematic shot. The same Colombian woman now relaxed on a park bench in '
+                .'late afternoon light, her phone face-up beside her lighting up with notification after '
+                .'notification while she sips coffee and smiles, not touching it. Medium shot, shallow '
+                .'depth of field, golden hour. Ambient park sounds only. No text on screen, nobody speaks.',
+
+                // La calculadora pública y la página de Brygar: lo que ella misma puede abrir.
+                'CAPTURAS',
+            ],
+            'capturas' => [
+                [
+                    ['archivo' => '11-modulos.png', 'modo' => 'ancho', 'zoom' => 1.1, 'arriba' => 0.25],
+                    ['archivo' => '12-cobros.png', 'modo' => 'ancho', 'zoom' => 1.1, 'arriba' => 0.3],
+                    ['archivo' => '13-tendencia.png', 'modo' => 'ancho', 'zoom' => 1.1, 'arriba' => 0.5],
+                ],
+                [
+                    ['archivo' => '31-cuantas-personas.png', 'modo' => 'ancho', 'zoom' => 1.1, 'arriba' => 0.0],
+                    // Zoom alto para quedarse en el encabezado: más abajo la página carga por tramos y sale a medias.
+                    ['archivo' => '32-pagina-brygar.png', 'modo' => 'ancho', 'zoom' => 1.6, 'arriba' => 0.0],
+                ],
+            ],
+            'frases' => [
+                '¿Cuántos clientes manejas hoy?',
+                'Afiliaciones y planillas solas',
+                'Una IA atiende a tus clientes',
+                'Hasta el 50 % de la administración',
+            ],
+            'narracion' => 'Si eres asesor de seguridad social y ya tienes clientes, esto es para ti. '
+                .'En BRYGAR trabajas con BRYNEX, el software que hace lo operativo solo: afiliaciones automáticas '
+                .'a la ARL y a la EPS, planillas pagadas por API, cobros por WhatsApp, y una inteligencia '
+                .'artificial que atiende a tus clientes y hasta lee sus comprobantes. Tú vendes, el sistema '
+                .'administra. Ganas la mitad de cada afiliación y hasta el cincuenta por ciento de la '
+                .'administración mensual. Escríbenos y calcula cuánto ganarías.',
+            'copy' => '¿Eres asesor de seguridad social y ya tienes clientes? En BRYGAR trabajas con BRYNEX.co, '
+                .'el software que hace lo operativo por ti:'."\n\n"
+                .'• Afiliaciones automáticas a ARL y EPS, con carné en PDF.'."\n"
+                .'• Planillas liquidadas y pagadas por API, sin subir archivos.'."\n"
+                .'• Cobros por WhatsApp y una IA que atiende a tus clientes, lee comprobantes y responde notas de voz.'."\n"
+                .'• Informes del día y del mes para seguir tu cartera desde el celular.'."\n\n"
+                .'Tú vendes, el sistema administra. Ganas la mitad de cada afiliación ($62.700 en un plan de $125.400) '
+                .'y por administración del 20 % al 50 % según tu cartera: hasta $23.000 al mes por cada cliente.'."\n\n"
+                .'📲 Escríbenos al '.self::WHATSAPP_ASESORES.' con cuántos clientes manejas, o calcula tu caso en brynex.co/aliados.',
+        ],
         'contadores' => [
             'tema' => 'contadores y asesores con cartera propia: sus clientes piden afiliaciones y ellos ganan por traerlas',
             'titulo' => '¿Tus clientes te preguntan por EPS y ARL?',
