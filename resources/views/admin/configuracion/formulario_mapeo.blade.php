@@ -110,6 +110,37 @@
     <div class="fmap-title">🗺️ {{ $titulo }}</div>
     <div class="fmap-sub">Selecciona {{ $subtitulo }}, elige un campo y arrastra en el PDF para definir el cuadro donde se escribirá el dato.</div>
 
+    {{-- Cambiar de tipo de entidad: los ids de EPS, pensiones y cajas se
+         repiten (la EPS 35 no es la caja 35), y entrar al editor equivocado
+         hacía creer que la caja no existía. --}}
+    @php
+        $tiposFormulario = [];
+        foreach ([
+            ['EPS', 'eps', \App\Models\Eps::class, 'nombre'],
+            ['Pensión', 'pensiones', \App\Models\Pension::class, 'razon_social'],
+            ['Caja', 'cajas', \App\Models\Caja::class, 'nombre'],
+        ] as [$etiqueta, $segmento, $modelo, $orden]) {
+            $primera = $modelo::whereNotNull('formulario_pdf')->orderBy($orden)->value('id')
+                ?? $modelo::orderBy($orden)->value('id');
+            $tiposFormulario[] = [
+                'etiqueta' => $etiqueta,
+                'url' => $primera ? url("/admin/configuracion/{$segmento}/{$primera}/formulario") : null,
+                'activo' => str_ends_with($urlBase, '/'.$segmento),
+            ];
+        }
+    @endphp
+    <div style="display:flex;gap:0.35rem;margin-bottom:0.6rem;">
+        @foreach($tiposFormulario as $t)
+            @if($t['url'])
+            <a href="{{ $t['url'] }}"
+               style="flex:1;text-align:center;padding:0.35rem 0;border-radius:7px;font-size:0.75rem;font-weight:700;text-decoration:none;
+                      {{ $t['activo'] ? 'background:#3b82f6;color:#fff;' : 'background:#1e293b;color:#94a3b8;border:1px solid #334155;' }}">
+                {{ $t['etiqueta'] }}
+            </a>
+            @endif
+        @endforeach
+    </div>
+
     <select class="eps-select" id="selectorEps" onchange="cambiarEntidad()">
         <optgroup label="✅ Con formulario PDF">
             @foreach($lista->where('formulario_pdf','!=',null)->sortBy('nombre') as $e)
