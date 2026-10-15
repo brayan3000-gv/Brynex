@@ -41,6 +41,7 @@ sirven. Por eso:
 
 | Pieza | Necesario | De dónde sale |
 |---|---|---|
+| Todo | **aliado** | el usuario ("en el aliado Brygar"); si no lo dice, **preguntar siempre**, aunque la cédula ya exista en algún aliado. Nunca asumir el aliado 1 (es de pruebas) ni el último usado |
 | Ficha | tipo y número de documento, nombres, apellidos, género, fecha de nacimiento | foto de la cédula |
 | Ficha | fecha y lugar de expedición, RH | reverso de la cédula |
 | Ficha | celular | el mensaje del usuario (si no viene, preguntar) |
@@ -73,6 +74,10 @@ DB::table('contratos')->where('aliado_id', $aliado)->where('cedula', $ced)->get(
   preguntar: probablemente es un duplicado.
 - Aliados: 1 BryNex (solo pruebas), 2 Brygar, 4 GiMave, 6 Luis Lopez, 9 Fecop…
   confirmar con `DB::table('aliados')->pluck('nombre','id')`.
+- Si el usuario no dijo el aliado, preguntarlo **antes** de buscar o crear
+  nada. Para orientar la pregunta se puede decir en qué aliados ya existe la
+  cédula (`clientes` y `contratos` sin filtrar por aliado), pero eso no decide:
+  la persona puede estar entrando por otro aliado.
 
 ## Paso 2 — RUAF para EPS y AFP reales
 
