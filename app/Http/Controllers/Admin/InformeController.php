@@ -4280,11 +4280,74 @@ class InformeController extends Controller
             'retiros_informativos' => 'Retiros Informativos',
         ];
 
+        if ($request->boolean('excel')) {
+            return $this->exportarDetalleConsolidado($request, $personas, $tipo, $tiposLabel[$tipo], $nombresMeses[$mes].' '.$anio);
+        }
+
         return response()->json([
             'mes_label' => $nombresMeses[$mes] . ' ' . $anio,
             'tipo_label' => $tiposLabel[$tipo],
             'personas' => array_values($personas),
         ]);
+    }
+
+    /**
+     * Excel del detalle del consolidado con lo que se ve en el modal: aplica
+     * los mismos filtros de columna (texto contenido, sin tildes en el
+     * nombre) y el orden de la pantalla (`orden` y `dir`).
+     */
+    private function exportarDetalleConsolidado(Request $request, array $personas, string $tipo, string $titulo, string $mesLabel)
+    {
+        $sinTildes = fn ($t) => mb_strtolower(\Illuminate\Support\Str::ascii((string) $t));
+        $contiene = fn ($valor, $filtro) => $filtro === '' || str_contains(mb_strtolower((string) $valor), mb_strtolower($filtro));
+        $f = fn ($k) => trim((string) $request->input($k, ''));
+
+        $filas = collect($personas)->filter(fn ($p) => $contiene($p['cedula'], $f('f_cedula'))
+            && ($f('f_nombre') === '' || str_contains($sinTildes($p['nombre_completo']), $sinTildes($f('f_nombre'))))
+            && $contiene($p['modalidad'].' '.$p['plan'], $f('f_modalidad'))
+            && $contiene($p['fecha_ingreso'], $f('f_ingreso'))
+            && ($f('f_tipo') === '' || mb_strtolower((string) $p['tipo']) === mb_strtolower($f('f_tipo')))
+            && $contiene($p['fecha_retiro'], $f('f_retiro'))
+            && $contiene($p['facturas'], $f('f_facturas'))
+            && $contiene($p['fecha_factura'], $f('f_fecha_factura')));
+
+        // El orden de la pantalla: columna y sentido, con las fechas dd/mm/aaaa
+        // pasadas a aaaa-mm-dd para que ordenen bien.
+        $col = (string) $request->input('orden', '');
+        if (in_array($col, ['cedula', 'nombre_completo', 'modalidad', 'fecha_ingreso', 'tipo', 'fecha_retiro', 'facturas', 'fecha_factura'], true)) {
+            $clave = function ($p) use ($col) {
+                $v = mb_strtolower((string) ($p[$col] ?? ''));
+                if (str_starts_with($col, 'fecha') && preg_match('#(\d{2})/(\d{2})/(\d{4})#', $v, $m)) {
+                    return "{$m[3]}-{$m[2]}-{$m[1]}";
+                }
+
+                return $v;
+            };
+            $filas = $request->input('dir') === 'desc' ? $filas->sortByDesc($clave) : $filas->sortBy($clave);
+        }
+        $filas = $filas->values();
+
+        $conTipo = $tipo !== 'admon_vigentes';
+        $headers = array_merge(['N°', 'Cédula', 'Nombre', 'Modalidad', 'Plan', 'Fecha Ingreso'],
+            $conTipo ? ['Tipo'] : [], ['Fecha Retiro', 'Factura(s)', 'Valor', 'Fecha Factura']);
+        $nombre = \Illuminate\Support\Str::slug($titulo.' '.$mesLabel, '_');
+
+        $n = 0;
+
+        return $this->exportExcel($filas, $nombre, $headers, function ($p) use (&$n, $conTipo) {
+            $valores = collect($p['facturas_valor']);
+
+            return array_merge(
+                [++$n, $p['cedula'], nombre_oracion($p['nombre_completo']), $p['modalidad'], $p['plan'], $p['fecha_ingreso']],
+                $conTipo ? [$p['tipo']] : [],
+                [
+                    $p['fecha_retiro'],
+                    $valores->pluck('numero')->implode(', '),
+                    $valores->isEmpty() ? null : (float) $valores->sum('total'),
+                    $p['fecha_factura'],
+                ]
+            );
+        });
     }
 
     public function consolidadoMensualWhatsapp(Request $request)

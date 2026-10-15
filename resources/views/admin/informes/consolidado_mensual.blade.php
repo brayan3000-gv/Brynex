@@ -429,7 +429,12 @@
                 <span style="font-size: 0.82rem; color: #64748b; font-weight: 600;">
                     Usa los campos de cada columna para filtrar los datos o haz clic en los títulos para ordenar.
                 </span>
-                <span id="modalCounter" class="modal-counter">0 registros</span>
+                <div style="display: flex; align-items: center; gap: 0.6rem;">
+                    <span id="modalCounter" class="modal-counter">0 registros</span>
+                    <button type="button" class="modal-btn-descargar" onclick="descargarDetalle()" title="Descarga lo que se ve, con los filtros y el orden aplicados">
+                        📥 Descargar Excel
+                    </button>
+                </div>
             </div>
 
             {{-- Spinner de carga --}}
@@ -776,6 +781,20 @@
         align-items: center;
         white-space: nowrap;
     }
+    .modal-btn-descargar {
+        background: #2563eb;
+        color: #ffffff;
+        border: none;
+        border-radius: 8px;
+        padding: 0.4rem 0.9rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background-color 0.15s;
+    }
+    .modal-btn-descargar:hover { background: #1e40af; }
     .fact-num {
         background: rgba(59, 130, 246, 0.1);
         color: #1e40af;
@@ -827,6 +846,7 @@
 
 <script>
     let personasOriginal = [];
+    let detalleActual = null;
     let personasFiltradas = [];
     let sortColumna = '';
     let sortDireccion = 'asc';
@@ -864,6 +884,7 @@
         setTimeout(() => modal.classList.add('active'), 10);
         
         // Fetch data
+        detalleActual = { mes, anio, tipo };
         const url = `{{ route('admin.informes.consolidado_mensual_detalle') }}?mes=${mes}&anio=${anio}&tipo=${tipo}`;
         
         fetch(url)
@@ -932,6 +953,20 @@
             `;
             tableBody.appendChild(tr);
         });
+    }
+
+    // Excel de lo que se ve: mismos filtros de columna y mismo orden.
+    function descargarDetalle() {
+        if (!detalleActual) return;
+        const valor = id => document.getElementById(id).value.trim();
+        const params = new URLSearchParams({
+            mes: detalleActual.mes, anio: detalleActual.anio, tipo: detalleActual.tipo, excel: 1,
+            f_cedula: valor('filtro-cedula'), f_nombre: valor('filtro-nombre'), f_modalidad: valor('filtro-modalidad'),
+            f_ingreso: valor('filtro-ingreso'), f_tipo: valor('filtro-tipo'), f_retiro: valor('filtro-retiro'),
+            f_facturas: valor('filtro-facturas'), f_fecha_factura: valor('filtro-fecha-factura'),
+            orden: sortColumna || '', dir: sortDireccion,
+        });
+        window.location.href = `{{ route('admin.informes.consolidado_mensual_detalle') }}?${params}`;
     }
 
     function aplicarFiltrosModal() {
