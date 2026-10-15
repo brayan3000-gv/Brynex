@@ -91,17 +91,23 @@ class ListadosMesExcelService
             dinero: ['M', 'P'],
         );
 
+        // Nueva o reingreso con la misma regla del Resumen Consolidado Mensual.
+        $afiliaciones = $this->afiliaciones();
+        $reingresos = ReingresosAfiliacion::porContrato($this->aliadoId, $afiliaciones);
+
         $this->hoja($libro, 'Afiliaciones', 'Listado de afiliaciones', $cierre,
-            ['Cédula', 'Nombre', 'Razón Social', 'Empresa', 'Fecha Ingreso', 'Motivo de afiliación', 'Encargado de afiliación',
-                'Factura afiliación', 'Valor factura afiliación'],
-            $this->afiliaciones()->map(fn ($r) => [
-                $r->cedula, $r->nombre, $r->razon_social, $r->empresa,
-                $this->fecha($r->fecha_ingreso), $r->motivo, $r->encargado,
+            ['Cédula', 'Nombre', 'Razón Social', 'Empresa', 'Fecha Ingreso', 'Motivo de afiliación',
+                'Tipo (nueva/reingreso)', 'Retiro anterior', 'Encargado de afiliación', 'Factura afiliación', 'Valor factura afiliación'],
+            $afiliaciones->map(fn ($r) => [
+                $r->cedula, $r->nombre, $r->razon_social, $r->empresa, $this->fecha($r->fecha_ingreso), $r->motivo,
+                isset($reingresos[$r->id]) ? 'Reingreso' : 'Nueva',
+                isset($reingresos[$r->id]) ? $this->fecha($reingresos[$r->id]->fecha_retiro) : null,
+                $r->encargado,
                 $r->factura_numero ? (int) $r->factura_numero : null,
                 $r->factura_total !== null ? (float) $r->factura_total : null,
             ]),
-            fechas: ['E'],
-            dinero: ['I'],
+            fechas: ['E', 'H'],
+            dinero: ['K'],
         );
 
         $libro->setActiveSheetIndex(0);
@@ -116,8 +122,11 @@ class ListadosMesExcelService
     {
         $aid = $this->aliadoId;
 
+        // Sin ficha de cliente en el aliado no es una persona real: son
+        // contratos que migraron mal del sistema viejo, sin nombre (13 de
+        // GiMave con ingreso y retiro en agosto de 2026).
         return DB::table('contratos AS c')
-            ->leftJoin('clientes AS cl', function ($j) use ($aid) {
+            ->join('clientes AS cl', function ($j) use ($aid) {
                 $j->on('cl.cedula', '=', 'c.cedula')->where('cl.aliado_id', $aid);
             })
             ->leftJoin('razones_sociales AS rs', 'rs.id', '=', 'c.razon_social_id')
@@ -238,7 +247,7 @@ class ListadosMesExcelService
             ->whereYear('c.fecha_ingreso', $this->anio)
             // La factura que cobró la afiliación: la de tipo afiliación o una
             // de planilla que la trae sumada (campo `afiliacion` > 0).
-            ->addSelect('c.fecha_ingreso', 'ma.nombre AS motivo', 'u.nombre AS encargado',
+            ->addSelect('c.id', 'c.fecha_ingreso', 'ma.nombre AS motivo', 'u.nombre AS encargado',
                 DB::raw("(SELECT TOP 1 numero_factura FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND deleted_at IS NULL AND (tipo = 'afiliacion' OR afiliacion > 0) ORDER BY id) AS factura_numero"),
                 DB::raw("(SELECT TOP 1 total FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND deleted_at IS NULL AND (tipo = 'afiliacion' OR afiliacion > 0) ORDER BY id) AS factura_total"))
             ->get();
