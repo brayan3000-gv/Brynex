@@ -443,16 +443,18 @@
                 <table class="modal-table">
                     <thead>
                         <tr>
+                            <th class="col-num">N°</th>
                             <th onclick="ordenarPor('cedula')">Cédula <span id="sort-icon-cedula" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('nombre_completo')">Nombre Completo <span id="sort-icon-nombre_completo" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('modalidad')">Plan y Modalidad <span id="sort-icon-modalidad" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('fecha_ingreso')">Fecha Ingreso <span id="sort-icon-fecha_ingreso" class="sort-indicator">↕</span></th>
                             <th class="col-tipo" onclick="ordenarPor('tipo')">Tipo <span id="sort-icon-tipo" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('fecha_retiro')">Fecha Retiro <span id="sort-icon-fecha_retiro" class="sort-indicator">↕</span></th>
-                            <th onclick="ordenarPor('facturas')">Factura(s) <span id="sort-icon-facturas" class="sort-indicator">↕</span></th>
+                            <th onclick="ordenarPor('facturas')" style="text-align: center;">Factura(s) <span id="sort-icon-facturas" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('fecha_factura')">Fecha Factura <span id="sort-icon-fecha_factura" class="sort-indicator">↕</span></th>
                         </tr>
                         <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+                            <td class="col-num"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-cedula" placeholder="🔍 Cédula..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-nombre" placeholder="🔍 Nombre..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-modalidad" placeholder="🔍 Plan/Mod..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
@@ -543,7 +545,8 @@
                     <div id="modalWaLotesTableContainer" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff;">
                         <table class="modal-table">
                             <thead>
-                                <tr style="position: sticky; top: 0; background: #f8fafc; z-index: 10;">
+                                <tr>
+                                    <th class="col-num">N°</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Fecha</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem; text-align: center;">Lote ID</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Plantilla</th>
@@ -577,7 +580,8 @@
                     <div id="modalWaConvTableContainer" style="max-height: 220px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff;">
                         <table class="modal-table">
                             <thead>
-                                <tr style="position: sticky; top: 0; background: #f8fafc; z-index: 10;">
+                                <tr>
+                                    <th class="col-num">N°</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Cliente</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Número WhatsApp</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Fecha Primera Respuesta</th>
@@ -621,12 +625,11 @@
     }
     .modal-card {
         background: #ffffff;
-        border-radius: 20px;
-        /* Ancho para que las 8 columnas del detalle quepan sin scroll lateral. */
+        border-radius: 14px;
+        /* Ancho para que las columnas del detalle quepan sin scroll lateral. */
         width: 95%;
         max-width: 1320px;
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
-        border: 1px solid rgba(226, 232, 240, 0.8);
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
         overflow: hidden;
         transform: scale(0.96);
         transition: transform 0.25s ease;
@@ -639,8 +642,9 @@
     }
     .modal-header {
         padding: 1.25rem 1.5rem;
-        background: linear-gradient(135deg, #f8fafc, #f1f5f9);
-        border-bottom: 1px solid #e2e8f0;
+        /* Encabezado con el gradiente de la barra de BryNex. */
+        background: linear-gradient(90deg, #0a1628, #0d2550 55%, #1e40af);
+        border-bottom: 3px solid #3b82f6;
         display: flex;
         justify-content: space-between;
         align-items: center;
@@ -649,27 +653,27 @@
         margin: 0;
         font-size: 1.15rem;
         font-weight: 800;
-        color: #0f172a;
+        color: #ffffff;
         letter-spacing: -0.02em;
     }
     .modal-subtitle {
         margin: 0.15rem 0 0;
         font-size: 0.8rem;
-        color: #64748b;
+        color: #93c5fd;
         font-weight: 500;
     }
     .modal-close-btn {
         background: none;
         border: none;
         font-size: 1.75rem;
-        color: #94a3b8;
+        color: rgba(255, 255, 255, 0.7);
         cursor: pointer;
         transition: color 0.2s, transform 0.2s;
         line-height: 1;
         padding: 0.25rem;
     }
     .modal-close-btn:hover {
-        color: #ef4444;
+        color: #fca5a5;
         transform: scale(1.1);
     }
     .modal-body {
@@ -691,17 +695,17 @@
         box-sizing: border-box;
     }
     .modal-filter-input:focus {
-        border-color: #0d9488;
-        box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.12);
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
     }
     .modal-counter {
         font-size: 0.72rem;
         font-weight: 800;
-        color: #0d9488;
-        background: rgba(13, 148, 136, 0.08);
-        border: 1px solid rgba(13, 148, 136, 0.2);
-        padding: 0.3rem 0.65rem;
-        border-radius: 8px;
+        color: #1e40af;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
         white-space: nowrap;
         letter-spacing: 0.02em;
     }
@@ -719,7 +723,7 @@
         width: 32px;
         height: 32px;
         border: 3px solid #f1f5f9;
-        border-top: 3px solid #0d9488;
+        border-top: 3px solid #2563eb;
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
     }
@@ -734,32 +738,62 @@
     .modal-table th {
         position: sticky;
         top: 0;
-        background: #f8fafc;
-        color: #475569;
+        background: #eff6ff;
+        color: #0d2550;
         font-size: 0.7rem;
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         padding: 0.75rem 1rem;
         text-align: left;
-        border-bottom: 2px solid #e2e8f0;
+        border-bottom: 2px solid #bfdbfe;
         z-index: 10;
         cursor: pointer;
         user-select: none;
         transition: background-color 0.15s, color 0.15s;
     }
     .modal-table th:hover {
-        background-color: #f1f5f9;
-        color: #0d9488;
+        background-color: #dbeafe;
+        color: #1e40af;
     }
+    .modal-table th.col-num { cursor: default; }
+    .modal-table th.col-num:hover { background-color: #eff6ff; color: #0d2550; }
+    .modal-table .col-num {
+        width: 1%;
+        text-align: center;
+        color: #94a3b8;
+        font-weight: 700;
+        font-size: 0.72rem;
+        padding-left: 0.75rem;
+        padding-right: 0.5rem;
+    }
+    .modal-table tbody tr:nth-child(even) td { background-color: #fafcff; }
+    /* Una línea por factura: número y valor alineados en columna. */
+    .fact-lista {
+        display: inline-grid;
+        grid-template-columns: auto auto;
+        gap: 0.3rem 0.45rem;
+        align-items: center;
+        white-space: nowrap;
+    }
+    .fact-num {
+        background: rgba(59, 130, 246, 0.1);
+        color: #1e40af;
+        font-weight: 700;
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+        font-size: 0.72rem;
+        font-family: monospace;
+    }
+    .fact-valor { color: #334155; font-size: 0.75rem; font-weight: 600; text-align: right; }
     .modal-table td {
         padding: 0.75rem 1rem;
         font-size: 0.8rem;
         color: #334155;
         border-bottom: 1px solid #f1f5f9;
     }
-    .modal-table tr:hover td {
-        background-color: #f8fafc;
+    .modal-table tbody tr:hover td {
+        background-color: #eff6ff;
     }
     .modal-no-results {
         text-align: center;
@@ -874,9 +908,10 @@
         noResults.style.display = 'none';
         tableContainer.style.display = 'block';
         
-        personas.forEach(p => {
+        personas.forEach((p, i) => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
+                <td class="col-num">${i + 1}</td>
                 <td style="font-weight: 700; color: #475569;">${p.cedula}</td>
                 <td style="font-weight: 600; color: #1e293b;">${nombreOracion(p.nombre_completo)}</td>
                 <td>
@@ -888,12 +923,10 @@
                     <span style="display: inline-block; padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.72rem; font-weight: 700; ${p.tipo === 'Nueva' ? 'background: #eef2ff; color: #4f46e5;' : 'background: #ecfeff; color: #0891b2;'}">${p.tipo}</span>
                 </td>` : ''}
                 <td>${p.fecha_retiro}</td>
-                <td>
-                    ${(p.facturas_valor && p.facturas_valor.length) ? p.facturas_valor.map(f => `
-                        <div style="margin-bottom: 0.25rem; white-space: nowrap;">
-                            <span style="background: rgba(13, 148, 136, 0.08); color: #0f766e; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-family: monospace;">${f.numero}</span>
-                            <div style="color: #475569; font-size: 0.72rem; font-weight: 600; margin-top: 0.15rem;">$${Math.round(f.total).toLocaleString('es-CO')}</div>
-                        </div>`).join('') : '—'}
+                <td style="text-align: center;">
+                    ${(p.facturas_valor && p.facturas_valor.length) ? `<div class="fact-lista">${p.facturas_valor.map(f => `
+                        <span class="fact-num">${f.numero}</span>
+                        <span class="fact-valor">$${Math.round(f.total).toLocaleString('es-CO')}</span>`).join('')}</div>` : '—'}
                 </td>
                 <td style="color: #64748b; font-weight: 600; font-size: 0.78rem;">${p.fecha_factura || '—'}</td>
             `;
@@ -1051,7 +1084,7 @@
                     lotesTableContainer.style.display = 'block';
                     lotesNoResults.style.display = 'none';
                     let htmlLotes = '';
-                    data.lotes.forEach(l => {
+                    data.lotes.forEach((l, i) => {
                         const fecha = new Date(l.fecha_envio + 'T00:00:00');
                         const fechaFormateada = fecha.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' });
                         const tipo = l.tipo_envio === 'empresa' ? '🏢 Empresa' : '👤 Individual';
@@ -1074,6 +1107,7 @@
                         
                         htmlLotes += `
                             <tr>
+                                <td class="col-num">${i + 1}</td>
                                 <td style="padding: 0.6rem 0.75rem;">${fechaFormateada}</td>
                                 <td style="text-align: center; font-weight: 700; color: #64748b; padding: 0.6rem 0.75rem;">#${l.lote_id}</td>
                                 <td style="padding: 0.6rem 0.75rem; font-weight: 600; color: #334155;">${l.plantilla}</td>
@@ -1102,7 +1136,7 @@
                     convTableContainer.style.display = 'block';
                     convNoResults.style.display = 'none';
                     let htmlConv = '';
-                    data.conversaciones.forEach(c => {
+                    data.conversaciones.forEach((c, i) => {
                         const fecha = c.fecha_primera_respuesta ? new Date(c.fecha_primera_respuesta + 'T00:00:00') : null;
                         const fechaFormateada = fecha ? fecha.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
                         const numLink = `https://wa.me/${c.wa_contact_id.replace(/\+/g, '')}`;
@@ -1122,6 +1156,7 @@
 
                         htmlConv += `
                             <tr>
+                                <td class="col-num">${i + 1}</td>
                                 <td style="padding: 0.6rem 0.75rem; font-weight: 600; color: #1e293b;">${c.nombre_contacto || 'Cliente de WhatsApp'}</td>
                                 <td style="padding: 0.6rem 0.75rem;">
                                     <a href="${numLink}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: none; font-family: monospace;">
