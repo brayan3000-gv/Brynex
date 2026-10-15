@@ -511,6 +511,60 @@ class MarketingVideoGuion extends Command
                 .'50 % de la administración según tu cartera, sin pagar plataforma.'."\n\n"
                 .'📲 Escríbenos al '.self::WHATSAPP_ASESORES.' con cuántos clientes manejas, o mira las opciones en brynex.co/aliados.'
         ],
+        // La versión llamativa del mensaje de aliado, pedida tras rechazar la #111 (con capturas):
+        // sin pantallazos, cuatro escenas de Veo con movimiento, luz dura y color, y el texto
+        // hablando de BRYNEX. Las pantallas aparecen como luz y partículas, nunca como interfaz:
+        // Veo no escribe texto legible y una pantalla inventada delata el video.
+        'brynex-aliados' => [
+            'tema' => 'asesores y empresas con cartera: BRYNEX hace lo operativo (afiliaciones, planillas, IA) y somos su aliado',
+            'titulo' => 'Somos tu aliado, con la tecnología de BRYNEX',
+            'escenas' => [
+                'Vertical 9:16, high-energy cinematic. A confident Colombian woman in her 30s in a sharp '
+                .'navy blazer walks fast through a busy Cali street at golden hour, phone in hand, camera '
+                .'tracking alongside her in slow motion, sun flares, people blurred behind her, bold warm '
+                .'light and deep blue shadows. Dynamic, premium look. Ambient city sounds only. No text on '
+                .'screen, nobody speaks.',
+
+                'Vertical 9:16, dramatic macro shot. On a dark wooden desk, a smartphone lights up with an '
+                .'intense electric-blue glow; stacks of paper forms around it lift, dissolve into glowing '
+                .'blue particles and stream into the phone like a vortex. Slow motion, shallow depth of '
+                .'field, rim light, cinematic contrast. Abstract light only, no readable text, no logos, '
+                .'nobody speaks. Soft whoosh ambience.',
+
+                'Vertical 9:16, night cinematic. A Colombian man in his 40s relaxes on a balcony at night '
+                .'over city lights, coffee in hand, while his phone on the railing pulses with soft blue '
+                .'light again and again, notifications arriving as glowing dots that float up into the '
+                .'air. Bokeh city lights, slow push in, calm and powerful mood. Ambient night sounds only. '
+                .'No text on screen, nobody speaks.',
+
+                'Vertical 9:16, epic finale. Drone shot pulling back from the same confident Colombian '
+                .'woman standing on a rooftop terrace at sunset, arms relaxed, looking over the city '
+                .'skyline, wind in her hair, golden light with blue sky, lens flare. Slow, cinematic, '
+                .'triumphant. Ambient wind only. No text on screen, nobody speaks.',
+            ],
+            'frases' => [
+                '¿Cuántos clientes manejas hoy?',
+                'BRYNEX hace lo operativo',
+                'Afiliaciones y planillas solas',
+                'Una IA atiende a tus clientes',
+                'Somos tu aliado. Tú eliges',
+            ],
+            'narracion' => '¿Eres asesor o tienes empresa de seguridad social? En BRYGAR somos tu aliado, '
+                .'con la tecnología de BRYNEX. Las afiliaciones a la ARL y a la EPS salen solas. Las planillas '
+                .'se pagan por API, sin subir archivos. Los cobros llegan por WhatsApp, y una inteligencia '
+                .'artificial atiende a tus clientes de día y de noche. Tú eliges según tus afiliados: solo el '
+                .'programa, nuestras razones sociales, o todo lo operativo hecho por nosotros. '
+                .'Escríbenos y empieza a ganar más con los clientes que ya tienes.',
+            'copy' => '¿Eres asesor o tienes empresa de seguridad social? En BRYGAR somos tu aliado, con la '
+                .'tecnología de BRYNEX.co, y te ayudamos con lo que necesites según cuántos afiliados manejes:'."\n\n"
+                .'• Solo el programa: afiliaciones automáticas a ARL y EPS, planillas pagadas por API, cobros por '
+                .'WhatsApp y una IA que atiende a tus clientes, lee comprobantes y responde notas de voz.'."\n"
+                .'• El programa más nuestras razones sociales, para afiliar sin tener empresa propia.'."\n"
+                .'• O todo lo operativo hecho por nosotros: tú solo vendes.'."\n\n"
+                .'Y si trabajas con menos de 100 afiliados, el Plan Asesor: la mitad de cada afiliación y del 20 % al '
+                .'50 % de la administración según tu cartera, sin pagar plataforma.'."\n\n"
+                .'📲 Escríbenos al '.self::WHATSAPP_ASESORES.' con cuántos clientes manejas, o mira las opciones en brynex.co/aliados.',
+        ],
         'contadores' => [
             'tema' => 'contadores y asesores con cartera propia: sus clientes piden afiliaciones y ellos ganan por traerlas',
             'titulo' => '¿Tus clientes te preguntan por EPS y ARL?',
