@@ -6,7 +6,7 @@ namespace App\Services;
  * Catálogo de campos que se pueden mapear sobre un PDF de afiliación
  * (clave interna → etiqueta para el usuario).
  *
- * Lo comparten el editor de formularios de EPS y el de fondos de pensión:
+ * Lo comparten los editores de formularios de EPS, fondos de pensión y cajas:
  * los datos del cotizante, la empresa y las fechas son los mismos en ambos
  * formularios, solo cambia dónde caen en la hoja.
  */
@@ -20,7 +20,13 @@ class FormularioCampos
             'cliente.segundo_apellido' => 'Segundo apellido',
             'cliente.primer_nombre' => 'Primer nombre',
             'cliente.segundo_nombre' => 'Segundo nombre',
+            'cliente.nombres' => 'Nombres (primero y segundo juntos)',
             'cliente.tipo_doc' => 'Tipo de documento',
+            'cliente.tipo_doc_cc_x' => 'Tipo de documento — cuadro C.C. (X si es CC)',
+            'cliente.tipo_doc_ce_x' => 'Tipo de documento — cuadro C.E. (X si es CE)',
+            'cliente.tipo_doc_ti_x' => 'Tipo de documento — cuadro T.I. (X si es TI)',
+            'cliente.tipo_doc_pep_x' => 'Tipo de documento — cuadro P.E.P. (X si es PE)',
+            'cliente.tipo_doc_ppt_x' => 'Tipo de documento — cuadro P.P.T. (X si es PT)',
             'cliente.cedula' => 'Número de documento / Cédula',
             'cliente.genero' => 'Género (M / F)',
             'cliente.genero_m' => 'Género — cuadro MASCULINO (X si es M)',
@@ -61,6 +67,9 @@ class FormularioCampos
             // ══ FECHAS ════════════════════════════════════════════
             // ── Fecha de nacimiento ────────────────────────────────
             'cliente.fecha_nacimiento' => '📅 Nac. — Fecha completa (dd/mm/aaaa)',
+            'cliente.fecha_nacimiento_d' => '📅 Nac. — DÍA (05)',
+            'cliente.fecha_nacimiento_m' => '📅 Nac. — MES (02)',
+            'cliente.fecha_nacimiento_a' => '📅 Nac. — AÑO (1990)',
             'cliente.fecha_nacimiento_d_esp' => '📅 Nac. — DÍA espaciado (0 5)',
             'cliente.fecha_nacimiento_m_esp' => '📅 Nac. — MES espaciado (0 2)',
             'cliente.fecha_nacimiento_a_esp' => '📅 Nac. — AÑO espaciado (1 9 9 0)',
@@ -78,6 +87,9 @@ class FormularioCampos
 
             // ── Fecha de ingreso ───────────────────────────────────
             'contrato.fecha_ingreso' => '📅 Ing. — Fecha completa (dd/mm/aaaa)',
+            'contrato.fecha_ingreso_d' => '📅 Ing. — DÍA (01)',
+            'contrato.fecha_ingreso_m' => '📅 Ing. — MES (03)',
+            'contrato.fecha_ingreso_a' => '📅 Ing. — AÑO (2026)',
             'contrato.fecha_ingreso_d_esp' => '📅 Ing. — DÍA espaciado (0 5)',
             'contrato.fecha_ingreso_m_esp' => '📅 Ing. — MES espaciado (0 2)',
             'contrato.fecha_ingreso_a_esp' => '📅 Ing. — AÑO espaciado (2 0 2 6)',

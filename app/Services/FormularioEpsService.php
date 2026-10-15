@@ -99,6 +99,8 @@ class FormularioEpsService
         $genero  = strtoupper(trim($c?->genero ?? ''));
         $esM     = in_array($genero, ['M', 'MASCULINO', 'HOMBRE']);
         $esF     = in_array($genero, ['F', 'FEMENINO', 'MUJER']);
+        // Tipo de documento separado para los cuadros C.C. / C.E. / T.I. / P.E.P. / P.P.T.
+        $tipoDoc = strtoupper(trim($c?->tipo_doc ?? ''));
 
         $datos = [
             // ── Cotizante ──────────────────────────────────────────
@@ -110,6 +112,11 @@ class FormularioEpsService
             'cliente.apellidos'        => strtoupper(trim(($c?->primer_apellido ?? '') . ' ' . ($c?->segundo_apellido ?? ''))),
             'cliente.nombre_completo'  => strtoupper($c?->nombre_completo  ?? ''),
             'cliente.tipo_doc'         => $c?->tipo_doc ?? '',
+            'cliente.tipo_doc_cc_x'    => $tipoDoc === 'CC' ? 'X' : '',
+            'cliente.tipo_doc_ce_x'    => $tipoDoc === 'CE' ? 'X' : '',
+            'cliente.tipo_doc_ti_x'    => $tipoDoc === 'TI' ? 'X' : '',
+            'cliente.tipo_doc_pep_x'   => $tipoDoc === 'PE' ? 'X' : '',
+            'cliente.tipo_doc_ppt_x'   => $tipoDoc === 'PT' ? 'X' : '',
             'cliente.cedula'           => $c?->cedula   ?? '',
             'cliente.genero'           => $genero,
             'cliente.genero_m'         => $esM ? 'X' : '',  // Cuadro Masculino
