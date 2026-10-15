@@ -481,8 +481,9 @@ class MarketingVideoGuion extends Command
                 ],
                 [
                     ['archivo' => '31-cuantas-personas.png', 'modo' => 'ancho', 'zoom' => 1.1, 'arriba' => 0.0],
-                    // Zoom alto para quedarse en el encabezado: más abajo la página carga por tramos y sale a medias.
-                    ['archivo' => '32-pagina-brygar.png', 'modo' => 'ancho', 'zoom' => 1.6, 'arriba' => 0.0],
+                    // La captura viene recortada al encabezado (800×810): más abajo la página carga por
+                    // tramos y sale a medias, y con zoom alto el título se cortaba por los lados.
+                    ['archivo' => '32-pagina-brygar.png', 'modo' => 'ancho', 'zoom' => 1.1, 'arriba' => 0.0],
                 ],
             ],
             // Las tres puertas del volante de alianzas, en el orden en que crece el aliado. Son
