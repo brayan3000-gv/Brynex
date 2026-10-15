@@ -50,6 +50,18 @@
                     </div>
                     <div class="hc-arrow">→</div>
                 </a>
+                @can('whatsapp.ver')
+                {{-- Los prospectos son del aliado que pauta el anuncio para asesores (Brygar, el
+                     primero de config/alianzas.php): ?aliado= cambia el aliado activo a ese. --}}
+                <a href="{{ route('admin.whatsapp.prospectos_aliados', ['aliado' => array_key_first(config('alianzas.contactos', [])) ?? 2]) }}" class="hub-card">
+                    <div class="hc-icon">🤝</div>
+                    <div class="hc-body">
+                        <div class="hc-name">Interesados en ser aliados</div>
+                        <div class="hc-desc">Asesores y empresas que escribieron: pendientes, en conversación, no interesados y los que adquirieron software o plan</div>
+                    </div>
+                    <div class="hc-arrow">→</div>
+                </a>
+                @endcan
             </div>
         </div>
 
