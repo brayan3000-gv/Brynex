@@ -149,6 +149,7 @@ antes de tocar un módulo de negocio:
 
 - [[contratos-brynex]] — contratos, planes, modalidades, ARL, PILA
 - [[afiliaciones-brynex]] — cotizador público, gestión de vigencia ARL, radicados
+- [[alta-afiliado-brynex]] — alta desde el chat: ficha + contrato + afiliación ARL (cédula y datos sueltos)
 - [[facturacion-brynex]] — facturación, mora, anticipos, distribución de cobros
 - [[cobros-brynex]] — cuadre diario, consignaciones, caja menor
 - [[incapacidades-brynex]] — incapacidades médicas, prórrogas, abonos
