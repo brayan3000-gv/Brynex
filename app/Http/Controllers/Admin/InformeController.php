@@ -47,13 +47,25 @@ class InformeController extends Controller
     }
 
     // ── HUB principal ─────────────────────────────────────────────────
-    public function hub()
+    public function hub(Request $request)
     {
         $this->checkAdmin();
         $aid = $this->aliadoId();
 
-        $mes  = now()->month;
-        $anio = now()->year;
+        // Mes de lo "del mes" (afiliaciones, retiros, cierre, ingresos). Lo de
+        // "hoy" (activos, empresas, gestión pendiente) es siempre de hoy. Un
+        // mes futuro o inválido vuelve al actual.
+        $hoy = now();
+        $sel = \Carbon\Carbon::create((int) $request->input('anio', $hoy->year), max(1, min(12, (int) $request->input('mes', $hoy->month))), 1);
+        if ($sel->greaterThan($hoy) || $sel->year < 2020) {
+            $sel = $hoy->copy()->startOfMonth();
+        }
+        $esMesActual = $sel->isSameMonth($hoy);
+        // Hasta qué día se mira el mes: hoy si va corrido, el último si ya cerró.
+        $ref = $esMesActual ? $hoy : $sel->copy()->endOfMonth();
+
+        $mes  = $sel->month;
+        $anio = $sel->year;
         $mesAnterior  = $mes === 1 ? 12 : $mes - 1;
         $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
 
@@ -89,20 +101,22 @@ class InformeController extends Controller
         // propia regla de reingreso y no cuadraba con el consolidado.
         $conFicha = fn ($sq) => $sq->select(DB::raw(1))->from('clientes AS cl')
             ->whereColumn('cl.cedula', 'c.cedula')->where('cl.aliado_id', $aid);
-        $hoy = now();
-        $iniMes = $hoy->copy()->startOfMonth();
+        $iniMes = $sel->copy()->startOfMonth();
         $afiliacionesMes = DB::table('contratos AS c')
             ->where('c.aliado_id', $aid)
             ->whereExists($conFicha)
-            ->whereBetween('c.fecha_ingreso', [$iniMes->toDateString(), $hoy->copy()->endOfMonth()->toDateString()])
+            ->whereBetween('c.fecha_ingreso', [$iniMes->toDateString(), $sel->copy()->endOfMonth()->toDateString()])
             ->get(['c.id', 'c.cedula', 'c.fecha_ingreso']);
         $afiliacionesTotal = $afiliacionesMes->count();
         $afiliacionesNuevas = $afiliacionesTotal - count(\App\Services\ReingresosAfiliacion::porContrato($aid, $afiliacionesMes));
 
         // Referencia: el mes anterior hasta el mismo día. Comparar el mes en
-        // curso contra el anterior completo siempre daría que se va peor.
+        // curso contra el anterior completo siempre daría que se va peor. Un
+        // mes ya cerrado se compara completo contra el anterior completo.
         $iniAnt = $iniMes->copy()->subMonthNoOverflow();
-        $finAntMismoDia = $iniAnt->copy()->addDays(min($hoy->day, $iniAnt->daysInMonth) - 1);
+        $finAntMismoDia = $esMesActual
+            ? $iniAnt->copy()->addDays(min($ref->day, $iniAnt->daysInMonth) - 1)
+            : $iniAnt->copy()->endOfMonth();
         $afiliacionesAntMismoDia = DB::table('contratos AS c')
             ->where('c.aliado_id', $aid)
             ->whereExists($conFicha)
@@ -112,7 +126,7 @@ class InformeController extends Controller
         // Contratos activos al cierre del mes anterior, con la regla de la hoja
         // Activos del Excel de listados: ingresó antes del corte y no se había
         // retirado a esa fecha.
-        $corteAnt = $iniMes->copy()->subDay()->toDateString();
+        $corteAnt = $hoy->copy()->startOfMonth()->subDay()->toDateString();
         $activosCierreAnterior = DB::table('contratos AS c')
             ->where('c.aliado_id', $aid)
             ->where('c.fecha_ingreso', '<=', $corteAnt)
@@ -181,16 +195,18 @@ class InformeController extends Controller
             // el informe daban cifras distintas para el mismo mes.
             // Excepción: en 'otro_ingreso' (trámites) `otros` SÍ es el valor
             // cobrado, así que ahí sigue contando.
-            $kpis['ingresos_mes'] = DB::table('facturas')
+            $ingresosDe = fn (int $m, int $a) => (float) DB::table('facturas')
                 ->where('aliado_id',$aid)->whereNull('deleted_at')
-                ->where('mes',$mes)->where('anio',$anio)
+                ->where('mes',$m)->where('anio',$a)
                 ->whereIn('estado',['pagada','abono'])
                 ->sum(DB::raw("admon + seguro + afiliacion + mensajeria + iva + retiro
                                + ISNULL(otros_admon,0)
                                + CASE WHEN tipo = 'otro_ingreso' THEN otros ELSE 0 END"));
+            $kpis['ingresos_mes'] = $ingresosDe($mes, $anio);
+            $kpis['ingresos_mes_anterior'] = $ingresosDe($mesAnterior, $anioAnterior);
         }
 
-        return view('admin.informes.hub', compact('kpis','esFinanciero'));
+        return view('admin.informes.hub', compact('kpis', 'esFinanciero', 'mes', 'anio', 'esMesActual', 'ref'));
     }
 
     // ── Listados del cierre de mes (Excel de 4 hojas) ─────────────────
