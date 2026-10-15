@@ -1337,6 +1337,8 @@ Route::middleware('auth')->group(function () {
             Route::post('chat/{id}/reabrir', [$chat, 'reabrir'])->name('chat.reabrir')->whereNumber('id');
             Route::post('chat/{id}/acuse', [$chat, 'enviarAcuse'])->name('chat.acuse')->whereNumber('id');
         });
+        // En qué quedó cada prospecto aliado (no interesado, en conversación, adquirió software o plan).
+        Route::patch('prospectos-aliados/{id}/estado', [$chat, 'guardarEstadoProspecto'])->name('prospectos_aliados.estado')->middleware('permiso:whatsapp.responder')->whereNumber('id');
         Route::patch('chat/{id}/asignar', [$chat, 'asignar'])->name('chat.asignar')->middleware('permiso:whatsapp.asignar')->whereNumber('id');
         // Manual: devuelve al inbox general las asignadas con el cliente esperando hace horas.
         Route::post('chat/liberar-sin-atender', [$chat, 'liberarSinAtender'])->name('chat.liberar_sin_atender')->middleware('permiso:whatsapp.asignar');

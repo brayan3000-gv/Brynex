@@ -766,26 +766,53 @@ class WhatsappChatController extends Controller
 
     /**
      * Prospectos que quieren trabajar con el aliado (asesores y empresas): qué dijeron
-     * ser, cuántas personas manejan, qué les sugirió la IA y cómo va cada conversación.
-     * Lo marca la herramienta perfilar_aliado o el comando whatsapp:perfil-aliado.
+     * ser, cuántas personas manejan, qué les sugirió la IA, cómo va cada conversación y
+     * en qué quedó según quien lo atiende (prospecto_estado, marcado a mano).
+     * Entran los perfilados por perfilar_aliado o whatsapp:perfil-aliado y también los que
+     * llegaron por un anuncio para asesores aunque nunca hayan contestado.
      */
     public function prospectosAliados(Request $request)
     {
         $alidoId = (int) session('aliado_id_activo');
         $tipo = $request->get('tipo');
         $desde = $request->get('desde');
+        $estado = $request->get('estado');
+        $estados = \App\Services\ProspectoAliadoService::ESTADOS;
+
+        // Piezas para asesores de las que llegó alguien: se reconocen por el texto del anuncio.
+        $piezasAsesores = \App\Models\Publicacion::whereIn('id', WhatsappConversacion::delAliado($alidoId)
+                ->whereNotNull('origen_publicacion_id')->distinct()->pluck('origen_publicacion_id'))
+            ->get()
+            ->filter(fn ($pieza) => \App\Services\Ia\AsistenteIaService::esPiezaDeAsesores($pieza))
+            ->pluck('id')->all();
 
         $q = WhatsappConversacion::delAliado($alidoId)
-            ->whereNotNull('perfil_aliado')
-            ->with('asignado')
-            ->orderByDesc('perfil_aliado_at');
-        if ($tipo && array_key_exists($tipo, \App\Services\ProspectoAliadoService::TIPOS)) {
+            ->where(function ($w) use ($piezasAsesores) {
+                $w->whereNotNull('perfil_aliado');
+                if ($piezasAsesores) {
+                    $w->orWhereIn('origen_publicacion_id', $piezasAsesores);
+                }
+            })
+            ->with('asignado');
+        if ($tipo === 'sin_perfil') {
+            $q->whereNull('perfil_aliado');
+        } elseif ($tipo && array_key_exists($tipo, \App\Services\ProspectoAliadoService::TIPOS)) {
             $q->where('perfil_aliado', $tipo);
         }
         if ($desde) {
-            $q->where('perfil_aliado_at', '>=', $desde);
+            $q->whereRaw('coalesce(perfil_aliado_at, created_at) >= ?', [$desde]);
         }
-        $prospectos = $q->get();
+        $todos = $q->get()->sortByDesc(fn ($p) => $p->perfil_aliado_at ?? $p->created_at)->values();
+
+        // Los conteos por estado salen antes de filtrar por estado, para que las tarjetas
+        // sigan mostrando el total de cada uno.
+        $porEstado = array_fill_keys(array_keys($estados), 0);
+        foreach ($todos as $p) {
+            $porEstado[$p->prospecto_estado ?: 'pendiente'] = ($porEstado[$p->prospecto_estado ?: 'pendiente'] ?? 0) + 1;
+        }
+        $prospectos = $estado && isset($estados[$estado])
+            ? $todos->filter(fn ($p) => ($p->prospecto_estado ?: 'pendiente') === $estado)->values()
+            : $todos;
 
         // Cuánto tardó la primera respuesta humana desde el primer mensaje del prospecto,
         // y cuándo fue el último mensaje de cada lado. Una sola consulta para todas.
@@ -805,17 +832,46 @@ class WhatsappChatController extends Controller
                 ? max(0, (int) round((strtotime($t->primer_humano) - strtotime($t->primer_cliente)) / 60)) : null;
             $p->sin_respuesta_humana = ! ($t && $t->primer_humano);
             $p->esperando_a_nosotros = $t && $t->ultimo_cliente && (! $t->ultimo_nuestro || $t->ultimo_cliente > $t->ultimo_nuestro);
+            $p->ultimo_cliente_at = $t?->ultimo_cliente;
         }
 
         $resumen = [
-            'total' => $prospectos->count(),
-            'asesores' => $prospectos->where('perfil_aliado', 'asesor')->count(),
-            'empresas' => $prospectos->where('perfil_aliado', 'empresa')->count(),
-            'personas' => (int) $prospectos->sum('personas_declaradas'),
+            'total' => $todos->count(),
+            'asesores' => $todos->where('perfil_aliado', 'asesor')->count(),
+            'empresas' => $todos->where('perfil_aliado', 'empresa')->count(),
+            'sin_perfil' => $todos->whereNull('perfil_aliado')->count(),
+            'personas' => (int) $todos->sum('personas_declaradas'),
             'sin_humano' => $prospectos->where('sin_respuesta_humana', true)->count(),
+            'por_estado' => $porEstado,
         ];
 
-        return view('admin.whatsapp.prospectos-aliados', compact('prospectos', 'resumen', 'tipo', 'desde'));
+        return view('admin.whatsapp.prospectos-aliados', compact('prospectos', 'resumen', 'tipo', 'desde', 'estado', 'estados'));
+    }
+
+    /**
+     * Marca en qué quedó un prospecto aliado (pendiente, en conversación, no interesado,
+     * adquirió software o plan) y una nota corta. Solo cambia el seguimiento: no toca la
+     * conversación, la IA ni la bandeja.
+     */
+    public function guardarEstadoProspecto(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'estado' => 'required|in:'.implode(',', array_keys(\App\Services\ProspectoAliadoService::ESTADOS)),
+            'nota' => 'nullable|string|max:500',
+        ]);
+
+        $conversacion = WhatsappConversacion::delAliado((int) session('aliado_id_activo'))->findOrFail($id);
+        $conversacion->update([
+            'prospecto_estado' => $validated['estado'],
+            'prospecto_nota' => trim((string) ($validated['nota'] ?? '')) ?: null,
+            'prospecto_estado_at' => now(),
+            'prospecto_estado_por' => Auth::id(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'marcado' => 'Marcado por '.(Auth::user()->nombre ?? 'ti').' el '.now()->format('d/m/Y H:i'),
+        ]);
     }
 
     // ── Helpers privados ─────────────────────────────────────────────

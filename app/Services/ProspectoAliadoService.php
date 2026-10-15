@@ -18,6 +18,15 @@ class ProspectoAliadoService
 {
     public const TIPOS = ['asesor' => 'Asesor', 'empresa' => 'Empresa', 'empleador' => 'Empleador'];
 
+    /** En qué quedó cada prospecto, marcado a mano por quien lo atiende. Sin valor = pendiente. */
+    public const ESTADOS = [
+        'pendiente' => 'Pendiente',
+        'conversacion' => 'En conversación',
+        'no_interesado' => 'No interesado',
+        'software' => 'Adquirió software',
+        'plan' => 'Adquirió plan',
+    ];
+
     public function __construct(private AlertaOperativaService $alertas) {}
 
     /**
