@@ -773,6 +773,8 @@ class WhatsappChatController extends Controller
      */
     public function prospectosAliados(Request $request)
     {
+        // Solo el superadmin de BryNex: es el embudo comercial de las alianzas (15-oct-2026).
+        abort_unless(Auth::user()->es_brynex && Auth::user()->hasRole('superadmin'), 403);
         $alidoId = (int) session('aliado_id_activo');
         $tipo = $request->get('tipo');
         $desde = $request->get('desde');
@@ -855,6 +857,7 @@ class WhatsappChatController extends Controller
      */
     public function guardarEstadoProspecto(Request $request, int $id)
     {
+        abort_unless(Auth::user()->es_brynex && Auth::user()->hasRole('superadmin'), 403);
         $validated = $request->validate([
             'estado' => 'required|in:'.implode(',', array_keys(\App\Services\ProspectoAliadoService::ESTADOS)),
             'nota' => 'nullable|string|max:500',

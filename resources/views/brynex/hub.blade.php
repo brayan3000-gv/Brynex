@@ -50,7 +50,7 @@
                     </div>
                     <div class="hc-arrow">→</div>
                 </a>
-                @can('whatsapp.ver')
+                @if(auth()->user()->es_brynex && auth()->user()->hasRole('superadmin'))
                 {{-- Los prospectos son del aliado que pauta el anuncio para asesores (Brygar, el
                      primero de config/alianzas.php): ?aliado= cambia el aliado activo a ese. --}}
                 <a href="{{ route('admin.whatsapp.prospectos_aliados', ['aliado' => array_key_first(config('alianzas.contactos', [])) ?? 2]) }}" class="hub-card">
@@ -61,7 +61,7 @@
                     </div>
                     <div class="hc-arrow">→</div>
                 </a>
-                @endcan
+                @endif
             </div>
         </div>
 

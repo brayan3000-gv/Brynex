@@ -13,7 +13,7 @@
         'software'      => ['#ecfdf5', '#047857', '#10b981'],
         'plan'          => ['#f5f3ff', '#6d28d9', '#7c3aed'],
     ];
-    $puedeMarcar = auth()->user()?->can('whatsapp.responder');
+    $puedeMarcar = true; // la vista ya es solo del superadmin de BryNex
     $filtros = array_filter(['tipo' => $tipo, 'desde' => $desde]);
 @endphp
 <div style="background:#fff;border-radius:14px;padding:1.5rem;box-shadow:0 1px 8px rgba(0,0,0,0.06);">

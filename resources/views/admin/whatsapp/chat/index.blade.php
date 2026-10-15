@@ -270,7 +270,9 @@
                 </a>
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'mias', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'mias' ? 'active' : '' }}">👤 Míos</a>
+                @if(auth()->user()->es_brynex && auth()->user()->hasRole('superadmin'))
                 <a href="{{ route('admin.whatsapp.prospectos_aliados') }}" class="sidebar-tab" title="Asesores y empresas que escribieron para trabajar con nosotros">🤝 Aliados</a>
+                @endif
                 <a href="{{ route('admin.whatsapp.chat.index', ['tab' => 'ia', 'buscar' => $buscar, 'tipo' => $tipo]) }}"
                    class="sidebar-tab {{ $tab === 'ia' ? 'active' : '' }}">🤖 IA
                     @if($totalIa > 0)<span class="sidebar-badge" style="margin-left:.25rem;">{{ $totalIa }}</span>@endif
