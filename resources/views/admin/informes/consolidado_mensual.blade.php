@@ -56,10 +56,10 @@
                 <div style="font-size:0.72rem;color:#94a3b8;margin-top:0.2rem;">Nuevas afiliaciones por fecha de ingreso</div>
             </div>
             <div style="margin-top: 1rem; display: flex; justify-content: space-between; border-top: 1px solid #f1f5f9; padding-top: 0.75rem;">
-                <div style="font-size:0.75rem;color:#475569;" title="Cédulas que no traían un retiro marcado este mes">
+                <div style="font-size:0.75rem;color:#475569;" title="Cédulas sin un contrato retirado este mes ni el anterior">
                     Nuevas: <strong style="color:#4f46e5;">{{ number_format($kpisActual['afil_nuevas'], 0, ',', '.') }}</strong>
                 </div>
-                <div style="font-size:0.75rem;color:#475569;" title="Se les marcó retiro y se les abrió contrato nuevo en el mismo mes (ingreso-retiro)">
+                <div style="font-size:0.75rem;color:#475569;" title="Tenían otro contrato retirado este mes o el anterior, de cualquier razón social">
                     Reingresos: <strong style="color:#0891b2;">{{ number_format($kpisActual['afil_reingresos'], 0, ',', '.') }}</strong>
                 </div>
             </div>
@@ -198,7 +198,7 @@
         </div>
         <p style="font-size: 0.72rem; color: #94a3b8; margin-top: 1rem; line-height: 1.5;">
             * <strong>Admon (Vigentes)</strong>: Contratos activos continuos durante el mes (incluye contratos con retiro y facturación regular). 
-            * <strong>Afil. Fecha Ingreso</strong>: Nuevos contratos ingresados en el mes, discriminando <strong>nuevas</strong> (cédulas sin retiro marcado ese mes) y <strong>reingresos</strong> (se les marcó retiro y se les abrió contrato nuevo dentro del mismo mes).
+            * <strong>Afil. Fecha Ingreso</strong>: Nuevos contratos ingresados en el mes, discriminando <strong>nuevas</strong> y <strong>reingresos</strong>: es reingreso la cédula que tenía otro contrato retirado ese mes o el anterior, de cualquier razón social (no cuentan los contratos creados por error y retirados). Al abrir el detalle se ve cuál es cuál.
             * <strong>renovados</strong> (bajo Retiros Reales e Informativos): De esos retiros, cuántos volvieron — se les abrió otro contrato con fecha de ingreso en el mismo mes del retiro, o esa cédula tiene hoy un contrato vigente con el aliado. Es una parte del número de arriba, no un retiro adicional.
             * <strong>WA (Plan. / Rec.)</strong>: Relación de WhatsApps del mes (Enviados en plantilla masiva / Recibidos iniciados por el cliente tras 24h de inactividad). Los enviados cuentan solo los mensajes que sí salieron: no incluyen los destinatarios cuyo envío falló ni los omitidos por envío repetido.
             * <strong>Total Activos</strong>: Suma de Admon (Vigentes) y Afil. Fecha Ingreso.
@@ -871,7 +871,10 @@
                     <div style="font-weight: 700; color: #1e293b; font-size: 0.78rem;">${p.modalidad || '—'}</div>
                     <div style="color: #0f766e; font-size: 0.72rem; font-weight: 600;">${p.plan || '—'}</div>
                 </td>
-                <td>${p.fecha_ingreso}</td>
+                <td>
+                    ${p.fecha_ingreso}
+                    ${p.tipo_afil ? `<div style="font-size: 0.68rem; font-weight: 700; color: ${p.tipo_afil === 'Nueva' ? '#4f46e5' : '#0891b2'};">${p.tipo_afil}</div>` : ''}
+                </td>
                 <td>${p.fecha_retiro}</td>
                 <td>
                     <span style="background: rgba(13, 148, 136, 0.08); color: #0f766e; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-family: monospace;">
@@ -899,7 +902,7 @@
             return p.cedula.toLowerCase().includes(cedula) &&
                    norm(p.nombre_completo).includes(nombre) &&
                    ((p.modalidad || '') + ' ' + (p.plan || '')).toLowerCase().includes(modalidad) &&
-                   p.fecha_ingreso.toLowerCase().includes(ingreso) &&
+                   (p.fecha_ingreso + ' ' + (p.tipo_afil || '')).toLowerCase().includes(ingreso) &&
                    p.fecha_retiro.toLowerCase().includes(retiro) &&
                    p.facturas.toLowerCase().includes(facturas) &&
                    (p.fecha_factura || '').toLowerCase().includes(fechaFactura);

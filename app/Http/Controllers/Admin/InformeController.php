@@ -3791,6 +3791,66 @@ class InformeController extends Controller
      *
      * Sólo recibe enteros y fechas generadas por Carbon, nunca entrada del usuario.
      */
+    /**
+     * Qué afiliaciones son reingresos: la cédula tenía otro contrato con el
+     * aliado retirado en el mismo mes del ingreso o en el anterior, sea cual
+     * sea la razón social. Devuelve [contrato_id nuevo => contrato retirado].
+     *
+     * Se mira la fecha de retiro, no el período de la factura de retiro: en
+     * mes vencido esa factura cae un mes después y cruzaba el ingreso de
+     * agosto con un retiro de julio sin decirlo (GiMave, oct-2026).
+     *
+     * No cuentan:
+     * - El contrato retirado que empezó el mismo día o después del nuevo: es
+     *   una corrección (contrato mal creado y retirado), no alguien que volvió.
+     * - Un mismo retiro para dos afiliaciones del mes: se lo lleva la primera.
+     *   Es por mes para que el detalle, que solo ve uno, dé lo mismo.
+     */
+    private function reingresosPorContrato(int $aid, $afiliaciones): array
+    {
+        if ($afiliaciones->isEmpty()) {
+            return [];
+        }
+
+        $dia = fn ($f) => substr((string) $f, 0, 10);
+        $ingresos = $afiliaciones->map(fn ($a) => $dia($a->fecha_ingreso));
+        $desde = \Carbon\Carbon::parse($ingresos->min())->startOfMonth()->subMonth()->toDateString();
+        $hasta = \Carbon\Carbon::parse($ingresos->max())->endOfMonth()->toDateString();
+
+        $retirados = DB::table('contratos')
+            ->where('aliado_id', $aid)
+            ->where('estado', 'retirado')
+            ->whereBetween('fecha_retiro', [$desde, $hasta])
+            ->orderBy('fecha_retiro')
+            ->get(['id', 'cedula', 'fecha_ingreso', 'fecha_retiro'])
+            ->groupBy(fn ($r) => trim((string) $r->cedula));
+
+        $usados = [];
+        $reingresos = [];
+        $orden = $afiliaciones->sortBy(fn ($a) => $dia($a->fecha_ingreso).'|'.str_pad((string) $a->id, 10, '0', STR_PAD_LEFT));
+        foreach ($orden as $a) {
+            $ingreso = $dia($a->fecha_ingreso);
+            $mes = \Carbon\Carbon::parse($ingreso);
+            $ventanaIni = $mes->copy()->startOfMonth()->subMonth()->toDateString();
+            $ventanaFin = $mes->copy()->endOfMonth()->toDateString();
+
+            foreach ($retirados[trim((string) $a->cedula)] ?? [] as $r) {
+                $retiro = $dia($r->fecha_retiro);
+                $usado = substr($ingreso, 0, 7).':'.$r->id;
+                if ((int) $r->id === (int) $a->id || isset($usados[$usado])
+                    || $retiro < $ventanaIni || $retiro > $ventanaFin
+                    || $dia($r->fecha_ingreso) >= $ingreso) {
+                    continue;
+                }
+                $usados[$usado] = true;
+                $reingresos[$a->id] = $r;
+                break;
+            }
+        }
+
+        return $reingresos;
+    }
+
     private function tablaPeriodosSql(array $periodos): string
     {
         $filas = array_map(fn ($p) => sprintf(
@@ -3873,6 +3933,7 @@ class InformeController extends Controller
             ->select('c.id', 'c.cedula', 'c.fecha_ingreso')
             ->get()
             ->groupBy(fn ($a) => $clave(substr($a->fecha_ingreso, 0, 4), substr($a->fecha_ingreso, 5, 2)));
+        $reingresos = $this->reingresosPorContrato($aid, $afiliacionesPorMes->flatten(1));
 
         // 4. Retiros Puros (guiados estrictamente por el período mes/año de la factura de retiro #0)
         $retiradosPorMes = DB::table(DB::raw($tp))
@@ -4043,24 +4104,8 @@ class InformeController extends Controller
                 }
             }
 
-            // Reingresos del mes ("ingreso-retiro"): afiliaciones cuya cédula también
-            // aparece entre los retiros de ESTE mes, en un contrato distinto. El
-            // contrato que entra y sale dentro del mismo mes no cuenta — es una
-            // afiliación que se retiró, no alguien que volvió.
-            $retiradosPorCedula = [];
-            foreach ($retiradosRaw as $r) {
-                $retiradosPorCedula[$r->cedula][] = $r->id;
-            }
-
-            $afilReingresos = 0;
-            foreach ($afiliacionesMes as $a) {
-                foreach ($retiradosPorCedula[$a->cedula] ?? [] as $idRetirado) {
-                    if ((int) $idRetirado !== (int) $a->id) {
-                        $afilReingresos++;
-                        break;
-                    }
-                }
-            }
+            // Reingresos: ver reingresosPorContrato().
+            $afilReingresos = $afiliacionesMes->filter(fn ($a) => isset($reingresos[$a->id]))->count();
             $afilNuevas = $afilPorFecha - $afilReingresos;
 
             $label = $nombresMeses[$mesVal] . ' ' . $anioVal;
@@ -4227,6 +4272,8 @@ class InformeController extends Controller
             ->get()
             ->groupBy('contrato_id');
 
+        $reingresos = $tipo === 'afiliaciones' ? $this->reingresosPorContrato($aid, $contratos) : [];
+
         $personas = [];
         foreach ($contratos as $c) {
             // Formatear facturas y extraer fechas de generación
@@ -4265,6 +4312,10 @@ class InformeController extends Controller
                 'fecha_factura' => !empty($fechasFacturaContrato) ? implode(', ', array_unique($fechasFacturaContrato)) : '—',
                 'plan' => $c->plan_nombre ?: '—',
                 'modalidad' => $c->modalidad_nombre ?: '—',
+                'tipo_afil' => $tipo !== 'afiliaciones' ? null
+                    : (isset($reingresos[$c->id])
+                        ? 'Reingreso · retiro '.\Carbon\Carbon::parse($reingresos[$c->id]->fecha_retiro)->format('d/m/Y')
+                        : 'Nueva'),
             ];
         }
 
