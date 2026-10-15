@@ -4037,34 +4037,19 @@ class InformeController extends Controller
             ->groupBy(fn ($a) => $clave(substr($a->fecha_ingreso, 0, 4), substr($a->fecha_ingreso, 5, 2)));
         $reingresos = \App\Services\ReingresosAfiliacion::porContrato($aid, $afiliacionesPorMes->flatten(1));
 
-        // 4. Retiros Puros (guiados estrictamente por el período mes/año de la factura de retiro #0)
+        // 4. Retiros del mes: la regla de "Retirados del mes" y del Excel de
+        // listados (ListadosMesExcelService::sqlRetiroDelMes), por fecha de
+        // retiro. Antes se guiaba por la factura de retiro del período y dejaba
+        // por fuera los retiros sin factura —los que llegan del programa viejo—:
+        // julio de 2026 de GiMave daba 110 contra 140.
         $retiradosPorMes = DB::table(DB::raw($tp))
             ->join('contratos as c', function ($j) use ($aid) {
                 $j->where('c.aliado_id', '=', $aid)->where('c.estado', '=', 'retirado');
             })
             ->whereExists($conFicha)
-            ->whereExists(function ($sq) {
-                $sq->select(DB::raw(1))
-                   ->from('facturas as f')
-                   ->whereColumn('f.contrato_id', 'c.id')
-                   ->where('f.numero_factura', 0)
-                   ->where('f.tipo', '<>', 'afiliacion')
-                   ->whereColumn('f.mes', 'm.mes')
-                   ->whereColumn('f.anio', 'm.anio')
-                   ->whereNull('f.deleted_at');
-            })
-            ->whereNotExists(function ($sq) {
-                $sq->select(DB::raw(1))
-                   ->from('facturas as f')
-                   ->whereColumn('f.contrato_id', 'c.id')
-                   ->where('f.numero_factura', '>', 0)
-                   ->where('f.tipo', '<>', 'afiliacion')
-                   ->whereColumn('f.mes', 'm.mes')
-                   ->whereColumn('f.anio', 'm.anio')
-                   ->whereNull('f.deleted_at');
-            })
+            ->whereRaw(\App\Services\ListadosMesExcelService::sqlRetiroDelMes('c', 'm.ini_d'))
             ->select('m.anio', 'm.mes', 'c.id', 'c.cedula',
-                DB::raw("(SELECT TOP 1 total_ss FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND tipo <> 'afiliacion' AND mes = m.mes AND anio = m.anio AND deleted_at IS NULL ORDER BY id DESC) as costo_ss"),
+                DB::raw(\App\Services\ListadosMesExcelService::sqlRetiroEsReal('c').' as es_real'),
                 // Retiro que en realidad fue una renovación ("ingreso-retiro"):
                 // o se le abrió otro contrato con fecha de ingreso dentro del mismo
                 // mes del retiro, o esa cédula hoy tiene un contrato vigente con
@@ -4190,7 +4175,7 @@ class InformeController extends Controller
             foreach ($retiradosRaw as $r) {
                 $esRenovado = (int) $r->es_renovado === 1;
 
-                if (($r->costo_ss ?? 0) > 0) {
+                if ((int) $r->es_real === 1) {
                     $retirosReales++;
                     if ($esRenovado) {
                         $retirosRealesRenov++;
@@ -4319,27 +4304,10 @@ class InformeController extends Controller
                 ->where('c.fecha_ingreso', '>=', $primerDia->toDateString())
                 ->where('c.fecha_ingreso', '<=', $ultimoDia->toDateString());
         } elseif ($tipo === 'retiros_reales' || $tipo === 'retiros_informativos') {
+            // La misma regla del resumen y de "Retirados del mes".
             $query->where('c.aliado_id', $aid)
                 ->where('c.estado', 'retirado')
-                ->whereExists(function($sq) use ($mes, $anio) {
-                    $sq->select(DB::raw(1))
-                       ->from('facturas as f')
-                       ->whereColumn('f.contrato_id', 'c.id')
-                       ->where('f.numero_factura', 0)
-                       ->where('f.tipo', '<>', 'afiliacion')
-                       ->where('f.mes', $mes)
-                       ->where('f.anio', $anio)
-                       ->whereNull('f.deleted_at');
-                })->whereNotExists(function($sq) use ($mes, $anio) {
-                    $sq->select(DB::raw(1))
-                       ->from('facturas as f')
-                       ->whereColumn('f.contrato_id', 'c.id')
-                       ->where('f.numero_factura', '>', 0)
-                       ->where('f.tipo', '<>', 'afiliacion')
-                       ->where('f.mes', $mes)
-                       ->where('f.anio', $anio)
-                       ->whereNull('f.deleted_at');
-                });
+                ->whereRaw(\App\Services\ListadosMesExcelService::sqlRetiroDelMes('c', sprintf("CAST('%04d-%02d-01' AS date)", $anio, $mes)));
         } else {
             return response()->json(['error' => 'Tipo de detalle no soportado.'], 400);
         }
@@ -4348,21 +4316,20 @@ class InformeController extends Controller
             'c.id', 'c.cedula', 'c.estado', 'c.fecha_ingreso', 'c.fecha_retiro',
             'pl.nombre as plan_nombre',
             DB::raw("ISNULL(NULLIF(tm.observacion, ''), tm.tipo_modalidad) as modalidad_nombre"),
-            DB::raw("LTRIM(RTRIM(cl.primer_nombre+' '+ISNULL(cl.segundo_nombre,'')+' '+cl.primer_apellido+' '+ISNULL(cl.segundo_apellido,''))) AS nombre_completo"),
-            DB::raw("(SELECT TOP 1 mes FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND tipo <> 'afiliacion' AND deleted_at IS NULL ORDER BY id DESC) as mes_factura_retiro")
+            DB::raw("LTRIM(RTRIM(cl.primer_nombre+' '+ISNULL(cl.segundo_nombre,'')+' '+cl.primer_apellido+' '+ISNULL(cl.segundo_apellido,''))) AS nombre_completo")
         );
 
         if ($tipo === 'retiros_reales' || $tipo === 'retiros_informativos') {
-            $query->addSelect(DB::raw("(SELECT TOP 1 total_ss FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) as costo_ss"));
+            $query->addSelect(DB::raw(\App\Services\ListadosMesExcelService::sqlRetiroEsReal('c').' as es_real'));
         }
 
         $contratos = $query->orderBy('cl.primer_apellido')->get();
 
         // Filtrar retiros reales o informativos
         if ($tipo === 'retiros_reales') {
-            $contratos = $contratos->filter(fn($c) => ($c->costo_ss ?? 0) > 0);
+            $contratos = $contratos->filter(fn($c) => (int) $c->es_real === 1);
         } elseif ($tipo === 'retiros_informativos') {
-            $contratos = $contratos->filter(fn($c) => ($c->costo_ss ?? 0) <= 0);
+            $contratos = $contratos->filter(fn($c) => (int) $c->es_real !== 1);
         }
 
         // Obtener facturas de este período
@@ -4410,9 +4377,10 @@ class InformeController extends Controller
 
             // Formatear fecha de retiro
             $fechaRetiroStr = '—';
-            if ($c->fecha_retiro || ($c->estado ?? null) === 'retirado') {
-                $mesMarcado = $c->mes_factura_retiro ?: $mes;
-                $fechaRetiroStr = 'Retirado en ' . $nombresMeses[$mesMarcado];
+            if ($c->fecha_retiro) {
+                $fechaRetiroStr = \Carbon\Carbon::parse($c->fecha_retiro)->format('d/m/Y');
+            } elseif (($c->estado ?? null) === 'retirado') {
+                $fechaRetiroStr = 'Retirado, sin fecha';
             }
 
             $personas[] = [

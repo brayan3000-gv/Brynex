@@ -190,42 +190,68 @@ class ListadosMesExcelService
     }
 
     /**
+     * SQL: el contrato `$c` es un retiro del mes que empieza en `$ini` (una
+     * expresión SQL de fecha, p. ej. `'2026-07-01'` o una columna). El de mes
+     * vencido se retira en la planilla del mes anterior, así que a julio le
+     * tocan sus retiros de junio. Una sola regla para "Retirados del mes", la
+     * hoja Retiros del Excel y el Resumen Consolidado Mensual.
+     */
+    public static function sqlRetiroDelMes(string $c, string $ini): string
+    {
+        return "(($c.paga_mes_actual = 1 AND $c.fecha_retiro >= $ini AND $c.fecha_retiro < DATEADD(month, 1, $ini))"
+            ." OR ($c.paga_mes_actual = 0 AND $c.fecha_retiro >= DATEADD(month, -1, $ini) AND $c.fecha_retiro < $ini))";
+    }
+
+    /** SQL: lo que costó en seguridad social el retiro de `$c`, según su factura de retiro. */
+    public static function sqlCostoRetiro(string $c): string
+    {
+        return "(SELECT TOP 1 f.total_ss FROM facturas f WHERE f.contrato_id = $c.id AND f.numero_factura = 0"
+            ." AND f.tipo <> 'afiliacion' AND f.deleted_at IS NULL ORDER BY f.id DESC)";
+    }
+
+    /**
+     * SQL: 1 si el retiro de `$c` es real (costó seguridad social), 0 si fue
+     * informativo. Con factura de retiro manda su `total_ss`; sin factura, el
+     * plano que marcó el retiro (`fecha_ret`): real si cotizó días. Los
+     * retiros que llegan del programa viejo vienen sin factura de retiro
+     * (GiMave factura allá) pero con su plano, y mirando solo la factura
+     * salían como informativos siendo reales.
+     */
+    public static function sqlRetiroEsReal(string $c): string
+    {
+        $costo = self::sqlCostoRetiro($c);
+        $dias = "(SELECT TOP 1 p.num_dias FROM planos p WHERE p.contrato_id = $c.id AND p.fecha_ret IS NOT NULL"
+            ." AND p.deleted_at IS NULL ORDER BY p.anio_plano DESC, p.mes_plano DESC, p.id DESC)";
+
+        return "(CASE WHEN $costo IS NOT NULL THEN CASE WHEN $costo > 0 THEN 1 ELSE 0 END"
+            ." ELSE CASE WHEN ISNULL($dias, 0) > 0 THEN 1 ELSE 0 END END)";
+    }
+
+    /**
      * Retiros del mes, con lo que muestra el informe "Retirados del mes"
      * (que también los saca de aquí, para que la pantalla y el Excel no se
      * desfasen).
      *
-     * - Tipo: "Real" si la factura de retiro (`numero_factura = 0`) cobró
-     *   seguridad social; si fue en $0, "Informativo".
+     * - Tipo: "Real" si el retiro costó seguridad social (ver
+     *   sqlRetiroEsReal); si fue en $0, "Informativo".
      * - Renovó: la cédula tiene hoy un contrato vigente con el aliado.
      * - Fecha marcado: `updated_at` del contrato, la última vez que se tocó.
      */
     public function retiros()
     {
-        $mes = $this->mes;
-        $anio = $this->anio;
-        $mesAnterior = $mes === 1 ? 12 : $mes - 1;
-        $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
+        $ini = sprintf("CAST('%04d-%02d-01' AS date)", $this->anio, $this->mes);
 
         return $this->baseContratos()
             ->leftJoin('motivos_retiro AS mr', 'mr.id', '=', 'c.motivo_retiro_id')
             ->where('c.estado', 'retirado')
-            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                $q->where(function ($q1) use ($mes, $anio) {
-                    $q1->where('c.paga_mes_actual', 1)
-                        ->whereMonth('c.fecha_retiro', $mes)
-                        ->whereYear('c.fecha_retiro', $anio);
-                })->orWhere(function ($q2) use ($mesAnterior, $anioAnterior) {
-                    $q2->where('c.paga_mes_actual', 0)
-                        ->whereMonth('c.fecha_retiro', $mesAnterior)
-                        ->whereYear('c.fecha_retiro', $anioAnterior);
-                });
-            })
+            ->whereRaw(self::sqlRetiroDelMes('c', $ini))
             ->leftJoin('planes_contrato AS pl', 'pl.id', '=', 'c.plan_id')
             ->leftJoin('tipo_modalidad AS tm', 'tm.id', '=', 'c.tipo_modalidad_id')
             ->addSelect('c.id AS contrato_id', 'c.fecha_retiro', 'c.observacion', 'c.updated_at AS fecha_marcado_retiro',
                 'mr.nombre AS motivo', 'pl.nombre AS plan_nombre', 'tm.tipo_modalidad AS modalidad_nombre',
                 DB::raw("(SELECT COUNT(*) FROM contratos WHERE cedula = c.cedula AND aliado_id = c.aliado_id AND estado = 'vigente') AS vigentes"),
-                DB::raw('(SELECT TOP 1 total_ss FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) AS costo_ss'),
+                DB::raw(self::sqlCostoRetiro('c').' AS costo_ss'),
+                DB::raw(self::sqlRetiroEsReal('c').' AS es_real'),
                 DB::raw('(SELECT TOP 1 dias_cotizados FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) AS dias_retiro'),
                 // La de retiro va con número 0: la que sirve de referencia es
                 // la última que se le cobró al contrato.
@@ -233,7 +259,7 @@ class ListadosMesExcelService
                 DB::raw("(SELECT TOP 1 total FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND tipo <> 'afiliacion' AND deleted_at IS NULL ORDER BY anio DESC, mes DESC, id DESC) AS factura_total"))
             ->get()
             ->each(function ($r) {
-                $r->tipo_retiro = (float) ($r->costo_ss ?? 0) > 0 ? 'Real' : 'Informativo';
+                $r->tipo_retiro = (int) $r->es_real === 1 ? 'Real' : 'Informativo';
                 $r->renovo = (int) $r->vigentes > 0;
             });
     }
