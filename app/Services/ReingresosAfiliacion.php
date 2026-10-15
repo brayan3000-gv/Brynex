@@ -29,6 +29,8 @@ class ReingresosAfiliacion
      */
     public static function porContrato(int $aid, $afiliaciones): array
     {
+        // Sin fecha de ingreso (legado) no se puede ubicar en el tiempo.
+        $afiliaciones = $afiliaciones->filter(fn ($a) => ! empty($a->fecha_ingreso));
         if ($afiliaciones->isEmpty()) {
             return [];
         }

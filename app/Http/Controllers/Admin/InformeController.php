@@ -4215,16 +4215,20 @@ class InformeController extends Controller
             ->where('mes', $mes)
             ->where('anio', $anio)
             ->whereNull('deleted_at')
-            ->select('contrato_id', 'numero_factura', 'tipo', 'created_at')
+            ->select('contrato_id', 'numero_factura', 'tipo', 'total', 'total_ss', 'created_at')
             ->get()
             ->groupBy('contrato_id');
 
-        $reingresos = $tipo === 'afiliaciones' ? \App\Services\ReingresosAfiliacion::porContrato($aid, $contratos) : [];
+        // Nueva o reingreso: en afiliaciones, el contrato que entró; en
+        // retiros, cómo había entrado el contrato que se retiró.
+        $conTipo = $tipo !== 'admon_vigentes';
+        $reingresos = $conTipo ? \App\Services\ReingresosAfiliacion::porContrato($aid, $contratos) : [];
 
         $personas = [];
         foreach ($contratos as $c) {
             // Formatear facturas y extraer fechas de generación
             $facturasContrato = [];
+            $valoresFactura = [];
             $fechasFacturaContrato = [];
             if (isset($facturas[$c->id])) {
                 foreach ($facturas[$c->id] as $f) {
@@ -4237,6 +4241,11 @@ class InformeController extends Controller
                     } else {
                         $facturasContrato[] = '#' . str_pad($f->numero_factura, 6, '0', STR_PAD_LEFT);
                     }
+                    // La de retiro va en $0: lo que cuesta es la seguridad social.
+                    $valoresFactura[] = [
+                        'numero' => end($facturasContrato),
+                        'total' => (float) $f->total > 0 ? (float) $f->total : (float) $f->total_ss,
+                    ];
                     if ($f->created_at) {
                         $fechasFacturaContrato[] = \Carbon\Carbon::parse($f->created_at)->format('d/m/Y');
                     }
@@ -4256,13 +4265,11 @@ class InformeController extends Controller
                 'fecha_ingreso' => $c->fecha_ingreso ? \Carbon\Carbon::parse($c->fecha_ingreso)->format('d/m/Y') : '—',
                 'fecha_retiro' => $fechaRetiroStr,
                 'facturas' => !empty($facturasContrato) ? implode(', ', $facturasContrato) : '—',
+                'facturas_valor' => $valoresFactura,
                 'fecha_factura' => !empty($fechasFacturaContrato) ? implode(', ', array_unique($fechasFacturaContrato)) : '—',
                 'plan' => $c->plan_nombre ?: '—',
                 'modalidad' => $c->modalidad_nombre ?: '—',
-                'tipo_afil' => $tipo !== 'afiliaciones' ? null
-                    : (isset($reingresos[$c->id])
-                        ? 'Reingreso · retiro '.\Carbon\Carbon::parse($reingresos[$c->id]->fecha_retiro)->format('d/m/Y')
-                        : 'Nueva'),
+                'tipo' => ! $conTipo ? null : (isset($reingresos[$c->id]) ? 'Reingreso' : 'Nueva'),
             ];
         }
 

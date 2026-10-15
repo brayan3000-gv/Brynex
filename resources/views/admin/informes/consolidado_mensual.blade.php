@@ -447,6 +447,7 @@
                             <th onclick="ordenarPor('nombre_completo')">Nombre Completo <span id="sort-icon-nombre_completo" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('modalidad')">Plan y Modalidad <span id="sort-icon-modalidad" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('fecha_ingreso')">Fecha Ingreso <span id="sort-icon-fecha_ingreso" class="sort-indicator">↕</span></th>
+                            <th class="col-tipo" onclick="ordenarPor('tipo')">Tipo <span id="sort-icon-tipo" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('fecha_retiro')">Fecha Retiro <span id="sort-icon-fecha_retiro" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('facturas')">Factura(s) <span id="sort-icon-facturas" class="sort-indicator">↕</span></th>
                             <th onclick="ordenarPor('fecha_factura')">Fecha Factura <span id="sort-icon-fecha_factura" class="sort-indicator">↕</span></th>
@@ -456,6 +457,13 @@
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-nombre" placeholder="🔍 Nombre..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-modalidad" placeholder="🔍 Plan/Mod..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-ingreso" placeholder="🔍 Ingreso..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
+                            <td class="col-tipo" style="padding: 0.4rem 0.5rem;">
+                                <select id="filtro-tipo" class="modal-filter-input" onchange="aplicarFiltrosModal()">
+                                    <option value="">Todos</option>
+                                    <option value="nueva">Nueva</option>
+                                    <option value="reingreso">Reingreso</option>
+                                </select>
+                            </td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-retiro" placeholder="🔍 Retiro..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-facturas" placeholder="🔍 Factura..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
                             <td style="padding: 0.4rem 0.5rem;"><input type="text" id="filtro-fecha-factura" placeholder="🔍 Fecha Fact..." class="modal-filter-input" oninput="aplicarFiltrosModal()"></td>
@@ -799,6 +807,9 @@
         document.getElementById('filtro-nombre').value = '';
         document.getElementById('filtro-modalidad').value = '';
         document.getElementById('filtro-ingreso').value = '';
+        document.getElementById('filtro-tipo').value = '';
+        // Nueva / reingreso solo aplica a afiliaciones y retiros.
+        document.querySelectorAll('#modalDetalle .col-tipo').forEach(el => el.style.display = tipo === 'admon_vigentes' ? 'none' : '');
         document.getElementById('filtro-retiro').value = '';
         document.getElementById('filtro-facturas').value = '';
         document.getElementById('filtro-fecha-factura').value = '';
@@ -871,15 +882,17 @@
                     <div style="font-weight: 700; color: #1e293b; font-size: 0.78rem;">${p.modalidad || '—'}</div>
                     <div style="color: #0f766e; font-size: 0.72rem; font-weight: 600;">${p.plan || '—'}</div>
                 </td>
-                <td>
-                    ${p.fecha_ingreso}
-                    ${p.tipo_afil ? `<div style="font-size: 0.68rem; font-weight: 700; color: ${p.tipo_afil === 'Nueva' ? '#4f46e5' : '#0891b2'};">${p.tipo_afil}</div>` : ''}
-                </td>
+                <td>${p.fecha_ingreso}</td>
+                ${p.tipo ? `<td class="col-tipo">
+                    <span style="display: inline-block; padding: 0.15rem 0.55rem; border-radius: 20px; font-size: 0.72rem; font-weight: 700; ${p.tipo === 'Nueva' ? 'background: #eef2ff; color: #4f46e5;' : 'background: #ecfeff; color: #0891b2;'}">${p.tipo}</span>
+                </td>` : ''}
                 <td>${p.fecha_retiro}</td>
                 <td>
-                    <span style="background: rgba(13, 148, 136, 0.08); color: #0f766e; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-family: monospace;">
-                        ${p.facturas}
-                    </span>
+                    ${(p.facturas_valor && p.facturas_valor.length) ? p.facturas_valor.map(f => `
+                        <div style="margin-bottom: 0.25rem; white-space: nowrap;">
+                            <span style="background: rgba(13, 148, 136, 0.08); color: #0f766e; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.72rem; font-family: monospace;">${f.numero}</span>
+                            <div style="color: #475569; font-size: 0.72rem; font-weight: 600; margin-top: 0.15rem;">$${Math.round(f.total).toLocaleString('es-CO')}</div>
+                        </div>`).join('') : '—'}
                 </td>
                 <td style="color: #64748b; font-weight: 600; font-size: 0.78rem;">${p.fecha_factura || '—'}</td>
             `;
@@ -894,6 +907,7 @@
         const nombre = norm(document.getElementById('filtro-nombre').value.trim());
         const modalidad = document.getElementById('filtro-modalidad').value.toLowerCase().trim();
         const ingreso = document.getElementById('filtro-ingreso').value.toLowerCase().trim();
+        const tipoFiltro = document.getElementById('filtro-tipo').value;
         const retiro = document.getElementById('filtro-retiro').value.toLowerCase().trim();
         const facturas = document.getElementById('filtro-facturas').value.toLowerCase().trim();
         const fechaFactura = document.getElementById('filtro-fecha-factura').value.toLowerCase().trim();
@@ -902,7 +916,8 @@
             return p.cedula.toLowerCase().includes(cedula) &&
                    norm(p.nombre_completo).includes(nombre) &&
                    ((p.modalidad || '') + ' ' + (p.plan || '')).toLowerCase().includes(modalidad) &&
-                   (p.fecha_ingreso + ' ' + (p.tipo_afil || '')).toLowerCase().includes(ingreso) &&
+                   p.fecha_ingreso.toLowerCase().includes(ingreso) &&
+                   (!tipoFiltro || (p.tipo || '').toLowerCase() === tipoFiltro) &&
                    p.fecha_retiro.toLowerCase().includes(retiro) &&
                    p.facturas.toLowerCase().includes(facturas) &&
                    (p.fecha_factura || '').toLowerCase().includes(fechaFactura);
@@ -959,7 +974,7 @@
     }
 
     function actualizarIndicadoresOrden() {
-        const columnas = ['cedula', 'nombre_completo', 'modalidad', 'fecha_ingreso', 'fecha_retiro', 'facturas', 'fecha_factura'];
+        const columnas = ['cedula', 'nombre_completo', 'modalidad', 'fecha_ingreso', 'tipo', 'fecha_retiro', 'facturas', 'fecha_factura'];
         columnas.forEach(col => {
             const el = document.getElementById(`sort-icon-${col}`);
             if (!el) return;
