@@ -57,21 +57,22 @@ class InformeController extends Controller
         $mesAnterior  = $mes === 1 ? 12 : $mes - 1;
         $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
 
-        $retirosBaseQuery = DB::table('contratos AS c')
-            ->where('c.aliado_id',$aid)
-            ->where('c.estado','retirado')
-            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                $q->where(function ($q1) use ($mes, $anio) {
-                    $q1->where('c.paga_mes_actual', 1)
-                       ->whereMonth('c.fecha_retiro', $mes)
-                       ->whereYear('c.fecha_retiro', $anio);
-                })->orWhere(function ($q2) use ($mesAnterior, $anioAnterior) {
-                    $q2->where('c.paga_mes_actual', 0)
-                    ->whereMonth('c.fecha_retiro', $mesAnterior)
-                    ->whereYear('c.fecha_retiro', $anioAnterior);
-                });
-            });
+        // Retirados del mes: la regla del informe "Retirados del mes" (el de
+        // mes vencido se retira en la planilla del mes anterior). Se calcula
+        // también para el mes anterior, que es la referencia de la tarjeta.
+        $retirosDe = function (int $m, int $a) use ($aid) {
+            $mAnt = $m === 1 ? 12 : $m - 1;
+            $aAnt = $m === 1 ? $a - 1 : $a;
 
+            return DB::table('contratos AS c')
+                ->where('c.aliado_id', $aid)
+                ->where('c.estado', 'retirado')
+                ->where(function ($q) use ($m, $a, $mAnt, $aAnt) {
+                    $q->where(fn ($q1) => $q1->where('c.paga_mes_actual', 1)->whereMonth('c.fecha_retiro', $m)->whereYear('c.fecha_retiro', $a))
+                        ->orWhere(fn ($q2) => $q2->where('c.paga_mes_actual', 0)->whereMonth('c.fecha_retiro', $mAnt)->whereYear('c.fecha_retiro', $aAnt));
+                });
+        };
+        $retirosBaseQuery = $retirosDe($mes, $anio);
         $retirosTotal = (clone $retirosBaseQuery)->count();
         $retirosNoRenovados = (clone $retirosBaseQuery)->whereNotExists(function ($query) use ($aid) {
             $query->select(DB::raw(1))
@@ -80,33 +81,55 @@ class InformeController extends Controller
                 ->where('c2.aliado_id', $aid)
                 ->where('c2.estado', 'vigente');
         })->count();
+        $retirosMesAnterior = $retirosDe($mesAnterior, $anioAnterior)->count();
 
-        $afiliacionesBaseQuery = DB::table('contratos AS c')
-            ->where('c.aliado_id',$aid)
-            ->whereMonth('c.fecha_ingreso', $mes)
-            ->whereYear('c.fecha_ingreso', $anio);
+        // Afiliaciones del mes con la misma regla del consolidado mensual y del
+        // Excel de listados (ReingresosAfiliacion), y sin los contratos que no
+        // tienen ficha de cliente (migraron mal). Antes la tarjeta tenía su
+        // propia regla de reingreso y no cuadraba con el consolidado.
+        $conFicha = fn ($sq) => $sq->select(DB::raw(1))->from('clientes AS cl')
+            ->whereColumn('cl.cedula', 'c.cedula')->where('cl.aliado_id', $aid);
+        $hoy = now();
+        $iniMes = $hoy->copy()->startOfMonth();
+        $afiliacionesMes = DB::table('contratos AS c')
+            ->where('c.aliado_id', $aid)
+            ->whereExists($conFicha)
+            ->whereBetween('c.fecha_ingreso', [$iniMes->toDateString(), $hoy->copy()->endOfMonth()->toDateString()])
+            ->get(['c.id', 'c.cedula', 'c.fecha_ingreso']);
+        $afiliacionesTotal = $afiliacionesMes->count();
+        $afiliacionesNuevas = $afiliacionesTotal - count(\App\Services\ReingresosAfiliacion::porContrato($aid, $afiliacionesMes));
 
-        $afiliacionesTotal = (clone $afiliacionesBaseQuery)->count();
-        $afiliacionesNuevas = (clone $afiliacionesBaseQuery)
-            ->whereNotExists(function ($query) use ($aid, $mes, $anio, $mesAnterior, $anioAnterior) {
-                $query->select(DB::raw(1))
-                    ->from('contratos AS c2')
-                    ->whereColumn('c2.cedula', 'c.cedula')
-                    ->where('c2.aliado_id', $aid)
-                    ->where('c2.estado', 'retirado')
-                    ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                        $q->where(function ($q1) use ($mes, $anio) {
-                            $q1->where('c2.paga_mes_actual', 1)
-                               ->whereMonth('c2.fecha_retiro', $mes)
-                               ->whereYear('c2.fecha_retiro', $anio);
-                        })->orWhere(function ($q2) use ($mesAnterior, $anioAnterior) {
-                            $q2->where('c2.paga_mes_actual', 0)
-                            ->whereMonth('c2.fecha_retiro', $mesAnterior)
-                            ->whereYear('c2.fecha_retiro', $anioAnterior);
-                        });
-                    });
+        // Referencia: el mes anterior hasta el mismo día. Comparar el mes en
+        // curso contra el anterior completo siempre daría que se va peor.
+        $iniAnt = $iniMes->copy()->subMonthNoOverflow();
+        $finAntMismoDia = $iniAnt->copy()->addDays(min($hoy->day, $iniAnt->daysInMonth) - 1);
+        $afiliacionesAntMismoDia = DB::table('contratos AS c')
+            ->where('c.aliado_id', $aid)
+            ->whereExists($conFicha)
+            ->whereBetween('c.fecha_ingreso', [$iniAnt->toDateString(), $finAntMismoDia->toDateString()])
+            ->count();
+
+        // Contratos activos al cierre del mes anterior, con la regla de la hoja
+        // Activos del Excel de listados: ingresó antes del corte y no se había
+        // retirado a esa fecha.
+        $corteAnt = $iniMes->copy()->subDay()->toDateString();
+        $activosCierreAnterior = DB::table('contratos AS c')
+            ->where('c.aliado_id', $aid)
+            ->where('c.fecha_ingreso', '<=', $corteAnt)
+            ->where(function ($q) use ($corteAnt) {
+                $q->where(fn ($v) => $v->where('c.estado', 'vigente')
+                    ->where(fn ($f) => $f->whereNull('c.fecha_retiro')->orWhere('c.fecha_retiro', '>', $corteAnt)))
+                    ->orWhere(fn ($r) => $r->where('c.estado', 'retirado')->where('c.fecha_retiro', '>', $corteAnt));
             })
             ->count();
+
+        // Empresas con contratos activos (la de la ficha del cliente, del aliado).
+        $empresasConActivos = DB::table('contratos AS c')
+            ->join('clientes AS cl', fn ($j) => $j->on('cl.cedula', '=', 'c.cedula')->where('cl.aliado_id', $aid))
+            ->join('empresas AS em', fn ($j) => $j->on('em.id', '=', 'cl.cod_empresa')->where('em.aliado_id', $aid))
+            ->where('c.aliado_id', $aid)
+            ->where('c.estado', 'vigente')
+            ->count(DB::raw('DISTINCT em.id'));
 
         $kpis = [
             'clientes_activos'          => DB::table('contratos')->where('aliado_id',$aid)->where('estado','vigente')->count(),
@@ -117,6 +140,10 @@ class InformeController extends Controller
             'retiros_mes_total'         => $retirosTotal,
             'retiros_mes_sin_renovar'   => $retirosNoRenovados,
             'empresas'                  => DB::table('empresas')->where('aliado_id',$aid)->count(),
+            'empresas_con_activos'      => $empresasConActivos,
+            'activos_cierre_anterior'   => $activosCierreAnterior,
+            'afiliaciones_ant_mismo_dia'=> $afiliacionesAntMismoDia,
+            'retiros_mes_anterior'      => $retirosMesAnterior,
             // Las mismas "Activas" del módulo de incapacidades: una por familia
             // (original + prórrogas) con algo pendiente. Antes excluía un
             // 'cerrado' que no existe y contaba pagadas, anuladas y prórrogas
@@ -131,6 +158,17 @@ class InformeController extends Controller
         // número que da sentido a la tarjeta.
         $kpis['cierre_operacion'] = (new \App\Services\CierrePeriodoService())
             ->contadoresOperacion($aid, $mes, $anio);
+
+        // ── Requiere atención: lo que hay que mover, con las reglas de cada
+        // módulo para que el número y la lista que abre coincidan.
+        $kpis['tareas_vencidas'] = DB::table('tareas')->where('aliado_id', $aid)->whereNull('deleted_at')
+            ->whereIn('estado', \App\Models\Tarea::ESTADOS_ACTIVOS)
+            ->where('fecha_limite', '<', $hoy->toDateString())
+            ->count();
+        $kpis['incapacidades_sin_gestion'] = \App\Http\Controllers\Admin\IncapacidadController::sinGestionReciente(
+            DB::table('incapacidades as i')->where('i.aliado_id', $aid)->whereNull('i.deleted_at')->whereNull('i.incapacidad_padre_id'),
+            'i'
+        )->count();
 
         // Ojo: NO es `informes.ver`. El bloque financiero del hub (ingresos,
         // egresos, utilidad, saldos) es solo de superadmin y contable.

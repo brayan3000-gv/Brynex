@@ -222,6 +222,10 @@ class TareaController extends Controller
                         $q->where($t.'.fecha_limite', '<=', $hoy)
                             ->orWhereNull($t.'.fecha_limite');
                     });
+            } elseif ($request->semaforo === 'vencidas') {
+                // La misma regla del contador "Vencidas" de arriba.
+                $query->whereIn($t.'.estado', Tarea::ESTADOS_ACTIVOS)
+                    ->where($t.'.fecha_limite', '<', $hoy);
             } elseif ($request->semaforo === 'en_espera') {
                 $query->where($t.'.estado', 'en_espera')
                     ->where($t.'.fecha_alerta', '<=', $hoy);

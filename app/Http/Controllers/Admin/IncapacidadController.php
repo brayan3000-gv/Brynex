@@ -220,11 +220,12 @@ class IncapacidadController extends Controller
      * de sus miembros: las gestiones de una prórroga se registran en la
      * prórroga, no en la original. Una sola definición para la tarjeta "Sin
      * gestión +7d" y para la tabla que abre, o el número y las filas dejarían
-     * de coincidir.
+     * de coincidir. También la usa la franja "Requiere atención" del Centro de
+     * Informes.
      */
-    private function sinGestionReciente($query, string $tabla)
+    public static function sinGestionReciente($query, string $tabla)
     {
-        return $query->whereRaw($this->sqlFamiliaAbierta($tabla))
+        return $query->whereRaw(self::sqlFamiliaAbierta($tabla))
             ->whereNotExists(function ($sub) use ($tabla) {
                 $sub->from('gestiones_incapacidad as g')
                     ->join('incapacidades as gm', 'gm.id', '=', 'g.incapacidad_id')

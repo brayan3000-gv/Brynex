@@ -7,8 +7,56 @@
     {{-- Header --}}
     <div style="margin-bottom:1.5rem;">
         <h1 style="font-size:1.4rem;font-weight:700;color:#0d2550;">📊 Centro de Informes</h1>
-        <p style="color:#64748b;font-size:0.85rem;margin-top:0.25rem;">Resumen ejecutivo · {{ now()->isoFormat('MMMM [de] YYYY') }}</p>
+        <p style="color:#64748b;font-size:0.85rem;margin-top:0.25rem;">Resumen ejecutivo · {{ now()->isoFormat('MMMM [de] YYYY') }}
+            @if(now()->day < now()->daysInMonth)
+                · <span style="color:#d97706;font-weight:600;">mes en curso, cifras a la fecha ({{ now()->isoFormat('D [de] MMMM') }})</span>
+            @endif
+        </p>
     </div>
+
+    @can('informes.ver')
+    @php
+        $co = $kpis['cierre_operacion'];
+        $alertas = array_values(array_filter([
+            ['n' => $kpis['tareas_vencidas'], 'titulo' => 'Tareas vencidas', 'sub' => 'Pasaron su fecha límite',
+                'url' => route('admin.tareas.index', ['semaforo' => 'vencidas'])],
+            ['n' => $kpis['incapacidades_sin_gestion'], 'titulo' => 'Incapacidades sin gestión', 'sub' => 'Más de 7 días sin moverse',
+                'url' => route('admin.incapacidades.index', ['kpi' => 'sin_gestion'])],
+            ['n' => $co['vigentes'] + $co['afiliaciones'], 'titulo' => 'Sin facturar este mes',
+                'sub' => number_format($co['vigentes'], 0, ',', '.').' contratos · '.number_format($co['afiliaciones'], 0, ',', '.').' afiliaciones',
+                'url' => route('admin.informes.cierre_operacion')],
+            ['n' => $co['lotes'], 'titulo' => 'Planillas sin confirmar', 'sub' => 'Tandas de planos sin número de planilla',
+                'url' => route('admin.informes.cierre_operacion')],
+        ], fn ($a) => $a['n'] > 0));
+    @endphp
+    {{-- Requiere atención: solo lo que tiene algo pendiente; cada número abre
+         la lista ya filtrada con la misma regla con la que se contó. --}}
+    @if(count($alertas))
+    <div style="background:#fff;border-radius:14px;border:1px solid #fecaca;box-shadow:0 1px 6px rgba(0,0,0,.06);overflow:hidden;margin-bottom:1.75rem;">
+        <div style="background:linear-gradient(90deg,#7f1d1d,#b91c1c);color:#fff;padding:.7rem 1.2rem;font-weight:800;font-size:.9rem;">
+            ⚠️ Requiere atención <span style="font-weight:500;font-size:.75rem;opacity:.85;">· cada número abre la lista</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));">
+            @foreach($alertas as $a)
+            <a href="{{ $a['url'] }}" style="display:flex;gap:.8rem;align-items:center;padding:1rem 1.2rem;border-right:1px solid #f1f5f9;text-decoration:none;color:inherit;"
+               onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background=''">
+                <div style="font-size:1.6rem;font-weight:800;color:#dc2626;min-width:2.6rem;text-align:center;">{{ number_format($a['n'], 0, ',', '.') }}</div>
+                <div>
+                    <div style="font-size:.82rem;font-weight:700;color:#1e293b;">{{ $a['titulo'] }}</div>
+                    <div style="font-size:.7rem;color:#94a3b8;margin-top:.1rem;">{{ $a['sub'] }}</div>
+                </div>
+                <div style="margin-left:auto;color:#3b82f6;font-weight:800;">→</div>
+            </a>
+            @endforeach
+        </div>
+    </div>
+    @else
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:12px;padding:.75rem 1rem;font-size:.82rem;font-weight:600;margin-bottom:1.75rem;">
+        ✅ Todo al día: sin tareas vencidas, incapacidades con gestión reciente y el mes facturado.
+        <a href="{{ route('admin.informes.cierre_operacion') }}" style="color:#047857;margin-left:.5rem;">Ver cierre de operación →</a>
+    </div>
+    @endif
+    @endcan
 
     {{-- Grid KPIs operativos --}}
     @can('informes.ver')
@@ -16,16 +64,23 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:1rem;margin-bottom:1.75rem;">
 
         @php
+        $mesAnt = now()->startOfMonth()->subMonthNoOverflow();
+        $mesAntCorto = mb_substr($mesAnt->isoFormat('MMMM'), 0, 3);
+        $diaRef = min(now()->day, $mesAnt->daysInMonth);
+        // Delta frente al mes anterior. `bueno` dice de qué color va la subida.
+        $delta = fn (int $n, string $txt, bool $buenoSiSube = true) => ['n' => $n, 'txt' => $txt, 'bueno' => $buenoSiSube];
         $cards = [
-            ['icono'=>'👥','label'=>'Clientes Activos','val'=>$kpis['clientes_unicos'].' / '.$kpis['clientes_activos'],'color'=>'#3b82f6','url'=>route('admin.informes.clientes_activos'),'desc'=>'Clientes únicos / Contratos'],
+            ['icono'=>'👥','label'=>'Clientes Activos','val'=>number_format($kpis['clientes_unicos'],0,',','.').' / '.number_format($kpis['clientes_activos'],0,',','.'),'color'=>'#3b82f6','url'=>route('admin.informes.clientes_activos'),'desc'=>'Clientes únicos / Contratos',
+                'delta'=>$delta($kpis['clientes_activos'] - $kpis['activos_cierre_anterior'], 'vs. cierre '.$mesAntCorto)],
             ['icono'=>'🏢','label'=>'Por Razón Social','val'=>$kpis['razones_sociales'],'color'=>'#06b6d4','url'=>route('admin.informes.por_razon_social'),'desc'=>'RS activas'],
-            ['icono'=>'📥','label'=>'Afiliaciones del Mes','val'=>$kpis['afiliaciones_mes_nuevas'].' + '.($kpis['afiliaciones_mes_total'] - $kpis['afiliaciones_mes_nuevas']),'color'=>'#8b5cf6','url'=>route('admin.informes.afiliaciones_retiros'),'desc'=>'Nuevos + Reingresos'],
-            ['icono'=>'🏭','label'=>'Empresas Clientes','val'=>$kpis['empresas'],'color'=>'#0ea5e9','url'=>route('admin.informes.empresas_clientes'),'desc'=>'Empresas registradas'],
+            ['icono'=>'📥','label'=>'Afiliaciones del Mes','val'=>$kpis['afiliaciones_mes_nuevas'].' + '.($kpis['afiliaciones_mes_total'] - $kpis['afiliaciones_mes_nuevas']),'color'=>'#8b5cf6','url'=>route('admin.informes.consolidado_mensual'),'desc'=>'Nuevas + Reingresos',
+                'delta'=>$delta($kpis['afiliaciones_mes_total'] - $kpis['afiliaciones_ant_mismo_dia'], 'vs. 1–'.$diaRef.' '.$mesAntCorto)],
+            ['icono'=>'🏭','label'=>'Empresas Clientes','val'=>$kpis['empresas_con_activos'],'color'=>'#0ea5e9','url'=>route('admin.informes.empresas_clientes'),'desc'=>'Con contratos activos · de '.number_format($kpis['empresas'],0,',','.')],
             ['icono'=>'🏥','label'=>'Por Entidades','val'=>'EPS/AFP/ARL','color'=>'#10b981','url'=>route('admin.informes.por_entidades'),'desc'=>'Ver distribución'],
-            ['icono'=>'🚪','label'=>'Retirados del Mes','val'=>$kpis['retiros_mes_sin_renovar'].' / '.$kpis['retiros_mes_total'],'color'=>'#f59e0b','url'=>route('admin.informes.retirados_mes'),'desc'=>'Sin renovar / Total'],
+            ['icono'=>'🚪','label'=>'Retirados del Mes','val'=>$kpis['retiros_mes_sin_renovar'].' / '.$kpis['retiros_mes_total'],'color'=>'#f59e0b','url'=>route('admin.informes.retirados_mes'),'desc'=>'Sin renovar / Total',
+                'ref'=>ucfirst($mesAntCorto).' completo: '.$kpis['retiros_mes_anterior']],
             ['icono'=>'🏨','label'=>'Incapacidades','val'=>$kpis['incapacidades'],'color'=>'#ef4444','url'=>route('admin.informes.incapacidades'),'desc'=>'Casos activos'],
             ['icono'=>'📌','label'=>'Tareas','val'=>$kpis['tareas'],'color'=>'#f97316','url'=>route('admin.informes.tareas'),'desc'=>'Tareas activas'],
-            ['icono'=>'✅','label'=>'Cierre de Operación','val'=>$kpis['cierre_operacion']['lotes'].' tandas','color'=>$kpis['cierre_operacion']['total'] > 0 ? '#ef4444' : '#10b981','url'=>route('admin.informes.cierre_operacion'),'desc'=>$kpis['cierre_operacion']['vigentes'].' sin facturar · '.$kpis['cierre_operacion']['afiliaciones'].' afiliaciones'],
         ];
         @endphp
 
@@ -37,6 +92,18 @@
             <div style="font-size:1.5rem;font-weight:800;color:{{ $c['color'] }};line-height:1;">{{ $c['val'] }}</div>
             <div style="font-size:.8rem;font-weight:700;color:#1e293b;">{{ $c['label'] }}</div>
             <div style="font-size:.72rem;color:#94a3b8;">{{ $c['desc'] }}</div>
+            @if(isset($c['delta']))
+                @php
+                    $d = $c['delta'];
+                    $bien = $d['n'] === 0 ? null : (($d['n'] > 0) === $d['bueno']);
+                    [$fondo, $tinta] = $bien === null ? ['#f1f5f9', '#64748b'] : ($bien ? ['#d1fae5', '#059669'] : ['#fee2e2', '#dc2626']);
+                @endphp
+                <span style="font-size:.7rem;font-weight:700;padding:.12rem .45rem;border-radius:999px;width:fit-content;white-space:nowrap;background:{{ $fondo }};color:{{ $tinta }};">
+                    {{ $d['n'] > 0 ? '▲ +' : ($d['n'] < 0 ? '▼ ' : '● ') }}{{ number_format($d['n'], 0, ',', '.') }} {{ $d['txt'] }}
+                </span>
+            @elseif(isset($c['ref']))
+                <span style="font-size:.7rem;font-weight:600;color:#64748b;">{{ $c['ref'] }}</span>
+            @endif
         </a>
         @endforeach
     </div>

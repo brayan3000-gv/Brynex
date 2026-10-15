@@ -360,7 +360,7 @@ body {
                 <span class="rc-num">{{ $resumenEstados['en_espera'] ?? 0 }}</span>
                 <span class="rc-lbl">🟠 En Espera</span>
             </div>
-            <div class="resumen-card-mini vencidas" title="Tareas Vencidas">
+            <div class="resumen-card-mini vencidas" onclick="filtrarVencidas()" title="Tareas Vencidas">
                 <span class="rc-num">{{ $vencidas }}</span>
                 <span class="rc-lbl">🔴 Vencidas</span>
             </div>
@@ -408,6 +408,7 @@ body {
         <select name="semaforo" onchange="this.form.submit()" style="padding:0.3rem 0.5rem; font-size:0.75rem; height:28px; box-sizing:border-box;">
             <option value="">🚦 Todos los semáforos</option>
             <option value="urgente" {{ request('semaforo') === 'urgente' ? 'selected' : '' }}>🔴 Urgentes / Vencidas</option>
+            <option value="vencidas" {{ request('semaforo') === 'vencidas' ? 'selected' : '' }}>⏰ Solo vencidas</option>
             <option value="en_espera" {{ request('semaforo') === 'en_espera' ? 'selected' : '' }}>🔵 En espera - Recordar</option>
         </select>
 
@@ -1028,6 +1029,12 @@ function seleccionarResultadoCierre(val) {
 function filtrarEstado(estado) {
     const url = new URL(window.location);
     url.searchParams.set('estado', estado);
+    window.location = url;
+}
+function filtrarVencidas() {
+    const url = new URL(window.location);
+    url.searchParams.delete('estado');
+    url.searchParams.set('semaforo', 'vencidas');
     window.location = url;
 }
 function filtrarTipo(tipo) {
