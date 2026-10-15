@@ -439,7 +439,7 @@
             </div>
 
             {{-- Contenedor de la tabla con filtros y ordenamientos --}}
-            <div id="modalTableContainer" style="display: none; max-height: 480px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
+            <div id="modalTableContainer" style="display: none; max-height: calc(92vh - 230px); overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;">
                 <table class="modal-table">
                     <thead>
                         <tr>
@@ -485,7 +485,7 @@
 
 {{-- Modal de WhatsApp Consolidado Mensual --}}
 <div id="modalWhatsapp" class="modal-overlay" style="display: none;">
-    <div class="modal-card" style="max-width: 900px;">
+    <div class="modal-card" style="max-width: 1100px;">
         <div class="modal-header">
             <div>
                 <h3 class="modal-title">Detalle de WhatsApps de Planilla</h3>
@@ -622,8 +622,9 @@
     .modal-card {
         background: #ffffff;
         border-radius: 20px;
-        width: 92%;
-        max-width: 900px;
+        /* Ancho para que las 8 columnas del detalle quepan sin scroll lateral. */
+        width: 95%;
+        max-width: 1320px;
         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
         border: 1px solid rgba(226, 232, 240, 0.8);
         overflow: hidden;
@@ -631,7 +632,7 @@
         transition: transform 0.25s ease;
         display: flex;
         flex-direction: column;
-        max-height: 85vh;
+        max-height: 92vh;
     }
     .modal-overlay.active .modal-card {
         transform: scale(1);
