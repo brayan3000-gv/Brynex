@@ -19,44 +19,68 @@ Complementa a [[contratos-brynex]] (reglas del contrato), [[afiliaciones-brynex]
 (radicados y vigencia ARL) y [[permisos-brynex]] (aliado activo). La memoria
 `flujo-crear-cliente-contrato-por-chat` tiene el origen de varias reglas.
 
-## Regla de oro: si falta un dato necesario, se pregunta
+## Regla de oro: proponer todo y confirmar una sola vez
 
-El alta tiene que quedar bien a la primera: un contrato con la razón social o
+El alta tiene que quedar bien a la primera (un contrato con la razón social o
 el riesgo equivocado se paga en planillas mal liquidadas y coberturas que no
-sirven. Por eso:
+sirven), pero sin interrogar al usuario dato por dato. Por eso **nada se
+pregunta suelto: se propone**.
 
-- **No adivinar** razón social, nivel de riesgo, tarifa de afiliación, fecha de
-  ingreso ni plan. Si el usuario no lo dijo y no hay una sola respuesta
-  evidente en los datos, se pregunta.
-- Juntar las dudas en **una sola** `AskUserQuestion` (hasta 4 preguntas), con
-  la opción recomendada primero y el porqué en la descripción ("la más usada:
-  45 Gestión ARL vigentes", "tarifa del tarifario").
-- Lo que sí se resuelve solo, sin preguntar: EPS y AFP (RUAF), datos de la
-  cédula (OCR de la foto), salario mínimo, encargado (user 2), municipio Cali
-  si la cédula es de Cali y no dicen otro.
-- Si un dato que la entidad exige no está (dirección para EPS/caja, correo,
-  CIUO del cargo) y no tiene respaldo, se pregunta antes de radicar.
+1. Con lo que mandó el usuario, la cédula y lo que hay en la BD, **llenar todos
+   los datos**: los que dijo, tal cual; los que no dijo, con la **sugerencia**
+   que sale de los pasos 1-5 (fecha de ingreso = mañana, razón social más usada
+   para esa modalidad en el aliado, riesgo según la clase oficial del cargo,
+   tarifa del tarifario, plan de la modalidad…).
+2. Mostrar **una ficha de confirmación** en una tabla, marcando en cada fila de
+   dónde salió el valor: *lo dijiste*, *cédula*, *RUAF*, *sugerido: porqué*
+   ("la más usada: 45 Gestión ARL vigentes", "Decreto 768: CIIU 9511 es clase
+   2", "tarifa de Brygar riesgo 2"). Si lo que dijo el usuario choca con la
+   verificación (p. ej. dijo riesgo 3 y la clase oficial es 2), decirlo en esa
+   fila y sugerir el valor verificado.
+3. Terminar con una sola pregunta: **"¿Lo creo así, o qué cambio?"**. El
+   usuario confirma o corrige solo lo que quiera.
+4. **No escribir nada** (ficha, contrato, catálogo ni afiliación a la ARL) hasta
+   que confirme. Con la confirmación se hace todo de corrido: ficha, contrato y
+   afiliación.
 
-### Datos mínimos por pieza
+Qué no se sugiere sino que se resuelve solo: EPS y AFP (RUAF), datos de la
+cédula (lectura de la foto), salario mínimo, encargado (user 2), municipio Cali
+si la cédula es de Cali y no dicen otro. Igual aparecen en la ficha de
+confirmación para que se vean.
 
-| Pieza | Necesario | De dónde sale |
+**La única excepción es el aliado**, porque todo lo demás (razón social,
+tarifa, empresa) depende de él. Si no viene en el mensaje: si la cédula existe
+en un solo aliado (sin contar el 1, que es de pruebas), sugerirlo en la ficha
+como los demás; si existe en varios o en ninguno, preguntar el aliado **primero**,
+en una pregunta corta, y después armar la ficha. Nunca asumir el aliado 1 ni el
+último usado.
+
+Si falta un dato que **no tiene sugerencia razonable** y la entidad lo exige
+(celular, dirección para EPS o caja), aparece en la ficha como *falta* y se pide
+ahí mismo, en la misma pregunta de confirmación.
+
+### Datos que lleva la ficha de confirmación
+
+| Pieza | Dato | De dónde sale |
 |---|---|---|
-| Todo | **aliado** | el usuario ("en el aliado Brygar"); si no lo dice, **preguntar siempre**, aunque la cédula ya exista en algún aliado. Nunca asumir el aliado 1 (es de pruebas) ni el último usado |
+| Todo | aliado | el usuario; si no, ver la excepción de arriba |
 | Ficha | tipo y número de documento, nombres, apellidos, género, fecha de nacimiento | foto de la cédula |
 | Ficha | fecha y lugar de expedición, RH | reverso de la cédula |
-| Ficha | celular | el mensaje del usuario (si no viene, preguntar) |
+| Ficha | celular | el mensaje; si no viene, *falta* |
 | Ficha | EPS, AFP | RUAF (paso 2) |
-| Ficha | empresa cliente (`cod_empresa`) | el usuario ("en la empresa X") |
-| Ficha | dirección, correo | el usuario; si no vienen, ver la nota de abajo |
-| Contrato | razón social | el usuario; si no la dice, **preguntar** |
+| Ficha | empresa cliente (`cod_empresa`) | el usuario; si no, sugerir la que ya tenga la ficha o ninguna |
+| Ficha | dirección, correo | el mensaje; ver la nota de abajo |
+| Contrato | razón social | el usuario; si no, sugerir la más usada (paso 3) |
 | Contrato | modalidad y plan | el usuario ("Gestión ARL" = modalidad 15, plan 2) |
-| Contrato | nivel de riesgo y cargo | el usuario + verificación (paso 4) |
-| Contrato | fecha de ingreso | el usuario ("mañana" = hoy + 1) |
-| Contrato | administración y afiliación | tarifario (paso 5); si no cuadra, preguntar |
+| Contrato | nivel de riesgo y cargo | el usuario + verificación (paso 4); si no dijo el riesgo, sugerir la clase oficial |
+| Contrato | fecha de ingreso | el usuario ("mañana" = hoy + 1); si no, sugerir mañana |
+| Contrato | administración y afiliación | el usuario; si no, sugerir según el paso 5 |
+| ARL | fecha de inicio de cobertura | la de ingreso (Sura cubre desde mañana como pronto) |
 
 Dirección y correo: la afiliación a **ARL Sura** cae a la dirección y el correo
-de la razón social si la ficha no los tiene, así que no bloquean. **EPS y caja
-sí los exigen**: si el plan incluye EPS o caja, preguntar la dirección.
+de la razón social si la ficha no los tiene, así que no bloquean (en la ficha:
+*se usa la de la razón social*). **EPS y caja sí los exigen**: si el plan
+incluye EPS o caja, la dirección va como *falta*.
 
 ## Paso 1 — Buscar la cédula en el aliado correcto
 
@@ -70,14 +94,15 @@ DB::table('contratos')->where('aliado_id', $aliado)->where('cedula', $ced)->get(
 
 - Si la ficha existe, se **actualiza** (celular, dirección, EPS/AFP, ocupación).
 - **Contrato: siempre uno nuevo.** El viejo solo se mira para saber si quedó
-  retirado. Si hay un contrato **vigente** con la misma razón social, parar y
-  preguntar: probablemente es un duplicado.
+  retirado. Si hay un contrato **vigente** con la misma razón social, avisarlo
+  en la ficha de confirmación: probablemente es un duplicado y no se crea
+  otro sin que el usuario lo confirme.
 - Aliados: 1 BryNex (solo pruebas), 2 Brygar, 4 GiMave, 6 Luis Lopez, 9 Fecop…
   confirmar con `DB::table('aliados')->pluck('nombre','id')`.
-- Si el usuario no dijo el aliado, preguntarlo **antes** de buscar o crear
-  nada. Para orientar la pregunta se puede decir en qué aliados ya existe la
-  cédula (`clientes` y `contratos` sin filtrar por aliado), pero eso no decide:
-  la persona puede estar entrando por otro aliado.
+- Si el usuario no dijo el aliado, buscar en qué aliados existe la cédula
+  (`clientes` y `contratos` sin filtrar por aliado) y aplicar la excepción de
+  la regla de oro: uno solo → sugerirlo; varios o ninguno → preguntar el
+  aliado primero.
 
 ## Paso 2 — RUAF para EPS y AFP reales
 
@@ -88,7 +113,7 @@ app(\App\Services\RegistroOficialService::class)->consultar($aliado, $ced, 'CC')
 
 El tipo de documento es parte de la llave (memoria
 `ruaf-consulta-por-tipo-documento`). Si el RUAF no lo encuentra o la EPS que
-dice el usuario es otra, preguntar cuál vale.
+dice el usuario es otra, mostrar las dos en la ficha y sugerir la del RUAF.
 
 ## Paso 3 — Empresa cliente ≠ razón social
 
@@ -100,8 +125,9 @@ DB::table('empresas')->where('aliado_id', $aliado)->where('empresa', 'like', "%{
 DB::table('razones_sociales')->where('aliado_id', $aliado)->where('razon_social', 'like', "%{$x}%")->get();
 ```
 
-Si el nombre aparece en las dos, o en ninguna, preguntar. Para proponer la
-razón social, contar las vigentes de esa modalidad en el aliado:
+Si el nombre aparece en las dos, o en ninguna, señalarlo en la ficha de
+confirmación. Para sugerir la razón social, contar las vigentes de esa
+modalidad en el aliado:
 
 ```php
 DB::table('contratos')->where('aliado_id', $aliado)->where('tipo_modalidad_id', $mod)
@@ -146,12 +172,15 @@ más cada mes.
    falla por certificado.
    `actividades_economicas` de BryNex solo tiene 23 filas con
    `nivel_arl_sugerido`: sirve de pista, no de fuente.
-4. **Decidir**:
-   - Si el nivel del usuario coincide con el catálogo o con la clase de la
-     ARL, seguir.
-   - Si **no coincide** o **no se pudo verificar**, preguntar antes de crear
-     el contrato: "Sura clasifica 'mantenimiento de computadores' (CIIU 9511)
-     como clase N; dijiste riesgo M. ¿Cuál dejo?". No crear con un nivel dudoso.
+4. **Decidir** (en la ficha de confirmación, no en una pregunta aparte):
+   - Si el nivel del usuario coincide con el catálogo o con la clase oficial,
+     va como *lo dijiste ✓ verificado*.
+   - Si **no coincide**, sugerir la clase oficial y explicar el choque en la
+     fila: "dijiste riesgo 3; el Decreto 768 pone CIIU 9511 en clase 2 →
+     sugiero 2". Riesgo mayor solo si las tareas reales lo justifican
+     (alturas, electricidad).
+   - Si **no se pudo verificar**, decirlo en la fila. No crear con un nivel
+     dudoso sin que el usuario lo haya visto.
 5. Si el cargo no estaba en el catálogo, agregarlo para el aliado con el nivel
    ya confirmado y su código **CIUO** (p. ej. 7422 reparadores de equipos de
    informática y comunicaciones). El CIUO también lo pide la caja Comfandi.
@@ -175,8 +204,10 @@ DB::table('afiliacion_arl_modalidad')->where('aliado_id', $aliado)
 ```
 
 Comparar con los últimos contratos iguales del aliado (misma modalidad, plan y
-nivel). Si el tarifario y la práctica reciente no coinciden (p. ej. tarifa
-$58.800 y contratos recientes en $52.000 y $40.000), **preguntar** cuál cobrar.
+nivel). Sugerir el tarifario, y si la práctica reciente no coincide (p. ej.
+tarifa $58.800 y contratos recientes en $52.000 y $40.000), mostrarlo en la
+fila para que el usuario elija. En Brygar, Gestión ARL se ha venido cobrando
+por debajo del tarifario: Jhon Fred (riesgo 2) quedó en $50.000.
 Gestión ARL en Brygar: administración $46.000.
 
 ## Paso 6 — Crear ficha y contrato
