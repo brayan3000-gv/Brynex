@@ -395,44 +395,20 @@ class InformeController extends Controller
         $aid  = $this->aliadoId();
         $mes  = (int)$request->input('mes', now()->month);
         $anio = (int)$request->input('anio', now()->year);
-        $mesAnterior  = $mes  === 1 ? 12 : $mes  - 1;
-        $anioAnterior = $mes  === 1 ? $anio - 1 : $anio;
 
-        $retiradosBase = DB::table('contratos AS c')
-            ->join('clientes AS cl', function($j) use($aid){ $j->on('cl.cedula','=','c.cedula')->where('cl.aliado_id',$aid); })
-            ->leftJoin('razones_sociales AS rs','rs.id','=','c.razon_social_id')
-            ->leftJoin('motivos_retiro AS mr','mr.id','=','c.motivo_retiro_id')
-            ->leftJoin('planes_contrato AS pl','pl.id','=','c.plan_id')
-            ->leftJoin('tipo_modalidad AS tm','tm.id','=','c.tipo_modalidad_id')
-            ->where('c.aliado_id',$aid)->where('c.estado','retirado')
-            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                $q->where(function ($q1) use ($mes, $anio) {
-                    $q1->where('c.paga_mes_actual', 1)
-                       ->whereMonth('c.fecha_retiro', $mes)
-                       ->whereYear('c.fecha_retiro', $anio);
-                })->orWhere(function ($q2) use ($mesAnterior, $anioAnterior) {
-                    $q2->where('c.paga_mes_actual', 0)
-                    ->whereMonth('c.fecha_retiro', $mesAnterior)
-                    ->whereYear('c.fecha_retiro', $anioAnterior);
-                });
+        // La consulta vive en el servicio del Excel de listados del mes, para
+        // que esta pantalla y la hoja "Retiros" de ese Excel no se desfasen.
+        $retiradosBase = (new \App\Services\ListadosMesExcelService($aid, $mes, $anio))->retiros()
+            ->each(function ($r) {
+                $r->nombre_completo = trim(preg_replace('/\s+/', ' ', (string) $r->nombre));
+                $r->tiene_contrato_vigente = (int) $r->vigentes;
             })
-            ->select('c.cedula','c.fecha_retiro','c.observacion','c.updated_at AS fecha_marcado_retiro',
-                DB::raw("LTRIM(RTRIM(cl.primer_nombre+' '+ISNULL(cl.segundo_nombre,'')+' '+cl.primer_apellido+' '+ISNULL(cl.segundo_apellido,''))) AS nombre_completo"),
-                'rs.razon_social','mr.nombre AS motivo',
-                'pl.nombre AS plan_nombre','tm.tipo_modalidad AS modalidad_nombre',
-                DB::raw("(SELECT COUNT(*) FROM contratos WHERE cedula = c.cedula AND aliado_id = c.aliado_id AND estado = 'vigente') AS tiene_contrato_vigente"),
-                DB::raw("(SELECT TOP 1 total_ss FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) AS costo_ss"),
-                DB::raw("(SELECT TOP 1 dias_cotizados FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) AS dias_retiro"))
-            ->orderBy('c.fecha_retiro')->get();
-
-        // Enriquecer cada registro con tipo_retiro en memoria
-        $retiradosBase = $retiradosBase->map(function($r) {
-            $r->tipo_retiro = ($r->costo_ss ?? 0) > 0 ? 'Real' : 'Informativo';
-            return $r;
-        });
+            ->sortBy(fn ($r) => sqldate($r->fecha_retiro)?->format('Y-m-d') ?? '')
+            ->values();
 
         // Extraer opciones únicas para los filtros basados en la consulta actual del mes
         $opcRs = $retiradosBase->pluck('razon_social')->unique()->filter()->values()->toArray();
+        $opcEmpresa = $retiradosBase->pluck('empresa')->unique()->filter()->sort()->values()->toArray();
         $opcPlan = $retiradosBase->pluck('plan_nombre')->unique()->filter()->values()->toArray();
         $opcModalidad = $retiradosBase->pluck('modalidad_nombre')->unique()->filter()->values()->toArray();
         $opcMotivo = $retiradosBase->pluck('motivo')->unique()->filter()->values()->toArray();
@@ -440,6 +416,7 @@ class InformeController extends Controller
 
         // Capturar filtros
         $fRs = $request->get('f_rs');
+        $fEmpresa = $request->get('f_empresa');
         $fPlan = $request->get('f_plan');
         $fModalidad = $request->get('f_modalidad');
         $fMotivo = $request->get('f_motivo');
@@ -449,6 +426,12 @@ class InformeController extends Controller
         $retirados = $retiradosBase;
         if ($fRs && $fRs !== 'todos') {
             $retirados = $retirados->where('razon_social', $fRs);
+        }
+        if ($fEmpresa && $fEmpresa !== 'todos') {
+            // "sin" = retirados sin empresa en la ficha del cliente.
+            $retirados = $fEmpresa === 'sin'
+                ? $retirados->filter(fn ($r) => empty($r->empresa))
+                : $retirados->where('empresa', $fEmpresa);
         }
         if ($fPlan && $fPlan !== 'todos') {
             $retirados = $retirados->where('plan_nombre', $fPlan);
@@ -465,13 +448,13 @@ class InformeController extends Controller
         $retirados = $retirados->values();
 
         if ($request->input('excel')) return $this->exportExcel($retirados,'retirados_mes',
-            ['Cédula','Nombre','Razón Social','Plan','Modalidad','Días Retiro','Fecha Retiro','Fecha Marcado Retiro','Motivo','Costo SS Retiro','Tipo Retiro','Observación','Renovó'],
-            fn($r)=>[$r->cedula,$r->nombre_completo,$r->razon_social,$r->plan_nombre ?? '—',$r->modalidad_nombre ?? '—',$r->dias_retiro ?? 0,sqldate($r->fecha_retiro)?->format('d/m/Y'),sqldate($r->fecha_marcado_retiro)?->format('d/m/Y H:i'),$r->motivo,$r->costo_ss ? (int)$r->costo_ss : 0, $r->tipo_retiro, $r->observacion, $r->tiene_contrato_vigente > 0 ? 'Sí' : 'No']);
+            ['Cédula','Nombre','Razón Social','Empresa','Plan','Modalidad','Días Retiro','Fecha Retiro','Fecha Marcado Retiro','Motivo','Costo SS Retiro','Tipo Retiro','Observación','Renovó'],
+            fn($r)=>[$r->cedula,$r->nombre_completo,$r->razon_social,$r->empresa ?? '—',$r->plan_nombre ?? '—',$r->modalidad_nombre ?? '—',$r->dias_retiro ?? 0,sqldate($r->fecha_retiro)?->format('d/m/Y'),sqldate($r->fecha_marcado_retiro)?->format('d/m/Y H:i'),$r->motivo,$r->costo_ss ? (int)$r->costo_ss : 0, $r->tipo_retiro, $r->observacion, $r->tiene_contrato_vigente > 0 ? 'Sí' : 'No']);
 
         return view('admin.informes.retirados_mes', compact(
             'retirados','mes','anio',
-            'opcRs','opcPlan','opcModalidad','opcMotivo','opcTipo',
-            'fRs','fPlan','fModalidad','fMotivo','fTipo'
+            'opcRs','opcEmpresa','opcPlan','opcModalidad','opcMotivo','opcTipo',
+            'fRs','fEmpresa','fPlan','fModalidad','fMotivo','fTipo'
         ));
     }
 

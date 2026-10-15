@@ -72,22 +72,36 @@ class ListadosMesExcelService
             dinero: ['I'],
         );
 
+        // Las mismas columnas del informe "Retirados del mes", más la empresa.
         $this->hoja($libro, 'Retiros', 'Listado de retiros', $cierre,
-            ['Cédula', 'Nombre', 'Razón Social', 'Empresa', 'Motivo del retiro', 'Observación de retiro', 'Fecha de retiro'],
+            ['Cédula', 'Nombre', 'Razón Social', 'Empresa', 'Plan', 'Modalidad', 'Días retiro',
+                'Fecha de retiro', 'Fecha marcado retiro', 'Motivo del retiro', 'Tipo retiro', 'Renovó',
+                'Costo SS retiro', 'Observación de retiro', 'Última factura', 'Valor última factura'],
             $this->retiros()->map(fn ($r) => [
-                $r->cedula, $r->nombre, $r->razon_social, $r->empresa, $r->motivo,
-                $r->observacion, $this->fecha($r->fecha_retiro),
+                $r->cedula, $r->nombre, $r->razon_social, $r->empresa, $r->plan_nombre, $r->modalidad_nombre,
+                (int) ($r->dias_retiro ?? 0),
+                $this->fecha($r->fecha_retiro), $this->fechaHora($r->fecha_marcado_retiro),
+                $r->motivo, $r->tipo_retiro, $r->renovo ? 'Sí' : 'No',
+                (float) ($r->costo_ss ?? 0), $r->observacion,
+                $r->factura_numero ? (int) $r->factura_numero : null,
+                $r->factura_total !== null ? (float) $r->factura_total : null,
             ]),
-            fechas: ['G'],
+            fechas: ['H'],
+            fechasHora: ['I'],
+            dinero: ['M', 'P'],
         );
 
         $this->hoja($libro, 'Afiliaciones', 'Listado de afiliaciones', $cierre,
-            ['Cédula', 'Nombre', 'Razón Social', 'Empresa', 'Fecha Ingreso', 'Motivo de afiliación', 'Encargado de afiliación'],
+            ['Cédula', 'Nombre', 'Razón Social', 'Empresa', 'Fecha Ingreso', 'Motivo de afiliación', 'Encargado de afiliación',
+                'Factura afiliación', 'Valor factura afiliación'],
             $this->afiliaciones()->map(fn ($r) => [
                 $r->cedula, $r->nombre, $r->razon_social, $r->empresa,
                 $this->fecha($r->fecha_ingreso), $r->motivo, $r->encargado,
+                $r->factura_numero ? (int) $r->factura_numero : null,
+                $r->factura_total !== null ? (float) $r->factura_total : null,
             ]),
             fechas: ['E'],
+            dinero: ['I'],
         );
 
         $libro->setActiveSheetIndex(0);
@@ -166,7 +180,17 @@ class ListadosMesExcelService
             ->get();
     }
 
-    private function retiros()
+    /**
+     * Retiros del mes, con lo que muestra el informe "Retirados del mes"
+     * (que también los saca de aquí, para que la pantalla y el Excel no se
+     * desfasen).
+     *
+     * - Tipo: "Real" si la factura de retiro (`numero_factura = 0`) cobró
+     *   seguridad social; si fue en $0, "Informativo".
+     * - Renovó: la cédula tiene hoy un contrato vigente con el aliado.
+     * - Fecha marcado: `updated_at` del contrato, la última vez que se tocó.
+     */
+    public function retiros()
     {
         $mes = $this->mes;
         $anio = $this->anio;
@@ -187,8 +211,22 @@ class ListadosMesExcelService
                         ->whereYear('c.fecha_retiro', $anioAnterior);
                 });
             })
-            ->addSelect('c.fecha_retiro', 'c.observacion', 'mr.nombre AS motivo')
-            ->get();
+            ->leftJoin('planes_contrato AS pl', 'pl.id', '=', 'c.plan_id')
+            ->leftJoin('tipo_modalidad AS tm', 'tm.id', '=', 'c.tipo_modalidad_id')
+            ->addSelect('c.id AS contrato_id', 'c.fecha_retiro', 'c.observacion', 'c.updated_at AS fecha_marcado_retiro',
+                'mr.nombre AS motivo', 'pl.nombre AS plan_nombre', 'tm.tipo_modalidad AS modalidad_nombre',
+                DB::raw("(SELECT COUNT(*) FROM contratos WHERE cedula = c.cedula AND aliado_id = c.aliado_id AND estado = 'vigente') AS vigentes"),
+                DB::raw('(SELECT TOP 1 total_ss FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) AS costo_ss'),
+                DB::raw('(SELECT TOP 1 dias_cotizados FROM facturas WHERE contrato_id = c.id AND numero_factura = 0 AND deleted_at IS NULL ORDER BY id DESC) AS dias_retiro'),
+                // La de retiro va con número 0: la que sirve de referencia es
+                // la última que se le cobró al contrato.
+                DB::raw("(SELECT TOP 1 numero_factura FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND tipo <> 'afiliacion' AND deleted_at IS NULL ORDER BY anio DESC, mes DESC, id DESC) AS factura_numero"),
+                DB::raw("(SELECT TOP 1 total FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND tipo <> 'afiliacion' AND deleted_at IS NULL ORDER BY anio DESC, mes DESC, id DESC) AS factura_total"))
+            ->get()
+            ->each(function ($r) {
+                $r->tipo_retiro = (float) ($r->costo_ss ?? 0) > 0 ? 'Real' : 'Informativo';
+                $r->renovo = (int) $r->vigentes > 0;
+            });
     }
 
     private function afiliaciones()
@@ -198,14 +236,18 @@ class ListadosMesExcelService
             ->leftJoin('users AS u', 'u.id', '=', 'c.encargado_id')
             ->whereMonth('c.fecha_ingreso', $this->mes)
             ->whereYear('c.fecha_ingreso', $this->anio)
-            ->addSelect('c.fecha_ingreso', 'ma.nombre AS motivo', 'u.nombre AS encargado')
+            // La factura que cobró la afiliación: la de tipo afiliación o una
+            // de planilla que la trae sumada (campo `afiliacion` > 0).
+            ->addSelect('c.fecha_ingreso', 'ma.nombre AS motivo', 'u.nombre AS encargado',
+                DB::raw("(SELECT TOP 1 numero_factura FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND deleted_at IS NULL AND (tipo = 'afiliacion' OR afiliacion > 0) ORDER BY id) AS factura_numero"),
+                DB::raw("(SELECT TOP 1 total FROM facturas WHERE contrato_id = c.id AND numero_factura > 0 AND deleted_at IS NULL AND (tipo = 'afiliacion' OR afiliacion > 0) ORDER BY id) AS factura_total"))
             ->get();
     }
 
     // ── Presentación ───────────────────────────────────────────────────
 
     private function hoja(Spreadsheet $libro, string $nombre, string $titulo, string $cierre,
-        array $encabezados, $filas, array $fechas = [], array $dinero = []): void
+        array $encabezados, $filas, array $fechas = [], array $fechasHora = [], array $dinero = []): void
     {
         $hoja = new Worksheet($libro, $nombre);
         $libro->addSheet($hoja);
@@ -250,6 +292,9 @@ class ListadosMesExcelService
             foreach ($fechas as $col) {
                 $hoja->getStyle("{$col}4:{$col}{$fin}")->getNumberFormat()->setFormatCode('dd/mm/yyyy');
             }
+            foreach ($fechasHora as $col) {
+                $hoja->getStyle("{$col}4:{$col}{$fin}")->getNumberFormat()->setFormatCode('dd/mm/yyyy hh:mm');
+            }
             foreach ($dinero as $col) {
                 $hoja->getStyle("{$col}4:{$col}{$fin}")->getNumberFormat()->setFormatCode('$#,##0');
             }
@@ -278,6 +323,13 @@ class ListadosMesExcelService
         $c = sqldate($valor);
 
         return $c ? ExcelDate::PHPToExcel($c->copy()->startOfDay()) : null;
+    }
+
+    private function fechaHora($valor): ?float
+    {
+        $c = sqldate($valor);
+
+        return $c ? ExcelDate::PHPToExcel($c) : null;
     }
 
     private function limpiar(?string $v): string

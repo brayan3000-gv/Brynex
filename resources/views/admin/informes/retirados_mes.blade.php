@@ -96,6 +96,21 @@
                         </form>
                     </th>
 
+                    {{-- Filtro Empresa cliente en el título --}}
+                    <th style="padding:.65rem .8rem;text-align:left;min-width:150px;">
+                        <form method="GET" style="margin:0">
+                            @foreach(request()->except(['f_empresa','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+                            <select name="f_empresa" onchange="this.form.submit()" class="th-select {{ $fEmpresa ? 'activo' : '' }}">
+                                <option value="">↓ Empresa</option>
+                                <option value="todos">Todos</option>
+                                <option value="sin" {{ $fEmpresa==='sin'?'selected':'' }}>Sin empresa</option>
+                                @foreach($opcEmpresa as $empVal)
+                                    <option value="{{ $empVal }}" {{ $fEmpresa===$empVal?'selected':'' }}>{{ \Illuminate\Support\Str::limit($empVal, 22, '…') }}</option>
+                                @endforeach
+                            </select>
+                        </form>
+                    </th>
+
                     {{-- Filtro Plan en el título --}}
                     <th style="padding:.65rem .8rem;text-align:left;min-width:110px;">
                         <form method="GET" style="margin:0">
@@ -168,6 +183,7 @@
                     <td style="padding:.6rem .8rem;font-weight:600;color:#b45309;">{{ $r->cedula }}</td>
                     <td style="padding:.6rem .8rem;font-weight:600;color:#0d2550;">{{ nombre_oracion($r->nombre_completo) }}</td>
                     <td style="padding:.6rem .8rem;color:#475569;">{{ $r->razon_social ?? '—' }}</td>
+                    <td style="padding:.6rem .8rem;color:#475569;">{{ $r->empresa ?? '—' }}</td>
                     
                     {{-- Plan más pequeño y en un solo renglón (nowrap) --}}
                     <td style="padding:.6rem .8rem;color:#475569;font-size:.73rem;white-space:nowrap;">{{ $r->plan_nombre ?? '—' }}</td>
@@ -204,13 +220,13 @@
                     <td style="padding:.6rem .8rem;color:#64748b;font-size:.8rem;max-width:220px;word-break:break-word;">{{ $r->observacion ?? '—' }}</td>
                 </tr>
                 @empty
-                <tr><td colspan="13" style="padding:2rem;text-align:center;color:#94a3b8;">Sin retirados para este período</td></tr>
+                <tr><td colspan="15" style="padding:2rem;text-align:center;color:#94a3b8;">Sin retirados para este período</td></tr>
                 @endforelse
             </tbody>
             <tfoot>
                 <tr style="background:#f8fafc;border-top:2px solid #cbd5e1;font-weight:700;color:#0d2550;">
                     <td style="padding:.65rem .8rem;text-align:left;" colspan="4">TOTALES ({{ $retirados->count() }} registros)</td>
-                    <td colspan="8"></td>
+                    <td colspan="9"></td>
                     <td style="padding:.65rem .8rem;text-align:right;font-family:monospace;font-weight:700;color:#1e40af;font-size:.85rem;">
                         ${{ number_format($retirados->sum('costo_ss'), 0, ',', '.') }}
                     </td>
