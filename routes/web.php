@@ -557,6 +557,16 @@ Route::middleware('auth')->group(function () {
             Route::post('configuracion/pensiones/{pension}/formulario/pdf', [$pf, 'subirPdf'])->name('configuracion.pensiones.formulario.pdf');
         });
 
+        // Formularios de cajas de compensación (COMFABOY y demás) — mismo
+        // editor visual, otra entidad dueña del PDF.
+        $cf = \App\Http\Controllers\Admin\CajaFormularioController::class;
+        Route::middleware('permiso:formularios_pdf.editar')->group(function () use ($cf) {
+            Route::get('configuracion/cajas/{caja}/formulario', [$cf, 'editor'])->name('configuracion.cajas.formulario');
+            Route::get('configuracion/cajas/{caja}/formulario/pdf', [$cf, 'verPdf'])->name('configuracion.cajas.formulario.vpdf');
+            Route::post('configuracion/cajas/{caja}/formulario', [$cf, 'guardar'])->name('configuracion.cajas.formulario.guardar');
+            Route::post('configuracion/cajas/{caja}/formulario/pdf', [$cf, 'subirPdf'])->name('configuracion.cajas.formulario.pdf');
+        });
+
         // Planillas de Pago SS — mapeo visual de coordenadas
         $opf = \App\Http\Controllers\Admin\OperadorPlanillaFormularioController::class;
         Route::middleware('permiso:formularios_pdf.editar')->group(function () use ($opf) {
@@ -1199,6 +1209,9 @@ Route::middleware('auth')->group(function () {
         // misma del cliente, por eso no se duplica la ruta.
         Route::get('/{contrato}/formulario/pension', [$fc, 'vistaPension'])->name('formulario.pension')->whereNumber('contrato');
         Route::get('/{contrato}/formulario/pension/raw', [$fc, 'generarPension'])->name('formulario.pension.raw')->whereNumber('contrato');
+        // Formulario de la caja de compensación (COMFABOY y demás), misma firma.
+        Route::get('/{contrato}/formulario/caja', [$fc, 'vistaCaja'])->name('formulario.caja')->whereNumber('contrato');
+        Route::get('/{contrato}/formulario/caja/raw', [$fc, 'generarCaja'])->name('formulario.caja.raw')->whereNumber('contrato');
     });
 
     // ── Tareas ───────────────────────────────────────────────────────────────

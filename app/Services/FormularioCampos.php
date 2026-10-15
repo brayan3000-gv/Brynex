@@ -33,6 +33,7 @@ class FormularioCampos
             'eps.nombre' => 'Nombre EPS',
             'arl.nombre' => 'Nombre ARL',
             'pension.nombre' => 'Nombre Pensión',
+            'caja.nombre' => 'Nombre Caja',
             'contrato.salario' => 'Salario del contrato',
             'cliente.direccion' => 'Dirección del cotizante',
             'cliente.telefono' => 'Teléfono',

@@ -46,7 +46,24 @@ class FormularioEpsService
     }
 
     /**
-     * @param  \Illuminate\Database\Eloquent\Model|null  $entidad  Dueña del PDF (Eps o Pension)
+     * Formulario de afiliación a la caja de compensación del contrato (COMFABOY y demás).
+     *
+     * @param array<string,string> $customDatos
+     */
+    public function generarCaja(Contrato $contrato, bool $incluirBeneficiarios = false, array $customDatos = []): string
+    {
+        return $this->generarDesde(
+            $contrato,
+            $contrato->caja,
+            'formularios/cajas',
+            'Sin formulario configurado para esta caja de compensación.',
+            $incluirBeneficiarios,
+            $customDatos
+        );
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Model|null  $entidad  Dueña del PDF (Eps, Pension o Caja)
      * @param  array<string,string>  $customDatos
      */
     protected function generarDesde(
@@ -137,6 +154,7 @@ class FormularioEpsService
             'eps.nombre'               => strtoupper(($contrato->eps ?: $c?->eps)?->nombre ?? ''),
             'arl.nombre'               => strtoupper($contrato->arl?->nombre_arl ?? $contrato->arl?->razon_social ?? ''),
             'pension.nombre'           => strtoupper($contrato->pension?->razon_social ?? ''),
+            'caja.nombre'              => strtoupper($contrato->caja?->nombre ?? ''),
             // ── Contrato ───────────────────────────────────────────
             'contrato.fecha_ingreso'           => $contrato->fecha_ingreso?->format('d/m/Y') ?? '',
             'contrato.fecha_ingreso_d'         => $contrato->fecha_ingreso?->format('d')     ?? '',

@@ -35,8 +35,17 @@ class FormularioEpsController extends Controller
     }
 
     /**
+     * Vista de impresión del formulario de la caja de compensación (COMFABOY y demás).
+     * GET /admin/afiliaciones/{contrato}/formulario/caja
+     */
+    public function vistaCaja(int $contrato)
+    {
+        return $this->vistaFormulario(Contrato::paraTramite($contrato), 'caja');
+    }
+
+    /**
      * Arma la vista de impresión: muestra el PDF en un iframe con el botón de
-     * imprimir. El único cambio entre EPS y pensión es de quién sale el mapeo.
+     * imprimir. El único cambio entre EPS, pensión y caja es de quién sale el mapeo.
      */
     protected function vistaFormulario(Contrato $contrato, string $tipo)
     {
@@ -50,13 +59,20 @@ class FormularioEpsController extends Controller
             'eps',
             'arl',
             'pension',
+            'caja',
         ]);
 
         $cliente = $contrato->cliente;
-        $entidad = $tipo === 'pension' ? $contrato->pension : $contrato->eps;
-        $tituloEntidad = $tipo === 'pension'
-            ? ($contrato->pension?->razon_social ?? 'Pensión')
-            : ($contrato->eps?->nombre ?? 'EPS');
+        $entidad = match ($tipo) {
+            'pension' => $contrato->pension,
+            'caja' => $contrato->caja,
+            default => $contrato->eps,
+        };
+        $tituloEntidad = match ($tipo) {
+            'pension' => $contrato->pension?->razon_social ?? 'Pensión',
+            'caja' => $contrato->caja?->nombre ?? 'Caja',
+            default => $contrato->eps?->nombre ?? 'EPS',
+        };
 
         $nombreCompleto = $cliente?->nombre_completo ?? '—';
         $empresa = $contrato->razonSocial?->razon_social ?? '—';
@@ -76,9 +92,11 @@ class FormularioEpsController extends Controller
             ->unique('clave')
             ->values();
 
-        $rutaVista = $tipo === 'pension'
-            ? 'admin.afiliaciones.formulario.pension'
-            : 'admin.afiliaciones.formulario.eps';
+        $rutaVista = match ($tipo) {
+            'pension' => 'admin.afiliaciones.formulario.pension',
+            'caja' => 'admin.afiliaciones.formulario.caja',
+            default => 'admin.afiliaciones.formulario.eps',
+        };
         $rutaRaw = $rutaVista.'.raw';
 
         return view('admin.afiliaciones.formulario_print', [
@@ -144,6 +162,15 @@ class FormularioEpsController extends Controller
         return $this->generarPdf(Contrato::paraTramite($contrato), 'pension');
     }
 
+    /**
+     * PDF relleno de la caja de compensación (binario) para el iframe.
+     * GET /admin/afiliaciones/{contrato}/formulario/caja/raw
+     */
+    public function generarCaja(int $contrato)
+    {
+        return $this->generarPdf(Contrato::paraTramite($contrato), 'caja');
+    }
+
     protected function generarPdf(Contrato $contrato, string $tipo)
     {
         $incluirBeneficiarios = request()->boolean('beneficiarios', false);
@@ -162,16 +189,21 @@ class FormularioEpsController extends Controller
             'eps',
             'arl',
             'pension',
+            'caja',
         ]);
 
-        $pdfBinario = $tipo === 'pension'
-            ? $this->service->generarPension($contrato, $incluirBeneficiarios, $customDatos)
-            : $this->service->generar($contrato, $incluirBeneficiarios, $customDatos);
+        $pdfBinario = match ($tipo) {
+            'pension' => $this->service->generarPension($contrato, $incluirBeneficiarios, $customDatos),
+            'caja' => $this->service->generarCaja($contrato, $incluirBeneficiarios, $customDatos),
+            default => $this->service->generar($contrato, $incluirBeneficiarios, $customDatos),
+        };
 
         $nombreCliente = str_replace([' ', '/'], '_', $contrato->cliente?->nombre_completo ?? 'formulario');
-        $nombreEntidad = $tipo === 'pension'
-            ? str_replace([' ', '/'], '_', $contrato->pension?->razon_social ?? 'pension')
-            : str_replace([' ', '/'], '_', $contrato->eps?->nombre ?? 'eps');
+        $nombreEntidad = str_replace([' ', '/'], '_', match ($tipo) {
+            'pension' => $contrato->pension?->razon_social ?? 'pension',
+            'caja' => $contrato->caja?->nombre ?? 'caja',
+            default => $contrato->eps?->nombre ?? 'eps',
+        });
         $filename = "Formulario_{$nombreEntidad}_{$nombreCliente}.pdf";
 
         return response($pdfBinario, 200, [

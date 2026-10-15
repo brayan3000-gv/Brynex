@@ -13,5 +13,10 @@ class Caja extends BaseModel
         'nit', 'codigo', 'nombre', 'razon_social',
         'direccion', 'telefono', 'ciudad', 'email',
         'nombre_asopagos',
+        'formulario_pdf', 'formulario_campos',
+    ];
+
+    protected $casts = [
+        'formulario_campos' => 'array',
     ];
 }

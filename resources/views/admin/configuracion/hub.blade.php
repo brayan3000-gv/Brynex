@@ -256,6 +256,16 @@
         </a>
         @endif
 
+        @if(($primeraCaja ?? null) && auth()->user()->can('formularios_pdf.editar'))
+        <a class="cfg-card" href="{{ route('admin.configuracion.cajas.formulario', $primeraCaja) }}"
+           style="--c:#16a34a;--bc:#86efac">
+            <span class="c-badge" style="background:#dcfce7;color:#15803d">Solo BryNex</span>
+            <div class="c-icon">🗺️</div>
+            <div class="c-title">Editor de Formularios Caja</div>
+            <div class="c-desc">Igual que el de EPS, pero para las cajas de compensación: COMFABOY y las demás con formulario propio de afiliación.</div>
+        </a>
+        @endif
+
         @if(($primerOperador ?? null) && auth()->user()->can('formularios_pdf.editar'))
         <a class="cfg-card" href="{{ route('admin.configuracion.operadores.formulario', $primerOperador) }}"
            style="--c:#0f172a;--bc:#94a3b8">

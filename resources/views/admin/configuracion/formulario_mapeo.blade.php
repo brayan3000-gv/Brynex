@@ -290,6 +290,7 @@ const PREVIEWS = {
     'novedad.inicio_laboral_x'       : 'X',
     'arl.nombre'                     : 'SURA ARL',
     'pension.nombre'                 : 'PORVENIR',
+    'caja.nombre'                    : 'COMFABOY',
     'contrato.salario'               : '1.300.000',
     'empresa.razon_social'           : 'EMPRESA S.A.S.',
     'empresa.tipo_doc'               : 'NIT',

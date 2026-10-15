@@ -43,13 +43,19 @@ class ConfiguracionAliadoController extends Controller
             ?? \App\Models\Pension::select('id', 'razon_social', 'formulario_pdf')
                 ->orderBy('razon_social')->first();
 
+        // Caja de entrada al editor: una con PDF ya cargado, si no, la primera.
+        $primeraCaja = \App\Models\Caja::select('id', 'nombre', 'formulario_pdf')
+            ->whereNotNull('formulario_pdf')->orderBy('nombre')->first()
+            ?? \App\Models\Caja::select('id', 'nombre', 'formulario_pdf')
+                ->orderBy('nombre')->first();
+
         // Obtener el primer operador de planilla disponible para el editor de planillas
         $primerOperador = \App\Models\OperadorPlanilla::orderBy('nombre')->first();
 
         // Slug del aliado activo, para el link de la tarjeta "Página Web Pública"
         $aliadoActivo = Aliado::select('id', 'slug')->find(session('aliado_id_activo'));
 
-        return view('admin.configuracion.hub', compact('primeraEps', 'primeraPension', 'primerOperador', 'aliadoActivo'));
+        return view('admin.configuracion.hub', compact('primeraEps', 'primeraPension', 'primeraCaja', 'primerOperador', 'aliadoActivo'));
     }
 
     /**

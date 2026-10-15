@@ -788,6 +788,8 @@ function sortClass($col, $currSort, $currDir) {
             <button class="badge-estado badge-{{ $rCaja->estadoClaseEfectiva() }} btn-rad"
                 @if($rCaja->esConfirmadoPorEntidad()) title="{{ $rCaja->textoConfirmacion() }}" @endif
                 data-rad-id="{{ $rCaja->id }}"
+                data-contrato-id="{{ $c->id }}"
+                data-caja-formulario="{{ $c->caja?->formulario_pdf ? '1' : '0' }}"
                 data-rad='{{ json_encode(['id'=>$rCaja->id,'tipo'=>$rCaja->tipo,'estado'=>$rCaja->estado,'numero_radicado'=>$rCaja->numero_radicado,'canal_envio'=>$rCaja->canal_envio,'canal_envio_cliente'=>$rCaja->canal_envio_cliente,'enviado_al_cliente'=>$rCaja->enviado_al_cliente,'ruta_pdf'=>$rCaja->ruta_pdf,'observacion'=>$rCaja->observacion]) }}'>
                 {{ $rCaja->estadoTextoEfectivo() }}
                 @if($rCaja->tieneAlertaDias())<span class="alert-dias">{{ $rCaja->diasEnEstado() }}d</span>@endif
@@ -798,6 +800,7 @@ function sortClass($col, $currSort, $currDir) {
                 @else
                 <button class="badge-estado badge-pendiente btn-rad-crear"
                     data-contrato-id="{{ $c->id }}" data-tipo="caja"
+                    data-caja-formulario="{{ $c->caja?->formulario_pdf ? '1' : '0' }}"
                     title="Sin radicado registrado — clic para abrir el trámite">⏳ P</button>
                 @endif
             @else
@@ -1827,8 +1830,8 @@ document.addEventListener('click', function(e) {
         const radData       = JSON.parse(btn.dataset.rad);
         const ctx           = ctxDelRadicado(btn);
         const contratoId    = btn.dataset.contratoId || null;
-        // El formulario mapeado puede ser el de la EPS o el del fondo de pensión
-        const tieneFormulario = btn.dataset.epsFormulario === '1' || btn.dataset.pensionFormulario === '1';
+        // El formulario mapeado puede ser el de la EPS, el del fondo de pensión o el de la caja
+        const tieneFormulario = btn.dataset.epsFormulario === '1' || btn.dataset.pensionFormulario === '1' || btn.dataset.cajaFormulario === '1';
         abrirModalRadicado(radId, radData, ctx, contratoId, tieneFormulario);
         return;
     }
@@ -1884,7 +1887,7 @@ async function crearRadicadoPendiente(btn) {
             data.radicado,
             ctxDelRadicado(btn),
             btn.dataset.contratoId || null,
-            btn.dataset.epsFormulario === '1' || btn.dataset.pensionFormulario === '1'
+            btn.dataset.epsFormulario === '1' || btn.dataset.pensionFormulario === '1' || btn.dataset.cajaFormulario === '1'
         );
     } catch (err) {
         btn.textContent = textoOriginal;
@@ -2026,12 +2029,12 @@ function abrirModalRadicado(radId, radData, ctx = {}, contratoId = null, tieneFo
         }
     }
 
-    // ── Botón PDF Formulario (EPS o Pensión) / Ver Datos ──
+    // ── Botón PDF Formulario (EPS, Pensión o Caja) / Ver Datos ──
     const secFormulario = document.getElementById('seccionFormularioEps');
     const btnPdf        = document.getElementById('btnFormularioPdf');
     const btnVerDatos   = document.getElementById('btnVerDatosCotizante');
-    // Solo EPS y pensión tienen formulario de afiliación mapeado
-    const tipoFormulario = ['eps', 'pension'].includes(radData.tipo) ? radData.tipo : null;
+    // Solo EPS, pensión y caja tienen formulario de afiliación mapeado
+    const tipoFormulario = ['eps', 'pension', 'caja'].includes(radData.tipo) ? radData.tipo : null;
 
     // Botón Formulario PDF: visible solo si la entidad tiene formulario configurado
     if (btnPdf) {
