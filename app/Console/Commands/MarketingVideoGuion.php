@@ -453,8 +453,8 @@ class MarketingVideoGuion extends Command
         // afiliación y 20/30/40/50 % de administración según cartera. Por unidad, nunca un
         // total, y sin «garantizado».
         'aliados-plataforma' => [
-            'tema' => 'asesores con cartera propia: el software hace afiliaciones, planillas e IA por WhatsApp; ganan hasta el 50 %',
-            'titulo' => '¿Cuántos clientes manejas hoy? El software hace el resto',
+            'tema' => 'asesores y empresas con cartera: solo el programa, razones sociales o todo lo operativo, según sus afiliados',
+            'titulo' => 'Somos tu aliado: solo el programa, razones sociales o todo lo operativo',
             'escenas' => [
                 'Vertical 9:16 cinematic shot. A Colombian woman in her 30s, a sales advisor, sits at a '
                 .'cafe table with a phone in one hand and a thick folder of forms in the other, glancing '
@@ -485,27 +485,30 @@ class MarketingVideoGuion extends Command
                     ['archivo' => '32-pagina-brygar.png', 'modo' => 'ancho', 'zoom' => 1.6, 'arriba' => 0.0],
                 ],
             ],
+            // Las tres puertas del volante de alianzas, en el orden en que crece el aliado. Son
+            // las de brynex.co/aliados (Esencial, Específica, Integral) dichas sin nombre de plan.
             'frases' => [
                 '¿Cuántos clientes manejas hoy?',
-                'Afiliaciones y planillas solas',
-                'Una IA atiende a tus clientes',
-                'Hasta el 50 % de la administración',
+                'Solo el programa',
+                'O nuestras razones sociales',
+                'O todo lo operativo',
+                'Tú eliges, según tus afiliados',
             ],
-            'narracion' => 'Si eres asesor de seguridad social y ya tienes clientes, esto es para ti. '
-                .'En BRYGAR trabajas con BRYNEX, el software que hace lo operativo solo: afiliaciones automáticas '
-                .'a la ARL y a la EPS, planillas pagadas por API, cobros por WhatsApp, y una inteligencia '
-                .'artificial que atiende a tus clientes y hasta lee sus comprobantes. Tú vendes, el sistema '
-                .'administra. Ganas la mitad de cada afiliación y hasta el cincuenta por ciento de la '
-                .'administración mensual. Escríbenos y calcula cuánto ganarías.',
-            'copy' => '¿Eres asesor de seguridad social y ya tienes clientes? En BRYGAR trabajas con BRYNEX.co, '
-                .'el software que hace lo operativo por ti:'."\n\n"
-                .'• Afiliaciones automáticas a ARL y EPS, con carné en PDF.'."\n"
-                .'• Planillas liquidadas y pagadas por API, sin subir archivos.'."\n"
-                .'• Cobros por WhatsApp y una IA que atiende a tus clientes, lee comprobantes y responde notas de voz.'."\n"
-                .'• Informes del día y del mes para seguir tu cartera desde el celular.'."\n\n"
-                .'Tú vendes, el sistema administra. Ganas la mitad de cada afiliación ($62.700 en un plan de $125.400) '
-                .'y por administración del 20 % al 50 % según tu cartera: hasta $23.000 al mes por cada cliente.'."\n\n"
-                .'📲 Escríbenos al '.self::WHATSAPP_ASESORES.' con cuántos clientes manejas, o calcula tu caso en brynex.co/aliados.',
+            'narracion' => 'Si eres asesor o tienes empresa de seguridad social, en BRYGAR somos tu aliado. '
+                .'Te ayudamos con lo que necesites. Solo el programa: BRYNEX, con afiliaciones automáticas, '
+                .'planillas por API y una inteligencia artificial que atiende a tus clientes por WhatsApp. '
+                .'O también nuestras razones sociales, para que afilies sin tener empresa propia. '
+                .'O te hacemos todo lo operativo, y tú solo vendes. '
+                .'Tú eliges, según tus afiliados. Escríbenos y armamos tu plan.',
+            'copy' => '¿Eres asesor o tienes empresa de seguridad social? En BRYGAR somos tu aliado y te ayudamos '
+                .'con lo que necesites, según cuántos afiliados manejes:'."\n\n"
+                .'• Solo el programa: BRYNEX.co, con afiliaciones automáticas a ARL y EPS, planillas por API, cobros '
+                .'por WhatsApp y una IA que atiende a tus clientes, lee comprobantes y responde notas de voz.'."\n"
+                .'• El programa más nuestras razones sociales, para afiliar sin tener empresa propia.'."\n"
+                .'• O todo lo operativo hecho por nosotros: tú solo vendes.'."\n\n"
+                .'Y si trabajas con menos de 100 afiliados, el Plan Asesor: la mitad de cada afiliación y del 20 % al '
+                .'50 % de la administración según tu cartera, sin pagar plataforma.'."\n\n"
+                .'📲 Escríbenos al '.self::WHATSAPP_ASESORES.' con cuántos clientes manejas, o mira las opciones en brynex.co/aliados.'
         ],
         'contadores' => [
             'tema' => 'contadores y asesores con cartera propia: sus clientes piden afiliaciones y ellos ganan por traerlas',
