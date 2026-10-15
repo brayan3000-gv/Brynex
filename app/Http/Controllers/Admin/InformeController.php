@@ -117,8 +117,13 @@ class InformeController extends Controller
             'retiros_mes_total'         => $retirosTotal,
             'retiros_mes_sin_renovar'   => $retirosNoRenovados,
             'empresas'                  => DB::table('empresas')->where('aliado_id',$aid)->count(),
-            'incapacidades'             => DB::table('incapacidades')->where('aliado_id',$aid)->whereNull('deleted_at')->whereNotIn('estado',['cerrado','rechazado'])->count(),
-            'tareas'                    => DB::table('tareas')->where('aliado_id',$aid)->whereNull('deleted_at')->whereIn('estado',['pendiente','en_gestion','en_espera'])->count(),
+            // Las mismas "Activas" del módulo de incapacidades: una por familia
+            // (original + prórrogas) con algo pendiente. Antes excluía un
+            // 'cerrado' que no existe y contaba pagadas, anuladas y prórrogas
+            // (GiMave: 2.202 contra 450).
+            'incapacidades'             => DB::table('incapacidades')->where('aliado_id',$aid)->whereNull('deleted_at')->whereNull('incapacidad_padre_id')
+                ->whereRaw(\App\Http\Controllers\Admin\IncapacidadController::sqlFamiliaAbierta('incapacidades'))->count(),
+            'tareas'                    => DB::table('tareas')->where('aliado_id',$aid)->whereNull('deleted_at')->whereIn('estado',\App\Models\Tarea::ESTADOS_ACTIVOS)->count(),
         ];
 
         // Lo que le falta cerrar al aliado del mes. Son 3 consultas de ~250ms
@@ -344,24 +349,119 @@ class InformeController extends Controller
     }
 
     // ── 4. Empresas clientes ──────────────────────────────────────────
-    public function empresasClientes()
+    /**
+     * Empresas clientes: contratos activos hoy y cómo se movieron en los
+     * últimos 6 meses (este incluido): ingresos por fecha de ingreso, retiros
+     * por fecha de retiro, y el balance.
+     *
+     * La empresa es la de la ficha del cliente (`clientes.cod_empresa`), y
+     * solo de este aliado: `cod_empresa` a veces apunta a una empresa de otro.
+     */
+    public function empresasClientes(Request $request)
     {
         $this->checkAdmin();
         $aid = $this->aliadoId();
 
-        $data = DB::table('empresas AS em')
-            ->where('em.aliado_id',$aid)
-            ->leftJoin('clientes AS cl','cl.cod_empresa','=','em.id')
-            ->leftJoin('contratos AS co', function($j) use($aid){
-                $j->on('co.cedula','=','cl.cedula')->where('co.aliado_id',$aid)->where('co.estado','vigente');
+        $nombres = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+        $meses = collect(range(5, 0))->map(function ($atras) use ($nombres) {
+            $d = now()->startOfMonth()->subMonths($atras);
+
+            return ['clave' => $d->format('Y-n'), 'anio' => $d->year, 'mes' => $d->month,
+                'label' => $nombres[$d->month].' '.$d->format('y')];
+        });
+        $desde = now()->startOfMonth()->subMonths(5)->toDateString();
+        $hasta = now()->endOfMonth()->toDateString();
+
+        $empresas = DB::table('empresas AS em')
+            ->where('em.aliado_id', $aid)
+            ->leftJoin('clientes AS cl', function ($j) use ($aid) {
+                $j->on('cl.cod_empresa', '=', 'em.id')->where('cl.aliado_id', $aid);
             })
-            ->groupBy('em.id','em.empresa','em.nit')
-            ->select('em.id','em.empresa','em.nit',
+            ->leftJoin('contratos AS co', function ($j) use ($aid) {
+                $j->on('co.cedula', '=', 'cl.cedula')->where('co.aliado_id', $aid)->where('co.estado', 'vigente');
+            })
+            ->groupBy('em.id', 'em.empresa', 'em.nit')
+            ->select('em.id', 'em.empresa', 'em.nit',
                 DB::raw('COUNT(DISTINCT cl.cedula) AS clientes'),
                 DB::raw('COUNT(DISTINCT co.id) AS contratos'))
-            ->orderByDesc('contratos')->get();
+            ->get();
 
-        return view('admin.informes.empresas_clientes', compact('data'));
+        // Ingresos y retiros por empresa y mes, en una consulta cada uno.
+        $movimiento = function (string $campo, bool $soloRetirados) use ($aid, $desde, $hasta) {
+            return DB::table('contratos AS c')
+                ->join('clientes AS cl', function ($j) use ($aid) {
+                    $j->on('cl.cedula', '=', 'c.cedula')->where('cl.aliado_id', $aid);
+                })
+                ->where('c.aliado_id', $aid)
+                ->when($soloRetirados, fn ($q) => $q->where('c.estado', 'retirado'))
+                ->whereBetween("c.$campo", [$desde, $hasta])
+                ->groupBy('cl.cod_empresa', DB::raw("YEAR(c.$campo)"), DB::raw("MONTH(c.$campo)"))
+                ->select('cl.cod_empresa', DB::raw("YEAR(c.$campo) AS anio"), DB::raw("MONTH(c.$campo) AS mes"), DB::raw('COUNT(*) AS n'))
+                ->get()
+                ->groupBy(fn ($r) => (int) $r->cod_empresa)
+                ->map(fn ($filas) => $filas->mapWithKeys(fn ($r) => [((int) $r->anio).'-'.((int) $r->mes) => (int) $r->n]));
+        };
+        $ingresos = $movimiento('fecha_ingreso', false);
+        $retiros = $movimiento('fecha_retiro', true);
+
+        $idsEmpresa = $empresas->pluck('id')->map(fn ($id) => (int) $id)->flip();
+        $serie = function (int $id) use ($meses, $ingresos, $retiros) {
+            return $meses->map(fn ($m) => [
+                'ingresos' => $ingresos->get($id)?->get($m['clave']) ?? 0,
+                'retiros' => $retiros->get($id)?->get($m['clave']) ?? 0,
+            ])->all();
+        };
+
+        $filas = $empresas->map(function ($e) use ($serie) {
+            $e->meses = $serie((int) $e->id);
+            $e->ingresos = array_sum(array_column($e->meses, 'ingresos'));
+            $e->retiros = array_sum(array_column($e->meses, 'retiros'));
+            $e->balance = $e->ingresos - $e->retiros;
+            $e->contratos = (int) $e->contratos;
+            $e->clientes = (int) $e->clientes;
+
+            return $e;
+        })
+            // Con activos primero (de más a menos); luego las que se movieron
+            // en el semestre; al final las quietas, por nombre.
+            ->sortBy(fn ($e) => [$e->contratos > 0 ? 0 : 1, -$e->contratos, ($e->ingresos + $e->retiros) > 0 ? 0 : 1, mb_strtolower((string) $e->empresa)])
+            ->values();
+
+        // Totales del aliado por mes, con los clientes sin empresa incluidos.
+        $totales = $meses->map(function ($m) use ($ingresos, $retiros) {
+            $i = $ingresos->sum(fn ($porMes) => $porMes->get($m['clave']) ?? 0);
+            $r = $retiros->sum(fn ($porMes) => $porMes->get($m['clave']) ?? 0);
+
+            return $m + ['ingresos' => $i, 'retiros' => $r, 'balance' => $i - $r];
+        });
+        // Clientes sin empresa en la ficha (o con una de otro aliado).
+        $sinEmpresa = fn ($mov) => $mov->reject(fn ($porMes, $id) => $idsEmpresa->has($id))->sum(fn ($porMes) => $porMes->sum());
+
+        $resumen = [
+            'empresas' => $filas->count(),
+            'con_activos' => $filas->where('contratos', '>', 0)->count(),
+            'contratos' => $filas->sum('contratos'),
+            'crecieron' => $filas->where('balance', '>', 0)->count(),
+            'bajaron' => $filas->where('balance', '<', 0)->count(),
+            'sin_empresa_ingresos' => $sinEmpresa($ingresos),
+            'sin_empresa_retiros' => $sinEmpresa($retiros),
+        ];
+
+        if ($request->boolean('excel')) {
+            $headers = array_merge(['Empresa', 'NIT', 'Clientes', 'Contratos activos'],
+                $meses->flatMap(fn ($m) => ["Ingresos {$m['label']}", "Retiros {$m['label']}"])->all(),
+                ['Ingresos 6 meses', 'Retiros 6 meses', 'Balance', 'Tendencia']);
+
+            return $this->exportExcel($filas, 'empresas_clientes', $headers, fn ($e) => array_merge(
+                [$e->empresa, $e->nit, $e->clientes, $e->contratos],
+                collect($e->meses)->flatMap(fn ($m) => [$m['ingresos'], $m['retiros']])->all(),
+                [$e->ingresos, $e->retiros, $e->balance, $e->balance > 0 ? 'Creció' : ($e->balance < 0 ? 'Bajó' : 'Estable')]
+            ));
+        }
+
+        return view('admin.informes.empresas_clientes', [
+            'data' => $filas, 'meses' => $meses, 'totales' => $totales, 'resumen' => $resumen,
+        ]);
     }
 
     // ── 5. Por entidades ──────────────────────────────────────────────
@@ -673,8 +773,10 @@ class InformeController extends Controller
             // De la constante y no a mano: esta copia listaba un 'cerrado' que
             // no existe en el catálogo y le faltaban cierre_exitoso, negada y
             // las pagadas parciales, así que contaba como activas cosas ya
-            // cerradas. Ahora también deja fuera las anuladas.
-            'activas'  => (clone $base)->whereNotIn('estado', \App\Http\Controllers\Admin\IncapacidadController::ESTADOS_CERRADOS)->count(),
+            // cerradas. Ahora es la regla del módulo: una por familia
+            // (original + prórrogas) con algo pendiente.
+            'activas'  => (clone $base)->whereNull('incapacidad_padre_id')
+                ->whereRaw(\App\Http\Controllers\Admin\IncapacidadController::sqlFamiliaAbierta('incapacidades'))->count(),
             'dias'     => (clone $base)->sum('dias_incapacidad'),
             'v_esperado'=> (clone $base)->sum('valor_esperado'),
         ];

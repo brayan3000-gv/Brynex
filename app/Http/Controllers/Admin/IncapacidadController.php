@@ -194,8 +194,10 @@ class IncapacidadController extends Controller
      * la original sola. Mirando solo la original, una cerrada con prórrogas
      * todavía radicadas desaparecía de Activas (28 familias en sep-2026) y
      * salía en Pagadas aunque la plata de las prórrogas no se hubiera entregado.
+     *
+     * Pública porque la usa también la tarjeta del Centro de Informes.
      */
-    private function sqlFamiliaAbierta(string $tabla): string
+    public static function sqlFamiliaAbierta(string $tabla): string
     {
         $cerrados = "'".implode("','", self::ESTADOS_CERRADOS)."'";
 
