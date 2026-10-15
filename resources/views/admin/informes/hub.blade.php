@@ -17,15 +17,20 @@
     @can('informes.ver')
     @php
         $co = $kpis['cierre_operacion'];
+        // Lo del cierre (sin facturar, planillas sin confirmar) es normal a
+        // mitad de mes: se factura y se liquida en tandas. Se advierte desde el
+        // 25; antes va como tarjeta normal. Tareas e incapacidades no dependen
+        // del mes y se advierten siempre.
+        $esCierre = now()->day >= 25;
         $alertas = array_values(array_filter([
             ['n' => $kpis['tareas_vencidas'], 'titulo' => 'Tareas vencidas', 'sub' => 'Pasaron su fecha límite',
                 'url' => route('admin.tareas.index', ['semaforo' => 'vencidas'])],
             ['n' => $kpis['incapacidades_sin_gestion'], 'titulo' => 'Incapacidades sin gestión', 'sub' => 'Más de 7 días sin moverse',
                 'url' => route('admin.incapacidades.index', ['kpi' => 'sin_gestion'])],
-            ['n' => $co['vigentes'] + $co['afiliaciones'], 'titulo' => 'Sin facturar este mes',
+            ['n' => $esCierre ? $co['vigentes'] + $co['afiliaciones'] : 0, 'titulo' => 'Sin facturar este mes',
                 'sub' => number_format($co['vigentes'], 0, ',', '.').' contratos · '.number_format($co['afiliaciones'], 0, ',', '.').' afiliaciones',
                 'url' => route('admin.informes.cierre_operacion')],
-            ['n' => $co['lotes'], 'titulo' => 'Planillas sin confirmar', 'sub' => 'Tandas de planos sin número de planilla',
+            ['n' => $esCierre ? $co['lotes'] : 0, 'titulo' => 'Planillas sin confirmar', 'sub' => 'Tandas de planos sin número de planilla',
                 'url' => route('admin.informes.cierre_operacion')],
         ], fn ($a) => $a['n'] > 0));
     @endphp
@@ -52,7 +57,7 @@
     </div>
     @else
     <div style="background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:12px;padding:.75rem 1rem;font-size:.82rem;font-weight:600;margin-bottom:1.75rem;">
-        ✅ Todo al día: sin tareas vencidas, incapacidades con gestión reciente y el mes facturado.
+        ✅ Todo al día: sin tareas vencidas{{ $esCierre ? ', incapacidades con gestión reciente y el mes facturado' : ' e incapacidades con gestión reciente' }}.
         <a href="{{ route('admin.informes.cierre_operacion') }}" style="color:#047857;margin-left:.5rem;">Ver cierre de operación →</a>
     </div>
     @endif
@@ -82,6 +87,10 @@
             ['icono'=>'🏨','label'=>'Incapacidades','val'=>$kpis['incapacidades'],'color'=>'#ef4444','url'=>route('admin.informes.incapacidades'),'desc'=>'Casos activos'],
             ['icono'=>'📌','label'=>'Tareas','val'=>$kpis['tareas'],'color'=>'#f97316','url'=>route('admin.informes.tareas'),'desc'=>'Tareas activas'],
         ];
+        // Antes del 25 el cierre no va en la franja de advertencias: va aquí.
+        if (now()->day < 25) {
+            $cards[] = ['icono'=>'✅','label'=>'Cierre de Operación','val'=>$kpis['cierre_operacion']['lotes'].' tandas','color'=>'#64748b','url'=>route('admin.informes.cierre_operacion'),'desc'=>$kpis['cierre_operacion']['vigentes'].' sin facturar · '.$kpis['cierre_operacion']['afiliaciones'].' afiliaciones · se advierte desde el 25'];
+        }
         @endphp
 
         @foreach($cards as $c)
