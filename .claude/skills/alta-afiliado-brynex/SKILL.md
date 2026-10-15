@@ -130,8 +130,15 @@ más cada mes.
    económicas del ingreso de independientes (columnas Código, Nombre, Clase
    riesgo, Tasa). Su API (`POST /sel-services/consultas/independientes/actividadEconomica`,
    cuerpo `{cdActividad, dsActividad, numClase}`) responde **500** desde el
-   servidor con cualquier combinación probada (14-oct-2026): para consultarla
-   hay que entrar al portal de Sura con Claude in Chrome.
+   servidor con cualquier combinación probada (14-oct-2026), y el portal pide
+   iniciar sesión, que Claude no puede hacer.
+   **Fuente que sí funciona:** la tabla completa del decreto, publicada en texto en
+   `https://normativa.colpensiones.gov.co/colpensiones/compilacion/docs/decreto_0768_2022.htm`
+   (unos 400 mil caracteres: leerla con WebFetch en tramos con `offset` 0,
+   100000, 200000 y 300000, buscando el CIIU). Va ordenada por clase de
+   riesgo. Ejemplo: **9511-01 "Mantenimiento y reparación de computadores y de
+   equipo periférico" es clase 2**; solo aparece ahí. El PDF de Función Pública
+   falla por certificado.
    `actividades_economicas` de BryNex solo tiene 23 filas con
    `nivel_arl_sugerido`: sirve de pista, no de fuente.
 4. **Decidir**:
