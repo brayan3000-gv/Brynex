@@ -2120,17 +2120,18 @@ function _mostrarModalGestion(incId, familia, inc = {}) {
                 <div id="gBloqueDescuentos" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.4rem">
                     <div class="form-group" style="margin:0">
                         <label style="font-weight:600;font-size:.76rem">Descuento Admon</label>
-                        <input type="number" id="gDescuentoAdmon" class="form-control" value="0" min="0" oninput="_calcularNetoAfiliado()">
+                        <input type="number" id="gDescuentoAdmon" class="form-control" value="0" min="0" oninput="_calcularNetoAfiliado(this)">
                     </div>
                     <div class="form-group" style="margin:0">
                         <label style="font-weight:600;font-size:.76rem">Descuento 4x1000</label>
-                        <input type="number" id="gDescuento4x1000" class="form-control" value="0" min="0" oninput="_calcularNetoAfiliado()">
+                        <input type="number" id="gDescuento4x1000" class="form-control" value="0" min="0" oninput="_calcularNetoAfiliado(this)">
                     </div>
                     <div class="form-group" style="margin:0">
                         <label style="font-weight:600;font-size:.76rem">Otros Descuentos</label>
-                        <input type="number" id="gDescuentoOtros" class="form-control" value="0" min="0" oninput="_calcularNetoAfiliado()">
+                        <input type="number" id="gDescuentoOtros" class="form-control" value="0" min="0" oninput="_calcularNetoAfiliado(this)">
                     </div>
                 </div>
+                <div id="gTopeDescuentos" style="display:none;font-size:.74rem;color:#b91c1c;margin-top:-.25rem"></div>
 
                 <!-- Lo que ya se le entregó al afiliado con "Registrar Anticipo / Préstamo":
                      se descuenta del neto para no pagarle dos veces la misma incapacidad. -->
@@ -2983,15 +2984,34 @@ function _cargarDatosPagoAfiliado(inc, incId, esDirecto = false) {
     document.addEventListener('paste', window._afiliadoPasteHandler);
 }
 
-function _calcularNetoAfiliado() {
+// `editado` es el campo de descuento que se está escribiendo: si con él los
+// descuentos pasan de lo que queda por entregar (recibido menos anticipado), se
+// baja a lo máximo que cabe. Antes el neto solo se mostraba en 0 y el descuento
+// inflado se guardaba igual como gasto del Canal 5.
+function _calcularNetoAfiliado(editado = null) {
+    const campos = ['gDescuentoAdmon', 'gDescuento4x1000', 'gDescuentoOtros'].map(id => document.getElementById(id));
     const bruto = Number(document.getElementById('gValorRecibidoEps').value || 0);
-    const admon = Number(document.getElementById('gDescuentoAdmon').value || 0);
-    const x1000 = Number(document.getElementById('gDescuento4x1000').value || 0);
-    const otros = Number(document.getElementById('gDescuentoOtros').value || 0);
     const anticipado = Number(document.getElementById('gAnticipadoAfiliado').value || 0);
+    const disponible = Math.max(0, bruto - anticipado);
+    const aviso = document.getElementById('gTopeDescuentos');
 
-    const neto = bruto - admon - x1000 - otros - anticipado;
-    document.getElementById('gValorPagoAfiliado').value = neto >= 0 ? neto : 0;
+    campos.forEach(c => { if (Number(c.value) < 0) c.value = 0; });
+    let descuentos = campos.reduce((t, c) => t + Number(c.value || 0), 0);
+
+    if (aviso) aviso.style.display = 'none';
+    if (descuentos > disponible) {
+        const objetivo = campos.includes(editado) ? editado : campos[2];
+        const resto = descuentos - Number(objetivo.value || 0);
+        objetivo.value = Math.max(0, disponible - resto);
+        descuentos = campos.reduce((t, c) => t + Number(c.value || 0), 0);
+        if (aviso) {
+            aviso.textContent = 'Los descuentos no pueden pasar de $' + disponible.toLocaleString('es-CO')
+                + (anticipado > 0 ? ' (lo recibido menos lo ya anticipado).' : ' (lo recibido).');
+            aviso.style.display = 'block';
+        }
+    }
+
+    document.getElementById('gValorPagoAfiliado').value = Math.max(0, disponible - descuentos);
 }
 
 function _cambioFormaPagoAfiliado(val) {

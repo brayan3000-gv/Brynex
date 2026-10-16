@@ -1203,6 +1203,19 @@ class IncapacidadController extends Controller
 
         // Mismo criterio: se avisa antes de crear la gestión. El pago directo de
         // la entidad no entra aquí porque no mueve la caja del aliado.
+        // El formulario ya topa los descuentos; esto ataja lo que llegue por otra vía.
+        if ($incActualizar && $nuevoEstado === 'pagada_afiliado' && ! $esPagoDirectoAfiliado
+            && $request->filled('valor_pago_afiliado')) {
+            $negativo = collect(['valor_pago_afiliado', 'descuento_admon', 'descuento_4x1000', 'descuento_otros'])
+                ->contains(fn ($campo) => (float) $request->input($campo, 0) < 0);
+            if ($negativo) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'El neto y los descuentos del pago al afiliado no pueden ser negativos.',
+                ], 422);
+            }
+        }
+
         // Con neto en cero (el anticipo ya cubrió todo) no sale plata nueva: el
         // aviso de "ya tiene un pago registrado" sería justo el anticipo.
         if ($incActualizar && $nuevoEstado === 'pagada_afiliado' && ! $esPagoDirectoAfiliado
