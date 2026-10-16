@@ -1898,6 +1898,7 @@ const CTX = {
     rsDiaHabil    : {{ $rsDiaHabil ?? 'null' }},
     csrfToken     : '{{ csrf_token() }}',
     gastoPagoId   : {{ $gastoPagoId ?? 'null' }},
+    bancoSugeridoId: {{ $bancoSugeridoId ?? 'null' }},
     routes: {
         descargar        : '{{ route('admin.planos.descargar') }}',
         descargarAsopagos  : '{{ route('admin.planos.descargar_asopagos') }}',
@@ -3201,6 +3202,38 @@ function pintarPendientesCierre(p) {
         (p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline">Ver quiénes son →</a>` : ''));
 }
 
+// Botón "Ya pagué": pagado el PSE, abre Confirmar Pago con lo que ya se sabe
+// de la planilla (operador, número, valor, la cuenta de la última vez). Solo
+// queda pegar el soporte y confirmar. Guarda la planilla en una variable
+// porque en pantalla hay una sola liquidación a la vez.
+function botonYaPague(numero, valor, operadorNombre) {
+    if (CTX.planoPagado || !numero) return '';
+    window._ultimaLiquidada = { numero: String(numero), valor: Math.round(Number(valor) || 0), operador: operadorNombre || '' };
+    return '<br><button type="button" onclick="confirmarPagoLiquidado()" style="margin-top:.5rem;background:#16a34a;'
+        + 'color:#fff;border:none;border-radius:8px;padding:.45rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">'
+        + '✅ Ya pagué — confirmar el pago</button>';
+}
+
+function confirmarPagoLiquidado() {
+    const l = window._ultimaLiquidada;
+    if (!l) return;
+
+    cerrarModal('modal-descarga');
+    abrirModalPago();
+    // En dos pasos sin la corrección liquidada abrirModalPago avisa y no abre.
+    if (!document.getElementById('modal-pago').classList.contains('open')) return;
+
+    // En dos pasos abrirModalPago ya fijó operador, número y valor de la corrección.
+    if (!window._pagoDosPasos) {
+        const sel = document.getElementById('pago-operador');
+        const opt = [...sel.options].find(o => o.value && o.value.trim().toUpperCase() === l.operador.trim().toUpperCase());
+        if (opt) sel.value = opt.value;
+        document.getElementById('pago-numero').value = l.numero;
+        if (l.valor > 0) document.getElementById('pago-valor').value = l.valor;
+    }
+    if (CTX.bancoSugeridoId) document.getElementById('pago-banco').value = String(CTX.bancoSugeridoId);
+}
+
 // Pinta el resultado guardado de una liquidación anterior.
 function renderEstadoEnlace(p, operadorNombre) {
     const cont = document.getElementById('enlace-ultima');
@@ -3212,7 +3245,8 @@ function renderEstadoEnlace(p, operadorNombre) {
         cont.innerHTML = avisoEnlace('#f0fdf4', '#bbf7d0', '#166534',
             `<strong>✅ Planilla ${p.numero_planilla}</strong> liquidada${enOperador} el ${p.fecha || ''}.` +
             (p.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(p.valor_total))}</strong>` : '') +
-            (p.url_pago ? `<br><a href="${p.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : ''));
+            (p.url_pago ? `<br><a href="${p.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : '') +
+            botonYaPague(p.numero_planilla, p.valor_total, operadorNombre));
     } else if (p.estado === 'con_errores') {
         cont.innerHTML = avisoEnlace('#fffbeb', '#fde68a', '#92400e',
             `<strong>⚠️ Último intento con errores.</strong><br>${p.mensaje_error || ''}`);
@@ -3327,7 +3361,8 @@ async function liquidarEnEnlace(operadorId, operadorNombre, paso = 1) {
             (data.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(data.valor_total))}</strong>` : '') +
             (data.valor_mora ? ` (mora: $ ${fmtNum(Math.round(data.valor_mora))})` : '') +
             (data.fecha_limite ? `<br>Fecha límite: ${String(data.fecha_limite).substring(0, 10)}` : '') +
-            (data.url_pago ? `<br><a href="${data.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : ''));
+            (data.url_pago ? `<br><a href="${data.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : '') +
+            botonYaPague(data.numero_planilla, data.valor_total, operadorNombre));
 
         pintarPendientesCierre(data.pendientes);
 
@@ -3608,7 +3643,8 @@ async function autocorregirEnlace() {
                 (data.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(data.valor_total))}</strong>` : '') +
                 (data.valor_mora ? ` (mora: $ ${fmtNum(Math.round(data.valor_mora))})` : '') +
                 (data.fecha_limite ? `<br>Fecha límite: ${String(data.fecha_limite).substring(0, 10)}` : '') +
-                (data.url_pago ? `<br><a href="${data.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : ''));
+                (data.url_pago ? `<br><a href="${data.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : '') +
+                botonYaPague(data.numero_planilla, data.valor_total, ''));
         }
     } catch (e) {
         mostrarToast('Error de conexión al autocorregir.', 'error');
