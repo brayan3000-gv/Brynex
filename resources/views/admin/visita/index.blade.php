@@ -118,7 +118,7 @@
         }
     </style>
 </head>
-<body x-data="visita()" x-init="iniciar()">
+<body x-data="visita()" x-init="iniciar()" @paste.window="pegarComprobante($event)">
 
 <header class="cab" x-ref="cab">
     <div class="cab-in">
@@ -302,9 +302,10 @@
                 <label class="foto">
                     <input type="file" accept="image/*" capture="environment" style="display:none" @change="tomarFoto($event)">
                     <template x-if="cobro.fotoUrl"><img :src="cobro.fotoUrl"></template>
-                    <span x-text="cobro.foto ? 'Foto lista · tocar para cambiar' : '📷 Tomar foto al comprobante'"></span>
+                    <span x-text="cobro.foto ? 'Comprobante listo · tocar o Ctrl+V para cambiar' : '📷 Tomar foto o pegar con Ctrl+V'"></span>
                 </label>
             </div>
+            <div class="aviso azul" x-show="cobro.foto && !cobro.transferencia" x-text="'Comprobante pegado: escribe el valor de la transferencia y la cuenta que la recibió.'"></div>
 
             <label class="campo">📱 WhatsApp para el recibo</label>
             <input class="entrada num" inputmode="tel" x-model="cobro.celular" placeholder="3001234567" maxlength="15">
@@ -517,6 +518,18 @@ function visita() {
         async tomarFoto(ev) {
             const f = ev.target.files && ev.target.files[0];
             if (!f) return;
+            this.cobro.foto = await this.comprimir(f);
+            this.cobro.fotoUrl = URL_obj(this.cobro.foto);
+        },
+        // En el computador el comprobante suele llegar como captura de
+        // pantalla (WhatsApp Web, correo): Ctrl+V lo toma del portapapeles.
+        // Un pegado sin imagen sigue su curso normal en el campo.
+        async pegarComprobante(ev) {
+            if (!this.cobro || this.resultado || this.guardando) return;
+            const item = [...(ev.clipboardData?.items || [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+            const f = item && item.getAsFile();
+            if (!f) return;
+            ev.preventDefault();
             this.cobro.foto = await this.comprimir(f);
             this.cobro.fotoUrl = URL_obj(this.cobro.foto);
         },
