@@ -1330,6 +1330,9 @@
                     {{-- Resultado de la última liquidación de este periodo --}}
                     <div id="enlace-ultima" style="display:none;margin-top:.6rem"></div>
 
+                    {{-- La razón social pasó al plano siguiente al liquidar. --}}
+                    <div id="enlace-nplano" style="display:none;margin-top:.6rem"></div>
+
                     {{-- Cuadre del período: vigentes que aún no entran a ninguna
                          planilla. Informativo — mientras el mes corre es normal
                          que haya tandas por liquidar. --}}
@@ -2600,6 +2603,8 @@ function abrirModalDescarga() {
         }
         chip.textContent = '$ ' + fmtNum(total);
     }
+    const avisoPlano = document.getElementById('enlace-nplano');
+    if (avisoPlano) { avisoPlano.style.display = 'none'; avisoPlano.innerHTML = ''; }
     document.getElementById('modal-descarga').classList.add('open');
     cargarEstadoEnlace();
 }
@@ -3188,30 +3193,79 @@ function pintarPendientesCierre(p) {
     const cont = document.getElementById('enlace-pendientes');
     if (!cont || !p) return;
 
+    cont.style.display = '';
     if (!p.total) {
-        cont.style.display = '';
         cont.innerHTML = avisoEnlace('#f0fdf4', '#bbf7d0', '#166534',
-            '✅ <strong>Sin pendientes.</strong> Todos los contratos vigentes de esta razón social ya están en una planilla del período.');
+            '✅ Todos los vigentes de esta razón social ya están en una planilla del mes.');
         return;
     }
 
-    cont.style.display = '';
+    // Mientras falten tandas por facturar es normal; en la última, son
+    // retiros sin registrar.
     cont.innerHTML = avisoEnlace('#fffbeb', '#fde68a', '#92400e',
-        `📋 Quedan <strong>${p.total}</strong> contrato(s) vigente(s) sin planilla en este período.` +
-        ` Si todavía faltan tandas por facturar es normal; si esta era la última, son retiros sin registrar.` +
-        (p.url ? `<br><a href="${p.url}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline">Ver quiénes son →</a>` : ''));
+        `📋 <strong>${p.total}</strong> vigente(s) aún sin planilla este mes.` +
+        (p.url ? ` <a href="${p.url}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline">Ver quiénes →</a>` : ''));
 }
 
-// Botón "Ya pagué": pagado el PSE, abre Confirmar Pago con lo que ya se sabe
-// de la planilla (operador, número, valor, la cuenta de la última vez). Solo
-// queda pegar el soporte y confirmar. Guarda la planilla en una variable
-// porque en pantalla hay una sola liquidación a la vez.
-function botonYaPague(numero, valor, operadorNombre) {
-    if (CTX.planoPagado || !numero) return '';
-    window._ultimaLiquidada = { numero: String(numero), valor: Math.round(Number(valor) || 0), operador: operadorNombre || '' };
-    return '<br><button type="button" onclick="confirmarPagoLiquidado()" style="margin-top:.5rem;background:#16a34a;'
-        + 'color:#fff;border:none;border-radius:8px;padding:.45rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">'
-        + '✅ Ya pagué — confirmar el pago</button>';
+// Liquidada la planilla, la razón social pasa al plano siguiente (ver
+// RazonSocial::avanzarPlanoUsado). Se avisa con la opción de devolverla, por
+// si todavía falta meter gente en esta planilla y volver a liquidar.
+function pintarPlanoMovido(data) {
+    const cont = document.getElementById('enlace-nplano');
+    if (!cont || !data || !data.n_plano_nuevo) return;
+    cont.style.display = '';
+    cont.innerHTML = avisoEnlace('#eff6ff', '#bfdbfe', '#1e40af',
+        `📌 ${data.razon_social || 'La razón social'} pasó al <strong>plano ${data.n_plano_nuevo}</strong>: `
+        + 'lo que se facture desde ahora queda aparte. '
+        + `<a href="#" onclick="devolverPlano(${Number(data.n_plano_liquidado)});return false;" `
+        + `style="color:#1e40af;font-weight:700;text-decoration:underline">Devolverla al plano ${data.n_plano_liquidado}</a>`);
+}
+
+async function devolverPlano(nPlano) {
+    const cont = document.getElementById('enlace-nplano');
+    try {
+        const resp = await fetch(CTX.routes.nPlanoUpdate, {
+            method : 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': CTX.csrfToken },
+            body   : JSON.stringify({ razon_social_id: CTX.razonSocialId, n_plano: nPlano }),
+        });
+        const data = await resp.json();
+        if (!data.ok) { mostrarToast(data.mensaje || 'No se pudo devolver el plano.', 'error'); return; }
+        mostrarToast(data.mensaje, 'success');
+        if (document.getElementById('badge-nplano-val'))
+            document.getElementById('badge-nplano-val').textContent = nPlano;
+        if (cont) cont.innerHTML = avisoEnlace('#f8fafc', '#e2e8f0', '#475569',
+            `↩️ La razón social sigue en el plano ${nPlano}. Al volver a liquidar o al confirmar el pago pasará al siguiente.`);
+    } catch (e) {
+        mostrarToast('Error de conexión.', 'error');
+    }
+}
+
+// Botones de la planilla liquidada: ir a pagar por PSE y, ya pagada, "Ya
+// pagué", que abre Confirmar Pago con lo que ya se sabe de la planilla
+// (operador, número, valor, la cuenta de la última vez). Solo queda pegar el
+// soporte y confirmar. La planilla se guarda en una variable porque en
+// pantalla hay una sola liquidación a la vez.
+const LOGO_PSE = '<svg width="22" height="22" viewBox="0 0 40 40" aria-hidden="true" style="flex:none">'
+    + '<circle cx="20" cy="20" r="19" fill="#fff"/><circle cx="20" cy="20" r="16.5" fill="#0b4f9c"/>'
+    + '<text x="20" y="24.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" '
+    + 'font-weight="700" fill="#fff">pse</text></svg>';
+
+function accionesPago(urlPago, numero, valor, operadorNombre) {
+    if (CTX.planoPagado) return '';
+    const estilo = 'display:inline-flex;align-items:center;gap:.4rem;border:none;border-radius:8px;'
+        + 'padding:.42rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer;text-decoration:none;color:#fff';
+    let html = '';
+    if (urlPago) {
+        html += `<a href="${urlPago}" target="_blank" rel="noopener" style="${estilo};background:#0b4f9c">`
+            + `${LOGO_PSE} Pagar con PSE</a>`;
+    }
+    if (numero) {
+        window._ultimaLiquidada = { numero: String(numero), valor: Math.round(Number(valor) || 0), operador: operadorNombre || '' };
+        html += `<button type="button" onclick="confirmarPagoLiquidado()" style="${estilo};background:#16a34a">`
+            + '✅ Ya pagué — confirmar</button>';
+    }
+    return html ? `<div style="display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.55rem">${html}</div>` : '';
 }
 
 function confirmarPagoLiquidado() {
@@ -3245,8 +3299,7 @@ function renderEstadoEnlace(p, operadorNombre) {
         cont.innerHTML = avisoEnlace('#f0fdf4', '#bbf7d0', '#166534',
             `<strong>✅ Planilla ${p.numero_planilla}</strong> liquidada${enOperador} el ${p.fecha || ''}.` +
             (p.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(p.valor_total))}</strong>` : '') +
-            (p.url_pago ? `<br><a href="${p.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : '') +
-            botonYaPague(p.numero_planilla, p.valor_total, operadorNombre));
+            accionesPago(p.url_pago, p.numero_planilla, p.valor_total, operadorNombre));
     } else if (p.estado === 'con_errores') {
         cont.innerHTML = avisoEnlace('#fffbeb', '#fde68a', '#92400e',
             `<strong>⚠️ Último intento con errores.</strong><br>${p.mensaje_error || ''}`);
@@ -3361,10 +3414,10 @@ async function liquidarEnEnlace(operadorId, operadorNombre, paso = 1) {
             (data.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(data.valor_total))}</strong>` : '') +
             (data.valor_mora ? ` (mora: $ ${fmtNum(Math.round(data.valor_mora))})` : '') +
             (data.fecha_limite ? `<br>Fecha límite: ${String(data.fecha_limite).substring(0, 10)}` : '') +
-            (data.url_pago ? `<br><a href="${data.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : '') +
-            botonYaPague(data.numero_planilla, data.valor_total, operadorNombre));
+            accionesPago(data.url_pago, data.numero_planilla, data.valor_total, operadorNombre));
 
         pintarPendientesCierre(data.pendientes);
+        pintarPlanoMovido(data);
 
         mostrarToast(`Planilla ${data.numero_planilla} liquidada en ${operadorNombre}.`, 'success');
 
@@ -3643,9 +3696,9 @@ async function autocorregirEnlace() {
                 (data.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(data.valor_total))}</strong>` : '') +
                 (data.valor_mora ? ` (mora: $ ${fmtNum(Math.round(data.valor_mora))})` : '') +
                 (data.fecha_limite ? `<br>Fecha límite: ${String(data.fecha_limite).substring(0, 10)}` : '') +
-                (data.url_pago ? `<br><a href="${data.url_pago}" target="_blank" rel="noopener" style="color:#15803d;font-weight:700;text-decoration:underline">Ir a pagar en PSE →</a>` : '') +
-                botonYaPague(data.numero_planilla, data.valor_total, ''));
+                accionesPago(data.url_pago, data.numero_planilla, data.valor_total, data.operador || ''));
         }
+        pintarPlanoMovido(data);
     } catch (e) {
         mostrarToast('Error de conexión al autocorregir.', 'error');
     } finally {

@@ -41,5 +41,31 @@ class RazonSocial extends BaseModel
     {
         return $q->where('aliado_id', $aliadoId)->where('estado', 'Activa');
     }
+
+    /**
+     * Pasa la razón social al plano siguiente si todavía apunta al que se
+     * acaba de liquidar o pagar. Si no, las facturas que entren después
+     * caerían en él: fuera de la planilla, pero marcadas con su número al
+     * confirmar el pago. Es lo que el modal "Actualizar N° Plano" pedía hacer
+     * a mano y a veces se olvidaba.
+     *
+     * Solo para el mes activo de la razón social (el n_plano solo vale ahí:
+     * ver FacturacionController::_nPlanoParaRS y ResetNPlanoMensual), y no en
+     * independientes, que se pagan persona por persona.
+     *
+     * @return int|null el plano nuevo, o null si no hubo que moverla.
+     */
+    public static function avanzarPlanoUsado(int $aliadoId, int $razonSocialId, int $nPlano, int $mes, int $anio): ?int
+    {
+        $movidas = static::where('aliado_id', $aliadoId)
+            ->whereKey($razonSocialId)
+            ->where('n_plano', $nPlano)
+            ->where('mes_pagos', $mes)
+            ->where('anio_pagos', $anio)
+            ->where(fn ($q) => $q->whereNull('es_independiente')->orWhere('es_independiente', false))
+            ->update(['n_plano' => $nPlano + 1]);
+
+        return $movidas ? $nPlano + 1 : null;
+    }
 }
 

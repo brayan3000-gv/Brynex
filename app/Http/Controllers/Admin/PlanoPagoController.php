@@ -1219,24 +1219,14 @@ class PlanoPagoController extends Controller
                 ]);
             }
 
-            // Si la razón social sigue apuntando al plano que se acaba de pagar,
-            // las facturas que entren después caerían en él y quedarían mezcladas
-            // con gente ya pagada. Se pasa sola al siguiente, que es lo que el
-            // modal "Actualizar N° Plano" pide hacer a mano y a veces se olvida.
-            // Solo si el pago es del mes activo de la razón social (ver
-            // FacturacionController::_nPlanoParaRS y ResetNPlanoMensual), y en
-            // independientes no, porque allá se paga persona por persona.
-            $nPlanoNuevo = null;
-            if (empty($validated['plano_id']) && ! $rs->es_independiente) {
-                $nPagado = (int) $validated['n_plano'];
-                $avanzo = RazonSocial::where('aliado_id', $aliadoId)
-                    ->whereKey($rs->id)
-                    ->where('n_plano', $nPagado)
-                    ->where('mes_pagos', (int) $validated['mes_plano'])
-                    ->where('anio_pagos', (int) $validated['anio_plano'])
-                    ->update(['n_plano' => $nPagado + 1]);
-                $nPlanoNuevo = $avanzo ? $nPagado + 1 : null;
-            }
+            // Si la razón social sigue en el plano pagado, pasa al siguiente.
+            // Normalmente ya lo hizo la liquidación en línea; esto cubre el
+            // pago por archivo. Ver RazonSocial::avanzarPlanoUsado.
+            $nPlanoNuevo = empty($validated['plano_id'])
+                ? RazonSocial::avanzarPlanoUsado(
+                    (int) $aliadoId, (int) $rs->id, (int) $validated['n_plano'],
+                    (int) $validated['mes_plano'], (int) $validated['anio_plano'])
+                : null;
 
             DB::commit();
 

@@ -290,7 +290,10 @@ class PlanillaApiController extends Controller
         return [
             'total' => $total,
             'url'   => route('admin.informes.validacion_cierre', [
+                // Sin aliado_id el informe es el global de BryNex y mostraba
+                // los pendientes de todos los aliados, no los de este.
                 'mes' => $mes, 'anio' => $anio, 'razon_social_id' => $razonSocialId,
+                'aliado_id' => $aliadoId,
             ]),
         ];
     }
@@ -811,9 +814,19 @@ class PlanillaApiController extends Controller
             'response_log'    => $resultado['response'] ?? null,
         ], $datosAsociada));
 
+        // Liquidada la planilla, su gente queda fija: lo que se facture desde
+        // ahora va a otro plano. Ver RazonSocial::avanzarPlanoUsado.
+        $nPlanoNuevo = RazonSocial::avanzarPlanoUsado(
+            (int) $aliadoId, (int) $rs->id, (int) $validated['n_plano'],
+            (int) $validated['mes'], (int) $validated['anio']
+        );
+
         return response()->json([
             'success'         => true,
             'liquidada'       => true,
+            'n_plano_nuevo'   => $nPlanoNuevo,
+            'n_plano_liquidado' => (int) $validated['n_plano'],
+            'razon_social'    => $rs->razon_social,
             'numero_planilla' => $resultado['numero_planilla'],
             'codigo_planilla' => $resultado['codigo_planilla'] ?? null,
             'valor_total'     => $resultado['totales']['total_pagar'] ?? null,
@@ -1199,9 +1212,20 @@ class PlanillaApiController extends Controller
             'response_log'    => $resultado['response'] ?? null,
         ]);
 
+        // Igual que al liquidar: la gente de esta planilla quedó fija. La de
+        // un independiente (plano_id) no mueve el plano de nadie.
+        $nPlanoNuevo = $registro->plano_id ? null : RazonSocial::avanzarPlanoUsado(
+            (int) $aliadoId, (int) $registro->razon_social_id, (int) $registro->n_plano,
+            (int) $registro->mes, (int) $registro->anio
+        );
+
         return response()->json([
             'success'         => true,
             'liquidada'       => true,
+            'operador'        => OperadorPlanilla::whereKey($registro->operador_planilla_id)->value('nombre'),
+            'n_plano_nuevo'   => $nPlanoNuevo,
+            'n_plano_liquidado' => (int) $registro->n_plano,
+            'razon_social'    => RazonSocial::whereKey($registro->razon_social_id)->value('razon_social'),
             'numero_planilla' => $resultado['numero_planilla'],
             'codigo_planilla' => $resultado['codigo_planilla'] ?? null,
             'valor_total'     => $totales['total_pagar'] ?? null,
