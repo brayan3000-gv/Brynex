@@ -2132,6 +2132,13 @@ function _mostrarModalGestion(incId, familia, inc = {}) {
                     </div>
                 </div>
 
+                <!-- Lo que ya se le entregó al afiliado con "Registrar Anticipo / Préstamo":
+                     se descuenta del neto para no pagarle dos veces la misma incapacidad. -->
+                <div id="gBloqueAnticipado" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.45rem .6rem;font-size:.78rem;color:#92400e">
+                    💰 Ya se le anticipó al afiliado <strong id="gAnticipadoTxt"></strong>: se descuenta del neto.
+                    <input type="hidden" id="gAnticipadoAfiliado" value="0">
+                </div>
+
                 <div id="gBloqueFormaPago" style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
                     <div class="form-group" style="margin:0">
                         <label style="font-weight:600;font-size:.8rem">Forma de Pago *</label>
@@ -2844,6 +2851,17 @@ function _cargarDatosPagoAfiliado(inc, incId, esDirecto = false) {
     const abonoEps = (inc.abonos || []).find(a => a.tipo === 'entrada_incapacidad');
     const today = new Date().toISOString().substring(0,10);
 
+    // En el pago directo la plata no pasó por el aliado: no hay neto del cual
+    // descontar el anticipo.
+    const anticipado = esDirecto ? 0 : Math.round((inc.abonos || [])
+        .filter(a => a.tipo === 'pago_cliente')
+        .reduce((t, a) => t + Number(a.valor || 0), 0));
+    document.getElementById('gAnticipadoAfiliado').value = anticipado;
+    document.getElementById('gAnticipadoTxt').textContent = '$' + anticipado.toLocaleString('es-CO');
+    document.getElementById('gBloqueAnticipado').style.display = anticipado > 0 ? 'block' : 'none';
+    // El 4x1000 se cobra sobre lo que sale del banco, no sobre lo que ya se entregó.
+    const x1000De = v => Math.round(Math.max(0, v - anticipado) * 0.004);
+
     document.getElementById('gFechaPagoAfiliado').value = today;
     document.getElementById('gDescuentoAdmon').value = 0;
     document.getElementById('gDescuentoOtros').value = 0;
@@ -2883,7 +2901,7 @@ function _cargarDatosPagoAfiliado(inc, incId, esDirecto = false) {
     if (abonoEps) {
         valorEps = Math.round(Number(abonoEps.valor || 0));
         document.getElementById('gValorRecibidoEps').value = valorEps;
-        document.getElementById('gDescuento4x1000').value = Math.round(valorEps * 0.004);
+        document.getElementById('gDescuento4x1000').value = x1000De(valorEps);
         
         document.getElementById('gBancoOrigenIdAfiliado').value = abonoEps.banco_cuenta_id || '';
         if (abonoEps.banco_cuenta) {
@@ -2909,7 +2927,7 @@ function _cargarDatosPagoAfiliado(inc, incId, esDirecto = false) {
     } else {
         valorEps = Math.round(Number(inc.valor_esperado || 0));
         document.getElementById('gValorRecibidoEps').value = valorEps;
-        document.getElementById('gDescuento4x1000').value = Math.round(valorEps * 0.004);
+        document.getElementById('gDescuento4x1000').value = x1000De(valorEps);
         
         document.getElementById('gCuentaOrigenAfiliado').value = 'Buscando cuenta de Razón Social...';
         document.getElementById('gBancoOrigenIdAfiliado').value = '';
@@ -2970,8 +2988,9 @@ function _calcularNetoAfiliado() {
     const admon = Number(document.getElementById('gDescuentoAdmon').value || 0);
     const x1000 = Number(document.getElementById('gDescuento4x1000').value || 0);
     const otros = Number(document.getElementById('gDescuentoOtros').value || 0);
-    
-    const neto = bruto - admon - x1000 - otros;
+    const anticipado = Number(document.getElementById('gAnticipadoAfiliado').value || 0);
+
+    const neto = bruto - admon - x1000 - otros - anticipado;
     document.getElementById('gValorPagoAfiliado').value = neto >= 0 ? neto : 0;
 }
 

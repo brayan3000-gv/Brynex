@@ -1203,8 +1203,10 @@ class IncapacidadController extends Controller
 
         // Mismo criterio: se avisa antes de crear la gestión. El pago directo de
         // la entidad no entra aquí porque no mueve la caja del aliado.
+        // Con neto en cero (el anticipo ya cubrió todo) no sale plata nueva: el
+        // aviso de "ya tiene un pago registrado" sería justo el anticipo.
         if ($incActualizar && $nuevoEstado === 'pagada_afiliado' && ! $esPagoDirectoAfiliado
-            && $request->filled('valor_pago_afiliado') && ! $request->boolean('confirmar_pago')) {
+            && (float) $request->valor_pago_afiliado > 0 && ! $request->boolean('confirmar_pago')) {
             $brutoNuevo = (float) $request->valor_pago_afiliado
                 + (float) $request->input('descuento_admon', 0)
                 + (float) $request->input('descuento_4x1000', 0)
@@ -1387,26 +1389,36 @@ class IncapacidadController extends Controller
 
                     $obsAbono = "Pago al afiliado (Neto: \${$valorNeto} · Admon: \${$admon} · 4x1000: \${$x1000} · Otros: \${$otros}) — Incapacidad #{$incActualizar->id}";
 
+                    // El formulario ya descuenta lo anticipado. Si el anticipo cubrió
+                    // todo, el neto llega en cero y no hay pago nuevo que registrar:
+                    // un abono y un gasto de $0 solo ensuciarían el Canal 5.
+                    $hayPagoNuevo = (float) $valorNeto > 0;
+                    if (! $hayPagoNuevo) {
+                        $obsAbono = "Cubierta con el anticipo ya pagado al afiliado (Admon: \${$admon} · 4x1000: \${$x1000} · Otros: \${$otros}) — Incapacidad #{$incActualizar->id}";
+                    }
+
                     // 1. Guardar abono tipo pago_cliente
                     $rsIdAbono = $incActualizar->razon_social_id;
                     if (! $rsIdAbono && $incActualizar->contrato_id) {
                         $rsIdAbono = DB::table('contratos')->where('id', $incActualizar->contrato_id)->value('razon_social_id') ?: null;
                     }
 
-                    DB::table('abonos_incapacidades')->insert([
-                        'aliado_id' => $incActualizar->aliado_id,
-                        'incapacidad_id' => $incActualizar->id,
-                        'razon_social_id' => $rsIdAbono,
-                        'gestion_incapacidad_id' => $gestion->id,
-                        'tipo' => 'pago_cliente',
-                        'valor' => $valorNeto,
-                        'fecha' => $fechaPago,
-                        'banco_cuenta_id' => $bancoId,
-                        'usuario_id' => Auth::id(),
-                        'observacion' => $obsAbono,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    if ($hayPagoNuevo) {
+                        DB::table('abonos_incapacidades')->insert([
+                            'aliado_id' => $incActualizar->aliado_id,
+                            'incapacidad_id' => $incActualizar->id,
+                            'razon_social_id' => $rsIdAbono,
+                            'gestion_incapacidad_id' => $gestion->id,
+                            'tipo' => 'pago_cliente',
+                            'valor' => $valorNeto,
+                            'fecha' => $fechaPago,
+                            'banco_cuenta_id' => $bancoId,
+                            'usuario_id' => Auth::id(),
+                            'observacion' => $obsAbono,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
 
                     // 2. Obtener el nombre del cliente/afiliado para el gasto
                     $clienteObj = DB::table('clientes')->where('cedula', $incActualizar->cedula_usuario)->first();
@@ -1415,26 +1427,28 @@ class IncapacidadController extends Controller
                         : $incActualizar->cedula_usuario;
 
                     // 3. Crear Gasto tipo pago_incapacidad (neto al afiliado — Canal 5)
-                    DB::table('gastos')->insert([
-                        'aliado_id' => $incActualizar->aliado_id,
-                        'usuario_id' => Auth::id(),
-                        'cuadre_id' => null,
-                        'fecha' => $fechaPago,
-                        'tipo' => 'pago_incapacidad',
-                        'incapacidad_id' => $incActualizar->id,
-                        'gestion_incapacidad_id' => $gestion->id,
-                        'descripcion' => "Pago incapacidad #{$incActualizar->id} al afiliado (Neto: \${$valorNeto})",
-                        'pagado_a' => $nombreCliente,
-                        'cc_pagado_a' => $incActualizar->cedula_usuario,
-                        'forma_pago' => $formaPago,
-                        'banco_origen_id' => $formaPago === 'transferencia_bancaria' ? $bancoId : null,
-                        'valor' => $valorNeto,
-                        'recibo_caja' => null,
-                        'lugar' => null,
-                        'observacion' => $obsAbono,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
+                    if ($hayPagoNuevo) {
+                        DB::table('gastos')->insert([
+                            'aliado_id' => $incActualizar->aliado_id,
+                            'usuario_id' => Auth::id(),
+                            'cuadre_id' => null,
+                            'fecha' => $fechaPago,
+                            'tipo' => 'pago_incapacidad',
+                            'incapacidad_id' => $incActualizar->id,
+                            'gestion_incapacidad_id' => $gestion->id,
+                            'descripcion' => "Pago incapacidad #{$incActualizar->id} al afiliado (Neto: \${$valorNeto})",
+                            'pagado_a' => $nombreCliente,
+                            'cc_pagado_a' => $incActualizar->cedula_usuario,
+                            'forma_pago' => $formaPago,
+                            'banco_origen_id' => $formaPago === 'transferencia_bancaria' ? $bancoId : null,
+                            'valor' => $valorNeto,
+                            'recibo_caja' => null,
+                            'lugar' => null,
+                            'observacion' => $obsAbono,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
 
                     // 3b. Gasto tipo cuatropormil_incapacidad (Canal 5)
                     if ((float) $x1000 > 0) {
@@ -1509,8 +1523,13 @@ class IncapacidadController extends Controller
                     }
 
                     // 4. Actualizar la incapacidad con la fecha de pago y estado de pago
+                    // valor_pago es lo entregado al afiliado en total, anticipo incluido;
+                    // con solo el neto de esta gestión el anticipo desaparecía del detalle.
                     $incActualizar->estado_pago = 'pagado_afiliado';
-                    $incActualizar->valor_pago = $valorNeto;
+                    $incActualizar->valor_pago = (float) DB::table('abonos_incapacidades')
+                        ->where('incapacidad_id', $incActualizar->id)
+                        ->where('tipo', 'pago_cliente')
+                        ->sum('valor');
                     $incActualizar->fecha_pago = $fechaPago;
                     $incActualizar->pagado_a = 'cliente';
                     $incActualizar->detalle_pago = $obsAbono;
@@ -1618,13 +1637,22 @@ class IncapacidadController extends Controller
         $esPagoRS = $g->estado_nuevo === 'pagada_razon_social';
 
         if ($esPagoAfiliado) {
+            // El respaldo por fecha es solo para gestiones de antes de que existiera
+            // el vínculo. Una gestión nueva sin movimientos ligados es la que cerró
+            // con un anticipo que ya cubría todo: con el respaldo, reversarla
+            // tomaría el gasto del anticipo (que no tiene gestión) y lo borraría.
+            $inicioVinculo = DB::table('abonos_incapacidades')
+                ->whereNotNull('gestion_incapacidad_id')
+                ->min('created_at');
+            $usaRespaldo = ! $inicioVinculo || $g->created_at < \Carbon\Carbon::parse($inicioVinculo);
+
             $gastos = DB::table('gastos')
                 ->where('aliado_id', $inc->aliado_id)
                 ->whereIn('tipo', \App\Models\Gasto::TIPOS_INCAPACIDAD)
                 ->where('gestion_incapacidad_id', $g->id)
                 ->get();
 
-            if ($gastos->isEmpty()) {
+            if ($gastos->isEmpty() && $usaRespaldo) {
                 $q = DB::table('gastos')
                     ->where('aliado_id', $inc->aliado_id)
                     ->whereIn('tipo', \App\Models\Gasto::TIPOS_INCAPACIDAD)
@@ -1646,7 +1674,7 @@ class IncapacidadController extends Controller
                 ->where('gestion_incapacidad_id', $g->id)
                 ->get();
 
-            if ($abonos->isEmpty()) {
+            if ($abonos->isEmpty() && $usaRespaldo) {
                 $q = DB::table('abonos_incapacidades')
                     ->where('incapacidad_id', $inc->id)
                     ->whereIn('tipo', $tiposPago)
@@ -1861,11 +1889,19 @@ class IncapacidadController extends Controller
             // sin pagar. El número de radicado NO se toca: sigue siendo cierto
             // que se radicó, aunque el estado retroceda.
             if (in_array($g->estado_nuevo, ['pagada_afiliado', 'pagado_afiliado'], true)) {
+                // Un anticipo previo sigue en pie: el total anticipado no se pierde.
+                $anticipado = (float) DB::table('abonos_incapacidades')
+                    ->where('incapacidad_id', $inc->id)
+                    ->where('tipo', 'pago_cliente')
+                    ->sum('valor');
+
                 $inc->estado_pago = 'pendiente';
-                $inc->valor_pago = null;
-                $inc->fecha_pago = null;
-                $inc->pagado_a = null;
-                $inc->detalle_pago = null;
+                $inc->valor_pago = $anticipado > 0 ? $anticipado : null;
+                if ($anticipado <= 0) {
+                    $inc->fecha_pago = null;
+                    $inc->pagado_a = null;
+                    $inc->detalle_pago = null;
+                }
             }
 
             $inc->estado = $estadoDestino;
@@ -2783,6 +2819,11 @@ class IncapacidadController extends Controller
         $nuevoSaldo = max(0, $saldoPendiente - $request->valor_pago);
         $cubreTotal = $nuevoSaldo <= 0;
 
+        // Lo ya anticipado se lee ANTES de insertar el abono: total_pago_cliente
+        // consulta la BD, y leído después ya incluye este pago, que luego se
+        // volvía a sumar — la #4550 y la #339 quedaron con el doble anticipado.
+        $anticipadoAntes = (float) $inc->total_pago_cliente;
+
         $formaPago = $request->forma_pago ?: 'transferencia_bancaria';
         $bancoId = $request->banco_cuenta_id ?: null;
         $obsAbono = $request->detalle_pago ?: "Anticipo / Préstamo al afiliado — Incapacidad #{$inc->id}";
@@ -2846,7 +2887,7 @@ class IncapacidadController extends Controller
 
             // 6. Actualizar incapacidad
             $updateData = [
-                'valor_pago' => (float) $inc->total_pago_cliente + $request->valor_pago,
+                'valor_pago' => $anticipadoAntes + (float) $request->valor_pago,
                 'fecha_pago' => $request->fecha_pago,
                 'pagado_a' => $request->pagado_a,
                 'detalle_pago' => $obsAbono,
