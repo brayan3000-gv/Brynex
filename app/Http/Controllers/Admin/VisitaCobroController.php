@@ -6,10 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Models\Anticipo;
 use App\Models\BancoCuenta;
 use App\Models\Cliente;
-use App\Models\Consignacion;
 use App\Models\Contrato;
 use App\Models\Empresa;
 use App\Models\Factura;
+use App\Models\User;
 use App\Services\ReciboVisitaService;
 use App\Services\VisitaCobroService;
 use App\Services\WhatsappApiService;
@@ -44,7 +44,9 @@ class VisitaCobroController extends Controller
             'empresas' => Empresa::where('aliado_id', $aliadoId)->where('id', '>', 1)
                 ->orderBy('empresa')->get(['id', 'empresa'])
                 ->map(fn ($e) => ['id' => $e->id, 'nombre' => $e->empresa])->values(),
-            'hoy' => $this->resumenHoy($aliadoId),
+            'hoy' => $this->resumenHoy($aliadoId, (int) Auth::id()),
+            // Solo el superadmin mira los cobros de los demás (ver hoy()).
+            'usuarios' => $this->esSuperadmin() ? $this->usuariosVisita($aliadoId) : [],
         ]);
     }
 
@@ -207,7 +209,7 @@ class VisitaCobroController extends Controller
                     'a' => $resultado['anticipo_ids'] ?: null,
                 ])),
                 'contrato' => $this->fichaContrato($contrato->load(['razonSocial', 'tipoModalidad', 'plan', 'cliente'])),
-                'hoy' => $this->resumenHoy($aliadoId),
+                'hoy' => $this->resumenHoy($aliadoId, (int) Auth::id()),
             ];
             Cache::put($claveToken, $respuesta, now()->addMinutes(30));
 
@@ -253,9 +255,50 @@ class VisitaCobroController extends Controller
         ]);
     }
 
-    public function hoy()
+    /**
+     * La caja de hoy. El superadmin puede pedir la de otro usuario del aliado
+     * (usuario_id) o la de todos juntos (usuario_id=todos); los demás siempre
+     * ven la suya, pidan lo que pidan.
+     */
+    public function hoy(Request $request)
     {
-        return response()->json($this->resumenHoy((int) session('aliado_id_activo')));
+        $aliadoId = (int) session('aliado_id_activo');
+        $usuarioId = (int) Auth::id();
+        $pedido = (string) $request->get('usuario_id', '');
+
+        if ($pedido !== '' && $this->esSuperadmin()) {
+            if ($pedido === 'todos') {
+                $usuarioId = null;
+            } elseif (collect($this->usuariosVisita($aliadoId))->contains('id', (int) $pedido)) {
+                $usuarioId = (int) $pedido;
+            }
+        }
+
+        return response()->json($this->resumenHoy($aliadoId, $usuarioId));
+    }
+
+    private function esSuperadmin(): bool
+    {
+        return (bool) Auth::user()?->hasRole('superadmin');
+    }
+
+    /**
+     * Usuarios activos del aliado más los que hoy cobraron en visita dentro
+     * de él: alguien de BryNex que cobra en otro aliado no figura en su lista.
+     */
+    private function usuariosVisita(int $aliadoId): array
+    {
+        $hoy = now()->toDateString();
+        $cobraronHoy = Factura::where('aliado_id', $aliadoId)->whereDate('fecha_pago', $hoy)
+            ->where('observacion', 'LIKE', 'Cobro en visita%')->distinct()->pluck('usuario_id')
+            ->concat(Anticipo::where('aliado_id', $aliadoId)->whereDate('fecha_pago', $hoy)
+                ->where('observacion', 'LIKE', 'Cobro en visita%')->distinct()->pluck('usuario_id'))
+            ->push(Auth::id())->filter()->map(fn ($id) => (int) $id)->unique();
+
+        return User::where(fn ($q) => $q->where('aliado_id', $aliadoId)->where('activo', true))
+            ->orWhereIn('id', $cobraronHoy->all())
+            ->orderBy('nombre')->get(['id', 'nombre'])
+            ->map(fn ($u) => ['id' => (int) $u->id, 'nombre' => $u->nombre])->values()->all();
     }
 
     private function fichaContrato(Contrato $c): array
@@ -304,33 +347,44 @@ class VisitaCobroController extends Controller
     }
 
     /**
-     * La caja de hoy de quien cobra (la misma que suma el cuadre diario) y los
-     * cobros que hizo desde esta pantalla.
+     * Lo cobrado hoy desde esta pantalla por un usuario, o por todos los del
+     * aliado con $usuarioId null. Solo cuenta lo de visita: la caja completa
+     * del día (oficina, traslados al banco) se ve en el cuadre diario.
      */
-    private function resumenHoy(int $aliadoId): array
+    private function resumenHoy(int $aliadoId, ?int $usuarioId): array
     {
-        $usuarioId = Auth::id();
         $hoy = now()->toDateString();
+        $deQuien = fn ($q) => $q->when($usuarioId !== null, fn ($w) => $w->where('usuario_id', $usuarioId));
 
-        $facturas = Factura::where('aliado_id', $aliadoId)->where('usuario_id', $usuarioId)
+        $facturas = Factura::where('aliado_id', $aliadoId)->tap($deQuien)
             ->whereDate('fecha_pago', $hoy)->where('observacion', 'LIKE', 'Cobro en visita%')
+            ->where('estado', '!=', 'anulada')
             ->with('contrato.cliente')->orderByDesc('id')->get();
-        $anticipos = Anticipo::where('aliado_id', $aliadoId)->where('usuario_id', $usuarioId)
+        // El anticipo que luego se aplica a una factura sigue siendo plata
+        // recibida ese día; el devuelto o anulado no.
+        $anticipos = Anticipo::where('aliado_id', $aliadoId)->tap($deQuien)
             ->whereDate('fecha_pago', $hoy)->where('observacion', 'LIKE', 'Cobro en visita%')
+            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_ANULADO])
             ->with('contrato.cliente')->orderByDesc('id')->get();
 
-        $efectivo = (int) Factura::where('aliado_id', $aliadoId)->where('usuario_id', $usuarioId)
-            ->whereDate('fecha_pago', $hoy)->where('es_prestamo', false)->sum('valor_efectivo')
-            + (int) Anticipo::where('aliado_id', $aliadoId)->where('usuario_id', $usuarioId)
-                ->whereDate('fecha_pago', $hoy)->whereIn('forma_pago', ['efectivo', 'nequi'])
-                ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO])->sum('valor');
-        $transferencias = (int) Consignacion::where('aliado_id', $aliadoId)->where('usuario_id', $usuarioId)
-            ->whereDate('fecha', $hoy)->sum('valor');
+        // La factura solo lleva en valor_efectivo/valor_consignado la plata
+        // nueva: lo que puso de anticipos anteriores no se cuenta dos veces.
+        $efectivo = (int) $facturas->sum('valor_efectivo')
+            + (int) $anticipos->where('forma_pago', 'efectivo')->sum('valor');
+        $transferencias = (int) $facturas->sum('valor_consignado')
+            + (int) $anticipos->where('forma_pago', '!=', 'efectivo')->sum('valor');
+
+        // Con la caja de todos, cada cobro dice quién lo hizo.
+        $nombres = $usuarioId === null
+            ? User::whereIn('id', $facturas->pluck('usuario_id')->concat($anticipos->pluck('usuario_id'))->unique()->all())
+                ->pluck('nombre', 'id')
+            : collect();
 
         $movs = $facturas->map(fn ($f) => [
             'hora' => $f->created_at?->format('g:i a'),
             'nombre' => $f->contrato?->cliente?->nombre_corto ?: $f->cedula,
             'tipo' => 'Factura '.ReciboVisitaService::periodo((int) $f->mes, (int) $f->anio),
+            'cobro' => $nombres[$f->usuario_id] ?? null,
             'valor' => (int) $f->valor_efectivo + (int) $f->valor_consignado,
             'url' => route('admin.visita.recibo', ['f' => $f->id]),
             'orden' => $f->created_at?->timestamp,
@@ -338,6 +392,7 @@ class VisitaCobroController extends Controller
             'hora' => $a->created_at?->format('g:i a'),
             'nombre' => $a->contrato?->cliente?->nombre_corto ?: $a->cedula,
             'tipo' => 'Anticipo · '.(Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago),
+            'cobro' => $nombres[$a->usuario_id] ?? null,
             'valor' => (int) $a->valor,
             'url' => route('admin.visita.recibo', ['a' => [$a->id]]),
             'orden' => $a->created_at?->timestamp,

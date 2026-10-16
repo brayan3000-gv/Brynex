@@ -129,9 +129,9 @@
             <a class="volver" href="{{ route('dashboard') }}">← Panel</a>
         </div>
         <div class="caja">
-            <div><small>Efectivo hoy</small><b class="num" x-text="plata(hoy.efectivo)"></b></div>
-            <div><small>Transferencias</small><b class="num" x-text="plata(hoy.transferencias)"></b></div>
-            <button type="button" @click="verHoy = true" x-text="hoy.cobros + ' cobros'"></button>
+            <div><small>Efectivo en visita</small><b class="num" x-text="plata(hoy.efectivo)"></b></div>
+            <div><small>Transf. en visita</small><b class="num" x-text="plata(hoy.transferencias)"></b></div>
+            <button type="button" @click="abrirHoy()" x-text="'Ver ' + hoy.cobros + (hoy.cobros === 1 ? ' cobro' : ' cobros')"></button>
         </div>
         <div class="empresa">
             <input list="lista-empresas" placeholder="🏢 Empresa que visitas (opcional)" x-model="empresaTexto" @change="elegirEmpresa()">
@@ -367,28 +367,39 @@
     <div class="hoja-fondo" @click="verHoy = false"></div>
     <section class="hoja">
         <div class="hoja-cab">
-            <h2>Tu caja de hoy</h2>
+            <h2 x-text="tituloHoy()"></h2>
             <button class="cerrar" @click="verHoy = false">✕</button>
         </div>
+        {{-- Solo el superadmin: ver la caja de otro usuario del aliado o la de todos --}}
+        <template x-if="usuarios.length">
+            <select class="entrada" style="margin-bottom:12px" x-model="usuarioHoy" @change="cargarHoy()">
+                <option value="">Mis cobros</option>
+                <option value="todos">Todos los usuarios</option>
+                <template x-for="u in usuarios.filter(u => u.id !== yo)" :key="u.id"><option :value="String(u.id)" x-text="u.nombre"></option></template>
+            </select>
+        </template>
+        <div class="ayuda" x-show="cargandoHoy" x-cloak><span class="cargando"></span></div>
+        <div x-show="!cargandoHoy">
         <div class="tarjeta">
-            <div class="fila"><span>Efectivo recibido</span><b class="num" x-text="plata(hoy.efectivo)"></b></div>
-            <div class="fila"><span>Transferencias</span><b class="num" x-text="plata(hoy.transferencias)"></b></div>
+            <div class="fila"><span>Efectivo</span><b class="num" x-text="plata(cajaHoy().efectivo)"></b></div>
+            <div class="fila"><span>Transferencias</span><b class="num" x-text="plata(cajaHoy().transferencias)"></b></div>
             <div class="sep"></div>
-            <div class="fila"><span>Cobrado en visitas</span><b class="num" x-text="plata(hoy.total_visita)"></b></div>
-            <div style="color:var(--tenue);font-size:.74rem;margin-top:6px">Es la misma caja del cuadre diario: lo cobrado aquí se cierra allá.</div>
+            <div class="fila"><span x-text="'Total cobrado en visita · ' + cajaHoy().cobros + (cajaHoy().cobros === 1 ? ' cobro' : ' cobros')"></span><b class="num" x-text="plata(cajaHoy().total_visita)"></b></div>
+            <div style="color:var(--tenue);font-size:.74rem;margin-top:6px">Solo lo cobrado desde esta pantalla. La caja completa del día (oficina, traslados al banco) está en el cuadre diario.</div>
         </div>
-        <div class="tarjeta" x-show="hoy.movimientos.length">
-            <template x-for="(m, i) in hoy.movimientos" :key="i">
+        <div class="tarjeta" x-show="cajaHoy().movimientos.length">
+            <template x-for="(m, i) in cajaHoy().movimientos" :key="i">
                 <a class="mov" :href="m.url" target="_blank">
                     <div>
                         <div style="font-weight:700" x-text="m.nombre"></div>
-                        <div style="color:var(--tenue);font-size:.76rem" x-text="m.hora + ' · ' + m.tipo"></div>
+                        <div style="color:var(--tenue);font-size:.76rem" x-text="m.hora + ' · ' + m.tipo + (m.cobro ? ' · ' + m.cobro : '')"></div>
                     </div>
                     <b class="num" x-text="plata(m.valor)"></b>
                 </a>
             </template>
         </div>
-        <div class="ayuda" x-show="!hoy.movimientos.length">Todavía no has cobrado nada hoy.</div>
+        <div class="ayuda" x-show="!cajaHoy().movimientos.length" x-text="usuarioHoy ? 'Nadie ha cobrado en visita hoy.' : 'Todavía no has cobrado nada hoy.'"></div>
+        </div>
     </section>
 </div>
 </template>
@@ -401,6 +412,7 @@ function visita() {
         cliente: @json(url('visita/cliente')),
         cobrar: @json(route('admin.visita.cobrar')),
         enviar: @json(route('admin.visita.recibo.enviar')),
+        hoy: @json(route('admin.visita.hoy')),
     };
     const EMPRESAS = @json($empresas);
     const recordar = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (_) {} };
@@ -416,6 +428,7 @@ function visita() {
         cobro: null, guardando: false, error: '', resultado: null,
         envio: { texto: '', clase: '', enviando: false, ok: false, intentado: false },
         verHoy: false, arrastrando: false,
+        usuarios: @json($usuarios), yo: {{ (int) auth()->id() }}, usuarioHoy: '', hoyOtro: null, cargandoHoy: false,
 
         iniciar() {
             const e = EMPRESAS.find(x => String(x.id) === leerLS('visita.empresa'));
@@ -443,6 +456,28 @@ function visita() {
             if (!e) this.empresaTexto = '';
             recordar('visita.empresa', e ? String(e.id) : null);
             this.buscar();
+        },
+
+        // La caja del encabezado es siempre la propia; la hoja puede mostrar
+        // la de otro usuario o la de todos (solo superadmin).
+        cajaHoy() { return this.usuarioHoy && this.hoyOtro ? this.hoyOtro : this.hoy; },
+        tituloHoy() {
+            if (!this.usuarioHoy) return 'Tus cobros de hoy';
+            if (this.usuarioHoy === 'todos') return 'Cobros de hoy · todos';
+            const u = this.usuarios.find(x => String(x.id) === this.usuarioHoy);
+            return 'Cobros de hoy · ' + (u ? u.nombre : '');
+        },
+        abrirHoy() { this.verHoy = true; if (this.usuarioHoy) this.cargarHoy(); },
+        async cargarHoy() {
+            this.hoyOtro = null;
+            if (!this.usuarioHoy) return;
+            const pedido = this.usuarioHoy;
+            this.cargandoHoy = true;
+            try {
+                const d = await this.pedir(URL.hoy + '?' + new URLSearchParams({ usuario_id: pedido }));
+                if (pedido === this.usuarioHoy) this.hoyOtro = d;
+            } catch (e) { alert(e.message); this.usuarioHoy = ''; }
+            finally { this.cargandoHoy = false; }
         },
 
         async pedir(url, opciones = {}) {
