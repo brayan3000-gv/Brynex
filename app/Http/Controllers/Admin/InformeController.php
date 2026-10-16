@@ -132,8 +132,8 @@ class InformeController extends Controller
             ->where('c.fecha_ingreso', '<=', $corteAnt)
             ->where(function ($q) use ($corteAnt) {
                 $q->where(fn ($v) => $v->where('c.estado', 'vigente')
-                    ->where(fn ($f) => $f->whereNull('c.fecha_retiro')->orWhere('c.fecha_retiro', '>', $corteAnt)))
-                    ->orWhere(fn ($r) => $r->where('c.estado', 'retirado')->where('c.fecha_retiro', '>', $corteAnt));
+                    ->where(fn ($f) => $f->whereNull('c.fecha_retiro')->orWhere('c.fecha_retiro', '>=', $corteAnt)))
+                    ->orWhere(fn ($r) => $r->where('c.estado', 'retirado')->where('c.fecha_retiro', '>=', $corteAnt));
             })
             ->count();
 
@@ -4019,6 +4019,39 @@ class InformeController extends Controller
             ->select('m.anio', 'm.mes', DB::raw('COUNT(DISTINCT c.id) as total'))
             ->get());
 
+        // 2. Contados dos veces: el contrato está en Admon (mes vencido: la
+        // factura de este mes cobra el anterior) pero se retiró antes de que el
+        // mes empezara, y la misma cédula entró con otro contrato este mes
+        // (traslado de razón social, cambio de plan, rotación). La persona
+        // sumaba en Admon con el viejo y en Afiliaciones con el nuevo: Fecop en
+        // sep-2026 daba 685 activos con 549 vigentes por 142 traslados. Solo se
+        // resta del Total Activos; Admon y Afiliaciones se muestran igual. El
+        // que se retiró sin volver no se toca: no está en Afiliaciones.
+        $doblesPorMes = $porMes(DB::table(DB::raw($tp))
+            ->join('facturas as f', function ($j) {
+                $j->on('f.mes', '=', 'm.mes')->on('f.anio', '=', 'm.anio');
+            })
+            ->join('contratos as c', 'c.id', '=', 'f.contrato_id')
+            ->where('c.aliado_id', $aid)
+            ->where('f.numero_factura', '>', 0)
+            ->whereNull('f.deleted_at')
+            ->whereColumn('c.fecha_ingreso', '<', 'm.ini_d')
+            ->whereColumn('c.fecha_retiro', '<', 'm.ini_d')
+            ->whereExists(function ($sq) use ($aid) {
+                $sq->select(DB::raw(1))->from('contratos as n')
+                    ->whereColumn('n.cedula', 'c.cedula')
+                    ->where('n.aliado_id', $aid)
+                    ->whereColumn('n.id', '<>', 'c.id')
+                    ->whereColumn('n.fecha_ingreso', '>=', 'm.ini_d')
+                    ->whereColumn('n.fecha_ingreso', '<=', 'm.fin_d')
+                    // Como en Afiliaciones: solo cuenta si tiene ficha de cliente.
+                    ->whereExists(fn ($fi) => $fi->select(DB::raw(1))->from('clientes as cl')
+                        ->whereColumn('cl.cedula', 'n.cedula')->where('cl.aliado_id', $aid));
+            })
+            ->groupBy('m.anio', 'm.mes')
+            ->select('m.anio', 'm.mes', DB::raw('COUNT(DISTINCT c.id) as total'))
+            ->get());
+
         // 3. Afiliaciones del Mes (nuevos contratos ingresados en el período por fecha de ingreso)
         //    Se traen las cédulas (no un COUNT) para poder cruzarlas más abajo
         //    contra los retiros del mes y separar reingresos de altas nuevas.
@@ -4199,7 +4232,8 @@ class InformeController extends Controller
             $label = $nombresMeses[$mesVal] . ' ' . $anioVal;
 
             $totalRetiros = $retirosReales + $retirosInformativos;
-            $totalActivos = $admonVigentes + $afilPorFecha;
+            $traslados = (int) ($doblesPorMes[$kMes] ?? 0);
+            $totalActivos = $admonVigentes + $afilPorFecha - $traslados;
             $retirosDefinitivos = $totalRetiros - $retirosRenovados;
 
             $waEnviados = (int) ($waCobrosPorMes[$kMes] ?? 0)
@@ -4230,6 +4264,7 @@ class InformeController extends Controller
                 'retiros_definitivos' => $retirosDefinitivos,
                 'total_retiros'    => $totalRetiros,
                 'total_activos'    => $totalActivos,
+                'traslados'        => $traslados,
                 'neto_periodo'     => $totalActivos - $totalRetiros,
                 'wa_enviados'        => (int) $waEnviados,
                 'respuestas_clientes' => $respuestasClientes,

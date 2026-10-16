@@ -16,7 +16,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
  * Cada hoja tiene su propia regla de "qué es del mes", y no son la misma:
  *
  * - Activos: foto al último día del mes. Ingresó en o antes del corte y no se
- *   había retirado a esa fecha. No es `estado = vigente`, que es la foto de
+ *   había retirado antes de esa fecha (el retirado el último día cuenta). No es `estado = vigente`, que es la foto de
  *   hoy: sacar agosto a mediados de septiembre daría otra gente.
  * - Pagos: las facturas del período (`mes`/`anio`), pagadas o prestadas. Las
  *   facturas de retiro (`numero_factura = 0`) quedan fuera: van en $0 porque
@@ -152,9 +152,12 @@ class ListadosMesExcelService
             ->where(function ($q) use ($fecha) {
                 $q->where(function ($v) use ($fecha) {
                     $v->where('c.estado', 'vigente')
-                        ->where(fn ($f) => $f->whereNull('c.fecha_retiro')->orWhere('c.fecha_retiro', '>', $fecha));
+                        ->where(fn ($f) => $f->whereNull('c.fecha_retiro')->orWhere('c.fecha_retiro', '>=', $fecha));
                 })->orWhere(function ($r) use ($fecha) {
-                    $r->where('c.estado', 'retirado')->where('c.fecha_retiro', '>', $fecha);
+                    // El retirado el último día sigue cubierto ese día: con '>'
+                    // los 142 traslados de Fecop del 31-ago-2026 no salían como
+                    // activos de agosto (249 contra 391).
+                    $r->where('c.estado', 'retirado')->where('c.fecha_retiro', '>=', $fecha);
                 });
             })
             ->addSelect('c.fecha_ingreso')

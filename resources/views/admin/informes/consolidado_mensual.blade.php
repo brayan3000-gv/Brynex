@@ -103,7 +103,7 @@
             <p style="margin:0.25rem 0 0; font-size: 0.78rem; color: #475569; line-height: 1.5;">
                 <strong>Admon Vigentes</strong>: Contratos activos continuos durante el mes (incluye contratos con retiro y facturación regular). 
                 <strong>Afiliaciones del Mes</strong>: Contratos nuevos ingresados en el mes.
-                <strong>Total Activos</strong>: Suma de Admon Vigentes + Afiliaciones del Mes.
+                <strong>Total Activos</strong>: Admon Vigentes + Afiliaciones del Mes, menos los traslados (la misma persona en las dos: se retiró antes del mes y entró con otro contrato este mes).
                 <strong>Variación</strong>: Diferencia de Total Activos de este mes comparado con el mes anterior.
             </p>
         </div>
@@ -172,6 +172,12 @@
                         </td>
                         <td style="text-align: right; font-weight: 800; color: #0d9488; background-color: rgba(13, 148, 136, 0.04); font-size: 0.95rem;">
                             {{ number_format($mes['total_activos'], 0, ',', '.') }}
+                            @if($mes['traslados'] > 0)
+                                <div style="font-size: 0.68rem; font-weight: 600; color: #b45309; margin-top: 0.15rem; white-space: nowrap;"
+                                     title="Personas que se retiraron antes del mes y entraron con otro contrato este mes: estaban en Admon (factura del mes anterior) y en Afiliaciones. Se cuentan una sola vez.">
+                                    −{{ number_format($mes['traslados'], 0, ',', '.') }} por traslados
+                                </div>
+                            @endif
                         </td>
                         <td style="text-align: center;">
                             @if($mes['variacion'] > 0)
@@ -202,7 +208,7 @@
             * <strong>Retiros Reales / Informativos</strong>: los mismos de "Retirados del mes", por fecha de retiro (el de mes vencido cuenta en el mes siguiente). Real si el retiro costó seguridad social —según la factura de retiro o, si no hay, si el plano del retiro cotizó días—; informativo si fue en $0.
             * <strong>renovados</strong> (bajo Retiros Reales e Informativos): De esos retiros, cuántos volvieron — se les abrió otro contrato con fecha de ingreso en el mismo mes del retiro, o esa cédula tiene hoy un contrato vigente con el aliado. Es una parte del número de arriba, no un retiro adicional.
             * <strong>WA (Plan. / Rec.)</strong>: Relación de WhatsApps del mes (Enviados en plantilla masiva / Recibidos iniciados por el cliente tras 24h de inactividad). Los enviados cuentan solo los mensajes que sí salieron: no incluyen los destinatarios cuyo envío falló ni los omitidos por envío repetido.
-            * <strong>Total Activos</strong>: Suma de Admon (Vigentes) y Afil. Fecha Ingreso.
+            * <strong>Total Activos</strong>: Suma de Admon (Vigentes) y Afil. Fecha Ingreso, menos los <strong>traslados</strong>: contratos que están en Admon porque se les facturó este mes el anterior (mes vencido), pero se retiraron antes de que el mes empezara y la misma cédula entró con otro contrato este mes (cambio de razón social, de plan o ingreso-retiro). Esa persona sumaba dos veces; el número descontado sale debajo del total.
             * <strong>Variación</strong>: Diferencia del Total Activos de este mes comparado con el mes anterior.
             * <strong>🤖 Asistente IA</strong>: Valor calculado con la tarifa configurada en BryNex para el módulo (editable en Configuración IA → activación por aliado) según las consultas reales del mes.
         </p>
