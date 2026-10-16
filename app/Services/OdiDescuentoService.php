@@ -121,10 +121,13 @@ class OdiDescuentoService
         }
 
         $porAplicar = (float) $analisis['descuento'];
-        // Una planilla solo pudo descontar órdenes que ya existían cuando se liquidó.
-        $fechaPlanilla = substr((string) $registro->created_at, 0, 10);
+        // Solo cuentan las ODI que BryNex ya tenía registradas cuando se liquidó
+        // la planilla, no basta con la fecha de la orden: un descuento anterior
+        // al registro puede ser de otra ODI que nunca se cargó (Work at Home,
+        // ago/sep-2026: $240.000 y $17.000 que no eran de la 1849379).
+        $liquidada = (string) $registro->created_at;
         $odis = OdiArl::conSaldo((int) $registro->aliado_id, (int) $registro->razon_social_id)
-            ->filter(fn ($o) => $o->fecha && $o->fecha->toDateString() <= $fechaPlanilla);
+            ->filter(fn ($o) => (string) $o->created_at <= $liquidada);
 
         $aplicar = function () use ($odis, $registro, &$porAplicar, &$resultado, $ejecutar) {
             foreach ($odis as $odi) {
