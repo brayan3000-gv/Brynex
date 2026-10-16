@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\OperadorCredencial;
 use App\Models\OperadorPlanillaApi;
 use App\Models\RazonSocial;
+use App\Services\OdiDescuentoService;
 use App\Services\SuaporteApiService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -92,6 +93,10 @@ class PlanillasSincronizarTotales extends Command
                 $this->line("  ✅ {$etiqueta}: {$registro->numero_afiliados} afiliados · "
                     ."períodos {$registro->periodo_cotizacion}/{$registro->periodo_servicio}");
                 $ok++;
+
+                // Con el desglose por administradora ya se ve si la planilla
+                // descontó alguna ODI de la ARL (ver OdiDescuentoService).
+                $this->registrarOdi($registro);
             } catch (Throwable $e) {
                 // Un aportante que falla no debe detener a los demás: suele ser
                 // su credencial o su sesión, no un problema general.
@@ -161,6 +166,29 @@ class PlanillasSincronizarTotales extends Command
             'valor_total'        => $d['totalPagar'] ?? $registro->valor_total,
             'totales_at'         => now(),
         ]);
+    }
+
+    private function registrarOdi(OperadorPlanillaApi $registro): void
+    {
+        if ($this->option('dry-run')) {
+            return;
+        }
+
+        try {
+            $r = app(OdiDescuentoService::class)->aplicar($registro->refresh());
+        } catch (Throwable $e) {
+            $this->warn('     ODI: '.mb_substr($e->getMessage(), 0, 120));
+
+            return;
+        }
+
+        foreach ($r['detalle'] as $d) {
+            $this->line("     📋 ODI {$d['numero']}: descontados $".number_format($d['valor'], 0, ',', '.'));
+        }
+        if ($r['sin_odi'] > 0) {
+            $this->warn('     ⚠️ La ARL salió $'.number_format($r['sin_odi'], 0, ',', '.')
+                .' por debajo de lo esperado y no hay ODI registrada que lo explique.');
+        }
     }
 
     private function fecha(?string $valor): ?string

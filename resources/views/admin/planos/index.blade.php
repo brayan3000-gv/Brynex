@@ -1310,6 +1310,34 @@
 
             <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: .85rem;">
 
+                {{-- ── ODI de la ARL por descontar. El API de Enlace no tiene dónde
+                     meterlas: se digitan en el portal antes de pagar, y al
+                     sincronizar los totales BryNex registra lo descontado. --}}
+                @if(($odisPendientes ?? collect())->isNotEmpty() && ! $planoPagado)
+                @php
+                    $odiSaldo = $odisPendientes->sum(fn ($o) => $o->saldo);
+                    $odiTope  = (int) floor(($arlTanda ?? 0) * \App\Models\OdiArl::TOPE_APORTE_ARL);
+                    $odiHoy   = $odiTope > 0 ? min($odiSaldo, $odiTope) : $odiSaldo;
+                @endphp
+                <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:.8rem 1rem;font-size:.78rem;color:#92400e;line-height:1.45">
+                    <div style="font-weight:800;margin-bottom:.3rem">📋 ODI de la ARL por descontar: ${{ number_format($odiSaldo, 0, ',', '.') }}</div>
+                    @foreach($odisPendientes as $o)
+                    <div style="display:flex;justify-content:space-between;font-size:.74rem">
+                        <span>ODI {{ $o->numero }} <span style="color:#b45309">({{ $o->fecha?->format('d/m/Y') }})</span></span>
+                        <span style="font-family:monospace;font-weight:700">${{ number_format($o->saldo, 0, ',', '.') }}</span>
+                    </div>
+                    @endforeach
+                    <div style="margin-top:.45rem;padding-top:.4rem;border-top:1px dashed #fcd34d">
+                        En Enlace, antes de pagar: cotizante → novedades → <strong>«ODI (Descuentos de ARL)»</strong>,
+                        con el número de la ODI.
+                        @if($odiTope > 0)
+                            Máximo el 99 % de la ARL de esta planilla: <strong>${{ number_format($odiHoy, 0, ',', '.') }}</strong>.
+                        @endif
+                        Al traer los totales de la planilla, BryNex registra lo descontado y baja el saldo.
+                    </div>
+                </div>
+                @endif
+
                 {{-- ── Liquidación directa por API (Enlace Operativo) — opción
                      prioritaria: sin descargar ni subir nada a mano. Se revela
                      desde JS solo si hay credenciales configuradas para el

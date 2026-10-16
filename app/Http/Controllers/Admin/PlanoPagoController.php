@@ -420,6 +420,13 @@ class PlanoPagoController extends Controller
             'rsNit'           => $rsSeleccionada ? ($rsSeleccionada->nit ?? $rsSeleccionada->id) : null,
             // Día hábil de vencimiento guardado en la RS (null = calcular por tabla)
             'rsDiaHabil'      => $rsSeleccionada?->dia_habil,
+            // ODI de la ARL por descontar en esta razón social: el API de Enlace
+            // no las mete, así que se avisa para digitarlas en el portal.
+            'odisPendientes'  => ($razonSocialId && \Illuminate\Support\Facades\Schema::hasTable('odis_arl'))
+                ? \App\Models\OdiArl::conSaldo((int) $aliadoId, (int) $razonSocialId)
+                : collect(),
+            // Tope del descuento: el 99 % del aporte a la ARL de la tanda.
+            'arlTanda'        => (int) collect($planos)->sum(fn ($p) => (float) ($p->v_arl ?? 0)),
         ]);
 
 
