@@ -1272,6 +1272,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/{id}/show', [$ic, 'show'])->name('show');
         Route::post('/{id}/gestion', [$ic, 'storeGestion'])->name('gestion.store');
         Route::post('/{id}/documento', [$ic, 'storeDocumento'])->name('documento.store');
+        Route::post('/gasto/{gastoId}/soporte', [$ic, 'subirSoporteGasto'])->whereNumber('gastoId')->name('gasto.soporte');
         Route::get('/documento/{docId}', [$ic, 'descargarDocumento'])->name('documento.download');
         Route::get('/documento/{docId}/ver', [$ic, 'verDocumento'])->name('documento.ver');
         Route::get('/{id}/documentos-familia', [$ic, 'documentosFamilia'])->name('documentos.familia');

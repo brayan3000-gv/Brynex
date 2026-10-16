@@ -990,6 +990,8 @@ class IncapacidadController extends Controller
             })
             ->values();
 
+        $this->adjuntarSoportes($gestionesFamilia);
+
         // Relaciones y cálculos que antes consultaban por su cuenta, servidos
         // desde lo que ya está en memoria.
         $inc->setRelation('gestiones', $gestionesFamilia
@@ -1504,7 +1506,7 @@ class IncapacidadController extends Controller
 
                     // 3. Crear Gasto tipo pago_incapacidad (neto al afiliado — Canal 5)
                     if ($hayPagoNuevo) {
-                        DB::table('gastos')->insert([
+                        $gastoPagoId = DB::table('gastos')->insertGetId([
                             'aliado_id' => $incActualizar->aliado_id,
                             'usuario_id' => Auth::id(),
                             'cuadre_id' => null,
@@ -1621,6 +1623,8 @@ class IncapacidadController extends Controller
             'estado' => $inc->fresh()->estado,
             'alcance' => $alcance,
             'consignacion_id' => $consignacionId ?? null,
+            // Gasto del pago al afiliado: ahí se sube la foto del comprobante.
+            'gasto_id' => $gastoPagoId ?? null,
             // Dónde subir el PDF de la ODI/OPI como documento de la incapacidad.
             'soporte_orden_incapacidad_id' => (isset($formaRecepcion) && in_array($formaRecepcion, ['odi', 'opi_banco', 'opi_efectivo'], true))
                 ? $incActualizar->id
@@ -2570,6 +2574,98 @@ class IncapacidadController extends Controller
             'message' => "Prórroga {$numProrroga} creada.",
             'prorroga' => $prorroga->only(['id', 'numero_proroga', 'dias_incapacidad', 'fecha_inicio', 'fecha_terminacion', 'estado', 'valor_esperado']),
         ]);
+    }
+
+    /**
+     * Le pega a cada gestión los soportes del pago que registró, para verlos
+     * desde la pestaña Gestiones: la foto de la consignación (pago a la razón
+     * social), la del gasto (pago al afiliado) y el PDF de la ODI.
+     *
+     * Las fotos de consignaciones y gastos viven en el disco público (así las
+     * muestra el informe financiero); el PDF de la ODI es un documento de la
+     * incapacidad y se abre por su ruta, que valida el aliado.
+     */
+    private function adjuntarSoportes(\Illuminate\Support\Collection $gestiones): void
+    {
+        $ids = $gestiones->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (! $ids) {
+            return;
+        }
+
+        $aliadoId = (int) session('aliado_id_activo');
+        $soportes = [];
+        $agregar = function ($gestionId, string $etiqueta, string $url) use (&$soportes) {
+            $soportes[(int) $gestionId][] = ['etiqueta' => $etiqueta, 'url' => $url];
+        };
+
+        DB::table('consignaciones')
+            ->whereIn('gestion_incapacidad_id', $ids)
+            ->where('aliado_id', $aliadoId)
+            ->whereNotNull('imagen_path')
+            ->get(['gestion_incapacidad_id', 'imagen_path', 'valor'])
+            ->each(fn ($c) => $agregar($c->gestion_incapacidad_id, 'Consignación $'.number_format((float) $c->valor, 0, ',', '.'), \Storage::url($c->imagen_path)));
+
+        DB::table('gastos')
+            ->whereIn('gestion_incapacidad_id', $ids)
+            ->where('aliado_id', $aliadoId)
+            ->whereNotNull('imagen_path')
+            ->get(['gestion_incapacidad_id', 'imagen_path', 'tipo'])
+            ->each(fn ($g) => $agregar($g->gestion_incapacidad_id, $g->tipo === 'pago_incapacidad' ? 'Pago al afiliado' : 'Gasto', \Storage::url($g->imagen_path)));
+
+        $abonos = DB::table('abonos_incapacidades')
+            ->whereIn('gestion_incapacidad_id', $ids)
+            ->where('aliado_id', $aliadoId)
+            ->get(['gestion_incapacidad_id', 'imagen_path', 'odi_id', 'forma_recepcion']);
+
+        $abonos->whereNotNull('imagen_path')
+            ->each(fn ($a) => $agregar($a->gestion_incapacidad_id, 'Comprobante', \Storage::url($a->imagen_path)));
+
+        // El PDF de la ODI es un documento (radicado) de la incapacidad.
+        $odiIds = $abonos->pluck('odi_id')->filter()->unique()->all();
+        if ($odiIds) {
+            $rutas = DB::table('odis_arl')->whereIn('id', $odiIds)->whereNotNull('imagen_path')->pluck('imagen_path', 'id');
+            $docs = DB::table('radicados')->whereIn('ruta_pdf', $rutas->values()->all())->where('aliado_id', $aliadoId)->pluck('id', 'ruta_pdf');
+            foreach ($abonos->whereNotNull('odi_id') as $a) {
+                $docId = $docs[$rutas[$a->odi_id] ?? ''] ?? null;
+                if ($docId) {
+                    $agregar($a->gestion_incapacidad_id, 'PDF de la ODI', route('admin.incapacidades.documento.ver', $docId));
+                }
+            }
+        }
+
+        foreach ($gestiones as $g) {
+            $g->setAttribute('soportes', $soportes[(int) $g->id] ?? []);
+        }
+    }
+
+    /**
+     * Foto del comprobante del pago al afiliado. Va al gasto, igual que los
+     * demás comprobantes de gastos (disco público, así los muestra el informe
+     * financiero). Solo gastos de incapacidades del aliado activo: la ruta
+     * general de gastos pide superadmin y por eso estas fotos nunca subían.
+     */
+    public function subirSoporteGasto(Request $request, int $gastoId)
+    {
+        $request->validate(['imagen' => 'required|file|mimes:jpg,jpeg,png,webp,pdf|max:8192']);
+
+        $gasto = DB::table('gastos')
+            ->where('id', $gastoId)
+            ->where('aliado_id', session('aliado_id_activo'))
+            ->whereNotNull('incapacidad_id')
+            ->first();
+        if (! $gasto) {
+            return response()->json(['ok' => false, 'message' => 'Gasto no encontrado.'], 404);
+        }
+        // Que la incapacidad también sea de este aliado.
+        $this->incapacidadDelAliado((int) $gasto->incapacidad_id);
+
+        if ($gasto->imagen_path) {
+            \Storage::disk('public')->delete($gasto->imagen_path);
+        }
+        $ruta = $request->file('imagen')->store("gastos/{$gasto->aliado_id}", 'public');
+        DB::table('gastos')->where('id', $gastoId)->update(['imagen_path' => $ruta, 'updated_at' => now()]);
+
+        return response()->json(['ok' => true, 'url' => \Storage::url($ruta)]);
     }
 
     // ── SUBIR DOCUMENTO (reutiliza tabla radicados) ──────────────────────────

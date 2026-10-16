@@ -1366,6 +1366,12 @@ function renderGestiones(){
             ? `<span title="Esta gestión se registró en: ${g.origen_label}"
                      style="background:#f1f5f9;color:#475569;border-radius:999px;padding:.1rem .45rem;font-size:.65rem;font-weight:700;margin-left:.35rem">${g.origen_label}</span>`
             : '';
+        // Soportes del pago que registró esta gestión (consignación, gasto, ODI).
+        const soportes = (g.soportes || []).length
+            ? `<div style="margin-top:.35rem;display:flex;flex-wrap:wrap;gap:.3rem">${g.soportes.map(s =>
+                `<a href="${s.url}" target="_blank" rel="noopener"
+                    style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:6px;padding:.15rem .5rem;font-size:.7rem;font-weight:600;text-decoration:none">📎 Ver soporte · ${s.etiqueta}</a>`).join('')}</div>`
+            : '';
         return `
         <div class="timeline-item"${revertida?' style="opacity:.6"':''}>
             <div class="tl-dot">${g.es_reversion?'↩️':iconoTipoGestion(g.tipo)}</div>
@@ -1373,7 +1379,7 @@ function renderGestiones(){
                 <div class="tl-tipo">${g.tipo}${g.aplica_a_familia?' <span style="color:#d97706">· Familia</span>':''}${origen}</div>
                 <div class="tl-tramite"${revertida?' style="text-decoration:line-through"':''}>${g.tramite || g.respuesta || '—'}</div>
                 <div class="tl-meta">${g.user?.nombre||'Sistema'} · ${formatFechaLarga(g.created_at)} ${g.fecha_recordar?`· 🔔 Recordar: ${formatFechaLarga(g.fecha_recordar)}`:''}${g.estado_resultado?` · Estado: ${labelEstado(g.estado_resultado)}`:''}</div>
-                ${avisoRevertida}${btnRevertir}
+                ${soportes}${avisoRevertida}${btnRevertir}
             </div>
         </div>`;
     }).join('') || '<div style="color:#94a3b8;font-size:.82rem">Sin gestiones para este filtro.</div>';
@@ -2869,7 +2875,11 @@ function enviarGestion(incId, confirmarPago) {
                 const fd = new FormData();
                 fd.append('imagen', window._afiliadoFotoFile);
                 fd.append('_token', TOKEN);
-                fetch(`/admin/informes/gastos/${d.gasto_id}/imagen`, { method: 'POST', body: fd }).catch(() => {});
+                fetch(`/admin/incapacidades/gasto/${d.gasto_id}/soporte`, {
+                    method: 'POST', body: fd, headers: { 'Accept': 'application/json' },
+                }).then(r => r.json()).then(r => {
+                    if (!r.ok) alert('⚠️ La gestión quedó, pero el comprobante no se subió: ' + (r.message || 'error'));
+                }).catch(() => alert('⚠️ La gestión quedó, pero el comprobante no se subió.'));
                 window._afiliadoFotoFile = null;
             }
             // Mensaje de éxito
