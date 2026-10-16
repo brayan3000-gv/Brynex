@@ -18,7 +18,10 @@ use Illuminate\Support\Facades\DB;
  *     se descuenta en planilla.
  *  2. Center CIT: las dos planillas de independientes del 3-jul también se
  *     pagaron desde la 137, no desde la Bancolombia de Center CIT (142).
- *  3. Work at Home tenía $1.776.528 al 1-jul-2026, fecha desde la que se
+ *  3. Dos facturas consignadas que figuraban en cuentas de razones sociales
+ *     entraron en realidad a la 137: la 13147 de julio (Center CIT, $126.000)
+ *     y la 13364 de agosto (Construtech, $405.600).
+ *  4. Work at Home tenía $1.776.528 al 1-jul-2026, fecha desde la que se
  *     calculan los saldos: la #450 (entró el 12-jun) y la #332 entraron antes
  *     y se pagaron después. Se registra como saldo inicial.
  *
@@ -47,6 +50,9 @@ class CorregirCuentasBrygarOct2026 extends Command
     private const ABONOS_ODI = [304, 250, 248, 252, 251, 305, 249];
 
     private const PLANILLAS_CENTER_CIT = [33228, 33229];
+
+    /** Consignaciones de facturas: id => cuenta donde figuran hoy. */
+    private const CONSIGNACIONES = [599735 => 142, 602414 => 144];
 
     private const SALDO_INICIAL_WAH = 1776528;
 
@@ -81,6 +87,15 @@ class CorregirCuentasBrygarOct2026 extends Command
                 $problemas[] = "Gasto #{$p->id} ya no es una planilla pagada desde Center CIT.";
             }
         }
+        $consignaciones = DB::table('consignaciones')->whereIn('id', array_keys(self::CONSIGNACIONES))->get();
+        if ($consignaciones->count() !== count(self::CONSIGNACIONES)) {
+            $problemas[] = 'Faltan consignaciones.';
+        }
+        foreach ($consignaciones as $c) {
+            if ((int) $c->aliado_id !== self::ALIADO || (int) $c->banco_cuenta_id !== self::CONSIGNACIONES[$c->id] || $c->deleted_at) {
+                $problemas[] = "Consignación #{$c->id} ya no está en la cuenta ".self::CONSIGNACIONES[$c->id].'.';
+            }
+        }
         $yaHaySaldo = DB::table('saldos_banco')
             ->where('aliado_id', self::ALIADO)->where('banco_cuenta_id', self::WORK_AT_HOME)
             ->where('tipo', 'saldo_inicial')->where('fecha', '>=', self::FECHA_CORTE)
@@ -104,7 +119,9 @@ class CorregirCuentasBrygarOct2026 extends Command
             .$gastosOdi->count().' gastos por '.$fmt($gastosOdi->sum('valor')).' y '.$abonosOdi->count().' abonos');
         $this->line('2. Planillas del 3-jul de Center CIT → Bancolombia Brayan García: '
             .$planillas->map(fn ($p) => "#{$p->id} {$fmt($p->valor)}")->implode(', '));
-        $this->line('3. Saldo inicial de Work at Home al 1-jul-2026: '.$fmt(self::SALDO_INICIAL_WAH));
+        $this->line('3. Consignaciones de facturas → Bancolombia Brayan García: '
+            .$consignaciones->map(fn ($c) => "#{$c->id} {$fmt($c->valor)}")->implode(', '));
+        $this->line('4. Saldo inicial de Work at Home al 1-jul-2026: '.$fmt(self::SALDO_INICIAL_WAH));
 
         if (! $ejecutar) {
             $this->newLine();
@@ -132,6 +149,14 @@ class CorregirCuentasBrygarOct2026 extends Command
                 ]);
             }
 
+            foreach (DB::table('consignaciones')->whereIn('id', array_keys(self::CONSIGNACIONES))->get() as $c) {
+                DB::table('consignaciones')->where('id', $c->id)->update([
+                    'banco_cuenta_id' => self::CUENTA_BRAYAN,
+                    'observacion' => mb_substr(trim((string) $c->observacion.' [corregido 16-oct-2026: entró a la Bancolombia de Brayan García, no a la cuenta '.$c->banco_cuenta_id.']'), 0, 500),
+                    'updated_at' => now(),
+                ]);
+            }
+
             DB::table('saldos_banco')->insert([
                 'aliado_id' => self::ALIADO,
                 'banco_cuenta_id' => self::WORK_AT_HOME,
@@ -146,10 +171,11 @@ class CorregirCuentasBrygarOct2026 extends Command
             ]);
         });
 
-        $saldos = \App\Models\Consignacion::saldosBancosOptimizados(self::ALIADO, [self::WORK_AT_HOME, self::CENTER_CIT]);
+        $saldos = \App\Models\Consignacion::saldosBancosOptimizados(self::ALIADO, [self::WORK_AT_HOME, self::CENTER_CIT, 144]);
         $this->newLine();
         $this->info('Listo. Work at Home queda en '.$fmt($saldos[self::WORK_AT_HOME] ?? 0)
-            .' y Center CIT en '.$fmt($saldos[self::CENTER_CIT] ?? 0).'.');
+            .', Center CIT en '.$fmt($saldos[self::CENTER_CIT] ?? 0)
+            .' y Construtech en '.$fmt($saldos[144] ?? 0).'.');
 
         return self::SUCCESS;
     }
