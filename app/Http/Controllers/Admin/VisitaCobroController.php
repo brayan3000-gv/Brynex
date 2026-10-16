@@ -46,6 +46,7 @@ class VisitaCobroController extends Controller
                 ->map(fn ($e) => ['id' => $e->id, 'nombre' => $e->empresa])->values(),
             'hoy' => $this->resumenHoy($aliadoId, (int) Auth::id()),
             // Solo el superadmin mira los cobros de los demás (ver hoy()).
+            'esSuperadmin' => $this->esSuperadmin(),
             'usuarios' => $this->esSuperadmin() ? $this->usuariosVisita($aliadoId) : [],
         ]);
     }
@@ -274,7 +275,13 @@ class VisitaCobroController extends Controller
             }
         }
 
-        return response()->json($this->resumenHoy($aliadoId, $usuarioId));
+        $resumen = $this->resumenHoy($aliadoId, $usuarioId);
+        // La lista de quién cobró crece durante el día: se manda de nuevo.
+        if ($this->esSuperadmin()) {
+            $resumen['usuarios'] = $this->usuariosVisita($aliadoId);
+        }
+
+        return response()->json($resumen);
     }
 
     private function esSuperadmin(): bool
@@ -283,22 +290,29 @@ class VisitaCobroController extends Controller
     }
 
     /**
-     * Usuarios activos del aliado más los que hoy cobraron en visita dentro
-     * de él: alguien de BryNex que cobra en otro aliado no figura en su lista.
+     * Solo quienes hoy cobraron en visita dentro del aliado, con cuántos
+     * cobros lleva cada uno (mismos filtros que resumenHoy).
      */
     private function usuariosVisita(int $aliadoId): array
     {
         $hoy = now()->toDateString();
-        $cobraronHoy = Factura::where('aliado_id', $aliadoId)->whereDate('fecha_pago', $hoy)
-            ->where('observacion', 'LIKE', 'Cobro en visita%')->distinct()->pluck('usuario_id')
-            ->concat(Anticipo::where('aliado_id', $aliadoId)->whereDate('fecha_pago', $hoy)
-                ->where('observacion', 'LIKE', 'Cobro en visita%')->distinct()->pluck('usuario_id'))
-            ->push(Auth::id())->filter()->map(fn ($id) => (int) $id)->unique();
+        $porUsuario = fn ($q) => $q->where('aliado_id', $aliadoId)->whereDate('fecha_pago', $hoy)
+            ->where('observacion', 'LIKE', 'Cobro en visita%')
+            ->selectRaw('usuario_id, COUNT(*) AS n')->groupBy('usuario_id')->pluck('n', 'usuario_id');
 
-        return User::where(fn ($q) => $q->where('aliado_id', $aliadoId)->where('activo', true))
-            ->orWhereIn('id', $cobraronHoy->all())
-            ->orderBy('nombre')->get(['id', 'nombre'])
-            ->map(fn ($u) => ['id' => (int) $u->id, 'nombre' => $u->nombre])->values()->all();
+        $cobros = collect();
+        foreach ([
+            $porUsuario(Factura::where('estado', '!=', 'anulada')),
+            $porUsuario(Anticipo::whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_ANULADO])),
+        ] as $conteo) {
+            foreach ($conteo as $id => $n) {
+                $cobros[(int) $id] = ($cobros[(int) $id] ?? 0) + (int) $n;
+            }
+        }
+
+        return User::whereIn('id', $cobros->keys()->all())->orderBy('nombre')->get(['id', 'nombre'])
+            ->map(fn ($u) => ['id' => (int) $u->id, 'nombre' => $u->nombre, 'cobros' => $cobros[(int) $u->id]])
+            ->values()->all();
     }
 
     private function fichaContrato(Contrato $c): array

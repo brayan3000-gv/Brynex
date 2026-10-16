@@ -371,11 +371,11 @@
             <button class="cerrar" @click="verHoy = false">✕</button>
         </div>
         {{-- Solo el superadmin: ver la caja de otro usuario del aliado o la de todos --}}
-        <template x-if="usuarios.length">
+        <template x-if="esSuperadmin">
             <select class="entrada" style="margin-bottom:12px" x-model="usuarioHoy" @change="cargarHoy()">
                 <option value="">Mis cobros</option>
-                <option value="todos">Todos los usuarios</option>
-                <template x-for="u in usuarios.filter(u => u.id !== yo)" :key="u.id"><option :value="String(u.id)" x-text="u.nombre"></option></template>
+                <option value="todos">Todos los que cobraron</option>
+                <template x-for="u in usuarios.filter(u => u.id !== yo)" :key="u.id"><option :value="String(u.id)" x-text="u.nombre + ' · ' + u.cobros + (u.cobros === 1 ? ' cobro' : ' cobros')"></option></template>
             </select>
         </template>
         <div class="ayuda" x-show="cargandoHoy" x-cloak><span class="cargando"></span></div>
@@ -428,7 +428,7 @@ function visita() {
         cobro: null, guardando: false, error: '', resultado: null,
         envio: { texto: '', clase: '', enviando: false, ok: false, intentado: false },
         verHoy: false, arrastrando: false,
-        usuarios: @json($usuarios), yo: {{ (int) auth()->id() }}, usuarioHoy: '', hoyOtro: null, cargandoHoy: false,
+        esSuperadmin: @json($esSuperadmin), usuarios: @json($usuarios), yo: {{ (int) auth()->id() }}, usuarioHoy: '', hoyOtro: null, cargandoHoy: false,
 
         iniciar() {
             const e = EMPRESAS.find(x => String(x.id) === leerLS('visita.empresa'));
@@ -467,15 +467,18 @@ function visita() {
             const u = this.usuarios.find(x => String(x.id) === this.usuarioHoy);
             return 'Cobros de hoy · ' + (u ? u.nombre : '');
         },
-        abrirHoy() { this.verHoy = true; if (this.usuarioHoy) this.cargarHoy(); },
+        // El superadmin recarga al abrir: la lista de quién cobró crece en el día.
+        abrirHoy() { this.verHoy = true; if (this.esSuperadmin) this.cargarHoy(); },
         async cargarHoy() {
             this.hoyOtro = null;
-            if (!this.usuarioHoy) return;
             const pedido = this.usuarioHoy;
+            if (!pedido && !this.esSuperadmin) return;
             this.cargandoHoy = true;
             try {
-                const d = await this.pedir(URL.hoy + '?' + new URLSearchParams({ usuario_id: pedido }));
-                if (pedido === this.usuarioHoy) this.hoyOtro = d;
+                const d = await this.pedir(URL.hoy + (pedido ? '?' + new URLSearchParams({ usuario_id: pedido }) : ''));
+                if (d.usuarios) this.usuarios = d.usuarios;
+                if (pedido !== this.usuarioHoy) return;
+                if (pedido) this.hoyOtro = d; else this.hoy = d;
             } catch (e) { alert(e.message); this.usuarioHoy = ''; }
             finally { this.cargandoHoy = false; }
         },
