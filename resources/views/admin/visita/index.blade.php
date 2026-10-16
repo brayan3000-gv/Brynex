@@ -104,6 +104,8 @@
         .entrada.plata { font-size: 1.35rem; font-weight: 800; }
         .foto { display: flex; align-items: center; gap: 10px; border: 1.5px dashed #94a3b8; border-radius: 12px; padding: 12px; background: #fff; cursor: pointer; font-weight: 600; font-size: .88rem; color: var(--tinta-2); }
         .foto img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; }
+        .foto .pdf { width: 54px; height: 54px; display: grid; place-items: center; font-size: 1.8rem; background: var(--rojo-suave); border-radius: 8px; flex-shrink: 0; }
+        .foto.encima { border-color: var(--azul); background: var(--azul-suave); }
         .previa { margin-top: 14px; border-radius: 12px; padding: 12px; font-size: .88rem; font-weight: 600; }
 
         .mov { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--borde); font-size: .85rem; text-decoration: none; color: inherit; }
@@ -298,14 +300,17 @@
                 </select>
                 <label class="campo">Referencia (opcional)</label>
                 <input class="entrada" x-model="cobro.referencia" maxlength="100" placeholder="N.º de la transferencia">
-                <label class="campo">Foto del comprobante (opcional)</label>
-                <label class="foto">
-                    <input type="file" accept="image/*" capture="environment" style="display:none" @change="tomarFoto($event)">
+                <label class="campo">Comprobante (opcional)</label>
+                {{-- Sin capture: así el celular ofrece cámara, galería o archivo (PDF del banco) --}}
+                <label class="foto" :class="arrastrando && 'encima'" @dragover.prevent="arrastrando = true" @dragleave="arrastrando = false" @drop.prevent="arrastrando = false; ponerComprobante($event.dataTransfer.files[0])">
+                    <input type="file" accept="image/*,application/pdf" style="display:none" @change="ponerComprobante($event.target.files[0]); $event.target.value = ''">
                     <template x-if="cobro.fotoUrl"><img :src="cobro.fotoUrl"></template>
-                    <span x-text="cobro.foto ? 'Comprobante listo · tocar o Ctrl+V para cambiar' : '📷 Tomar foto o pegar con Ctrl+V'"></span>
+                    <template x-if="cobro.foto && !cobro.fotoUrl"><span class="pdf">📄</span></template>
+                    <span style="flex:1;min-width:0" x-text="cobro.foto ? 'Listo: ' + cobro.foto.name + ' · tocar o Ctrl+V para cambiar' : '📷 Foto, imagen o PDF · o pegar con Ctrl+V'"></span>
                 </label>
+                <div class="aviso rojo" x-show="cobro.errorFoto" x-text="cobro.errorFoto"></div>
             </div>
-            <div class="aviso azul" x-show="cobro.foto && !cobro.transferencia" x-text="'Comprobante pegado: escribe el valor de la transferencia y la cuenta que la recibió.'"></div>
+            <div class="aviso azul" x-show="cobro.foto && !cobro.transferencia" x-text="'Comprobante listo: escribe el valor de la transferencia y la cuenta que la recibió.'"></div>
 
             <label class="campo">📱 WhatsApp para el recibo</label>
             <input class="entrada num" inputmode="tel" x-model="cobro.celular" placeholder="3001234567" maxlength="15">
@@ -410,7 +415,7 @@ function visita() {
         anticipos: [], anticiposEmpresa: [], abiertos: {},
         cobro: null, guardando: false, error: '', resultado: null,
         envio: { texto: '', clase: '', enviando: false, ok: false, intentado: false },
-        verHoy: false,
+        verHoy: false, arrastrando: false,
 
         iniciar() {
             const e = EMPRESAS.find(x => String(x.id) === leerLS('visita.empresa'));
@@ -486,7 +491,7 @@ function visita() {
             this.envio = { texto: '', clase: '', enviando: false, ok: false, intentado: false };
             this.cobro = {
                 k, efectivo: 0, transferencia: 0, banco: this.bancos.length === 1 ? String(this.bancos[0].id) : (leerLS('visita.banco') || ''),
-                referencia: '', foto: null, fotoUrl: null, celular: this.cliente.celular || '', nota: '',
+                referencia: '', foto: null, fotoUrl: null, errorFoto: '', celular: this.cliente.celular || '', nota: '',
                 token: (crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random()),
             };
         },
@@ -515,23 +520,29 @@ function visita() {
             return pago > 0 || (c.k.resumen.facturable && c.k.resumen.falta === 0);
         },
 
-        async tomarFoto(ev) {
-            const f = ev.target.files && ev.target.files[0];
-            if (!f) return;
-            this.cobro.foto = await this.comprimir(f);
-            this.cobro.fotoUrl = URL_obj(this.cobro.foto);
+        // Imagen (foto, captura, PNG) o el PDF que manda el banco. El
+        // servidor recibe hasta 10 MB; las imágenes se reducen antes.
+        async ponerComprobante(f) {
+            if (!f || !this.cobro) return;
+            this.cobro.errorFoto = '';
+            const esPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '');
+            if (!esPdf && !f.type.startsWith('image/')) { this.cobro.errorFoto = 'Solo se acepta una imagen o un PDF.'; return; }
+            const listo = esPdf ? f : await this.comprimir(f);
+            if (listo.size > 10 * 1024 * 1024) { this.cobro.errorFoto = 'El archivo pesa más de 10 MB.'; return; }
+            if (this.cobro.fotoUrl) window.URL.revokeObjectURL(this.cobro.fotoUrl);
+            this.cobro.foto = listo;
+            this.cobro.fotoUrl = esPdf ? null : URL_obj(listo);
         },
         // En el computador el comprobante suele llegar como captura de
         // pantalla (WhatsApp Web, correo): Ctrl+V lo toma del portapapeles.
-        // Un pegado sin imagen sigue su curso normal en el campo.
-        async pegarComprobante(ev) {
+        // Un pegado sin imagen ni PDF sigue su curso normal en el campo.
+        pegarComprobante(ev) {
             if (!this.cobro || this.resultado || this.guardando) return;
-            const item = [...(ev.clipboardData?.items || [])].find(i => i.kind === 'file' && i.type.startsWith('image/'));
-            const f = item && item.getAsFile();
+            const archivos = [...(ev.clipboardData?.files || [])];
+            const f = archivos.find(a => a.type.startsWith('image/') || a.type === 'application/pdf');
             if (!f) return;
             ev.preventDefault();
-            this.cobro.foto = await this.comprimir(f);
-            this.cobro.fotoUrl = URL_obj(this.cobro.foto);
+            this.ponerComprobante(f);
         },
         // Las fotos del celular pesan 4-8 MB: con mala señal no suben. Se
         // reducen a 1600 px en JPEG antes de mandarlas.
