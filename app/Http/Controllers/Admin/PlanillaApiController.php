@@ -164,6 +164,10 @@ class PlanillaApiController extends Controller
             'mezcla_extraordinaria' => $mezclada,
             'correccion' => $correccion,
             'operadores' => $operadores,
+            'operador_sugerido_id' => $this->operadorSugerido(
+                $aliadoId, (int) $validated['razon_social_id'], $validated,
+                $filtro, array_column($operadores, 'id'), $correccion
+            ),
             'pendientes' => $this->pendientesDelPeriodo(
                 $aliadoId, (int) $validated['razon_social_id'],
                 (int) $validated['mes'], (int) $validated['anio']
@@ -1448,6 +1452,90 @@ class PlanillaApiController extends Controller
         sort($tipos);
 
         return implode(',', $tipos);
+    }
+
+    /**
+     * El operador que se ofrece de primero cuando la razón social tiene
+     * credencial en más de uno. Mostrar Simple y Enlace a la vez confundía:
+     * cada empresa se liquida casi siempre en el mismo, y el que no es queda
+     * detrás de un enlace por si hace falta. null = mostrar todos.
+     *
+     * Sale del historial y no de una configuración, que habría que mantener a
+     * mano. En orden:
+     *  1. La planilla N va donde se pagó la planilla que corrige.
+     *  2. Si la tanda ya tiene planilla liquidada, ese operador (en dos pasos
+     *     la corrección solo existe allá).
+     *  3. El último con el que la razón social liquidó una tanda de la misma
+     *     familia: las normales en uno, las de dos pasos o la X1 a veces en otro.
+     *  4. Sin historial propio, el último del aliado para esa familia.
+     */
+    private function operadorSugerido(
+        int $aliadoId,
+        int $razonSocialId,
+        array $validated,
+        string $filtro,
+        array $ofrecidos,
+        ?array $correccion
+    ): ?int {
+        $ofrecidos = array_map('intval', $ofrecidos);
+        if (count($ofrecidos) < 2) {
+            return null;
+        }
+
+        $valido = fn ($id) => $id && in_array((int) $id, $ofrecidos, true) ? (int) $id : null;
+
+        if ($id = $valido($correccion['operador_planilla_id'] ?? null)) {
+            return $id;
+        }
+
+        $deLaTanda = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+            ->where('razon_social_id', $razonSocialId)
+            ->where('anio', $validated['anio'])
+            ->where('mes', $validated['mes'])
+            ->where('n_plano', $validated['n_plano'])
+            ->whereRaw("ISNULL(tipos_modalidad, '') = ?", [$filtro])
+            ->where('estado', 'validada')
+            ->whereIn('operador_planilla_id', $ofrecidos)
+            ->latest('id')
+            ->value('operador_planilla_id');
+        if ($id = $valido($deLaTanda)) {
+            return $id;
+        }
+
+        $familia = $this->familiaFiltro($filtro);
+
+        foreach ([['razon_social_id', $razonSocialId], null] as $alcance) {
+            $historial = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+                ->when($alcance, fn ($q) => $q->where(...$alcance))
+                ->where('estado', 'validada')
+                ->where('paso', 1)
+                ->whereIn('operador_planilla_id', $ofrecidos)
+                ->latest('id')
+                ->limit(60)
+                ->get(['operador_planilla_id', 'tipos_modalidad']);
+
+            // Primero el mismo filtro exacto, después cualquiera de la familia.
+            $igual = $historial->first(fn ($p) => (string) $p->tipos_modalidad === $filtro);
+            $misma = $igual ?? $historial->first(fn ($p) => $this->familiaFiltro((string) $p->tipos_modalidad) === $familia);
+            if ($misma) {
+                return (int) $misma->operador_planilla_id;
+            }
+        }
+
+        return null;
+    }
+
+    /** normal, dos_pasos o ex1: las tandas que suelen ir a operadores distintos. */
+    private function familiaFiltro(string $filtro): string
+    {
+        $tipos = $filtro === '' ? [] : array_map('intval', explode(',', $filtro));
+
+        if (PilaCotizanteEX1::esTanda($tipos)) {
+            return 'ex1';
+        }
+
+        return PlanillaDosPasosService::aplica($tipos) || PlanillaE1Service::aplica($tipos)
+            ? 'dos_pasos' : 'normal';
     }
 
     /** Credencial de la razón social, o la general del aliado. */

@@ -2816,7 +2816,20 @@ async function cargarEstadoEnlace() {
                     + 'Solo va esta gente; quienes ya pagaron esa planilla no se tocan.'));
         }
 
+        // Con credencial en más de un operador se ofrece solo el que la razón
+        // social viene usando (lo decide el historial, ver
+        // PlanillaApiController::operadorSugerido); los demás quedan detrás de
+        // un enlace, por si un mes toca liquidar en otro.
+        // Number(): sqlsrv entrega los ids como texto ("6").
+        const sugeridoId = data.operadores.some(o => Number(o.id) === Number(data.operador_sugerido_id))
+            ? Number(data.operador_sugerido_id) : null;
+        const contPrincipal = cont;
+        const contOtros = document.createElement('div');
+        contOtros.style.cssText = 'display:none;flex-direction:column;gap:.5rem';
+
         data.operadores.forEach(op => {
+            const cont = (sugeridoId && Number(op.id) !== sugeridoId) ? contOtros : contPrincipal;
+
             // Motivos por los que no se puede liquidar con ese operador.
             let bloqueo = null;
             if (CTX.planoPagado)   bloqueo = 'Este plano ya fue confirmado como pagado.';
@@ -2952,6 +2965,24 @@ async function cargarEstadoEnlace() {
                 cont.appendChild(aviso);
             }
         });
+
+        if (contOtros.childElementCount) {
+            const otros = data.operadores.filter(o => Number(o.id) !== sugeridoId).map(o => o.nombre).join(' o ');
+            const enlace = document.createElement('a');
+            enlace.href = '#';
+            enlace.style.cssText = 'font-size:.72rem;color:#6d28d9;text-align:center;text-decoration:underline';
+            enlace.textContent = `¿Esta vez va por otro operador? Liquidar en ${otros}`;
+            enlace.onclick = (e) => {
+                e.preventDefault();
+                const abierto = contOtros.style.display !== 'none';
+                contOtros.style.display = abierto ? 'none' : 'flex';
+                enlace.textContent = abierto
+                    ? `¿Esta vez va por otro operador? Liquidar en ${otros}`
+                    : 'Ocultar los otros operadores';
+            };
+            contPrincipal.appendChild(enlace);
+            contPrincipal.appendChild(contOtros);
+        }
 
         // Si ya se liquidó este periodo, mostrarlo en vez de arrancar en blanco.
         // Manda la planilla liquidada; si no hay, el intento más reciente —el
