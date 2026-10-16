@@ -29,11 +29,63 @@ class CotizarPlanPublicoTool implements IaToolInterface
 
     public function schema(): array
     {
-        return $this->interno->schema();
+        $schema = $this->interno->schema();
+
+        // En WhatsApp la gente dice lo que GANA, no su base de cotización. Ver ibcIndependiente().
+        $schema['properties']['salario']['description'] = 'Lo que el cliente dice que gana o le pagan al mes, en pesos. '
+            .'Si es empleado, es su salario. Si es independiente o contratista, pon lo que GANA o el valor mensual del '
+            .'contrato: la herramienta calcula sola la base de cotización (el 40 %, nunca menos del mínimo). No hagas tú '
+            .'esa cuenta. Si no da un valor, OMÍTELO: se cotiza sobre el salario mínimo.';
+        $schema['properties']['salario_es_ibc'] = [
+            'type' => 'boolean',
+            'description' => 'true SOLO si el cliente independiente dice que ese valor YA es su base de cotización '
+                .'(«cotizo sobre 2 millones», «mi IBC es…»), no lo que gana. Por defecto, omítelo.',
+        ];
+
+        return $schema;
+    }
+
+    /**
+     * Base de cotización de un independiente a partir de lo que gana.
+     *
+     * El independiente y el contratista cotizan sobre el 40 % de lo que ganan, y nunca por debajo
+     * del salario mínimo. Antes la herramienta tomaba lo que ganaba como base: el 15-oct-2026 un
+     * asesor preguntó por un contratista de $2.500.000 —y aclaró «yo sé que cotiza bajo el salario
+     * mínimo»— y recibió $819.400 al mes en riesgo 3, cuando sobre el mínimo son $587.800. Le
+     * cotizamos $231.600 de más al mes a alguien que estaba midiendo si sus clientes lo pagan.
+     *
+     * No aplica desde el exterior (cotiza voluntario sobre lo que elija) ni a la salud pagada
+     * por otra persona, ni cuando el cliente dice que el valor ya es su IBC.
+     *
+     * @return array{0: float, 1: ?string} [base, nota para el modelo]
+     */
+    private function ibcIndependiente(array $input): array
+    {
+        $ingreso = (float) $input['salario'];
+        $minimo = (float) \App\Models\ConfiguracionBrynex::salarioMinimo();
+        $base = max(round($ingreso * 0.4), $minimo);
+
+        $nota = 'Lo que gana ($'.number_format($ingreso, 0, ',', '.').') no es la base: un independiente cotiza sobre el 40 % '
+            .($base > $ingreso * 0.4
+                ? '($'.number_format($ingreso * 0.4, 0, ',', '.').'), que queda por debajo del mínimo, así que se cotizó sobre el salario mínimo.'
+                : '($'.number_format($base, 0, ',', '.').').')
+            .' Si lo explicas, dilo así, en una frase.';
+
+        return [$base, $nota];
     }
 
     public function ejecutar(array $input, array $contexto): array
     {
+        $notaIbc = null;
+        $esIndependiente = ! empty($input['es_independiente'])
+            && empty($input['desde_exterior'])
+            && empty($input['paga_por_otra_persona'])
+            && empty($input['tiempo_parcial_dias']);
+        if ($esIndependiente && ! empty($input['salario']) && (float) $input['salario'] > 0 && empty($input['salario_es_ibc'])) {
+            [$input['salario'], $notaIbc] = $this->ibcIndependiente($input);
+        }
+        unset($input['salario_es_ibc']);
+
         $resultado = $this->interno->ejecutar($input, $contexto);
 
         if (isset($resultado['error'])) {
@@ -76,6 +128,10 @@ class CotizarPlanPublicoTool implements IaToolInterface
         }
         if (!empty($resultado['nota_afp'])) {
             $salida['nota_afp'] = $resultado['nota_afp'];
+        }
+
+        if ($notaIbc) {
+            $salida['nota_base_cotizacion'] = $notaIbc;
         }
 
         return $salida;

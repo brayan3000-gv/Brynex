@@ -58,11 +58,17 @@ class ProspectoAliadoService
             $precios = [];
             // El precio de la página es por afiliado; el total va al lado para que no sorprenda
             // el mínimo de plataforma (con 100 en la Esencial son $80.000, pero se factura $180.000).
+            // El total va escrito como TOTAL, y el caso del mínimo dicho entero: con «$800 por afiliado,
+            // con el mínimo de plataforma: $180.000» el bot entendió que se sumaban y le dijo a una
+            // empresa de 200 que la Esencial le salía en $340.000 (prueba del 16-oct-2026).
             foreach ($c['planes'] as $p) {
-                $total = max($base * $p['valor'], $c['min_plataforma']);
-                $precios[] = $p['nombre'].': $'.number_format($p['valor'], 0, ',', '.').' por afiliado al mes'
-                    .($total > $base * $p['valor'] ? ', con el mínimo de plataforma: $' : ', con '.$base.' afiliados: $')
-                    .number_format($total, 0, ',', '.').' al mes ('.$p['incluye'].')';
+                $porAfiliados = $base * $p['valor'];
+                $total = max($porAfiliados, $c['min_plataforma']);
+                $precios[] = $p['nombre'].': $'.number_format($p['valor'], 0, ',', '.').' por afiliado al mes; '
+                    .($total > $porAfiliados
+                        ? "con {$base} afiliados darían $".number_format($porAfiliados, 0, ',', '.').', pero se factura el mínimo de plataforma, así que el TOTAL es $'
+                        : "con {$base} afiliados el TOTAL es $")
+                    .number_format($total, 0, ',', '.').' al mes, no se suma nada más ('.$p['incluye'].')';
             }
             $faltan = max($umbral - $n, 0);
             $resumen = ($faltan
@@ -72,8 +78,12 @@ class ProspectoAliadoService
                 .'Si además quiere que Brygar le haga las afiliaciones: $'.number_format($c['afiliacion']['brygar'], 0, ',', '.').' por contrato una sola vez (o $'
                 .number_format($c['afiliacion']['equipo'], 0, ',', '.').' si las hace su equipo con la plataforma); en la Integral van incluidas. '
                 .'La plataforma dedicada tiene un mínimo de $'.number_format($c['min_plataforma'], 0, ',', '.').' al mes. Valores antes de IVA. '
-                .'Si hace sus propias afiliaciones y solo necesita el programa, es la Alianza Esencial, que le sirve para: '
-                .implode(', ', $c['plataforma_incluye'] ?? []).'; con su propio logo y sus propias razones sociales.';
+                // «le sirve para» se leía como un servicio: el 14 y el 15-oct-2026 el bot les dijo a dos
+                // empresas que en la Esencial Brygar hacía las afiliaciones, traslados e incapacidades
+                // por $800. En la Esencial lo hace SU equipo con la plataforma; que lo haga Brygar es la Integral.
+                .'Si hace sus propias afiliaciones y solo necesita el programa, es la Alianza Esencial: el programa con el que SU equipo '
+                .'hace estos trámites ('.implode(', ', $c['plataforma_incluye'] ?? []).'), con su propio logo y sus propias razones sociales. '
+                .'En la Esencial Brygar NO hace esos trámites por él; si quiere que Brygar haga la operación, eso es la Integral.';
 
             return ['camino' => 'alianza', 'sugerencia' => $faltan ? "Alianza (le faltan {$faltan} para 100)" : 'Alianza para empresas', 'resumen' => $resumen, 'url' => $url];
         }
@@ -109,7 +119,11 @@ class ProspectoAliadoService
                 ? "Con {$n} personas estaría en el {$pct} %: $".number_format($porPersona, 0, ',', '.')." al mes por cada cliente de administración. "
                 : '')
             .($siguiente ? "Con {$siguiente['desde']} sube al {$siguiente['pct']} % ($".number_format($admon * $siguiente['pct'] / 100, 0, ',', '.').' por cliente). ' : 'Ya está en el nivel más alto. ')
-            ."Los tres primeros meses arranca con el {$maximo} % mientras cumple las metas (10 personas al cierre del segundo mes y 20 al del tercero). "
+            // El arranque es para quien empieza con pocos: a una empresa de 70 (13-oct-2026) le explicamos
+            // metas de 10 y 20 personas que ya había pasado de sobra.
+            .($pct < $maximo
+                ? "Los tres primeros meses arranca con el {$maximo} % mientras cumple las metas (10 personas al cierre del segundo mes y 20 al del tercero). "
+                : '')
             .($n < 5 ? 'Con menos de 5 personas empieza refiriendo (20 % durante 6 meses por cada cliente) y al llegar a 5 recibe su acceso al programa. ' : '')
             .($tipo === 'asesor' && $n >= $umbral ? "Con {$n} también le alcanza para una alianza con su propia marca, si la prefiere. " : '');
 

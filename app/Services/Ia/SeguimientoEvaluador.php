@@ -125,12 +125,20 @@ class SeguimientoEvaluador
 
         $nombre = $conversacion->nombreMostrar();
 
+        // A quien quiere TRABAJAR con nosotros no se le hace seguimiento como a un cliente: el
+        // 15-oct-2026 a un asesor con 35 clientes se le volvió a mandar, solo, el precio de $554.300
+        // que lo había frenado.
+        $esProspectoAliado = app(\App\Services\ProspectoAliadoService::class)->esProspectoAliado($conversacion);
+        $reglaAliado = $esProspectoAliado
+            ? "\nOJO: quien escribe NO es un cliente que quiere afiliarse, sino un asesor o una empresa que está viendo si trabaja con la agencia. Si corresponde seguimiento, retoma lo que le interesaba (lo que gana con sus clientes o el camino que se le explicó) y ofrécele resolverle una duda. NO repitas precios de planes ni cifras, y NO le pidas día ni hora.\n"
+            : '';
+
         $prompt = <<<PROMPT
 Eres quien supervisa a la asistente comercial de una agencia colombiana de afiliación a seguridad social. Han pasado unas horas desde el último mensaje y el cliente no ha vuelto a escribir. Decide si corresponde mandarle UN mensaje de seguimiento.
 
 CONVERSACIÓN RECIENTE (lo más nuevo al final):
 {$transcripcion}
-
+{$reglaAliado}
 Corresponde seguimiento SOLO si quedó una afiliación realmente en el aire: se le cotizó un plan y el cliente no cerró ni descartó, o dijo que lo iba a pensar y no volvió, o quedó de mandar datos y no los mandó.
 
 NO corresponde seguimiento si:

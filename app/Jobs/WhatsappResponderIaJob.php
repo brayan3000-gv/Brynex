@@ -178,6 +178,10 @@ class WhatsappResponderIaJob implements ShouldQueue
         string $texto,
         ?string $ultimoWaMessageId = null
     ): void {
+        // WhatsApp pone negrita con UN asterisco; con dos se ven los asteriscos. La regla está en el
+        // prompt y aun así se colaba (14-oct-2026: «**no compras ningún sistema**»).
+        $texto = preg_replace('/\*{2,}/', '*', $texto);
+
         $burbujas = array_values(array_filter(array_map('trim', explode('|||', $texto)), fn ($b) => $b !== ''));
         if (empty($burbujas)) {
             $burbujas = [$texto];

@@ -31,8 +31,15 @@ use Illuminate\Support\Facades\Log;
 
 class WhatsappWebhookService
 {
-    /** Segundos de silencio a esperar antes de responder, para agrupar mensajes seguidos. */
-    private const SEGUNDOS_DEBOUNCE = 6;
+    /**
+     * Segundos de silencio a esperar antes de responder, para agrupar mensajes seguidos.
+     *
+     * Eran 6 y se quedaban cortos: la gente manda el dato en dos mensajes con 8 o 9 segundos de
+     * diferencia («unas 50 de arl» y «como 7 de solo eps»; «a través de una empresa» y «quiero saber
+     * valores»), el bot contestaba el primero y después el segundo con casi lo mismo. Con 10 entran
+     * los dos en la misma respuesta; el tope total de espera sigue siendo SEGUNDOS_MAX_ESPERA_TOTAL.
+     */
+    private const SEGUNDOS_DEBOUNCE = 10;
 
     /**
      * Tope máximo de espera total: aunque el cliente siga escribiendo sin pausar (lo que
