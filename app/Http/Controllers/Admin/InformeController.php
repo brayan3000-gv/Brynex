@@ -1430,6 +1430,8 @@ class InformeController extends Controller
                     ->whereNotIn('estado', ['devuelto', 'distribuido'])
                     ->sum('valor');
 
+                $incM = $this->entradasIncapacidadEfectivo($aid, $mCurr, $yCurr);
+
                 $gastM = (float) DB::table('gastos')
                     ->where('aliado_id', $aid)
                     ->whereMonth('fecha', $mCurr)->whereYear('fecha', $yCurr)
@@ -1443,7 +1445,7 @@ class InformeController extends Controller
                     ->where('tipo', 'efectivo_banco')
                     ->sum('valor');
 
-                $saldoEfectivoMesAnt = max(0.0, $saldoEfectivoMesAnt + ($entM + $antM) - ($gastM + $consM));
+                $saldoEfectivoMesAnt = max(0.0, $saldoEfectivoMesAnt + ($entM + $antM + $incM) - ($gastM + $consM));
                 $curr->addMonth();
             }
         }
@@ -1526,6 +1528,9 @@ class InformeController extends Controller
             ->whereNotIn('estado', ['devuelto', 'distribuido'])
             ->sum('valor');
 
+        // OPI de la ARL cobradas en efectivo: plata que entró a la caja, no a un banco.
+        $efIncapacidades = $this->entradasIncapacidadEfectivo($aid, $mes, $anio);
+
         // Gastos ordinarios pagados en efectivo (excluyendo traslados a banco)
         $efGastos = (float) DB::table('gastos')
             ->where('aliado_id', $aid)
@@ -1542,16 +1547,17 @@ class InformeController extends Controller
             ->sum('valor');
 
         $efSalidas = $efGastos + $efConsignaciones;
-        $saldoEfectivoActual = $saldoEfectivoMesAnt + ($efEntradas + $efAnticipos) - $efSalidas;
+        $saldoEfectivoActual = $saldoEfectivoMesAnt + ($efEntradas + $efAnticipos + $efIncapacidades) - $efSalidas;
 
         $efMes = (object)[
-            'entradas'       => $efEntradas + $efAnticipos,
+            'entradas'       => $efEntradas + $efAnticipos + $efIncapacidades,
             'anticipos'      => $efAnticipos,
+            'incapacidades'  => $efIncapacidades,
             'facturas'       => $efEntradas,
             'salidas'        => $efSalidas,
             'gastos'         => $efGastos,
             'consignaciones' => $efConsignaciones,
-            'neto'           => ($efEntradas + $efAnticipos) - $efSalidas,
+            'neto'           => ($efEntradas + $efAnticipos + $efIncapacidades) - $efSalidas,
             'saldo_actual'   => $saldoEfectivoActual,
             'label_saldo'    => $esMesActual ? 'Saldo actual' : 'Saldo al ' . \Carbon\Carbon::createFromDate($anio,$mes,1)->endOfMonth()->format('d/m/y'),
         ];
@@ -1686,6 +1692,20 @@ class InformeController extends Controller
             ->whereRaw("ABS({$sqlEntradas} - {$sqlEgresos}) >= 1000")
             ->get();
 
+        // ODI con saldo: lo que la ARL le debe a cada razón social y se va a
+        // descontar del aporte a la ARL en las próximas planillas. No es plata en
+        // ningún banco, pero explica por qué un pago al afiliado no tiene entrada.
+        $odisPendientes = \Illuminate\Support\Facades\Schema::hasTable('odis_arl')
+            ? DB::table('odis_arl as o')
+                ->join('razones_sociales as rs', 'rs.id', '=', 'o.razon_social_id')
+                ->where('o.aliado_id', $aid)
+                ->whereColumn('o.descontado', '<', 'o.total')
+                ->groupBy('o.razon_social_id', 'rs.razon_social')
+                ->selectRaw('rs.razon_social, COUNT(*) AS cantidad, SUM(o.total - o.descontado) AS saldo')
+                ->orderByDesc('saldo')
+                ->get()
+            : collect();
+
         $usuarios = DB::table('users')->where('aliado_id', $aid)->where('activo', 1)->orderBy('nombre')->get(['id', 'nombre']);
         $esAdmin = Auth::user()->hasRole('superadmin');
 
@@ -1711,8 +1731,30 @@ class InformeController extends Controller
             'canal5EntradaMes', 'canal5PagoAfiliado', 'canal5Cuatropormil',
             'canal5OtrosDesc', 'canal5GananciaAdmon', 'canal5EgresosMes',
             'canal5SaldoMes', 'canal5SaldoAcumulado', 'canal5SaldoAnterior',
-            'canal5Visible', 'canal5Incapacidades'
+            'canal5Visible', 'canal5Incapacidades', 'odisPendientes'
         ));
+    }
+
+    /**
+     * Entradas de incapacidad que llegaron en efectivo (OPI de la ARL cobrada
+     * en ventanilla). Las demás formas entran a un banco por su consignación o,
+     * si son ODI, no entran: se descuentan en planilla.
+     */
+    private function entradasIncapacidadEfectivo(int $aid, int $mes, int $anio): float
+    {
+        // Se pregunta una vez: el arrastre de la caja llama esto por cada mes.
+        static $hayColumna = null;
+        $hayColumna ??= \Illuminate\Support\Facades\Schema::hasColumn('abonos_incapacidades', 'forma_recepcion');
+        if (! $hayColumna) {
+            return 0.0;
+        }
+
+        return (float) DB::table('abonos_incapacidades')
+            ->where('aliado_id', $aid)
+            ->where('tipo', 'entrada_incapacidad')
+            ->where('forma_recepcion', 'opi_efectivo')
+            ->whereMonth('fecha', $mes)->whereYear('fecha', $anio)
+            ->sum('valor');
     }
 
 

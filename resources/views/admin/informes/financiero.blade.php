@@ -408,6 +408,21 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 </div>
                 @endif
 
+                {{-- ODI: la ARL las descuenta del aporte en planilla, no llegan al banco --}}
+                @if(($odisPendientes ?? collect())->isNotEmpty())
+                <div style="border-top:1px dashed #e2e8f0;margin-top:.35rem;padding-top:.35rem;" title="Órdenes de descuento de la ARL: se descuentan del aporte a la ARL en las próximas planillas">
+                    <div class="fc-row-label" style="margin-bottom:.2rem;"><span class="fc-dot" style="background:#d97706;"></span>
+                        <span style="font-size:.68rem;font-weight:700;">📋 ODI por descontar en planilla</span>
+                    </div>
+                    @foreach($odisPendientes as $o)
+                    <div class="fc-row" style="padding-left:.9rem;">
+                        <span style="font-size:.64rem;color:#64748b;">{{ \Illuminate\Support\Str::limit($o->razon_social, 24) }} ({{ $o->cantidad }})</span>
+                        <span class="fc-row-val" style="color:#d97706;">{{ $fmt($o->saldo) }}</span>
+                    </div>
+                    @endforeach
+                </div>
+                @endif
+
                 <div style="margin-top:auto;"></div>
             </div>
 
@@ -693,6 +708,12 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                             <span>└ Anticipos</span>
                             <span style="font-family:monospace;">{{ $fmt($efMes->anticipos) }}</span>
                         </div>
+                        @if(($efMes->incapacidades ?? 0) > 0)
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;" title="OPI de la ARL cobradas en efectivo">
+                            <span>└ OPI incapacidades</span>
+                            <span style="font-family:monospace;">{{ $fmt($efMes->incapacidades) }}</span>
+                        </div>
+                        @endif
 
                         {{-- Salió total e hijos --}}
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">

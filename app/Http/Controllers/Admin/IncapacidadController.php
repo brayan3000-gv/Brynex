@@ -1245,6 +1245,28 @@ class IncapacidadController extends Controller
             ], 422);
         }
 
+        // Lo que exige cada forma de recibir el pago se revisa antes de crear la
+        // gestión, para no dejar una gestión registrada con el pago rechazado.
+        if ($nuevoEstado === 'pagada_razon_social' && $incActualizar && $request->filled('valor_pago_rs')) {
+            $forma = $request->input('forma_pago_rs');
+            if (in_array($forma, ['transferencia', 'opi_banco'], true) && ! $request->banco_cuenta_id) {
+                return response()->json(['ok' => false, 'message' => 'Debes seleccionar la cuenta bancaria que recibió el pago.'], 422);
+            }
+            if ($forma === 'odi') {
+                if (trim((string) $request->ref_pago_rs) === '') {
+                    return response()->json(['ok' => false, 'message' => 'Escribe el número de la ODI.'], 422);
+                }
+                $tieneRs = $incActualizar->razon_social_id
+                    || ($incActualizar->contrato_id && DB::table('contratos')->where('id', $incActualizar->contrato_id)->value('razon_social_id'));
+                if (! $tieneRs) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'La incapacidad no tiene razón social: la ODI se descuenta en la planilla de una razón social.',
+                    ], 422);
+                }
+            }
+        }
+
         $gestion = GestionIncapacidad::create([
             'incapacidad_id' => $incGestionId,
             'user_id' => Auth::id(),
@@ -1280,11 +1302,14 @@ class IncapacidadController extends Controller
                 }
                 // Si pagada_razon_social, registrar abono + consignación
                 if ($nuevoEstado === 'pagada_razon_social' && $request->filled('valor_pago_rs')) {
-                    if ($request->forma_pago_rs === 'transferencia') {
+                    // OPI consignada en una cuenta: entró plata al banco, igual que una transferencia.
+                    $entraAlBanco = in_array($request->forma_pago_rs, ['transferencia', 'opi_banco'], true);
+
+                    if ($entraAlBanco) {
                         if (! $request->banco_cuenta_id) {
                             return response()->json([
                                 'ok' => false,
-                                'message' => 'Debes seleccionar la cuenta bancaria de destino para el pago por transferencia.',
+                                'message' => 'Debes seleccionar la cuenta bancaria que recibió el pago.',
                             ], 422);
                         }
                         $cuenta = DB::table('banco_cuentas')->where('id', $request->banco_cuenta_id)->first();
@@ -1296,19 +1321,58 @@ class IncapacidadController extends Controller
                         }
                     }
 
-                    $formaLabel = match ($request->forma_pago_rs ?? 'otro') {
+                    $formaRecepcion = in_array($request->forma_pago_rs, ['transferencia', 'odi', 'opi_banco', 'opi_efectivo', 'cheque'], true)
+                        ? $request->forma_pago_rs
+                        : 'otro';
+
+                    $formaLabel = match ($formaRecepcion) {
                         'transferencia' => 'Transferencia/Consignación bancaria',
-                        'opi' => 'OPI (Orden de Pago Inmediata - ARL)',
-                        'odi' => 'ODI (Orden de la entidad)',
+                        'odi' => 'ODI (se descuenta del aporte a la ARL en planilla)',
+                        'opi_banco' => 'OPI consignada en banco',
+                        'opi_efectivo' => 'OPI cobrada en efectivo',
                         'cheque' => 'Cheque',
                         default => 'Otro medio de pago',
                     };
                     $refLabel = $request->filled('ref_pago_rs') ? ' · Ref: '.$request->ref_pago_rs : '';
                     $obsAbono = "{$formaLabel}{$refLabel} — Incapacidad #{$incActualizar->id}";
 
-                    // Solo crear consignación bancaria si es transferencia y hay cuenta
+                    $rsIdAbono = $incActualizar->razon_social_id;
+                    if (! $rsIdAbono && $incActualizar->contrato_id) {
+                        $rsIdAbono = DB::table('contratos')->where('id', $incActualizar->contrato_id)->value('razon_social_id') ?: null;
+                    }
+
+                    // La ODI no es plata que llega: queda como saldo de la razón social
+                    // para descontar del aporte a la ARL en las planillas siguientes.
+                    $odiId = null;
+                    if ($formaRecepcion === 'odi') {
+                        $numeroOdi = mb_substr(trim((string) $request->ref_pago_rs), 0, 30);
+                        if ($numeroOdi === '') {
+                            return response()->json(['ok' => false, 'message' => 'Escribe el número de la ODI.'], 422);
+                        }
+                        if (! $rsIdAbono) {
+                            return response()->json([
+                                'ok' => false,
+                                'message' => 'La incapacidad no tiene razón social: la ODI se descuenta en la planilla de una razón social.',
+                            ], 422);
+                        }
+
+                        $odiId = \App\Models\OdiArl::registrarEntrada(
+                            aliadoId: (int) $incActualizar->aliado_id,
+                            razonSocialId: (int) $rsIdAbono,
+                            arlId: $incActualizar->contrato_id
+                                ? (DB::table('contratos')->where('id', $incActualizar->contrato_id)->value('arl_id') ?: null)
+                                : null,
+                            numero: $numeroOdi,
+                            fecha: $request->fecha_pago_rs ?? now()->toDateString(),
+                            valorIncapacidad: (float) $request->valor_pago_rs,
+                            otrosRiesgos: max(0, (float) $request->input('otros_riesgos_rs', 0)),
+                            usuarioId: Auth::id(),
+                        )->id;
+                    }
+
+                    // Solo se crea consignación cuando la plata entró a una cuenta.
                     $consignacionId = null;
-                    if ($request->forma_pago_rs === 'transferencia') {
+                    if ($entraAlBanco) {
                         $consignacionId = DB::table('consignaciones')->insertGetId([
                             'aliado_id' => $incActualizar->aliado_id,
                             'fecha' => $request->fecha_pago_rs ?? now()->toDateString(),
@@ -1326,21 +1390,20 @@ class IncapacidadController extends Controller
                         ]);
                     }
 
-                    $rsIdAbono = $incActualizar->razon_social_id;
-                    if (! $rsIdAbono && $incActualizar->contrato_id) {
-                        $rsIdAbono = DB::table('contratos')->where('id', $incActualizar->contrato_id)->value('razon_social_id') ?: null;
-                    }
-
                     DB::table('abonos_incapacidades')->insert([
                         'aliado_id' => $incActualizar->aliado_id,
                         'incapacidad_id' => $incActualizar->id,
                         'razon_social_id' => $rsIdAbono,
                         'gestion_incapacidad_id' => $gestion->id,
                         'tipo' => 'entrada_incapacidad',
+                        'forma_recepcion' => $formaRecepcion,
                         'valor' => $request->valor_pago_rs,
                         'fecha' => $request->fecha_pago_rs ?? now()->toDateString(),
-                        'banco_cuenta_id' => $request->banco_cuenta_id ?: null,
+                        // Un banco solo cuando la plata entró a él: una ODI o una OPI
+                        // en efectivo con banco harían figurar plata que no está ahí.
+                        'banco_cuenta_id' => $entraAlBanco ? ($request->banco_cuenta_id ?: null) : null,
                         'consignacion_id' => $consignacionId,
+                        'odi_id' => $odiId,
                         'usuario_id' => Auth::id(),
                         'observacion' => $obsAbono,
                         'created_at' => now(),
@@ -1558,6 +1621,10 @@ class IncapacidadController extends Controller
             'estado' => $inc->fresh()->estado,
             'alcance' => $alcance,
             'consignacion_id' => $consignacionId ?? null,
+            // Dónde subir el PDF de la ODI/OPI como documento de la incapacidad.
+            'soporte_orden_incapacidad_id' => (isset($formaRecepcion) && in_array($formaRecepcion, ['odi', 'opi_banco', 'opi_efectivo'], true))
+                ? $incActualizar->id
+                : null,
         ]);
     }
 
@@ -1886,6 +1953,8 @@ class IncapacidadController extends Controller
                 DB::table('gastos')->whereIn('id', $analisis['gastos']->pluck('id'))->delete();
             }
             if ($analisis['abonos']->isNotEmpty()) {
+                // Una entrada por ODI es parte del saldo de la orden: se le resta antes de borrarla.
+                \App\Models\OdiArl::quitarEntradas($analisis['abonos']->pluck('id')->all());
                 DB::table('abonos_incapacidades')->whereIn('id', $analisis['abonos']->pluck('id'))->delete();
             }
             foreach ($analisis['consignaciones'] as $c) {
@@ -2031,9 +2100,17 @@ class IncapacidadController extends Controller
                 ->get(['id', 'nombre', 'banco', 'tipo_cuenta', 'numero_cuenta', 'nit']);
         }
 
+        // Las demás cuentas del aliado: de ahí sale el pago al afiliado cuando la
+        // incapacidad llegó por ODI, porque a la razón social no le entró nada.
+        $cuentasAliado = (clone $base)
+            ->whereNotIn('id', $cuentas->pluck('id')->all() ?: [0])
+            ->orderBy('banco')
+            ->get(['id', 'nombre', 'banco', 'tipo_cuenta', 'numero_cuenta', 'nit']);
+
         return response()->json([
             'ok' => true,
             'cuentas' => $cuentas,
+            'cuentas_aliado' => $cuentasAliado,
             'nit_rs' => $nit,
             'rs_nombre' => $rs?->razon_social ?? $inc->razon_social_nombre ?? null,
             'buscado_por' => $cuentas->isNotEmpty()
@@ -2537,6 +2614,18 @@ class IncapacidadController extends Controller
         // Si es soporte de pago firmado → actualizarlo en la incapacidad
         if ($request->tipo_documento === 'soporte_pago') {
             $inc->update(['ruta_soporte_pago' => $ruta]);
+        }
+
+        // El PDF de la ODI también queda en la orden, que puede cubrir varias incapacidades.
+        if ($request->tipo_documento === 'odi') {
+            $odiId = DB::table('abonos_incapacidades')
+                ->where('incapacidad_id', $inc->id)
+                ->whereNotNull('odi_id')
+                ->orderByDesc('id')
+                ->value('odi_id');
+            if ($odiId) {
+                \App\Models\OdiArl::where('id', $odiId)->whereNull('imagen_path')->update(['imagen_path' => $ruta]);
+            }
         }
 
         return response()->json(['ok' => true, 'message' => 'Documento subido.', 'ruta' => $ruta]);

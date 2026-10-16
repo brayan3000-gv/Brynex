@@ -1046,7 +1046,7 @@ function mostrarDocsEnEditar(incId, labelGrupo) {
             if (!docs.length) { lista.textContent = 'Sin documentos en este grupo.'; return; }
             const TIPOS_DOC = {
                 incapacidad_original:'📄 Inc. Original', historia_clinica:'📋 Hist. Clínica',
-                radicado_entidad:'📮 Radicado', soporte_pago:'💳 Soporte Pago',
+                radicado_entidad:'📮 Radicado', soporte_pago:'💳 Soporte Pago', odi:'📋 ODI/OPI ARL',
                 transcripcion:'🏥 Transcripción', cedula:'🪪 Cédula', examen:'🔬 Examen', otro:'📎 Otro'
             };
             lista.innerHTML = docs.map(d=>`
@@ -2101,8 +2101,13 @@ function _mostrarModalGestion(incId, familia, inc = {}) {
                 <div class="form-group" id="gBloqueCuentaOrigen" style="margin:0">
                     <label style="font-weight:600;font-size:.8rem">Cuenta Bancaria de Origen</label>
                     <input type="text" id="gCuentaOrigenAfiliado" class="form-control" readonly style="background:#f8fafc;color:#475569;font-weight:500">
+                    <!-- Con ODI la plata no llegó a la razón social: se escoge una cuenta del aliado -->
+                    <select id="gSelCuentaAliado" class="form-control" style="display:none"
+                            onchange="document.getElementById('gBancoOrigenIdAfiliado').value = this.value"></select>
                     <input type="hidden" id="gBancoOrigenIdAfiliado" value="">
                 </div>
+                <div id="gAvisoOrdenArl" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;
+                            padding:.5rem .7rem;font-size:.76rem;color:#92400e;line-height:1.35"></div>
 
                 <!-- Valores y deducciones -->
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
@@ -2307,6 +2312,7 @@ function _cargarCuentasRS(incId) {
             <input type="hidden" id="gValorPagoRS" value="">
             <input type="hidden" id="gFechaPagoRS" value="">
             <input type="hidden" id="gRefPagoRS" value="">
+            <input type="hidden" id="gOtrosRiesgosRS" value="">
 
             <div class="form-group" style="margin:0 0 .35rem">
                 <label style="font-weight:600;font-size:.82rem">¿Cómo se recibió el pago? *</label>
@@ -2318,7 +2324,11 @@ function _cargarCuentasRS(incId) {
                     // registrarse como una forma de recibirla — eso infla el Canal 5.
                     // Ese caso se registra con el estado 'Pagada al afiliado'.
                     ['transferencia', '🏦', 'Transferencia\n/ Consignación'],
-                    ['odi',           '📋', 'ODI'],
+                    // ODI y OPI son órdenes de la ARL: la ODI se descuenta en la
+                    // planilla (no llega plata) y la OPI se cobra a una cuenta o
+                    // en efectivo.
+                    ['odi',           '📋', 'ODI\n(descuento en planilla)'],
+                    ['opi',           '💵', 'OPI\n(cheque / consignación)'],
                     ['cheque',        '🧾', 'Cheque'],
                     ['otro',          '📎', 'Otro'],
                 ].map(([val, ico, lbl]) => `
@@ -2401,22 +2411,62 @@ function _abrirMiniModalRS(forma) {
         // Guardar flag para deshabilitar Confirmar si sin cuenta
         window._miniModalSinCuenta = sinCuenta;
     } else if (forma === 'odi') {
-        titulo = '📋 ODI — Orden de la Entidad';
+        titulo = '📋 ODI — Orden de Descuento de Incapacidad';
         cuerpo = `
-        <div class="form-group" style="margin:0 0 .5rem">
-            <label>Número de Referencia ODI</label>
-            <input type="text" id="_mRef" class="form-control" placeholder="Ej: ODI-2026-001" autofocus>
+        <div style="font-size:.74rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:.4rem .6rem;margin-bottom:.6rem">
+            La ODI <strong>no entra al banco</strong>: queda como saldo de la razón social para descontar
+            del aporte a la ARL en las próximas planillas.
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
             <div class="form-group" style="margin:0">
-                <label>Valor *</label>
-                <input type="number" id="_mValor" class="form-control" placeholder="0" min="0" step="1000">
+                <label>Número de la ODI *</label>
+                <input type="text" id="_mRef" class="form-control" placeholder="Ej: 1849379" autofocus>
             </div>
             <div class="form-group" style="margin:0">
-                <label>Fecha *</label>
+                <label>Fecha de la ODI *</label>
                 <input type="date" id="_mFecha" class="form-control" value="${today}">
             </div>
-        </div>`;
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+            <div class="form-group" style="margin:0">
+                <label>Valor de esta incapacidad *</label>
+                <input type="number" id="_mValor" class="form-control" placeholder="0" min="0" step="1">
+            </div>
+            <div class="form-group" style="margin:0">
+                <label title="Renglón 34 del PDF: la salud y pensión que la ARL devuelve">Cotizaciones a otros riesgos</label>
+                <input type="number" id="_mOtrosRiesgos" class="form-control" placeholder="0" min="0" step="1">
+            </div>
+        </div>
+        <div style="font-size:.7rem;color:#64748b;margin:-.2rem 0 .5rem">
+            «Otros riesgos» es de la orden completa: si la ODI cubre varias incapacidades, escríbelo solo en la primera.
+        </div>
+        ${_zonaArchivoRS('PDF de la ODI', true)}`;
+    } else if (forma === 'opi') {
+        titulo = '💵 OPI — Orden de Pago de Incapacidad';
+        cuerpo = `
+        <div class="form-group" style="margin:0 0 .5rem">
+            <label>¿Dónde se cobró? *</label>
+            <select id="_mOpiDestino" class="form-control">
+                <option value="">— Escoge —</option>
+                <option value="efectivo">💵 Se cobró en efectivo</option>
+                ${window._rsCuentaOpts || ''}
+            </select>
+        </div>
+        <div class="form-group" style="margin:0 0 .5rem">
+            <label>Número de la OPI</label>
+            <input type="text" id="_mRef" class="form-control" placeholder="Ej: 1850908">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+            <div class="form-group" style="margin:0">
+                <label>Valor *</label>
+                <input type="number" id="_mValor" class="form-control" placeholder="0" min="0" step="1">
+            </div>
+            <div class="form-group" style="margin:0">
+                <label>Fecha de cobro *</label>
+                <input type="date" id="_mFecha" class="form-control" value="${today}">
+            </div>
+        </div>
+        ${_zonaArchivoRS('Soporte de la OPI', false)}`;
     } else if (forma === 'cheque') {
         titulo = '🧾 Pago con Cheque';
         cuerpo = `
@@ -2496,7 +2546,7 @@ function _abrirMiniModalRS(forma) {
 
     // ── Listener Ctrl+V para pegar imagen desde portapapeles ──────────────
     window._rsPasteHandler = (e) => {
-        if (forma !== 'transferencia') return;
+        if (!['transferencia', 'odi', 'opi'].includes(forma)) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         for (const item of items) {
@@ -2531,6 +2581,23 @@ function _abrirMiniModalRS(forma) {
             prev.innerHTML = '📷 Clic, arrastra o <kbd style="background:#e2e8f0;padding:.1rem .3rem;border-radius:4px;font-size:.85em">Ctrl+V</kbd> para pegar';
         }
     }, 150);
+}
+
+// Zona para subir el soporte (foto o PDF) desde el mini-modal de la forma de pago.
+function _zonaArchivoRS(etiqueta, obligatorio) {
+    window._rsFotoFile = null;
+    return `
+        <div class="form-group" style="margin:0">
+            <label style="font-size:.78rem">${etiqueta} ${obligatorio ? '*' : '<span style="color:#94a3b8">(opcional)</span>'}</label>
+            <div id="_mFotoZone" onclick="document.getElementById('_mFotoInput').click()"
+                style="border:2px dashed #bae6fd;border-radius:8px;padding:.6rem;text-align:center;
+                       cursor:pointer;font-size:.78rem;color:#0369a1;background:#f0f9ff;margin-top:.25rem"
+                ondragover="event.preventDefault()" ondrop="_dropFotoRS(event)">
+                <div id="_mFotoPreview">📷 Haz clic o arrastra la imagen / PDF</div>
+            </div>
+            <input type="file" id="_mFotoInput" accept="image/*,application/pdf" style="display:none"
+                onchange="_previewFotoRS(this)">
+        </div>`;
 }
 
 function _cerrarMiniModalRS() {
@@ -2572,9 +2639,22 @@ function _confirmarFormaRS(forma) {
 
     const valor = document.getElementById('_mValor')?.value || '0';
     const fecha = document.getElementById('_mFecha')?.value || new Date().toISOString().substring(0,10);
-    const ref   = document.getElementById('_mRef')?.value || '';
-    const banco = document.getElementById('_mBancoCuenta')?.value || '';
+    const ref   = (document.getElementById('_mRef')?.value || '').trim();
+    let   banco = document.getElementById('_mBancoCuenta')?.value || '';
     const bancoEmisor = document.getElementById('_mBancoEmisor')?.value || '';
+    const otrosRiesgos = document.getElementById('_mOtrosRiesgos')?.value || '';
+
+    if (forma === 'odi') {
+        if (!ref) { alert('Escribe el número de la ODI.'); return; }
+        if (!window._rsFotoFile) { alert('Sube el PDF de la ODI: queda como soporte en la incapacidad.'); return; }
+    }
+    // La OPI se guarda con el destino en la forma: en efectivo no hay banco.
+    if (forma === 'opi') {
+        const destino = document.getElementById('_mOpiDestino')?.value || '';
+        if (!destino) { alert('Escoge si la OPI se cobró en efectivo o en qué cuenta entró.'); return; }
+        forma = destino === 'efectivo' ? 'opi_efectivo' : 'opi_banco';
+        banco = destino === 'efectivo' ? '' : destino;
+    }
 
     // Guardar en los inputs ocultos del panel principal
     document.getElementById('gFormaPagoRS').value  = forma;
@@ -2582,11 +2662,14 @@ function _confirmarFormaRS(forma) {
     document.getElementById('gValorPagoRS').value  = valor;
     document.getElementById('gFechaPagoRS').value  = fecha;
     document.getElementById('gRefPagoRS').value    = ref + (bancoEmisor ? ` · Banco: ${bancoEmisor}` : '');
+    document.getElementById('gOtrosRiesgosRS').value = forma === 'odi' ? otrosRiesgos : '';
 
     // Resumen visible en el panel
     const formaLabel = {
         transferencia: '🏦 Transferencia/Consignación',
-        odi:           '📋 ODI',
+        odi:           '📋 ODI (se descuenta en planilla)',
+        opi_efectivo:  '💵 OPI cobrada en efectivo',
+        opi_banco:     '💵 OPI consignada en banco',
         cheque:        '🧾 Cheque',
         directo:       '👤 Directo al cliente',
         otro:          '📎 Otro',
@@ -2594,7 +2677,7 @@ function _confirmarFormaRS(forma) {
 
     const valorFmt = Number(valor) > 0 ? ' · $' + Number(valor).toLocaleString('es-CO') : '';
     const refTxt   = ref ? ` · Ref: ${ref}` : '';
-    const fotoTxt  = (forma === 'transferencia' && window._rsFotoFile) ? ' 📸' : '';
+    const fotoTxt  = window._rsFotoFile ? ' 📸' : '';
 
     const resumen = document.getElementById('gResumenFormaRS');
     if (resumen) {
@@ -2696,6 +2779,7 @@ function enviarGestion(incId, confirmarPago) {
         valor_pago_rs:   esPagoRS ? (document.getElementById('gValorPagoRS')?.value || null) : null,
         fecha_pago_rs:   esPagoRS ? (document.getElementById('gFechaPagoRS')?.value || null) : null,
         ref_pago_rs:     esPagoRS ? (document.getElementById('gRefPagoRS')?.value || null) : null,
+        otros_riesgos_rs: esPagoRS ? (document.getElementById('gOtrosRiesgosRS')?.value || null) : null,
         // Pago al Afiliado (Gasto)
         forma_pago:          (esPagoAfiliado && !esPagoDirecto) ? (document.getElementById('gFormaPagoAfiliado')?.value || null) : null,
         valor_pago_afiliado: esPagoAfiliado ? (document.getElementById(esPagoDirecto ? 'gValorRecibidoEps' : 'gValorPagoAfiliado')?.value || null) : null,
@@ -2717,7 +2801,7 @@ function enviarGestion(incId, confirmarPago) {
     // Validar pago RS
     if (esPagoRS) {
         if (!body.forma_pago_rs) { alert('Selecciona la forma en que se recibió el pago.'); return; }
-        if (body.forma_pago_rs === 'transferencia' && !body.banco_cuenta_id) {
+        if (['transferencia', 'opi_banco'].includes(body.forma_pago_rs) && !body.banco_cuenta_id) {
             alert('Debes seleccionar una cuenta bancaria con NIT para la Razón Social.');
             return;
         }
@@ -2733,7 +2817,9 @@ function enviarGestion(incId, confirmarPago) {
         if (!body.fecha_pago_afiliado) { alert('Ingresa la fecha del pago.'); return; }
     } else if (esPagoAfiliado) {
         if (body.forma_pago === 'transferencia_bancaria' && !body.banco_cuenta_id) {
-            alert('No se detectó la cuenta bancaria de origen (Razón Social) asignada.');
+            alert(document.getElementById('gSelCuentaAliado')?.style.display !== 'none'
+                ? 'Escoge la cuenta del aliado desde la que se le paga al afiliado.'
+                : 'No se detectó la cuenta bancaria de origen (Razón Social) asignada.');
             return;
         }
         if (body.valor_pago_afiliado === null || Number(body.valor_pago_afiliado) < 0) {
@@ -2762,8 +2848,22 @@ function enviarGestion(incId, confirmarPago) {
                 fd.append('imagen', window._rsFotoFile);
                 fd.append('_token', TOKEN);
                 fetch(`/admin/facturacion/consignacion/${d.consignacion_id}/imagen`, { method: 'POST', body: fd }).catch(() => {});
-                window._rsFotoFile = null;
             }
+            // PDF de la ODI/OPI: queda como documento de la incapacidad
+            // (y la ODI lo toma como su soporte).
+            if (d.soporte_orden_incapacidad_id && window._rsFotoFile) {
+                const fd = new FormData();
+                fd.append('archivo', window._rsFotoFile);
+                fd.append('tipo_documento', 'odi');
+                fd.append('observacion', `${body.forma_pago_rs === 'odi' ? 'ODI' : 'OPI'} ${body.ref_pago_rs || ''}`.trim());
+                fd.append('_token', TOKEN);
+                fetch(`/admin/incapacidades/${d.soporte_orden_incapacidad_id}/documento`, {
+                    method: 'POST', body: fd, headers: { 'Accept': 'application/json' },
+                }).then(r => r.json()).then(r => {
+                    if (!r.ok) alert('⚠️ La gestión quedó, pero el soporte no se subió: ' + (r.message || 'error'));
+                }).catch(() => alert('⚠️ La gestión quedó, pero el soporte no se subió. Súbelo en Documentos.'));
+            }
+            window._rsFotoFile = null;
             // Foto comprobante Afiliado (Gasto)
             if (d.gasto_id && window._afiliadoFotoFile) {
                 const fd = new FormData();
@@ -2898,8 +2998,49 @@ function _cargarDatosPagoAfiliado(inc, incId, esDirecto = false) {
     if (prev) prev.innerHTML = '📷 Haz clic, arrastra o Ctrl+V para pegar soporte';
     window._afiliadoFotoFile = null;
     
+    // Cómo llegó la plata de la ARL decide de dónde sale el pago.
+    const formaEntrada = abonoEps?.forma_recepcion || null;
+    const aviso = document.getElementById('gAvisoOrdenArl');
+    const selAliado = document.getElementById('gSelCuentaAliado');
+    aviso.style.display = 'none';
+    selAliado.style.display = 'none';
+    document.getElementById('gCuentaOrigenAfiliado').style.display = '';
+
     let valorEps = 0;
-    if (abonoEps) {
+    if (abonoEps && formaEntrada === 'odi') {
+        // La ODI se descuenta en planilla: la razón social no recibió nada, así
+        // que el pago sale de una cuenta del aliado y se recupera con el descuento.
+        valorEps = Math.round(Number(abonoEps.valor || 0));
+        document.getElementById('gValorRecibidoEps').value = valorEps;
+        document.getElementById('gDescuento4x1000').value = x1000De(valorEps);
+        aviso.innerHTML = '📋 Esta incapacidad llegó por <strong>ODI</strong>: la plata no entró a la razón social, se descuenta '
+            + 'del aporte a la ARL en las próximas planillas. Paga desde una <strong>cuenta del aliado</strong> '
+            + '(no la de la razón social); se recupera cuando la planilla descuente la ODI.';
+        aviso.style.display = 'block';
+        document.getElementById('gCuentaOrigenAfiliado').style.display = 'none';
+        document.getElementById('gBancoOrigenIdAfiliado').value = '';
+        selAliado.innerHTML = '<option value="">Cargando cuentas…</option>';
+        selAliado.style.display = '';
+        fetch(`/admin/incapacidades/${incId}/cuentas-rs`)
+            .then(r => r.json()).then(d => {
+                const cuentas = (d.ok && d.cuentas_aliado) ? d.cuentas_aliado : [];
+                selAliado.innerHTML = '<option value="">— Escoge la cuenta del aliado —</option>'
+                    + cuentas.map(c => `<option value="${c.id}">${c.banco} · ****${(c.numero_cuenta||'').slice(-4)} (${c.nombre})</option>`).join('');
+                _calcularNetoAfiliado();
+            }).catch(() => { selAliado.innerHTML = '<option value="">Error al cargar cuentas</option>'; });
+    } else if (abonoEps && formaEntrada === 'opi_efectivo') {
+        // OPI cobrada en efectivo: lo normal es pagarle al afiliado con esa misma plata.
+        valorEps = Math.round(Number(abonoEps.valor || 0));
+        document.getElementById('gValorRecibidoEps').value = valorEps;
+        document.getElementById('gFormaPagoAfiliado').value = 'efectivo';
+        document.getElementById('gDescuento4x1000').value = 0;
+        document.getElementById('gBancoOrigenIdAfiliado').value = '';
+        document.getElementById('gCuentaOrigenAfiliado').value = 'OPI cobrada en efectivo — sin cuenta';
+        aviso.innerHTML = '💵 La OPI se cobró <strong>en efectivo</strong>: el pago queda en efectivo y sin 4x1000. '
+            + 'Si se le transfirió, cambia la forma de pago.';
+        aviso.style.display = 'block';
+        _calcularNetoAfiliado();
+    } else if (abonoEps) {
         valorEps = Math.round(Number(abonoEps.valor || 0));
         document.getElementById('gValorRecibidoEps').value = valorEps;
         document.getElementById('gDescuento4x1000').value = x1000De(valorEps);
@@ -3016,11 +3157,23 @@ function _calcularNetoAfiliado(editado = null) {
 
 function _cambioFormaPagoAfiliado(val) {
     const cuentaInp = document.getElementById('gCuentaOrigenAfiliado');
+    const selAliado = document.getElementById('gSelCuentaAliado');
+    const x1000 = document.getElementById('gDescuento4x1000');
     if (val === 'efectivo') {
         if (cuentaInp) cuentaInp.style.opacity = '0.5';
+        if (selAliado) selAliado.style.opacity = '0.5';
+        // En efectivo no pasa por el banco: no hay 4x1000 que cobrar.
+        if (x1000) x1000.value = 0;
     } else {
         if (cuentaInp) cuentaInp.style.opacity = '1';
+        if (selAliado) selAliado.style.opacity = '1';
+        if (x1000 && Number(x1000.value || 0) === 0) {
+            const bruto = Number(document.getElementById('gValorRecibidoEps')?.value || 0);
+            const anticipado = Number(document.getElementById('gAnticipadoAfiliado')?.value || 0);
+            x1000.value = Math.round(Math.max(0, bruto - anticipado) * 0.004);
+        }
     }
+    _calcularNetoAfiliado();
 }
 
 function _previewFotoAfiliado(input) {
@@ -3065,8 +3218,13 @@ function registrarPago(incId){
         .then(r => r.json())
         .then(d => {
             const cuentas = d.cuentas || [];
-            const cuentasOpts = cuentas.length
-                ? cuentas.map(c => `<option value="${c.id}">${c.banco} · ${c.tipo_cuenta||''} · ****${(c.numero_cuenta||'').slice(-4)} (${c.nombre})</option>`).join('')
+            const opt = c => `<option value="${c.id}">${c.banco} · ${c.tipo_cuenta||''} · ****${(c.numero_cuenta||'').slice(-4)} (${c.nombre})</option>`;
+            // Las cuentas del aliado también: cuando la incapacidad llega por ODI
+            // a la razón social no le entra nada, y el anticipo sale de otra cuenta.
+            const cuentasAliado = d.cuentas_aliado || [];
+            const cuentasOpts = (cuentas.length || cuentasAliado.length)
+                ? (cuentas.length ? `<optgroup label="Razón social">${cuentas.map(opt).join('')}</optgroup>` : '')
+                  + (cuentasAliado.length ? `<optgroup label="Otras cuentas del aliado">${cuentasAliado.map(opt).join('')}</optgroup>` : '')
                 : '<option value="">Sin cuentas registradas</option>';
 
             const html = `<div style="padding:1rem">
@@ -3203,6 +3361,7 @@ function subirDocumento(incId){
                                 <option value="historia_clinica">📋 Historia Clínica</option>
                                 <option value="radicado_entidad">📮 Radicado Entidad</option>
                                 <option value="soporte_pago">💳 Soporte de Pago</option>
+                                <option value="odi">📋 ODI / OPI de la ARL</option>
                                 <option value="transcripcion">🏥 Transcripción IPS</option>
                                 <option value="cedula">🪪 Cédula</option>
                                 <option value="examen">🔬 Examen / Diagnóstico</option>
@@ -3765,6 +3924,7 @@ function cargarDocsFamilia(incId) {
                 historia_clinica:     '📋 Hist. Clínica',
                 radicado_entidad:     '📮 Radicado Entidad',
                 soporte_pago:         '💳 Soporte Pago',
+                odi:                  '📋 ODI/OPI ARL',
                 transcripcion:        '🏥 Transcripción',
                 cedula:               '🪪 Cédula',
                 examen:               '🔬 Examen',
