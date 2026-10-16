@@ -1901,7 +1901,6 @@ const CTX = {
     rsDiaHabil    : {{ $rsDiaHabil ?? 'null' }},
     csrfToken     : '{{ csrf_token() }}',
     gastoPagoId   : {{ $gastoPagoId ?? 'null' }},
-    bancoSugeridoId: {{ $bancoSugeridoId ?? 'null' }},
     routes: {
         descargar        : '{{ route('admin.planos.descargar') }}',
         descargarAsopagos  : '{{ route('admin.planos.descargar_asopagos') }}',
@@ -3243,8 +3242,8 @@ async function devolverPlano(nPlano) {
 
 // Botones de la planilla liquidada: ir a pagar por PSE y, ya pagada, "Ya
 // pagué", que abre Confirmar Pago con lo que ya se sabe de la planilla
-// (operador, número, valor, la cuenta de la última vez). Solo queda pegar el
-// soporte y confirmar. La planilla se guarda en una variable porque en
+// (operador, número y valor). La cuenta bancaria se escoge a mano, y queda
+// pegar el soporte y confirmar. La planilla se guarda en una variable porque en
 // pantalla hay una sola liquidación a la vez.
 const LOGO_PSE = '<svg width="22" height="22" viewBox="0 0 40 40" aria-hidden="true" style="flex:none">'
     + '<circle cx="20" cy="20" r="19" fill="#fff"/><circle cx="20" cy="20" r="16.5" fill="#0b4f9c"/>'
@@ -3285,7 +3284,6 @@ function confirmarPagoLiquidado() {
         document.getElementById('pago-numero').value = l.numero;
         if (l.valor > 0) document.getElementById('pago-valor').value = l.valor;
     }
-    if (CTX.bancoSugeridoId) document.getElementById('pago-banco').value = String(CTX.bancoSugeridoId);
 }
 
 // Pinta el resultado guardado de una liquidación anterior.

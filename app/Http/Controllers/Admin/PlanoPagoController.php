@@ -349,25 +349,6 @@ class PlanoPagoController extends Controller
         // Bancos (para modal confirmar pago)
         $bancos = BancoCuenta::paraFacturacion($aliadoId);
 
-        // La cuenta con la que se pagó la última planilla de esta razón social
-        // (o, si no hay, la última del aliado): la propone el botón "Ya pagué"
-        // de la liquidación en línea. El gasto no guarda la razón social, pero
-        // su descripción sí ("Pago planilla SS — {razón social} | ...").
-        $bancoSugeridoId = null;
-        if ($rsSeleccionada) {
-            $ultimos = Gasto::where('aliado_id', $aliadoId)
-                ->where('tipo', 'pago_planilla')
-                ->whereNotNull('banco_origen_id')
-                ->orderByDesc('id');
-            $bancoSugeridoId = (clone $ultimos)
-                ->where('descripcion', 'like', 'Pago planilla SS — ' . $rsSeleccionada->razon_social . ' |%')
-                ->value('banco_origen_id')
-                ?? $ultimos->value('banco_origen_id');
-            if (! $bancos->contains('id', $bancoSugeridoId)) {
-                $bancoSugeridoId = null;
-            }
-        }
-
         // Operadores:
         //   - RS Independiente (es_independiente=true) → mostrar TODOS los operadores
         //     globales activos (el afiliado puede usar cualquier operador).
@@ -428,7 +409,7 @@ class PlanoPagoController extends Controller
             'totalSS', 'totalAdmon', 'totalPersonas',
             'bancos', 'operadores', 'operadoresApiIds',
             'planoPagado', 'numeroPlanillaPagado', 'valorPagado', 'pagoPaso1',
-            'gastoPagoId', 'puedeCorregirPago', 'bancoSugeridoId',
+            'gastoPagoId', 'puedeCorregirPago',
             'gastosPorPlanilla', 'puedeCorregir',
             'estadoPago',
         ) + [
