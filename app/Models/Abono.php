@@ -18,4 +18,5 @@ class Abono extends BaseModel
 
     public function factura() { return $this->belongsTo(Factura::class); }
     public function usuario() { return $this->belongsTo(User::class, 'usuario_id'); }
+    public function bancoCuenta() { return $this->belongsTo(BancoCuenta::class, 'banco_cuenta_id'); }
 }

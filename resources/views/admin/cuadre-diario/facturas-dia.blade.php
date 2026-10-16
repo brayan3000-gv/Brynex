@@ -148,6 +148,15 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
         </div>
     </div>
     @endif
+    @if($abonos->isNotEmpty())
+    <div class="fd-card">
+        <div class="lbl">💳 Abonos a préstamos</div>
+        <div class="val" style="color:#b45309">{{ $fmt($totales['abonos']) }}</div>
+        <div style="font-size:.66rem;color:#64748b;margin-top:.15rem">
+            💵 {{ $fmt($totales['abonos_efectivo']) }} · 🏦 {{ $fmt($totales['abonos_consignado']) }}
+        </div>
+    </div>
+    @endif
     <div class="fd-card">
         <div class="lbl">Seg. social</div>
         <div class="val" style="color:#475569">{{ $fmt($totales['seg_social']) }}</div>
@@ -422,7 +431,62 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
 </div>
 @endif
 
-{{-- Quién recibió el dinero (solo usuarios con efectivo, consignación o anticipos) --}}
+{{-- Abonos a préstamos recibidos ese día: el préstamo se facturó otro día --}}
+@if($abonos->isNotEmpty())
+<div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-top:.8rem">
+    <div style="padding:.55rem .9rem;background:#fffbeb;border-bottom:1px solid #e2e8f0;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#b45309">
+        💳 Abonos a préstamos ({{ $abonos->count() }})
+    </div>
+    <div style="overflow:auto;max-height:60vh">
+    <table class="tbl">
+        <thead><tr>
+            <th>No.</th>
+            <th>Cédula</th>
+            <th>Nombres</th>
+            <th>Factura préstamo</th>
+            <th>Fecha préstamo</th>
+            <th>Forma pago</th>
+            <th class="num">Efectivo</th>
+            <th class="num">Consignado</th>
+            <th>Banco</th>
+            <th>Recibió</th>
+            <th>Observación</th>
+        </tr></thead>
+        <tbody>
+        @foreach($abonos as $i => $ab)
+        @php $bancoTxt = $ab->bancoCuenta ? ($ab->bancoCuenta->nombre ?: $ab->bancoCuenta->banco) : '—'; @endphp
+        <tr>
+            <td style="color:#94a3b8">{{ $i + 1 }}</td>
+            <td class="num">{{ $ab->factura?->cedula }}</td>
+            <td style="font-weight:600">{{ nombre_oracion($ab->nombre_cliente) }}</td>
+            <td>
+                @if($ab->factura)
+                <button type="button" class="link-fact" onclick="abrirRecibo({{ $ab->factura->id }})"
+                        title="Ver recibo">{{ $ab->factura->numero_factura }}</button>
+                @endif
+            </td>
+            <td>{{ $ab->factura?->fecha_pago?->format('d/m/Y') ?? '—' }}</td>
+            <td>{{ $formas[$ab->forma_pago] ?? $ab->forma_pago }}</td>
+            <td class="num" style="color:#15803d;font-weight:700">{{ $fmt($ab->valor_efectivo) }}</td>
+            <td class="num" style="color:#0369a1">{{ $fmt($ab->valor_consignado) }}</td>
+            <td style="font-size:.72rem" title="{{ $bancoTxt }}">{{ \Illuminate\Support\Str::limit($bancoTxt, 20, '…') }}</td>
+            <td style="font-size:.72rem;color:#64748b">{{ $ab->usuario?->nombre ?? '—' }}</td>
+            <td style="font-size:.72rem;color:#64748b" title="{{ $ab->observacion }}">{{ \Illuminate\Support\Str::limit($ab->observacion ?? '', 30, '…') }}</td>
+        </tr>
+        @endforeach
+        </tbody>
+        <tfoot><tr>
+            <td colspan="6">TOTAL ABONOS</td>
+            <td class="num">{{ $fmt($totales['abonos_efectivo']) }}</td>
+            <td class="num">{{ $fmt($totales['abonos_consignado']) }}</td>
+            <td colspan="3"></td>
+        </tr></tfoot>
+    </table>
+    </div>
+</div>
+@endif
+
+{{-- Quién recibió el dinero (solo usuarios con efectivo, consignación, anticipos o abonos) --}}
 @if($porUsuario->isNotEmpty())
 <div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-top:.8rem">
     <div style="padding:.55rem .9rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#475569">
@@ -438,6 +502,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
             <th class="num">🏦 Consignado</th>
             <th class="num">💰 Anticipos 💵</th>
             <th class="num">💰 Anticipos 🏦</th>
+            <th class="num">💳 Abonos 💵</th>
+            <th class="num">💳 Abonos 🏦</th>
         </tr></thead>
         <tbody>
         @foreach($porUsuario as $nombre => $t)
@@ -449,6 +515,8 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.78rem}
             <td class="num" style="color:#0369a1">{{ $fmt($t['consignado']) }}</td>
             <td class="num" style="color:#15803d">{{ $fmt($t['anticipos_efectivo']) }}</td>
             <td class="num" style="color:#0369a1">{{ $fmt($t['anticipos_consignado']) }}</td>
+            <td class="num" style="color:#15803d">{{ $fmt($t['abonos_efectivo']) }}</td>
+            <td class="num" style="color:#0369a1">{{ $fmt($t['abonos_consignado']) }}</td>
         </tr>
         @endforeach
         </tbody>

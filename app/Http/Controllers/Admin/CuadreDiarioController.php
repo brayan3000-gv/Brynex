@@ -1509,6 +1509,38 @@ class CuadreDiarioController extends Controller
             $spreadsheet->setActiveSheetIndex(0);
         }
 
+        if ($datos['abonos']->isNotEmpty()) {
+            $hoja = $spreadsheet->createSheet();
+            $hoja->setTitle('Abonos a préstamos');
+            $hoja->fromArray(['No.', 'Cédula', 'Nombres', 'Factura préstamo', 'Fecha préstamo',
+                              'Forma pago', 'Efectivo', 'Consignado', 'Banco', 'Recibió', 'Observación'], null, 'A1');
+            $hoja->getStyle('A1:K1')->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'b45309']],
+            ]);
+            foreach ($datos['abonos']->values() as $i => $ab) {
+                $fila = $i + 2;
+                $hoja->fromArray([
+                    $i + 1,
+                    $ab->factura?->cedula,
+                    $ab->nombre_cliente,
+                    $ab->factura?->numero_factura,
+                    $ab->factura?->fecha_pago?->format('Y-m-d'),
+                    self::FORMAS_PAGO_DIA[$ab->forma_pago] ?? $ab->forma_pago,
+                    (int) $ab->valor_efectivo,
+                    (int) $ab->valor_consignado,
+                    $ab->bancoCuenta ? ($ab->bancoCuenta->nombre ?: $ab->bancoCuenta->banco) : '—',
+                    $ab->usuario?->nombre ?? '—',
+                    $ab->observacion,
+                ], null, "A{$fila}", true);
+                $hoja->getStyle("G{$fila}:H{$fila}")->getNumberFormat()->setFormatCode('$#,##0');
+            }
+            foreach (range('A', 'K') as $col) {
+                $hoja->getColumnDimension($col)->setAutoSize(true);
+            }
+            $spreadsheet->setActiveSheetIndex(0);
+        }
+
         $writer   = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
         $filename = 'facturas_del_dia_' . $datos['fecha'] . '.xlsx';
         $tmpPath  = tempnam(sys_get_temp_dir(), 'facdia');
@@ -1621,8 +1653,15 @@ class CuadreDiarioController extends Controller
             // Tipo, razón social y modalidad son de la factura: con esos filtros no aplican.
             (bool) ($fTipo || $fRazon || $fModal !== null));
 
+        // Abonos a préstamos recibidos ese día: el préstamo se facturó otro día.
+        $abonos = $this->abonosPrestamoDelDia($aliadoId, $fecha, $fUsuario, $fForma, $fBanco, $fEmpresa,
+            (bool) (($fTipo && $fTipo !== 'prestamo') || $fRazon || $fModal !== null));
+
         // ── Nombres de cliente en un solo query (evita N+1 por cédula) ──
-        $cedulas = $facturas->pluck('cedula')->merge($anticipos->pluck('cedula'))->unique()->all();
+        $cedulas = $facturas->pluck('cedula')
+            ->merge($anticipos->pluck('cedula'))
+            ->merge($abonos->pluck('factura.cedula'))
+            ->filter()->unique()->values()->all();
         $nombres = ! $cedulas
             ? collect()
             : \App\Models\Cliente::where('aliado_id', $aliadoId)
@@ -1656,6 +1695,9 @@ class CuadreDiarioController extends Controller
         foreach ($anticipos as $a) {
             $a->nombre_cliente = $nombres->get($a->cedula)?->nombre_corto ?? '—';
         }
+        foreach ($abonos as $ab) {
+            $ab->nombre_cliente = $nombres->get($ab->factura?->cedula)?->nombre_corto ?? '—';
+        }
 
         $totales = [
             'cantidad'   => $facturas->count(),
@@ -1673,6 +1715,9 @@ class CuadreDiarioController extends Controller
             'anticipos'            => (int) $anticipos->sum('valor'),
             'anticipos_efectivo'   => (int) $anticipos->filter(fn($a) => $a->es_efectivo)->sum('valor'),
             'anticipos_consignado' => (int) $anticipos->reject(fn($a) => $a->es_efectivo)->sum('valor'),
+            'abonos'               => (int) $abonos->sum('valor'),
+            'abonos_efectivo'      => (int) $abonos->sum('valor_efectivo'),
+            'abonos_consignado'    => (int) $abonos->sum('valor_consignado'),
         ];
 
         // Cuánto recibió cada quien: desglose por el usuario que facturó.
@@ -1683,10 +1728,12 @@ class CuadreDiarioController extends Controller
         $nombreUsuario = fn($x) => $x->usuario?->nombre ?? 'Sin usuario';
         $facturasPorU  = $facturas->groupBy($nombreUsuario);
         $anticiposPorU = $anticipos->groupBy($nombreUsuario);
-        $porUsuario = $facturasPorU->keys()->merge($anticiposPorU->keys())->unique()
-            ->mapWithKeys(function ($nombre) use ($facturasPorU, $anticiposPorU) {
-                $g = $facturasPorU->get($nombre, collect());
-                $a = $anticiposPorU->get($nombre, collect());
+        $abonosPorU    = $abonos->groupBy($nombreUsuario);
+        $porUsuario = $facturasPorU->keys()->merge($anticiposPorU->keys())->merge($abonosPorU->keys())->unique()
+            ->mapWithKeys(function ($nombre) use ($facturasPorU, $anticiposPorU, $abonosPorU) {
+                $g  = $facturasPorU->get($nombre, collect());
+                $a  = $anticiposPorU->get($nombre, collect());
+                $ab = $abonosPorU->get($nombre, collect());
                 return [$nombre => [
                     'cantidad'             => $g->count(),
                     'total'                => (int) $g->sum('total'),
@@ -1694,16 +1741,21 @@ class CuadreDiarioController extends Controller
                     'consignado'           => (int) $g->sum('valor_consignado'),
                     'anticipos_efectivo'   => (int) $a->filter(fn($x) => $x->es_efectivo)->sum('valor'),
                     'anticipos_consignado' => (int) $a->reject(fn($x) => $x->es_efectivo)->sum('valor'),
+                    'abonos_efectivo'      => (int) $ab->sum('valor_efectivo'),
+                    'abonos_consignado'    => (int) $ab->sum('valor_consignado'),
                 ]];
             })
             ->filter(fn($t) => $t['efectivo'] > 0 || $t['consignado'] > 0
-                || $t['anticipos_efectivo'] > 0 || $t['anticipos_consignado'] > 0)
-            ->sortByDesc(fn($t) => $t['efectivo'] + $t['consignado'] + $t['anticipos_efectivo'] + $t['anticipos_consignado']);
+                || $t['anticipos_efectivo'] > 0 || $t['anticipos_consignado'] > 0
+                || $t['abonos_efectivo'] > 0 || $t['abonos_consignado'] > 0)
+            ->sortByDesc(fn($t) => $t['efectivo'] + $t['consignado'] + $t['anticipos_efectivo']
+                + $t['anticipos_consignado'] + $t['abonos_efectivo'] + $t['abonos_consignado']);
 
         return [
             'fecha'      => $fecha,
             'facturas'   => $facturas,
             'anticipos'  => $anticipos,
+            'abonos'     => $abonos,
             'totales'    => $totales,
             'porUsuario' => $porUsuario,
             'tipos'      => self::TIPOS_FACTURA_DIA,
@@ -1755,6 +1807,39 @@ class CuadreDiarioController extends Controller
     }
 
     /**
+     * Abonos a préstamos recibidos ese día (la "cartera" del consolidado). Se
+     * filtran por la fecha y el usuario del abono, no los de la factura del
+     * préstamo, que casi siempre es de otro día.
+     */
+    private function abonosPrestamoDelDia(int $aliadoId, string $fecha, $fUsuario, $fForma, $fBanco,
+                                          $fEmpresa, bool $noAplica)
+    {
+        $formas = match ($fForma) {
+            null, '', 'prestamo' => null,
+            'efectivo'           => ['efectivo'],
+            'consignacion'       => ['consignacion'],
+            default              => [],   // mixta: no existe en abonos
+        };
+
+        if ($noAplica || $formas === []) {
+            return collect();
+        }
+
+        return \App\Models\Abono::whereDate('fecha', $fecha)
+            ->whereHas('factura', fn($q) => $q->where('aliado_id', $aliadoId)
+                ->where('es_prestamo', true)
+                ->when($fEmpresa === 'individuales', fn($q2) => $q2->whereNull('empresa_id'))
+                ->when($fEmpresa && $fEmpresa !== 'individuales', fn($q2) => $q2->where('empresa_id', $fEmpresa)))
+            ->when($fUsuario, fn($q) => $q->where('usuario_id', $fUsuario))
+            ->when($formas, fn($q) => $q->whereIn('forma_pago', $formas))
+            ->when($fBanco, fn($q) => $q->where('banco_cuenta_id', $fBanco))
+            ->with(['factura:id,numero_factura,cedula,fecha_pago,empresa_id', 'factura.empresa:id,empresa',
+                    'usuario:id,nombre', 'bancoCuenta'])
+            ->orderBy('id')
+            ->get();
+    }
+
+    /**
      * Opciones de los desplegables del encabezado: solo lo que realmente
      * existe ese día, sin aplicar los filtros activos (así nunca queda un
      * desplegable vacío del que no se pueda salir).
@@ -1795,6 +1880,10 @@ class CuadreDiarioController extends Controller
             'usuariosDisp' => $base->pluck('usuario')->filter()
                                 ->merge(User::whereIn('id', Anticipo::where('aliado_id', $aliadoId)
                                     ->whereDate('fecha_pago', $fecha)->whereNotNull('usuario_id')
+                                    ->distinct()->pluck('usuario_id'))->get(['id', 'nombre']))
+                                ->merge(User::whereIn('id', \App\Models\Abono::whereDate('fecha', $fecha)
+                                    ->whereHas('factura', fn($q) => $q->where('aliado_id', $aliadoId))
+                                    ->whereNotNull('usuario_id')
                                     ->distinct()->pluck('usuario_id'))->get(['id', 'nombre']))
                                 ->unique('id')->sortBy('nombre')->values(),
             // Mismo respaldo al contrato que usa razon_social_texto
