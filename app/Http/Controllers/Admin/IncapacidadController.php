@@ -2579,7 +2579,9 @@ class IncapacidadController extends Controller
     /**
      * Le pega a cada gestión los soportes del pago que registró, para verlos
      * desde la pestaña Gestiones: la foto de la consignación (pago a la razón
-     * social), la del gasto (pago al afiliado) y el PDF de la ODI.
+     * social), la del gasto (pago al afiliado) y el PDF de la ODI. También un
+     * resumen del pago (`resumen_pago`): cuánto entró y por dónde, o cuánto se
+     * le entregó al afiliado y qué se le descontó, aunque no haya foto.
      *
      * Las fotos de consignaciones y gastos viven en el disco público (así las
      * muestra el informe financiero); el PDF de la ODI es un documento de la
@@ -2605,17 +2607,73 @@ class IncapacidadController extends Controller
             ->get(['gestion_incapacidad_id', 'imagen_path', 'valor'])
             ->each(fn ($c) => $agregar($c->gestion_incapacidad_id, 'Consignación $'.number_format((float) $c->valor, 0, ',', '.'), \Storage::url($c->imagen_path)));
 
-        DB::table('gastos')
+        $gastos = DB::table('gastos')
             ->whereIn('gestion_incapacidad_id', $ids)
             ->where('aliado_id', $aliadoId)
-            ->whereNotNull('imagen_path')
-            ->get(['gestion_incapacidad_id', 'imagen_path', 'tipo'])
+            ->get(['gestion_incapacidad_id', 'imagen_path', 'tipo', 'valor', 'forma_pago', 'banco_origen_id']);
+
+        $gastos->whereNotNull('imagen_path')
             ->each(fn ($g) => $agregar($g->gestion_incapacidad_id, $g->tipo === 'pago_incapacidad' ? 'Pago al afiliado' : 'Gasto', \Storage::url($g->imagen_path)));
 
         $abonos = DB::table('abonos_incapacidades')
             ->whereIn('gestion_incapacidad_id', $ids)
             ->where('aliado_id', $aliadoId)
-            ->get(['gestion_incapacidad_id', 'imagen_path', 'odi_id', 'forma_recepcion']);
+            ->get(['gestion_incapacidad_id', 'imagen_path', 'odi_id', 'forma_recepcion', 'tipo', 'valor', 'banco_cuenta_id']);
+
+        // ── Resumen del pago de cada gestión ────────────────────────────────
+        $cuentas = DB::table('banco_cuentas')
+            ->whereIn('id', $gastos->pluck('banco_origen_id')->merge($abonos->pluck('banco_cuenta_id'))->filter()->unique()->all())
+            ->get(['id', 'banco', 'nombre'])
+            ->mapWithKeys(fn ($c) => [(int) $c->id => trim("{$c->banco} {$c->nombre}")]);
+        $resumenes = [];
+
+        foreach ($gastos->groupBy('gestion_incapacidad_id') as $gid => $gs) {
+            $suma = fn (string $tipo) => (float) $gs->where('tipo', $tipo)->sum('valor');
+            $pago = $gs->firstWhere('tipo', 'pago_incapacidad');
+            $forma = $pago ?? $gs->firstWhere('tipo', 'cuatropormil_incapacidad');
+            $resumenes[(int) $gid] = [
+                'titulo' => 'Pago al afiliado',
+                'items' => [
+                    ['Neto entregado', $suma('pago_incapacidad')],
+                    ['Administración', $suma('admon_incapacidad')],
+                    ['4x1000', $suma('cuatropormil_incapacidad')],
+                    ['Otros descuentos', $suma('otros_incapacidad')],
+                ],
+                'nota' => $forma
+                    ? ($forma->forma_pago === 'efectivo' ? 'En efectivo' : 'Transferencia'.($forma->banco_origen_id ? ' desde '.($cuentas[(int) $forma->banco_origen_id] ?? 'cuenta '.$forma->banco_origen_id) : ''))
+                    : null,
+            ];
+        }
+
+        $formas = [
+            'transferencia' => 'Transferencia', 'odi' => 'ODI (se descuenta en planilla)',
+            'opi_banco' => 'OPI consignada', 'opi_efectivo' => 'OPI cobrada en efectivo',
+            'cheque' => 'Cheque', 'otro' => 'Otro medio',
+        ];
+        foreach ($abonos->groupBy('gestion_incapacidad_id') as $gid => $as) {
+            if (isset($resumenes[(int) $gid])) {
+                continue;
+            }
+            $entrada = $as->firstWhere('tipo', 'entrada_incapacidad');
+            $directo = $as->firstWhere('tipo', 'pago_directo_entidad');
+            if ($entrada) {
+                $resumenes[(int) $gid] = [
+                    'titulo' => 'Entró a la razón social',
+                    'items' => [['Valor recibido', (float) $as->where('tipo', 'entrada_incapacidad')->sum('valor')]],
+                    // Las entradas anteriores a forma_recepcion no la tienen: con banco fueron transferencia.
+                    'nota' => implode(' · ', array_filter([
+                        $formas[$entrada->forma_recepcion] ?? ($entrada->banco_cuenta_id ? 'Transferencia' : null),
+                        $entrada->banco_cuenta_id ? ($cuentas[(int) $entrada->banco_cuenta_id] ?? null) : null,
+                    ])) ?: null,
+                ];
+            } elseif ($directo) {
+                $resumenes[(int) $gid] = [
+                    'titulo' => 'La entidad le pagó directo al afiliado',
+                    'items' => [['Valor', (float) $directo->valor]],
+                    'nota' => 'No pasó por la razón social',
+                ];
+            }
+        }
 
         $abonos->whereNotNull('imagen_path')
             ->each(fn ($a) => $agregar($a->gestion_incapacidad_id, 'Comprobante', \Storage::url($a->imagen_path)));
@@ -2635,6 +2693,7 @@ class IncapacidadController extends Controller
 
         foreach ($gestiones as $g) {
             $g->setAttribute('soportes', $soportes[(int) $g->id] ?? []);
+            $g->setAttribute('resumen_pago', $resumenes[(int) $g->id] ?? null);
         }
     }
 
