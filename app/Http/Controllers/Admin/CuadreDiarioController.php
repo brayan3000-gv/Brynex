@@ -268,8 +268,12 @@ class CuadreDiarioController extends Controller
         ->sortByDesc('efectivo_total')
         ->values();
 
-        // Vista mes: el mismo consolidado, día por día.
-        $resumenDias = $dias->groupBy('dia')
+        // Vista mes: el mismo consolidado, día por día. El card tiene su propio
+        // filtro de usuario (`usuario_dia`) para no reducir la tabla de arriba.
+        $usuarioDia  = $resumen->contains(fn($r) => $r->usuario->id === (int) $request->input('usuario_dia'))
+            ? (int) $request->input('usuario_dia') : null;
+        $resumenDias = $dias->when($usuarioDia, fn($ds) => $ds->where('uid', $usuarioDia))
+            ->groupBy('dia')
             ->map(fn($ds, $dia) => (object) [
                 'dia'             => $dia,
                 'facturas'        => $ds->sum('facturas'),
@@ -292,7 +296,7 @@ class CuadreDiarioController extends Controller
             ]);
 
         return view('admin.cuadre-diario.consolidado', compact(
-            'resumen', 'resumenDias', 'usuarios', 'fecha', 'mes', 'vistaMes', 'saldosBanco'
+            'resumen', 'resumenDias', 'usuarioDia', 'usuarios', 'fecha', 'mes', 'vistaMes', 'saldosBanco'
         ));
     }
 

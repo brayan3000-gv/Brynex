@@ -141,9 +141,32 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
     @endif
 </div>
 
-@if($vistaMes && $resumenDias->isNotEmpty())
-<div style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-top:.8rem">
-    <div style="padding:.6rem .9rem;font-size:.78rem;font-weight:800;color:#0f172a;border-bottom:1px solid #e2e8f0">📅 Día por día</div>
+@if($vistaMes && $resumen->isNotEmpty())
+@php
+    // Ver lleva a las facturas del día del usuario escogido en el card (o el de arriba).
+    $usuarioVer = $usuarioDia ?? request('usuario_id');
+@endphp
+<div id="dia-por-dia" style="background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden;margin-top:.8rem">
+    <div style="padding:.5rem .9rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex-wrap:wrap">
+        <div style="font-size:.78rem;font-weight:800;color:#0f172a">📅 Día por día</div>
+        <form method="GET" action="{{ route('admin.cuadre-diario.consolidado') }}#dia-por-dia" style="margin:0">
+            <input type="hidden" name="vista" value="mes">
+            <input type="hidden" name="mes" value="{{ $mes }}">
+            @if(request('usuario_id'))<input type="hidden" name="usuario_id" value="{{ request('usuario_id') }}">@endif
+            <select name="usuario_dia" onchange="this.form.submit()"
+                    style="padding:.25rem .5rem;border-radius:6px;border:1.5px solid #cbd5e1;background:#fff;color:#0f172a;font-size:.78rem">
+                <option value="">Todos los usuarios</option>
+                @foreach($resumen as $r)
+                <option value="{{ $r->usuario->id }}" {{ $usuarioDia === $r->usuario->id ? 'selected' : '' }}>
+                    {{ $r->usuario->nombre }}
+                </option>
+                @endforeach
+            </select>
+        </form>
+    </div>
+    @if($resumenDias->isEmpty())
+    <div style="padding:1.5rem;text-align:center;color:#94a3b8">Ese usuario no movió plata en el mes</div>
+    @else
     <div style="overflow-x:auto">
     <table class="tbl">
         <thead><tr>
@@ -171,7 +194,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
                 </span>
             </td>
             <td style="text-align:center">
-                <a href="{{ route('admin.cuadre-diario.consolidado', ['fecha' => $d->dia] + $filtroUsuario) }}"
+                <a href="{{ route('admin.cuadre-diario.facturas-dia', array_filter(['fecha' => $d->dia, 'usuario_id' => $usuarioVer])) }}"
                    style="padding:.2rem .55rem;background:#0f172a;color:#fff;border-radius:5px;font-size:.72rem;text-decoration:none">
                     👁️ Ver
                 </a>
@@ -181,6 +204,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
         </tbody>
     </table>
     </div>
+    @endif
 </div>
 @endif
 @endsection
