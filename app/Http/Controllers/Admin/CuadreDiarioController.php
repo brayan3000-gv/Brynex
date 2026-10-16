@@ -119,11 +119,13 @@ class CuadreDiarioController extends Controller
     }
 
     /**
-     * Consolidado admin: la caja de TODOS los usuarios en un día.
+     * Consolidado admin: la caja de TODOS los usuarios en un día, o en un mes
+     * completo con `vista=mes` (`mes=AAAA-MM`).
      *
      * Ya no depende de que exista una fila en `cuadres` — se calcula por
      * fecha igual que el índice, y la fila solo aporta el estado (cuadrado
-     * o pendiente). Todo en 6 queries agregadas, sin N+1 por usuario.
+     * o pendiente). Todo en 6 queries agregadas por usuario y día, sin N+1:
+     * con eso salen tanto los totales por usuario como los del mes día a día.
      */
     public function consolidado(Request $request)
     {
@@ -134,6 +136,12 @@ class CuadreDiarioController extends Controller
         $aliadoId      = session('aliado_id_activo');
         $fecha         = $this->fechaValida($request->input('fecha'));
         $usuarioFiltro = $request->input('usuario_id');
+        $vistaMes      = $request->input('vista') === 'mes';
+        $mes           = $this->mesValido($request->input('mes'), $fecha);
+
+        [$desde, $hasta] = $vistaMes
+            ? [\Carbon\Carbon::parse($mes . '-01')->toDateString(), \Carbon\Carbon::parse($mes . '-01')->endOfMonth()->toDateString()]
+            : [$fecha, $fecha];
 
         $usuarios = User::where('aliado_id', $aliadoId)->orderBy('nombre')->get();
 
@@ -142,80 +150,137 @@ class CuadreDiarioController extends Controller
             : $usuarios;
         $usuarioIds = $visibles->pluck('id')->all();
 
-        $porUsuario = fn($q) => $usuarioIds ? $q->get()->keyBy('uid') : collect();
+        $enRango = fn($q, string $col) => $q->whereDate($col, '>=', $desde)->whereDate($col, '<=', $hasta);
+        $porDia  = fn(string $col) => DB::raw("CAST($col AS date)");
 
-        $ingresos = $porUsuario(DB::table('facturas')
+        // Filas (uid, dia, …): sqlsrv devuelve la fecha como texto y a veces con hora.
+        $filas = fn($q) => $usuarioIds
+            ? $q->get()->each(fn($r) => $r->dia = substr((string) $r->dia, 0, 10))
+            : collect();
+
+        $ingresos = $filas($enRango(DB::table('facturas')
             ->whereNull('deleted_at')
             ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
-            ->whereDate('fecha_pago', $fecha)->where('es_prestamo', false)
-            ->groupBy('usuario_id')
-            ->selectRaw('usuario_id AS uid, SUM(ISNULL(valor_efectivo,0)) AS efectivo,
+            ->where('es_prestamo', false), 'fecha_pago')
+            ->groupBy('usuario_id', $porDia('fecha_pago'))
+            ->selectRaw('usuario_id AS uid, CAST(fecha_pago AS date) AS dia,
+                         SUM(ISNULL(valor_efectivo,0)) AS efectivo,
                          SUM(ISNULL(valor_consignado,0)) AS consignado, COUNT(*) AS facturas'));
 
-        $cartera = $porUsuario(DB::table('abonos')
+        $cartera = $filas($enRango(DB::table('abonos')
             ->join('facturas', 'abonos.factura_id', '=', 'facturas.id')
             ->whereNull('facturas.deleted_at')
             ->where('facturas.aliado_id', $aliadoId)->where('facturas.es_prestamo', true)
-            ->whereIn('abonos.usuario_id', $usuarioIds)
-            ->whereDate('abonos.fecha', $fecha)
-            ->groupBy('abonos.usuario_id')
-            ->selectRaw('abonos.usuario_id AS uid, SUM(ISNULL(abonos.valor_efectivo,0)) AS t'));
+            ->whereIn('abonos.usuario_id', $usuarioIds), 'abonos.fecha')
+            ->groupBy('abonos.usuario_id', $porDia('abonos.fecha'))
+            ->selectRaw('abonos.usuario_id AS uid, CAST(abonos.fecha AS date) AS dia,
+                         SUM(ISNULL(abonos.valor_efectivo,0)) AS t'));
 
-        $anticipos = $porUsuario(DB::table('anticipos')
+        $anticipos = $filas($enRango(DB::table('anticipos')
             ->whereNull('deleted_at')
             ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
             ->whereIn('forma_pago', ['efectivo', 'nequi'])
-            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO])
-            ->whereDate('fecha_pago', $fecha)
-            ->groupBy('usuario_id')
-            ->selectRaw('usuario_id AS uid, SUM(ISNULL(valor,0)) AS t'));
+            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO]), 'fecha_pago')
+            ->groupBy('usuario_id', $porDia('fecha_pago'))
+            ->selectRaw('usuario_id AS uid, CAST(fecha_pago AS date) AS dia, SUM(ISNULL(valor,0)) AS t'));
 
-        $gastos = $porUsuario(DB::table('gastos')
+        $gastos = $filas($enRango(DB::table('gastos')
             ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
-            ->whereDate('fecha', $fecha)
-            ->where(fn($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco'))
-            ->groupBy('usuario_id')
-            ->selectRaw('usuario_id AS uid, SUM(ISNULL(valor,0)) AS t'));
+            ->where(fn($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco')), 'fecha')
+            ->groupBy('usuario_id', $porDia('fecha'))
+            ->selectRaw('usuario_id AS uid, CAST(fecha AS date) AS dia, SUM(ISNULL(valor,0)) AS t'));
 
-        $consignado = $porUsuario(DB::table('consignaciones')
+        $consignado = $filas($enRango(DB::table('consignaciones')
             ->whereNull('deleted_at')
-            ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
-            ->whereDate('fecha', $fecha)
-            ->groupBy('usuario_id')
-            ->selectRaw('usuario_id AS uid, SUM(ISNULL(valor,0)) AS t'));
+            ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds), 'fecha')
+            ->groupBy('usuario_id', $porDia('fecha'))
+            ->selectRaw('usuario_id AS uid, CAST(fecha AS date) AS dia, SUM(ISNULL(valor,0)) AS t'));
 
-        // Días ya cuadrados de esa fecha (modelo por día).
-        $cuadrados = Cuadre::where('aliado_id', $aliadoId)
+        // Días ya cuadrados del rango (modelo por día), por "usuario|día".
+        $cuadrados = $enRango(Cuadre::where('aliado_id', $aliadoId)
             ->whereIn('usuario_id', $usuarioIds)
-            ->whereDate('fecha_inicio', $fecha)
-            ->whereColumn('fecha_inicio', 'fecha_fin')
+            ->whereColumn('fecha_inicio', 'fecha_fin'), 'fecha_inicio')
             ->with('cerradoPor:id,nombre')
-            ->get()->keyBy('usuario_id');
+            ->get()
+            ->keyBy(fn($c) => $c->usuario_id . '|' . $c->fecha_inicio->toDateString());
 
-        $resumen = $visibles->map(function ($u) use (
-            $aliadoId, $ingresos, $cartera, $anticipos, $gastos, $consignado, $cuadrados
-        ) {
-            $ing  = (int) ($ingresos[$u->id]->efectivo ?? 0);
-            $car  = (int) ($cartera[$u->id]->t         ?? 0);
-            $ant  = (int) ($anticipos[$u->id]->t       ?? 0);
-            $gas  = (int) ($gastos[$u->id]->t          ?? 0);
-            $base = CajaMenor::montoActivo($aliadoId, $u->id);
+        // Una celda por usuario y día con lo que se movió ese día.
+        $celdas = [];
+        $sumar = function ($rows, array $campos) use (&$celdas) {
+            foreach ($rows as $r) {
+                $celda = $celdas[(int) $r->uid][$r->dia] ?? [];
+                foreach ($campos as $destino => $origen) {
+                    $celda[$destino] = ($celda[$destino] ?? 0) + (int) $r->$origen;
+                }
+                $celdas[(int) $r->uid][$r->dia] = $celda;
+            }
+        };
+        $sumar($ingresos,   ['facturas' => 'facturas', 'efectivo' => 'efectivo']);
+        $sumar($cartera,    ['efectivo' => 't']);
+        $sumar($anticipos,  ['efectivo' => 't']);
+        $sumar($gastos,     ['gastos' => 't']);
+        $sumar($consignado, ['consignado' => 't']);
+        foreach ($cuadrados as $c) {
+            $celdas[(int) $c->usuario_id][$c->fecha_inicio->toDateString()] ??= [];
+        }
+
+        // Solo los días en que el usuario movió plata (o que quedaron cuadrados).
+        $dias = collect();
+        foreach ($visibles as $u) {
+            foreach ($celdas[$u->id] ?? [] as $dia => $c) {
+                $d = (object) [
+                    'uid'        => $u->id,
+                    'dia'        => $dia,
+                    'facturas'   => $c['facturas']   ?? 0,
+                    'efectivo'   => $c['efectivo']   ?? 0,
+                    'consignado' => $c['consignado'] ?? 0,
+                    'gastos'     => $c['gastos']     ?? 0,
+                    'cuadre'     => $cuadrados[$u->id . '|' . $dia] ?? null,
+                ];
+                if ($d->efectivo || $d->consignado || $d->gastos || $d->cuadre) {
+                    $dias->push($d);
+                }
+            }
+        }
+
+        // La base de caja menor es la de hoy: solo tiene sentido al mirar un día.
+        $resumen = $visibles->map(function ($u) use ($aliadoId, $dias, $vistaMes) {
+            $suyos = $dias->where('uid', $u->id);
+            $ing   = $suyos->sum('efectivo');
+            $gas   = $suyos->sum('gastos');
+            $base  = (! $vistaMes && $suyos->isNotEmpty()) ? CajaMenor::montoActivo($aliadoId, $u->id) : 0;
 
             return (object) [
                 'usuario'         => $u,
                 'base_caja'       => $base,
-                'facturas'        => (int) ($ingresos[$u->id]->facturas ?? 0),
-                'efectivo_total'  => $ing + $car + $ant,
-                'consignado'      => (int) ($consignado[$u->id]->t ?? 0),
+                'facturas'        => $suyos->sum('facturas'),
+                'efectivo_total'  => $ing,
+                'consignado'      => $suyos->sum('consignado'),
                 'gastos_efectivo' => $gas,
-                'saldo_esperado'  => $base + $ing + $car + $ant - $gas,
-                'cuadre'          => $cuadrados[$u->id] ?? null,
+                'saldo_esperado'  => $base + $ing - $gas,
+                'cuadre'          => $suyos->first()?->cuadre,
+                'dias_movimiento' => $suyos->count(),
+                'dias_cuadrados'  => $suyos->filter(fn($d) => $d->cuadre)->count(),
             ];
         })
-        // Solo quien movió plata ese día; sin esto la tabla es una lista de ceros.
-        ->filter(fn($r) => $r->efectivo_total || $r->consignado || $r->gastos_efectivo || $r->cuadre)
+        // Solo quien movió plata; sin esto la tabla es una lista de ceros.
+        ->filter(fn($r) => $r->dias_movimiento > 0)
         ->sortByDesc('efectivo_total')
         ->values();
+
+        // Vista mes: el mismo consolidado, día por día.
+        $resumenDias = $dias->groupBy('dia')
+            ->map(fn($ds, $dia) => (object) [
+                'dia'             => $dia,
+                'facturas'        => $ds->sum('facturas'),
+                'efectivo_total'  => $ds->sum('efectivo'),
+                'consignado'      => $ds->sum('consignado'),
+                'gastos_efectivo' => $ds->sum('gastos'),
+                'usuarios'        => $ds->count(),
+                'cuadrados'       => $ds->filter(fn($d) => $d->cuadre)->count(),
+            ])
+            ->sortBy('dia')
+            ->values();
 
         // Saldos bancarios actuales (calculados desde consignaciones + gastos)
         $saldosBanco = BancoCuenta::where('aliado_id', $aliadoId)
@@ -227,7 +292,7 @@ class CuadreDiarioController extends Controller
             ]);
 
         return view('admin.cuadre-diario.consolidado', compact(
-            'resumen', 'usuarios', 'fecha', 'saldosBanco'
+            'resumen', 'resumenDias', 'usuarios', 'fecha', 'mes', 'vistaMes', 'saldosBanco'
         ));
     }
 
@@ -684,6 +749,12 @@ class CuadreDiarioController extends Controller
         } catch (\Exception $e) {
             return today()->toDateString();
         }
+    }
+
+    /** Mes 'AAAA-MM' pedido; si no viene o no sirve, el de la fecha. */
+    private function mesValido(?string $mes, string $fecha): string
+    {
+        return ($mes && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes)) ? $mes : substr($fecha, 0, 7);
     }
 
     /** Cuadre (día ya cuadrado) de ese usuario en esa fecha, si existe. */
