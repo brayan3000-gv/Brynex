@@ -1219,6 +1219,25 @@ class PlanoPagoController extends Controller
                 ]);
             }
 
+            // Si la razón social sigue apuntando al plano que se acaba de pagar,
+            // las facturas que entren después caerían en él y quedarían mezcladas
+            // con gente ya pagada. Se pasa sola al siguiente, que es lo que el
+            // modal "Actualizar N° Plano" pide hacer a mano y a veces se olvida.
+            // Solo si el pago es del mes activo de la razón social (ver
+            // FacturacionController::_nPlanoParaRS y ResetNPlanoMensual), y en
+            // independientes no, porque allá se paga persona por persona.
+            $nPlanoNuevo = null;
+            if (empty($validated['plano_id']) && ! $rs->es_independiente) {
+                $nPagado = (int) $validated['n_plano'];
+                $avanzo = RazonSocial::where('aliado_id', $aliadoId)
+                    ->whereKey($rs->id)
+                    ->where('n_plano', $nPagado)
+                    ->where('mes_pagos', (int) $validated['mes_plano'])
+                    ->where('anio_pagos', (int) $validated['anio_plano'])
+                    ->update(['n_plano' => $nPagado + 1]);
+                $nPlanoNuevo = $avanzo ? $nPagado + 1 : null;
+            }
+
             DB::commit();
 
             // Los informes del operador se bajan en segundo plano, con espera
@@ -1230,9 +1249,11 @@ class PlanoPagoController extends Controller
 
             return response()->json([
                 'ok'                => true,
-                'mensaje'           => $numeroDelPlano === null
+                'mensaje'           => ($numeroDelPlano === null
                     ? "Pago 1 de 2 registrado (planilla {$validated['numero_planilla']}). El plano sigue pendiente hasta que se pague y confirme la corrección."
-                    : "Pago confirmado. Se actualizaron {$cantActualizados} registros con la planilla {$numeroDelPlano}.",
+                    : "Pago confirmado. Se actualizaron {$cantActualizados} registros con la planilla {$numeroDelPlano}.")
+                    . ($nPlanoNuevo ? " {$rs->razon_social} pasó al plano {$nPlanoNuevo}: lo que se facture desde ahora queda aparte." : ''),
+                'n_plano_nuevo'     => $nPlanoNuevo,
                 'pago_parcial'      => $numeroDelPlano === null,
                 'gasto_id'          => $gasto->id,
                 'cant_actualizados' => $cantActualizados,

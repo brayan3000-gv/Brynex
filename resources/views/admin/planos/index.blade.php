@@ -1403,7 +1403,7 @@
             <div style="border-top:1px solid #f1f5f9;padding-top:1rem;margin-top:1rem">
                 <div class="aviso-modal">
                     <strong>⚠️ Actualizar N° Plano</strong>
-                    Si realizará el pago con este plano, actualice el N_PLANO de la razón social para que los pagos siguientes queden en un nuevo número separado.
+                    Al confirmar el pago, si la razón social sigue en este plano, pasa sola al siguiente para que lo que se facture después quede en un número separado. Úselo solo si necesita moverla antes.
                 </div>
 
                 @if($rsSeleccionada)
@@ -3974,7 +3974,7 @@ async function ejecutarConfirmarPago() {
             mostrarToast(data.mensaje, 'success');
             if (data.pago_parcial) {
                 // Pago 1 de 2: el plano sigue pendiente, no se pinta nada.
-                setTimeout(() => location.reload(), 2500);
+                setTimeout(() => location.reload(), data.n_plano_nuevo ? 4500 : 2500);
             } else if (_planoIdActual) {
                 // Modo individual: actualizar visualmente la fila sin recargar
                 // Mismo chip que pinta el partial: el clic abre el menú de la
@@ -3993,7 +3993,9 @@ async function ejecutarConfirmarPago() {
                 
                 setTimeout(() => cerrarModal('modal-pago'), 1800);
             } else {
-                setTimeout(() => location.reload(), 2500);
+                // Si la razón social pasó a un plano nuevo se da más tiempo
+                // para leerlo antes de recargar.
+                setTimeout(() => location.reload(), data.n_plano_nuevo ? 4500 : 2500);
             }
         } else {
             res.innerHTML = `<div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:.65rem .9rem;color:#b91c1c;font-size:.82rem">❌ ${data.mensaje}</div>`;
