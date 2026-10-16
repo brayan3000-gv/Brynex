@@ -1545,6 +1545,7 @@
                     <label>Valor Pagado <span style="color:#ef4444">*</span></label>
                     <input type="number" id="pago-valor"
                            value="{{ $totalSS }}" min="1" step="100">
+                    <div id="pago-aviso-odi" style="display:none;margin-top:.35rem;font-size:.72rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:.35rem .5rem;line-height:1.35"></div>
                 </div>
                 <div class="form-grupo">
                     <label>Cuenta Bancaria <span style="color:#ef4444">*</span></label>
@@ -1840,6 +1841,9 @@ let desgloseVisible = false;
 // ── Datos del contexto Blade ──────────────────────────────────────────
 const CTX = {
     razonSocialId : {{ $razonSocialId ?? 'null' }},
+    // Saldo de ODI de la ARL por descontar: si hay, el valor pagado lo escribe
+    // el usuario, porque en Enlace la planilla se paga con la ODI ya restada.
+    odiSaldo      : {{ (int) ($odisPendientes ?? collect())->sum(fn ($o) => $o->saldo) }},
     nPlanoFiltro  : {{ $nPlanoFiltro  ?? 'null' }},
     mes           : {{ $mes }},
     anio          : {{ $anio }},
@@ -2647,6 +2651,9 @@ function resetModalPago() {
     document.getElementById('pago-banco').value    = '';
     document.getElementById('pago-operador').value = '';
     document.getElementById('pago-resultado').style.display = 'none';
+    // El aviso de ODI lo vuelve a poner abrirModalPago si aplica.
+    document.getElementById('pago-aviso-odi').style.display = 'none';
+    document.getElementById('pago-valor').placeholder = '';
     limpiarSoporte();
 }
 function abrirModalPago() {
@@ -2656,6 +2663,7 @@ function abrirModalPago() {
     document.getElementById('modal-pago-aviso').style.display = '';
     document.getElementById('pago-valor').value = window.CTX_TOTAL_PAGAR || CTX.ssBaseOperador;
     resetModalPago();
+    avisoOdiEnPago();
 
     // Dos pasos con el paso 1 ya pagado: lo único que queda por confirmar es
     // la corrección, en el mismo operador. Se fija todo para que no se
@@ -3310,7 +3318,29 @@ function confirmarPagoLiquidado() {
         const opt = [...sel.options].find(o => o.value && o.value.trim().toUpperCase() === l.operador.trim().toUpperCase());
         if (opt) sel.value = opt.value;
         document.getElementById('pago-numero').value = l.numero;
-        if (l.valor > 0) document.getElementById('pago-valor').value = l.valor;
+        // Con ODI el total de la liquidación no es lo que se paga: lo escribe el usuario.
+        if (l.valor > 0 && !(CTX.odiSaldo > 0)) document.getElementById('pago-valor').value = l.valor;
+    }
+}
+
+// Con ODI de la ARL pendiente, el valor pagado no se propone: en Enlace la
+// planilla se paga con la ODI ya descontada y solo el usuario sabe cuánto quedó.
+// Sin ODI el valor viene lleno, como siempre. No aplica al segundo pago de los
+// dos pasos, que ya trae su propio valor.
+function avisoOdiEnPago() {
+    const aviso = document.getElementById('pago-aviso-odi');
+    const valor = document.getElementById('pago-valor');
+    if (!aviso || !valor) return;
+
+    if (CTX.odiSaldo > 0 && !window._pagoDosPasos) {
+        valor.value = '';
+        valor.placeholder = 'Lo pagado en Enlace';
+        aviso.innerHTML = `📋 Esta razón social tiene <strong>$${fmtNum(CTX.odiSaldo)}</strong> de ODI por descontar. `
+            + 'Escribe lo que de verdad se pagó en Enlace, con la ODI ya restada.';
+        aviso.style.display = '';
+    } else {
+        valor.placeholder = '';
+        aviso.style.display = 'none';
     }
 }
 
