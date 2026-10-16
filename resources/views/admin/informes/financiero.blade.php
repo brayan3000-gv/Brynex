@@ -624,17 +624,28 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 {{-- Tarjetas banco — solo bancos con movimiento o saldo distinto de cero --}}
                 @foreach($bancos as $b)
                 @if($b->saldo_actual != 0 || $b->ing_mes != 0 || $b->sal_mes != 0)
-                @php $netColor = $b->saldo_mes >= 0 ? '#16a34a' : '#dc2626'; $netBg = $b->saldo_mes >= 0 ? '#f0fdf4' : '#fef2f2'; @endphp
+                @php
+                    // Cuenta de razón social (ni de cobros ni personal): la plata de
+                    // incapacidades entra un mes y sale otro, así que el neto del mes
+                    // asusta sin decir nada. Lo que importa es que quede en cero: se
+                    // muestra el saldo de la cuenta.
+                    $esCuentaRs = ! $b->cobro && ! $b->uso_personal;
+                    $heroValor  = $esCuentaRs ? $b->saldo_actual : $b->saldo_mes;
+                    $netColor = $heroValor >= 0 ? '#16a34a' : '#dc2626'; $netBg = $heroValor >= 0 ? '#f0fdf4' : '#fef2f2';
+                @endphp
                 <div class="bank-card" onclick="verMovimientosBanco({{ $b->id }},'{{ addslashes($b->nombre) }}')" title="Clic para ver movimientos del mes">
                     {{-- Cabecera --}}
                     <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">{{ $b->banco }}</div>
                     <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $b->nombre }}">{{ $b->nombre }}</div>
 
-                    {{-- Hero: Neto del mes --}}
+                    {{-- Hero: neto del mes, o el saldo en las cuentas de razón social --}}
                     <div style="margin-top:.55rem;">
-                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">Neto {{ $mesesEs[$mes] }}</div>
-                        <div style="font-size:1.3rem;font-weight:900;color:{{ $netColor }};line-height:1.1;">
-                            {{ $b->saldo_mes >= 0 ? '+' : '' }}{{ $fmt($b->saldo_mes) }}
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                             @if($esCuentaRs) title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" @endif>
+                            {{ $esCuentaRs ? 'Saldo cuenta razón social' : 'Neto '.$mesesEs[$mes] }}
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:{{ $heroValor == 0 ? '#16a34a' : $netColor }};line-height:1.1;">
+                            {{ $heroValor > 0 ? '+' : '' }}{{ $fmt($heroValor) }}
                         </div>
                     </div>
 
