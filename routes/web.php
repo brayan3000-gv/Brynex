@@ -1037,6 +1037,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/gasto', [$cd, 'registrarGasto'])->name('gasto.store');
         Route::delete('/gasto/{gastoId}', [$cd, 'eliminarGasto'])->name('gasto.destroy');
         Route::post('/gasto/{gastoId}/imagen', [$cd, 'subirImagenGasto'])->name('gasto.imagen');
+        Route::post('/movimiento-caja', [$cd, 'registrarMovimientoCaja'])->name('movimiento-caja.store');
+        Route::delete('/movimiento-caja/{movId}', [$cd, 'eliminarMovimientoCaja'])->name('movimiento-caja.destroy');
         Route::post('/consignacion/{csId}/imagen', [$cd, 'subirImagenConsignacion'])->name('consignacion.imagen');
         Route::post('/consignacion/{csId}/confirmar', [$cd, 'confirmarConsignacion'])->name('consignacion.confirmar');
         Route::patch('/consignacion/{csId}/confirmar/reversar', [$cd, 'reversarConsignacion'])->name('consignacion.reversar');

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Cuadre, Gasto, CajaMenor, Consignacion, BancoCuenta, Factura, User, Anticipo};
+use App\Models\{Cuadre, Gasto, CajaMenor, CajaMovimiento, Consignacion, BancoCuenta, Factura, User, Anticipo};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -72,10 +72,20 @@ class CuadreDiarioController extends Controller
         $consignaciones = $this->consignacionesDelDia($aliadoId, $usuarioId, $fecha);
         $cuadreDia      = $this->cuadreDelDia($aliadoId, $usuarioId, $fecha);
 
+        // Entregas, retiros y saldos iniciales del día que tocan a la persona.
+        $movimientosCaja = CajaMovimiento::where('aliado_id', $aliadoId)
+            ->whereDate('fecha', $fecha)
+            ->when($usuarioId, fn ($q) => $q->where(fn ($w) => $w
+                ->where('usuario_origen_id', $usuarioId)->orWhere('usuario_destino_id', $usuarioId)))
+            ->with(['origen:id,nombre', 'destino:id,nombre', 'registradoPor:id,nombre'])
+            ->orderBy('id')
+            ->get();
+        $usuariosCaja = $this->usuariosDeCaja($aliadoId);
+
         return view('admin.cuadre-diario.index', compact(
             'fecha', 'esAdmin', 'esPropio', 'verTodos', 'usuarios', 'usuarioId', 'usuarioVista',
             'bancosFacturacion', 'resumen', 'canales', 'gastos',
-            'consignaciones', 'cuadreDia'
+            'consignaciones', 'cuadreDia', 'movimientosCaja', 'usuariosCaja'
         ));
     }
 
@@ -143,7 +153,9 @@ class CuadreDiarioController extends Controller
             ? [\Carbon\Carbon::parse($mes . '-01')->toDateString(), \Carbon\Carbon::parse($mes . '-01')->endOfMonth()->toDateString()]
             : [$fecha, $fecha];
 
-        $usuarios = User::where('aliado_id', $aliadoId)->orderBy('nombre')->get();
+        // Las mismas personas que manejan caja en el índice, incluidas las de
+        // BryNex asignadas al aliado: antes solo salían las del aliado.
+        $usuarios = $this->usuariosDeCaja((int) $aliadoId);
 
         $visibles = $usuarioFiltro
             ? $usuarios->where('id', (int) $usuarioFiltro)
@@ -244,7 +256,11 @@ class CuadreDiarioController extends Controller
         }
 
         // La base de caja menor es la de hoy: solo tiene sentido al mirar un día.
-        $resumen = $visibles->map(function ($u) use ($aliadoId, $dias, $vistaMes) {
+        // Lo pendiente por pasar de cada persona al terminar el rango: es lo
+        // que responde «¿quién tiene la plata?».
+        $corte = min($hasta, today()->toDateString());
+
+        $resumen = $visibles->map(function ($u) use ($aliadoId, $dias, $vistaMes, $corte) {
             $suyos = $dias->where('uid', $u->id);
             $ing   = $suyos->sum('efectivo');
             $gas   = $suyos->sum('gastos');
@@ -261,10 +277,12 @@ class CuadreDiarioController extends Controller
                 'cuadre'          => $suyos->first()?->cuadre,
                 'dias_movimiento' => $suyos->count(),
                 'dias_cuadrados'  => $suyos->filter(fn($d) => $d->cuadre)->count(),
+                'pendiente'       => $this->saldoAlCierre((int) $aliadoId, (int) $u->id, $corte),
             ];
         })
-        // Solo quien movió plata; sin esto la tabla es una lista de ceros.
-        ->filter(fn($r) => $r->dias_movimiento > 0)
+        // Solo quien movió plata o tiene algo pendiente por pasar; sin esto la
+        // tabla es una lista de ceros.
+        ->filter(fn($r) => $r->dias_movimiento > 0 || ($r->pendiente ?? 0) != 0)
         ->sortByDesc('efectivo_total')
         ->values();
 
@@ -404,6 +422,120 @@ class CuadreDiarioController extends Controller
 
         $gasto->delete();
         return back()->with('success', 'Gasto eliminado.');
+    }
+
+    /**
+     * Personas que pueden tener efectivo del aliado: las suyas y las de BryNex
+     * asignadas a él por `aliado_user`, más quien está logueado.
+     */
+    private function usuariosDeCaja(int $aliadoId)
+    {
+        $asignados = DB::table('aliado_user')->where('aliado_id', $aliadoId)->where('activo', true)->pluck('user_id');
+
+        return User::where('activo', true)
+            ->where(fn ($q) => $q->where('aliado_id', $aliadoId)->orWhereIn('id', $asignados)->orWhere('id', Auth::id()))
+            ->orderBy('nombre')
+            ->get(['id', 'nombre']);
+    }
+
+    // ── Entregas, retiros del dueño y saldo inicial ──────────────────
+    /**
+     * Registra efectivo que cambia de manos sin ser cobro ni gasto.
+     *
+     * - entrega: la registra quien entrega o quien recibe (o un admin).
+     * - retiro_dueno: solo admin/superadmin; sale de la caja de una persona.
+     * - saldo_inicial: solo superadmin; el efectivo contado con que arranca una
+     *   persona ese día. Desde ahí se arrastra su saldo.
+     */
+    public function registrarMovimientoCaja(Request $request)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $yo       = (int) Auth::id();
+        $esAdmin  = Auth::user()->hasRole(['admin', 'superadmin']);
+        $esSuper  = Auth::user()->hasRole('superadmin');
+
+        $validated = $request->validate([
+            'tipo'               => 'required|in:' . implode(',', array_keys(CajaMovimiento::TIPOS)),
+            'fecha'              => 'required|date|before_or_equal:today',
+            'valor'              => 'required|integer|min:1',
+            'usuario_origen_id'  => 'nullable|integer',
+            'usuario_destino_id' => 'nullable|integer',
+            'observacion'        => 'nullable|string|max:500',
+        ]);
+
+        $tipo    = $validated['tipo'];
+        $origen  = isset($validated['usuario_origen_id']) ? (int) $validated['usuario_origen_id'] : null;
+        $destino = isset($validated['usuario_destino_id']) ? (int) $validated['usuario_destino_id'] : null;
+        $validos = $this->usuariosDeCaja($aliadoId)->pluck('id')->map(fn ($id) => (int) $id);
+
+        if ($tipo === CajaMovimiento::TIPO_ENTREGA) {
+            $origen ??= $yo;
+            if (! $destino || $destino === $origen) {
+                return back()->with('error', 'Elige a quién se le entregó la plata.');
+            }
+            if (! $esAdmin && $origen !== $yo && $destino !== $yo) {
+                return back()->with('error', 'Solo puedes registrar entregas que hiciste o que recibiste.');
+            }
+        } elseif ($tipo === CajaMovimiento::TIPO_RETIRO_DUENO) {
+            if (! $esAdmin) {
+                return back()->with('error', 'Solo un administrador registra retiros del dueño.');
+            }
+            $origen ??= $yo;
+            $destino = null;
+        } else {
+            if (! $esSuper) {
+                return back()->with('error', 'Solo el superadmin pone el saldo inicial de una caja.');
+            }
+            if (! $destino) {
+                return back()->with('error', 'Elige de quién es el saldo inicial.');
+            }
+            $origen = null;
+        }
+
+        foreach (array_filter([$origen, $destino]) as $uid) {
+            if (! $validos->contains($uid)) {
+                return back()->with('error', 'Esa persona no maneja caja en este aliado.');
+            }
+            if ($this->cuadreDelDia($aliadoId, $uid, $validated['fecha'])) {
+                return back()->with('error', 'Ese día ya fue cuadrado para una de las personas; reábrelo primero.');
+            }
+        }
+
+        CajaMovimiento::create([
+            'aliado_id'          => $aliadoId,
+            'fecha'              => $validated['fecha'],
+            'tipo'               => $tipo,
+            'usuario_origen_id'  => $origen,
+            'usuario_destino_id' => $destino,
+            'valor'              => (int) $validated['valor'],
+            'observacion'        => $validated['observacion'] ?? null,
+            'registrado_por'     => $yo,
+        ]);
+
+        return back()->with('success', CajaMovimiento::TIPOS[$tipo] . ' registrado.');
+    }
+
+    public function eliminarMovimientoCaja(int $movId)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $mov = CajaMovimiento::where('aliado_id', $aliadoId)->findOrFail($movId);
+
+        $esAdmin = Auth::user()->hasRole(['admin', 'superadmin']);
+        if ($mov->tipo === CajaMovimiento::TIPO_SALDO_INICIAL && ! Auth::user()->hasRole('superadmin')) {
+            return back()->with('error', 'Solo el superadmin quita un saldo inicial.');
+        }
+        if (! $esAdmin && (int) $mov->registrado_por !== (int) Auth::id()) {
+            return back()->with('error', 'Solo quien lo registró o un administrador lo puede quitar.');
+        }
+        foreach (array_filter([$mov->usuario_origen_id, $mov->usuario_destino_id]) as $uid) {
+            if ($this->cuadreDelDia($aliadoId, (int) $uid, $mov->fecha->toDateString())) {
+                return back()->with('error', 'Ese día ya fue cuadrado; reábrelo primero.');
+            }
+        }
+
+        $mov->delete();
+
+        return back()->with('success', $mov->tipoLabel() . ' quitado.');
     }
 
     /**
@@ -780,9 +912,13 @@ class CuadreDiarioController extends Controller
     /**
      * Resumen de caja de un día para un usuario.
      *
-     * `saldo_esperado` = base de caja menor + lo recibido en efectivo del día
-     * - los gastos en efectivo del día. No arrastra saldo de días anteriores:
-     * el cuadre se hace y se entrega por día.
+     * `saldo_esperado` = base de caja menor + lo que la persona traía de días
+     * anteriores + lo recibido en efectivo del día + lo que otros le entregaron
+     * − lo que salió del cajón (gastos, traslados al banco, incapacidades)
+     * − lo que entregó a otros − los retiros del dueño.
+     *
+     * Lo que traía solo se arrastra desde un saldo inicial contado (ver
+     * saldoAntesDe): sin él la persona arranca cada día de cero, como antes.
      */
     private function resumenDia(int $aliadoId, ?int $usuarioId, string $fecha, $facturasDia): array
     {
@@ -857,6 +993,11 @@ class CuadreDiarioController extends Controller
             : CajaMenor::montoActivo($aliadoId, $usuarioId);
         $recibido  = $ingresosEfectivo + $cobrosCartera + $anticiposEfectivo;
 
+        $mov       = $this->movimientosCaja($aliadoId, $usuarioId, $fecha, $fecha);
+        $traia     = $this->saldoAntesDe($aliadoId, $usuarioId, $fecha);
+        $pendiente = (int) $traia + $recibido + $mov['recibidas']
+                   - $gastosEfectivo - $mov['dadas'] - $mov['retiros'];
+
         return [
             'total_facturado'    => (int) $conValor->sum('total'),
             'num_facturas'       => $numFacturas,
@@ -875,8 +1016,132 @@ class CuadreDiarioController extends Controller
             'salidas_incapacidades' => $salidasIncapacidades,
             'consignado'         => $consignado,
             'recibido_efectivo'  => $recibido,
-            'saldo_esperado'     => $baseCaja + $recibido - $gastosEfectivo,
+            'arrastra'           => $traia !== null,
+            'traia'              => (int) $traia,
+            'entregas_recibidas' => $mov['recibidas'],
+            'entregas_dadas'     => $mov['dadas'],
+            'retiros_dueno'      => $mov['retiros'],
+            'pendiente_por_pasar' => $pendiente,
+            'saldo_esperado'     => $baseCaja + $pendiente,
         ];
+    }
+
+    /**
+     * Entregas y retiros del dueño entre dos fechas (ambas incluidas).
+     *
+     * Con la caja de todos ($usuarioId null) una entrega sale de uno y entra a
+     * otro: suma igual en recibidas y en dadas, y se anula.
+     */
+    private function movimientosCaja(int $aliadoId, ?int $usuarioId, string $desde, string $hasta): array
+    {
+        $movs = CajaMovimiento::where('aliado_id', $aliadoId)
+            ->whereIn('tipo', [CajaMovimiento::TIPO_ENTREGA, CajaMovimiento::TIPO_RETIRO_DUENO])
+            ->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta)
+            ->get(['tipo', 'usuario_origen_id', 'usuario_destino_id', 'valor']);
+
+        $entregas = $movs->where('tipo', CajaMovimiento::TIPO_ENTREGA);
+        $retiros  = $movs->where('tipo', CajaMovimiento::TIPO_RETIRO_DUENO);
+
+        if ($usuarioId === null) {
+            return [
+                'recibidas' => (int) $entregas->sum('valor'),
+                'dadas'     => (int) $entregas->sum('valor'),
+                'retiros'   => (int) $retiros->sum('valor'),
+            ];
+        }
+
+        return [
+            'recibidas' => (int) $entregas->where('usuario_destino_id', $usuarioId)->sum('valor'),
+            'dadas'     => (int) $entregas->where('usuario_origen_id', $usuarioId)->sum('valor'),
+            'retiros'   => (int) $retiros->where('usuario_origen_id', $usuarioId)->sum('valor'),
+        ];
+    }
+
+    /**
+     * Neto del efectivo de una persona (o de todos) entre dos fechas: lo que
+     * entró menos lo que salió, con las mismas reglas de resumenDia.
+     */
+    private function netoEfectivo(int $aliadoId, ?int $usuarioId, string $desde, string $hasta): int
+    {
+        $porUsuario = fn ($q, string $col = 'usuario_id') => $q->when($usuarioId, fn ($w) => $w->where($col, $usuarioId));
+
+        $facturas = (int) $porUsuario(Factura::where('aliado_id', $aliadoId))
+            ->where('es_prestamo', false)
+            ->whereDate('fecha_pago', '>=', $desde)
+            ->whereDate('fecha_pago', '<=', $hasta)
+            ->sum('valor_efectivo');
+
+        $cartera = (int) $porUsuario(DB::table('abonos')
+            ->join('facturas', 'abonos.factura_id', '=', 'facturas.id')
+            ->where('facturas.aliado_id', $aliadoId)
+            ->where('facturas.es_prestamo', true), 'abonos.usuario_id')
+            ->whereDate('abonos.fecha', '>=', $desde)
+            ->whereDate('abonos.fecha', '<=', $hasta)
+            ->sum('abonos.valor_efectivo');
+
+        $anticipos = (int) $porUsuario(Anticipo::where('aliado_id', $aliadoId))
+            ->whereIn('forma_pago', ['efectivo', 'nequi'])
+            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO])
+            ->whereDate('fecha_pago', '>=', $desde)
+            ->whereDate('fecha_pago', '<=', $hasta)
+            ->sum('valor');
+
+        $salidas = (int) $porUsuario(Gasto::where('aliado_id', $aliadoId))
+            ->where(fn ($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco'))
+            ->whereDate('fecha', '>=', $desde)
+            ->whereDate('fecha', '<=', $hasta)
+            ->sum('valor');
+
+        $mov = $this->movimientosCaja($aliadoId, $usuarioId, $desde, $hasta);
+
+        return $facturas + $cartera + $anticipos + $mov['recibidas'] - $salidas - $mov['dadas'] - $mov['retiros'];
+    }
+
+    /**
+     * Lo que una persona traía al empezar el día, sin la base de caja menor.
+     *
+     * Parte del último saldo inicial contado con fecha <= $fecha (que es el
+     * saldo al empezar ese día) y le suma lo que se movió desde entonces hasta
+     * el día anterior. null si la persona nunca tuvo saldo inicial: entonces
+     * no arrastra nada. Con la caja de todos suma el de cada persona.
+     */
+    private function saldoAntesDe(int $aliadoId, ?int $usuarioId, string $fecha): ?int
+    {
+        if ($usuarioId === null) {
+            $conSaldo = CajaMovimiento::where('aliado_id', $aliadoId)
+                ->where('tipo', CajaMovimiento::TIPO_SALDO_INICIAL)
+                ->whereDate('fecha', '<=', $fecha)
+                ->distinct()
+                ->pluck('usuario_destino_id');
+            if ($conSaldo->isEmpty()) {
+                return null;
+            }
+
+            return (int) $conSaldo->sum(fn ($uid) => (int) $this->saldoAntesDe($aliadoId, (int) $uid, $fecha));
+        }
+
+        $inicial = CajaMovimiento::saldoInicialVigente($aliadoId, $usuarioId, $fecha);
+        if (! $inicial) {
+            return null;
+        }
+
+        $desde = $inicial->fecha->toDateString();
+        if ($desde === $fecha) {
+            return (int) $inicial->valor;
+        }
+
+        $ayer = \Carbon\Carbon::parse($fecha)->subDay()->toDateString();
+
+        return (int) $inicial->valor + $this->netoEfectivo($aliadoId, $usuarioId, $desde, $ayer);
+    }
+
+    /** Lo pendiente por pasar al terminar el día $hasta (null si no arrastra). */
+    private function saldoAlCierre(int $aliadoId, int $usuarioId, string $hasta): ?int
+    {
+        $traia = $this->saldoAntesDe($aliadoId, $usuarioId, $hasta);
+
+        return $traia === null ? null : $traia + $this->netoEfectivo($aliadoId, $usuarioId, $hasta, $hasta);
     }
 
     /**

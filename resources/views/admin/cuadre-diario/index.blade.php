@@ -174,6 +174,13 @@ $totalFacturas   = array_sum($canales['conteo']);
                 + Registrar gasto
             </button>
             @endif
+            @if(!($verTodos ?? false) && !$diaBloqueado && ($esPropio || $esAdmin))
+            <button type="button" onclick="abrirModalCaja('entrega')" class="cd-link"
+                    style="background:#b45309;color:#fff;border:none;cursor:pointer;font-family:inherit"
+                    title="Registrar efectivo que pasó de una persona a otra">
+                🤝 Entregar plata
+            </button>
+            @endif
             <button type="button" onclick="window.print()" class="cd-link"
                     style="border:none;cursor:pointer;font-family:inherit;padding:.35rem .6rem;font-size:.9rem"
                     title="Imprimir en hoja carta vertical" aria-label="Imprimir">🖨️</button>
@@ -231,11 +238,28 @@ $totalFacturas   = array_sum($canales['conteo']);
     <div class="cd-card saldo">
         <div class="cd-card-title">✅ Efectivo en caja</div>
         <div class="cd-card-val">{{ $fmt($resumen['saldo_esperado']) }}</div>
+        @if($resumen['arrastra'])
+        <div style="font-size:.74rem;color:#1e40af;margin-top:.2rem" title="Lo que tiene que entregar o consignar: el efectivo en caja sin la base">
+            📌 Pendiente por pasar: <b>{{ $fmt($resumen['pendiente_por_pasar']) }}</b>
+        </div>
+        @endif
         <div style="margin-top:.45rem;padding-top:.4rem;border-top:1px solid #dbeafe">
+            @if($resumen['arrastra'])
+            <div class="cd-eq" title="Lo que quedó pendiente por pasar al terminar el día anterior">
+                <span>↪️ Traía de antes</span>
+                <b>{{ $fmt($resumen['traia']) }}</b>
+            </div>
+            @endif
             <div class="cd-eq" title="Facturas cobradas en efectivo + cartera recuperada + anticipos">
                 <span>💵 Recibido</span>
                 <b style="color:#15803d">{{ $fmt($resumen['recibido_efectivo']) }}</b>
             </div>
+            @if(!($verTodos ?? false) && $resumen['entregas_recibidas'] > 0)
+            <div class="cd-eq" title="Efectivo que otra persona le entregó">
+                <span>🤝 Le entregaron</span>
+                <b style="color:#15803d">{{ $fmt($resumen['entregas_recibidas']) }}</b>
+            </div>
+            @endif
             {{-- Lo que salió del cajón, separado: solo el primer renglón es gasto
                  de la empresa. El traslado sigue siendo de la empresa (está en el
                  banco) y la incapacidad es plata del afiliado. --}}
@@ -253,6 +277,18 @@ $totalFacturas   = array_sum($canales['conteo']);
             <div class="cd-eq" title="Pagos de incapacidad al afiliado: no es gasto, es plata que la entidad le consignó a la razón social">
                 <span>🏥 Pagado de incapacidades</span>
                 <b style="color:#7c3aed">−{{ $fmt($resumen['salidas_incapacidades']) }}</b>
+            </div>
+            @endif
+            @if(!($verTodos ?? false) && $resumen['entregas_dadas'] > 0)
+            <div class="cd-eq" title="Efectivo que le entregó a otra persona: no es gasto">
+                <span>🤝 Entregó a otros</span>
+                <b style="color:#b45309">−{{ $fmt($resumen['entregas_dadas']) }}</b>
+            </div>
+            @endif
+            @if($resumen['retiros_dueno'] > 0)
+            <div class="cd-eq" title="Plata que el dueño sacó de la caja: no es gasto, se descuenta de la utilidad">
+                <span>👤 Retiro del dueño</span>
+                <b style="color:#b45309">−{{ $fmt($resumen['retiros_dueno']) }}</b>
             </div>
             @endif
             <div class="cd-eq" title="Base de caja menor con la que arrancó el día">
@@ -513,6 +549,149 @@ $val = fn($v) => abs($v) >= 1 ? $fmt(round($v)) : null;
     </div>
     @endif
 </div>
+
+{{-- ═══════════ 3b. Entregas, retiros y saldo inicial ═══════════ --}}
+{{-- Efectivo que cambia de manos sin ser cobro ni gasto. Con esto cada persona
+     arrastra lo que tiene pendiente por pasar de un día al siguiente. --}}
+@if(!($verTodos ?? false) || $movimientosCaja->isNotEmpty())
+<div class="cd-panel">
+    <div class="cd-panel-head">
+        <div class="cd-panel-title">🤝 Entregas y retiros</div>
+        <div class="no-print" style="display:flex;gap:.35rem;flex-wrap:wrap">
+            @if(!($verTodos ?? false) && !$diaBloqueado && $esAdmin)
+            <button type="button" class="btn-sm" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d"
+                    onclick="abrirModalCaja('retiro_dueno')">👤 Retiro del dueño</button>
+            @endif
+            @if(!($verTodos ?? false) && !$diaBloqueado && $esSuperAdmin)
+            <button type="button" class="btn-sm" style="background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc"
+                    onclick="abrirModalCaja('saldo_inicial')">🧮 Saldo inicial contado</button>
+            @endif
+        </div>
+    </div>
+    @if(!$resumen['arrastra'] && !($verTodos ?? false))
+    <div style="font-size:.74rem;color:#64748b;padding:.2rem .1rem .5rem">
+        Esta caja todavía no tiene saldo inicial: cada día arranca de cero. Cuando se cuente el
+        efectivo, el superadmin lo pone con «Saldo inicial contado» y desde ahí se arrastra lo pendiente por pasar.
+    </div>
+    @endif
+    @if($movimientosCaja->isEmpty())
+    <div class="vacio">Sin entregas ni retiros ese día</div>
+    @else
+    <div style="overflow-x:auto">
+    <table class="tbl-cd">
+        <thead><tr>
+            <th>Tipo</th><th>De</th><th>Para</th><th>Observación</th><th class="num">Valor</th>
+            <th class="no-print" style="text-align:center">Acción</th>
+        </tr></thead>
+        <tbody>
+        @foreach($movimientosCaja as $m)
+        @php
+            $entra = $m->tipo === \App\Models\CajaMovimiento::TIPO_SALDO_INICIAL
+                  || (($usuarioId ?? null) && (int) $m->usuario_destino_id === (int) $usuarioId);
+        @endphp
+        <tr>
+            <td><span class="badge-tipo" style="background:{{ $m->tipo === 'entrega' ? '#b45309' : ($m->tipo === 'retiro_dueno' ? '#92400e' : '#3730a3') }}">{{ $m->tipoLabel() }}</span></td>
+            <td style="font-size:.76rem">{{ $m->origen?->nombre ?? '—' }}</td>
+            <td style="font-size:.76rem">{{ $m->destino?->nombre ?? ($m->tipo === 'retiro_dueno' ? 'Dueño' : '—') }}</td>
+            <td style="font-size:.74rem;color:#64748b;max-width:240px">
+                {{ $m->observacion }}
+                <div style="font-size:.68rem;color:#94a3b8">registró {{ $m->registradoPor?->nombre ?? '—' }}</div>
+            </td>
+            <td class="num" style="font-weight:700;color:{{ ($verTodos ?? false) && $m->tipo === 'entrega' ? '#64748b' : ($entra ? '#15803d' : '#b45309') }}">
+                {{ ($verTodos ?? false) && $m->tipo === 'entrega' ? '' : ($entra ? '+' : '−') }}{{ $fmt($m->valor) }}
+            </td>
+            <td class="no-print" style="text-align:center">
+                @if(!$diaBloqueado && ($esAdmin || (int) $m->registrado_por === (int) auth()->id()) && ($m->tipo !== 'saldo_inicial' || $esSuperAdmin))
+                <form method="POST" action="{{ route('admin.cuadre-diario.movimiento-caja.destroy', $m->id) }}"
+                      onsubmit="return confirm('¿Quitar este movimiento?')" style="display:inline">
+                    @csrf @method('DELETE')
+                    <button type="submit" style="background:#fee2e2;color:#991b1b;border:none;border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem">🗑️</button>
+                </form>
+                @else
+                <span style="color:#cbd5e1;font-size:.72rem">🔒</span>
+                @endif
+            </td>
+        </tr>
+        @endforeach
+        </tbody>
+    </table>
+    </div>
+    @endif
+</div>
+@endif
+
+{{-- Modal: entrega / retiro del dueño / saldo inicial --}}
+@if(!($verTodos ?? false))
+<div id="modal-caja" class="no-print"
+     onclick="if(event.target.id==='modal-caja')this.style.display='none'"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center">
+    <form method="POST" action="{{ route('admin.cuadre-diario.movimiento-caja.store') }}"
+          style="background:#fff;border-radius:14px;width:min(440px,94vw);padding:1.1rem 1.2rem;box-shadow:0 20px 50px rgba(0,0,0,.25)">
+        @csrf
+        <input type="hidden" name="tipo" id="caja-tipo" value="entrega">
+        <input type="hidden" name="fecha" value="{{ $fecha }}">
+        <div id="caja-titulo" style="font-weight:800;font-size:1rem;margin-bottom:.2rem">🤝 Entregar plata</div>
+        <div id="caja-ayuda" style="font-size:.75rem;color:#64748b;margin-bottom:.8rem"></div>
+
+        <div id="caja-blq-origen" style="margin-bottom:.6rem">
+            <label style="font-size:.74rem;font-weight:700;color:#475569">De quién sale</label>
+            <select name="usuario_origen_id" class="cd-input" style="width:100%;color:#0f172a;background:#fff;border:1px solid #cbd5e1"
+                    @disabled(!$esAdmin)>
+                @foreach($usuariosCaja as $u)
+                <option value="{{ $u->id }}" @selected((int) $u->id === (int) $usuarioId)>{{ $u->nombre }}</option>
+                @endforeach
+            </select>
+            @if(!$esAdmin)<input type="hidden" name="usuario_origen_id" value="{{ $usuarioId }}">@endif
+        </div>
+        <div id="caja-blq-destino" style="margin-bottom:.6rem">
+            <label id="caja-lbl-destino" style="font-size:.74rem;font-weight:700;color:#475569">A quién se le entregó</label>
+            <select name="usuario_destino_id" class="cd-input" style="width:100%;color:#0f172a;background:#fff;border:1px solid #cbd5e1">
+                <option value="">— Elegir —</option>
+                @foreach($usuariosCaja as $u)
+                <option value="{{ $u->id }}">{{ $u->nombre }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div style="margin-bottom:.6rem">
+            <label style="font-size:.74rem;font-weight:700;color:#475569">Valor</label>
+            <input type="number" name="valor" min="1" step="1" required class="cd-input"
+                   style="width:100%;color:#0f172a;background:#fff;border:1px solid #cbd5e1">
+        </div>
+        <div style="margin-bottom:.9rem">
+            <label style="font-size:.74rem;font-weight:700;color:#475569">Observación</label>
+            <input type="text" name="observacion" maxlength="500" class="cd-input"
+                   style="width:100%;color:#0f172a;background:#fff;border:1px solid #cbd5e1">
+        </div>
+        <div style="font-size:.72rem;color:#94a3b8;margin-bottom:.8rem">Fecha: {{ $carbonFecha->format('d/m/Y') }}</div>
+        <div style="display:flex;justify-content:flex-end;gap:.5rem">
+            <button type="button" class="btn-sm" style="background:#f1f5f9;color:#334155;border:1px solid #cbd5e1"
+                    onclick="document.getElementById('modal-caja').style.display='none'">Cancelar</button>
+            <button type="submit" class="btn-sm" style="background:#0f172a;color:#fff;border:none">Guardar</button>
+        </div>
+    </form>
+</div>
+<script>
+function abrirModalCaja(tipo) {
+    const textos = {
+        entrega:       ['🤝 Entregar plata', 'Efectivo que pasa de una persona a otra. No es gasto: sale de la caja de uno y entra a la del otro.', true, true, 'A quién se le entregó'],
+        retiro_dueno:  ['👤 Retiro del dueño', 'Plata que el dueño saca de la caja para él. No es gasto: se descuenta de la utilidad acumulada.', true, false, ''],
+        saldo_inicial: ['🧮 Saldo inicial contado', 'El efectivo contado con que arranca la persona al empezar este día (sin la base de caja menor). Desde aquí se arrastra lo pendiente por pasar.', false, true, 'De quién es la caja'],
+    };
+    const [titulo, ayuda, conOrigen, conDestino, lblDestino] = textos[tipo];
+    document.getElementById('caja-tipo').value = tipo;
+    document.getElementById('caja-titulo').textContent = titulo;
+    document.getElementById('caja-ayuda').textContent = ayuda;
+    document.getElementById('caja-blq-origen').style.display = conOrigen ? '' : 'none';
+    document.getElementById('caja-blq-destino').style.display = conDestino ? '' : 'none';
+    document.getElementById('caja-lbl-destino').textContent = lblDestino;
+    const destino = document.querySelector('#modal-caja select[name=usuario_destino_id]');
+    destino.required = conDestino;
+    if (tipo === 'saldo_inicial') destino.value = '{{ $usuarioId }}';
+    else if (destino.value === '{{ $usuarioId }}') destino.value = '';
+    document.getElementById('modal-caja').style.display = 'flex';
+}
+</script>
+@endif
 
 {{-- ═══════════ 4. Cerrar el día ═══════════ --}}
 {{-- El cierre es por persona: con "Todos" solo se mira el total, no se cuadra. --}}
