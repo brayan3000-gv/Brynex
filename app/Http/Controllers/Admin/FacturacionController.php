@@ -2837,6 +2837,7 @@ class FacturacionController extends Controller
                 'fecha' => now()->toDateString(),
                 'usuario_id' => Auth::id(),
             ]);
+            \App\Models\Consignacion::registrarDeAbono($ab, (int) $factura->aliado_id);
 
             // ¿El total abonado cubre el total?
             $factura->refresh();
@@ -3272,8 +3273,12 @@ class FacturacionController extends Controller
                     ]);
                 });
 
-                // Las consignaciones se eliminan físicamente (quedan en el snapshot de la bitácora)
+                // Las consignaciones se eliminan físicamente (quedan en el snapshot de la bitácora),
+                // también las de los abonos, que no cuelgan de la factura.
                 DB::table('consignaciones')->where('factura_id', $f->id)->delete();
+                DB::table('consignaciones')
+                    ->whereIn('abono_id', DB::table('abonos')->where('factura_id', $f->id)->select('id'))
+                    ->delete();
                 DB::table('abonos')->where('factura_id', $f->id)->delete();
             }
         });

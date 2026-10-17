@@ -313,6 +313,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: .78rem; min-width
                         'anticipo'           => ['label' => 'Anticipo',   'color' => '#92400e', 'bg' => '#fef3c7', 'icon' => '💰'],
                         'traslado_efectivo'  => ['label' => 'Ef→Banco',   'color' => '#1d4ed8', 'bg' => '#dbeafe', 'icon' => '📥'],
                         'banco_recibido'     => ['label' => 'T. entrada', 'color' => '#1d4ed8', 'bg' => '#dbeafe', 'icon' => '📥'],
+                        'abono_prestamo'     => ['label' => 'Abono préstamo', 'color' => '#0f766e', 'bg' => '#ccfbf1', 'icon' => '💳'],
                         default              => ['label' => ucfirst($mov->tipo ?? ''), 'color' => '#1d4ed8', 'bg' => '#dbeafe', 'icon' => '📥'],
                     };
                 @endphp

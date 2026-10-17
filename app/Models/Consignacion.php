@@ -12,7 +12,7 @@ class Consignacion extends BaseModel
     protected $table = 'consignaciones';
 
     protected $fillable = [
-        'aliado_id', 'factura_id', 'anticipo_id', 'banco_cuenta_id',
+        'aliado_id', 'factura_id', 'anticipo_id', 'abono_id', 'banco_cuenta_id',
         'fecha', 'valor', 'tipo', 'referencia', 'imagen_path',
         'confirmado', 'observacion', 'usuario_id',
         // Cuadre diario - traslados internos
@@ -39,6 +39,13 @@ class Consignacion extends BaseModel
 
     /** Pago anticipado de cliente (antes de la factura) */
     const TIPO_ANTICIPO = 'anticipo';
+
+    /**
+     * Abono consignado a un préstamo. Cuelga del abono (`abono_id`) y no de la
+     * factura: la factura ya tiene las consignaciones de su pago inicial, y la
+     * corrección de pago las reescribe todas.
+     */
+    const TIPO_ABONO = 'abono_prestamo';
 
     // ── Relaciones ───────────────────────────────────────────────────
     public function factura()
@@ -92,6 +99,39 @@ class Consignacion extends BaseModel
     public function scopeClientes($query)
     {
         return $query->where('tipo', self::TIPO_CLIENTE);
+    }
+
+    /**
+     * La entrada al banco de un abono consignado a un préstamo.
+     *
+     * El abono vivía solo en su tabla: la plata entraba a la cuenta pero no
+     * sumaba al saldo del banco ni al informe, y la conciliación no tenía con
+     * qué cruzar el movimiento del extracto ($2,1M en octubre de 2026 en
+     * BRYGAR). No se crea si no hay parte consignada o cuenta, ni dos veces
+     * para el mismo abono.
+     */
+    public static function registrarDeAbono(Abono $abono, int $aliadoId): ?self
+    {
+        $valor = (int) $abono->valor_consignado;
+        if ($valor <= 0 || ! $abono->banco_cuenta_id) {
+            return null;
+        }
+
+        return static::firstOrCreate(
+            ['abono_id' => $abono->id],
+            [
+                'aliado_id'       => $aliadoId,
+                'factura_id'      => null,
+                'banco_cuenta_id' => $abono->banco_cuenta_id,
+                'fecha'           => $abono->fecha,
+                'valor'           => $valor,
+                'tipo'            => self::TIPO_ABONO,
+                'referencia'      => 'Abono #' . $abono->id,
+                'confirmado'      => false,
+                'observacion'     => $abono->observacion,
+                'usuario_id'      => $abono->usuario_id,
+            ]
+        );
     }
 
     // ── Helper: saldo actual de una cuenta bancaria ──────────────────
@@ -200,6 +240,7 @@ class Consignacion extends BaseModel
         if (! empty($bancosSinLedger)) {
             $entradasQuery = DB::table('consignaciones')
                 ->where('aliado_id', $aliadoId)
+                ->whereNull('deleted_at')
                 ->where('fecha', '>=', '2026-07-01')
                 ->whereIn('banco_cuenta_id', $bancosSinLedger);
 

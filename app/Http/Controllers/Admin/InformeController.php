@@ -1465,6 +1465,7 @@ class InformeController extends Controller
         // ── Desglose de ingresos y egresos del mes por banco ──
         $ingMesPorBancoDetalle = DB::table('consignaciones')
             ->where('aliado_id', $aid)
+            ->whereNull('deleted_at')
             ->whereIn('banco_cuenta_id', $bancoIds)
             ->whereMonth('fecha', $mes)->whereYear('fecha', $anio)
             ->groupBy('banco_cuenta_id')
@@ -2040,6 +2041,7 @@ class InformeController extends Controller
             ->leftJoin('empresas AS em', 'em.id', '=', 'f.empresa_id')
             ->leftJoin('users AS u',     'u.id',  '=', 'cs.usuario_id')
             ->where('cs.aliado_id', $aliadoId)
+            ->whereNull('cs.deleted_at')
             ->whereIn('cs.banco_cuenta_id', $bancoIds)
             ->whereBetween('cs.fecha', [$inicio, $fin])
             ->selectRaw("
@@ -2416,6 +2418,7 @@ class InformeController extends Controller
             // Si empresa_id > 0 → empresa → join empresas por id
             ->leftJoin('empresas AS em', 'em.id', '=', 'f.empresa_id')
             ->where('cs.aliado_id', $aid)
+            ->whereNull('cs.deleted_at')
             ->where('cs.banco_cuenta_id', $bancoId)
             ->whereMonth('cs.fecha', $mes)
             ->whereYear('cs.fecha', $anio)

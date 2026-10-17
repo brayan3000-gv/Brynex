@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Factura, Abono, BitacoraCobro, Contrato, Empresa, BancoCuenta};
+use App\Models\{Factura, Abono, BitacoraCobro, Contrato, Empresa, BancoCuenta, Consignacion};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB, Storage};
 
@@ -339,7 +339,7 @@ class PrestamosController extends Controller
 
         DB::transaction(function () use ($factura, $validated, $esLote, $aliadoId, $soportePath, $soporteNombre) {
             // El abono se registra siempre en la factura de referencia del lote
-            Abono::create([
+            $abono = Abono::create([
                 'factura_id'       => $factura->id,
                 'valor'            => (int)$validated['valor'],
                 'forma_pago'       => $validated['forma_pago'],
@@ -352,6 +352,7 @@ class PrestamosController extends Controller
                 'fecha'            => today()->toDateString(),
                 'usuario_id'       => Auth::id(),
             ]);
+            Consignacion::registrarDeAbono($abono, (int) $aliadoId);
 
             if ($esLote) {
                 // Recargar todo el lote con abonos frescos para calcular saldo real
