@@ -47,7 +47,7 @@ class GastoAdminController extends Controller
             ->whereMonth('g.fecha', $mes)
             ->whereYear('g.fecha',  $anio)
             ->select([
-                'g.id', 'g.fecha', 'g.tipo', 'g.descripcion',
+                'g.id', 'g.fecha', 'g.periodo', 'g.tipo', 'g.descripcion',
                 'g.pagado_a', 'g.forma_pago', 'g.valor',
                 'g.observacion', 'g.recibo_caja', 'g.imagen_path',
                 'g.created_at',
@@ -126,6 +126,7 @@ class GastoAdminController extends Controller
 
         $data = $request->validate([
             'fecha'             => 'required|date',
+            'periodo'           => 'nullable|date_format:Y-m',
             'tipo'              => 'required|string',
             'descripcion'       => 'required|string|max:500',
             'pagado_a'          => 'nullable|string|max:255',
@@ -138,6 +139,8 @@ class GastoAdminController extends Controller
             'imagen_base64'     => 'nullable|string',   // paste Ctrl+V
             'imagen'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
+        // Mes al que corresponde (utilidad); la fecha sigue siendo la del pago.
+        $data['periodo'] = Gasto::periodoDesdeFormulario($data['periodo'] ?? null, $data['fecha']);
 
         DB::beginTransaction();
         try {
@@ -217,6 +220,7 @@ class GastoAdminController extends Controller
 
         $data = $request->validate([
             'fecha'             => 'required|date',
+            'periodo'           => 'nullable|date_format:Y-m',
             'tipo'              => 'required|string',
             'descripcion'       => 'required|string|max:500',
             'pagado_a'          => 'nullable|string|max:255',
@@ -229,6 +233,11 @@ class GastoAdminController extends Controller
             'imagen_base64'     => 'nullable|string',
             'imagen'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
+        // Mes al que corresponde (utilidad); la fecha sigue siendo la del pago.
+        // Un formulario sin el selector no lo borra.
+        if ($request->has('periodo')) {
+            $data['periodo'] = Gasto::periodoDesdeFormulario($data['periodo'], $data['fecha']);
+        }
 
         $gasto->update($data);
 

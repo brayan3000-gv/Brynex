@@ -150,7 +150,15 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
                         {{ $tipos[$g->tipo] ?? $g->tipo }}
                     </span>
                 </td>
-                <td style="max-width:220px">{{ $g->descripcion }}</td>
+                <td style="max-width:220px">
+                    {{ $g->descripcion }}
+                    @if($g->periodo && substr($g->periodo, 0, 7) !== substr($g->fecha, 0, 7))
+                        @php $per = \Carbon\Carbon::parse($g->periodo); @endphp
+                        <div style="font-size:.68rem;color:#b45309;font-weight:600" title="Mes al que corresponde: cuenta en la utilidad de ese mes">
+                            📅 De {{ $mesesNombres[$per->month] }} {{ $per->year }}
+                        </div>
+                    @endif
+                </td>
                 <td>{{ $g->pagado_a ?? '—' }}</td>
                 <td>
                     @if($g->forma_pago=='efectivo')
@@ -273,6 +281,7 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
     'esAdmin'     => true,
     'modalId'     => 'modal-gasto',
     'imagenPaste' => true,
+    'conPeriodo'  => true,
 ])
 
 {{-- Modal subir imagen a gasto existente --}}
@@ -331,6 +340,7 @@ function abrirModalNuevo(){
         const badge = form.querySelector('#badge-tipo-planilla');
         if(badge) badge.remove();
         quitarFormaPagoPropia(form);
+        gasto_periodoCargar('modal-gasto', null);
     }
     const hdr = document.querySelector('#modal-gasto [style*="background:#0f172a"] span');
     if(hdr) hdr.textContent = '💼 Registrar Gasto';
@@ -410,6 +420,7 @@ function abrirModalEditar(g){
         if(el) el.value = val ?? '';
     };
     set('fecha',            g.fecha ? g.fecha.substring(0,10) : '');
+    gasto_periodoCargar('modal-gasto', g);
     if(g.tipo !== 'pago_planilla') set('tipo', g.tipo ?? '');
     set('descripcion',      g.descripcion ?? '');
     set('pagado_a',         g.pagado_a    ?? '');

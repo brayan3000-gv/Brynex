@@ -9,6 +9,8 @@
     $modalId     — ID del div (default: 'modal-gasto')
     $imagenPaste — bool: zona paste/drag imagen
     $fechaDefault— fecha preseleccionada (default: hoy)
+    $conPeriodo  — bool: selector «Mes al que corresponde» (solo si el
+                   controlador del formAction guarda `periodo`)
 --}}
 @php
     $modalId    = $modalId    ?? 'modal-gasto';
@@ -19,6 +21,7 @@
     $tiposAdmin = \App\Models\Gasto::TIPOS_ADMIN;
     $allTipos   = \App\Models\Gasto::TIPOS;
     $usuarios   = $usuarios ?? collect();
+    $conPeriodo = $conPeriodo ?? false;
 @endphp
 
 <div id="{{ $modalId }}"
@@ -46,7 +49,8 @@
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem">
                 <div>
                     <label class="lbl-g">Fecha *</label>
-                    <input type="date" name="fecha" value="{{ $fechaDefault }}" required class="inp-g">
+                    <input type="date" name="fecha" value="{{ $fechaDefault }}" required class="inp-g"
+                           @if($conPeriodo) onchange="gasto_periodoOpciones('{{ $modalId }}')" @endif>
                 </div>
                 <div>
                     <label class="lbl-g">Tipo *</label>
@@ -66,6 +70,17 @@
                     </select>
                 </div>
             </div>
+
+            @if($conPeriodo)
+            {{-- Mes al que corresponde: manda en la utilidad; la fecha (pago) manda en bancos --}}
+            <div>
+                <label class="lbl-g">Mes al que corresponde</label>
+                <select name="periodo" id="{{ $modalId }}-periodo" class="inp-g"></select>
+                <div style="font-size:.68rem;color:#64748b;margin-top:.2rem">
+                    Para la utilidad. La fecha sigue siendo la del pago, la que cuadra con el banco.
+                </div>
+            </div>
+            @endif
 
             {{-- Descripción --}}
             <div>
@@ -261,6 +276,47 @@ function gasto_actualizarBancos(id) {
     }
 }
 
+// ── Mes al que corresponde ───────────────────────────────────────
+// Vacío = el mes de la fecha. Se ofrecen 12 meses antes y 2 después de la
+// fecha; $actual ('2026-08') se conserva aunque quede fuera de ese rango.
+const _MESES_GASTO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio',
+                      'Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function gasto_periodoOpciones(id, actual) {
+    const sel   = document.getElementById(id+'-periodo');
+    const fecha = document.querySelector('#'+id+'-form [name="fecha"]')?.value;
+    if (!sel) return;
+    if (actual === undefined) actual = sel.value;
+    const base = fecha ? new Date(fecha.substring(0,7)+'-01T00:00:00') : new Date();
+    const ym   = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    const lbl  = d => _MESES_GASTO[d.getMonth()]+' '+d.getFullYear();
+    const mesFecha = ym(base);
+    if (actual === mesFecha) actual = '';
+
+    sel.innerHTML = '';
+    sel.add(new Option('Mismo mes de la fecha ('+lbl(base)+')', ''));
+    const valores = [];
+    for (let i = -12; i <= 2; i++) {
+        const d = new Date(base.getFullYear(), base.getMonth()+i, 1);
+        if (i !== 0) { valores.push(ym(d)); sel.add(new Option(lbl(d), ym(d))); }
+    }
+    if (actual && !valores.includes(actual)) {
+        const [a, m] = actual.split('-').map(Number);
+        sel.add(new Option(lbl(new Date(a, m-1, 1)), actual));
+    }
+    sel.value = actual || '';
+}
+
+// Al abrir el modal: g = null para uno nuevo, o el gasto a editar. Si el gasto
+// llegó sin `periodo` (la consulta no lo trajo) el selector se apaga para no
+// enviarlo, y el controlador deja el que ya tenía.
+function gasto_periodoCargar(id, g) {
+    const sel = document.getElementById(id+'-periodo');
+    if (!sel) return;
+    const conocido = !g || ('periodo' in g);
+    sel.disabled = !conocido;
+    gasto_periodoOpciones(id, g && g.periodo ? String(g.periodo).substring(0,7) : '');
+}
+
 // Aliases para cuadre-diario (compatibilidad)
 function actualizarBancos()  { gasto_actualizarBancos('modal-gasto'); }
 function actualizarFormPago(){ gasto_onTipoChange('modal-gasto'); }
@@ -308,4 +364,7 @@ function gastoMostrarPreview(blob, id) {
     };
     reader.readAsDataURL(blob);
 }
+@if($conPeriodo)
+document.addEventListener('DOMContentLoaded', () => gasto_periodoOpciones('{{ $modalId }}', ''));
+@endif
 </script>

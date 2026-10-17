@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class Gasto extends BaseModel
@@ -16,7 +17,7 @@ class Gasto extends BaseModel
 
     protected $fillable = [
         'aliado_id', 'usuario_id', 'cuadre_id',
-        'fecha', 'tipo', 'numero_planilla', 'descripcion', 'pagado_a', 'cc_pagado_a',
+        'fecha', 'periodo', 'tipo', 'numero_planilla', 'descripcion', 'pagado_a', 'cc_pagado_a',
         'forma_pago', 'banco_origen_id', 'banco_destino_id',
         'valor', 'recibo_caja', 'lugar', 'observacion',
         'imagen_path',  // soporte / comprobante de pago
@@ -27,6 +28,7 @@ class Gasto extends BaseModel
 
     protected $casts = [
         'fecha' => 'date',
+        'periodo' => 'date',
         'valor' => 'integer',
     ];
 
@@ -179,6 +181,63 @@ class Gasto extends BaseModel
     public function bancoDestino()
     {
         return $this->belongsTo(BancoCuenta::class, 'banco_destino_id');
+    }
+
+    // ── Mes al que corresponde ────────────────────────────────────────
+    // `fecha` es el día en que se pagó y manda en bancos y efectivo (cuadra
+    // contra el extracto). `periodo` es el mes al que corresponde el gasto y
+    // manda en la utilidad; vacío = el mes de `fecha`.
+
+    /**
+     * Filtra un query de `gastos` por el mes al que corresponde. Sirve para
+     * DB::table() y Eloquent; $alias es el de la tabla en el query ('g').
+     * Se escribe como OR en vez de COALESCE para que siga usando el índice de fecha.
+     */
+    public static function wherePeriodo($query, int $mes, int $anio, string $alias = '')
+    {
+        $desde = Carbon::create($anio, $mes, 1);
+
+        return static::wherePeriodoEntre($query, $desde, $desde->copy()->endOfMonth(), $alias);
+    }
+
+    /** Igual que wherePeriodo, para varios meses seguidos (de $desde a $hasta). */
+    public static function wherePeriodoEntre($query, Carbon $desde, Carbon $hasta, string $alias = '')
+    {
+        $col = $alias ? "{$alias}." : '';
+        $ini = $desde->copy()->startOfMonth()->toDateString();
+        $fin = $hasta->copy()->endOfMonth()->toDateString();
+
+        return $query->where(function ($q) use ($col, $ini, $fin) {
+            $q->whereBetween("{$col}periodo", [$ini, $fin])
+              ->orWhere(function ($q2) use ($col, $ini, $fin) {
+                  $q2->whereNull("{$col}periodo")
+                     ->whereBetween("{$col}fecha", [$ini, $fin]);
+              });
+        });
+    }
+
+    /** Expresión SQL del mes al que corresponde (día 1), para agrupar o mostrar. */
+    public static function periodoSql(string $alias = ''): string
+    {
+        $col = $alias ? "{$alias}." : '';
+
+        return "ISNULL({$col}periodo, DATEFROMPARTS(YEAR({$col}fecha), MONTH({$col}fecha), 1))";
+    }
+
+    /**
+     * Normaliza el «Mes al que corresponde» del formulario ('2026-08') al día 1.
+     * Si es el mismo mes de la fecha se guarda vacío: así, si después se corrige
+     * la fecha, el mes la sigue.
+     */
+    public static function periodoDesdeFormulario(?string $periodo, $fecha): ?string
+    {
+        if (! $periodo) {
+            return null;
+        }
+        $p = Carbon::createFromFormat('!Y-m', $periodo);
+        $f = Carbon::parse($fecha);
+
+        return $p->format('Y-m') === $f->format('Y-m') ? null : $p->toDateString();
     }
 
     // ── Scopes ────────────────────────────────────────────────────────

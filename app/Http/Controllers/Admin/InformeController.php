@@ -1260,12 +1260,14 @@ class InformeController extends Controller
         $tiposIncapacidad = \App\Models\Gasto::TIPOS_INCAPACIDAD;
 
         // Gastos operativos (sin planillas SS, traslados, ni gastos de incapacidad)
-        $gastosOp = DB::table('gastos')->where('aliado_id',$aid)
+        // Van por el mes al que corresponden (`periodo`), no por el del pago:
+        // el arriendo de agosto pagado en septiembre es costo de agosto. Bancos
+        // y efectivo siguen por `fecha`, que es lo que cuadra con el extracto.
+        $gastosOp = \App\Models\Gasto::wherePeriodo(DB::table('gastos')->where('aliado_id',$aid)
             ->where('tipo','!=','pago_planilla')
             ->where('tipo','!=','efectivo_banco')
             ->where('forma_pago','!=','banco_banco')
-            ->whereNotIn('tipo', $tiposIncapacidad)
-            ->whereMonth('fecha',$mes)->whereYear('fecha',$anio)
+            ->whereNotIn('tipo', $tiposIncapacidad), $mes, $anio)
             ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
             ->value('total');
 
@@ -1946,7 +1948,7 @@ class InformeController extends Controller
         $anio = (int)$request->input('anio', now()->year);
 
         $tiposIncapacidad = \App\Models\Gasto::TIPOS_INCAPACIDAD;
-        $gastos = DB::table('gastos AS g')
+        $base = fn () => DB::table('gastos AS g')
             ->leftJoin('users AS u',         'u.id',  '=', 'g.usuario_id')
             ->leftJoin('banco_cuentas AS bc', 'bc.id', '=', 'g.banco_origen_id')
             ->where('g.aliado_id', $aid)
@@ -1954,30 +1956,49 @@ class InformeController extends Controller
             ->where('g.tipo', '!=', 'efectivo_banco')   // traslado interno
             ->where('g.forma_pago', '!=', 'banco_banco') // transferencia entre cuentas, no es egreso
             ->whereNotIn('g.tipo', $tiposIncapacidad)
-            ->whereMonth('g.fecha', $mes)
-            ->whereYear('g.fecha', $anio)
             ->select(
-                'g.id', 'g.fecha', 'g.tipo', 'g.descripcion', 'g.pagado_a',
+                'g.id', 'g.fecha', 'g.periodo', 'g.tipo', 'g.descripcion', 'g.pagado_a',
                 'g.forma_pago', 'g.banco_origen_id', 'g.banco_destino_id',
                 'g.valor', 'g.recibo_caja', 'g.observacion', 'g.imagen_path',
                 'u.nombre AS usuario_nombre',
-                'bc.banco AS banco_nombre', 'bc.nombre AS banco_titular'
+                'bc.banco AS banco_nombre', 'bc.nombre AS banco_titular',
+                DB::raw(\App\Models\Gasto::periodoSql('g') . ' AS periodo_efectivo')
             )
             ->orderByDesc('g.fecha')
-            ->orderByDesc('g.id')
-            ->get()
-            ->map(function ($g) {
-                $g->imagen_url = $g->imagen_path
-                    ? \Storage::url($g->imagen_path)
-                    : null;
-                return $g;
-            });
+            ->orderByDesc('g.id');
+
+        $mesClave = sprintf('%04d-%02d', $anio, $mes);
+        $preparar = function ($g) use ($mesClave) {
+            $g->imagen_url = $g->imagen_path
+                ? \Storage::url($g->imagen_path)
+                : null;
+            $g->periodo_efectivo = substr((string) $g->periodo_efectivo, 0, 7);
+            // Se pagó en un mes distinto al que corresponde (el banco lo
+            // muestra en el mes de la fecha, la utilidad en el del período).
+            $g->pagado_otro_mes = substr((string) $g->fecha, 0, 7) !== $mesClave;
+            return $g;
+        };
+
+        // Los que corresponden a este mes (pagados en este mes o en otro)
+        $gastos = \App\Models\Gasto::wherePeriodo($base(), $mes, $anio, 'g')
+            ->get()->map($preparar);
+
+        // Pagados en este mes pero de otro mes: salen del banco aquí y no
+        // pesan en la utilidad de este mes. Solo para que no se pierdan.
+        $deOtroMes = $base()
+            ->whereMonth('g.fecha', $mes)->whereYear('g.fecha', $anio)
+            ->whereNotNull('g.periodo')
+            ->where(function ($q) use ($mes, $anio) {
+                $q->whereMonth('g.periodo', '!=', $mes)->orWhereYear('g.periodo', '!=', $anio);
+            })
+            ->get()->map($preparar);
 
         return response()->json([
-            'ok'     => true,
-            'gastos' => $gastos,
-            'total'  => $gastos->sum('valor'),
-            'count'  => $gastos->count(),
+            'ok'          => true,
+            'gastos'      => $gastos,
+            'total'       => $gastos->sum('valor'),
+            'count'       => $gastos->count(),
+            'de_otro_mes' => $deOtroMes,
         ]);
     }
 
@@ -2460,7 +2481,7 @@ class InformeController extends Controller
             ->where('aliado_id', $aid)->where('banco_origen_id', $bancoId)
             ->whereMonth('fecha', $mes)->whereYear('fecha', $anio)
             ->where('tipo', '!=', 'efectivo_banco')   // traslados efectivo→banco no son salida del banco
-            ->select('id', 'fecha', 'valor', 'tipo', 'descripcion', 'pagado_a', 'forma_pago', 'banco_origen_id', 'banco_destino_id', 'recibo_caja', 'observacion', 'imagen_path')
+            ->select('id', 'fecha', 'periodo', 'valor', 'tipo', 'descripcion', 'pagado_a', 'forma_pago', 'banco_origen_id', 'banco_destino_id', 'recibo_caja', 'observacion', 'imagen_path')
             ->orderBy('fecha')->get();
 
         return response()->json(['entradas' => $entradas, 'salidas' => $salidas]);
@@ -3301,12 +3322,11 @@ class InformeController extends Controller
             ->first();
 
         $tiposIncapacidad = \App\Models\Gasto::TIPOS_INCAPACIDAD;
-        $gastosOp = DB::table('gastos')->where('aliado_id', $aid)
+        $gastosOp = \App\Models\Gasto::wherePeriodo(DB::table('gastos')->where('aliado_id', $aid)
             ->where('tipo', '!=', 'pago_planilla')
             ->where('tipo', '!=', 'efectivo_banco')
             ->where('forma_pago', '!=', 'banco_banco')
-            ->whereNotIn('tipo', $tiposIncapacidad)
-            ->whereMonth('fecha', $mes)->whereYear('fecha', $anio)
+            ->whereNotIn('tipo', $tiposIncapacidad), $mes, $anio)
             ->sum('valor');
 
         $ing = (float)($factData->ingresos ?? 0);
@@ -3353,19 +3373,21 @@ class InformeController extends Controller
             ->keyBy(function($r) { return $r->anio . '-' . $r->mes; });
 
         $tiposIncapacidad = \App\Models\Gasto::TIPOS_INCAPACIDAD;
-        $gastosPeriodos = DB::table('gastos')
+        // Por el mes al que corresponde cada gasto (ver estadoFinanciero)
+        $periodoSql = \App\Models\Gasto::periodoSql();
+        $gastosPeriodos = \App\Models\Gasto::wherePeriodoEntre(DB::table('gastos')
             ->where('aliado_id', $aid)
             ->where('tipo', '!=', 'pago_planilla')
             ->where('tipo', '!=', 'efectivo_banco')
             ->where('forma_pago', '!=', 'banco_banco')
-            ->whereNotIn('tipo', $tiposIncapacidad)
-            ->whereBetween('fecha', [$fechaInicio, $fechaFin])
-            ->groupByRaw('YEAR(fecha), MONTH(fecha)')
-            ->selectRaw('
-                YEAR(fecha) as anio,
-                MONTH(fecha) as mes,
+            ->whereNotIn('tipo', $tiposIncapacidad),
+                \Carbon\Carbon::parse($fechaInicio), \Carbon\Carbon::parse($fechaFin))
+            ->groupByRaw("YEAR({$periodoSql}), MONTH({$periodoSql})")
+            ->selectRaw("
+                YEAR({$periodoSql}) as anio,
+                MONTH({$periodoSql}) as mes,
                 SUM(valor) as total_gastos
-            ')
+            ")
             ->get()
             ->keyBy(function($r) { return $r->anio . '-' . $r->mes; });
 

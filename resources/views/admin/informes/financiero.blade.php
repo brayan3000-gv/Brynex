@@ -1291,7 +1291,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
         <div style="background:linear-gradient(135deg,#b91c1c,#ef4444);border-radius:18px 18px 0 0;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;">
             <div>
                 <div style="color:#fff;font-weight:800;font-size:1.05rem;">💸 Egresos Operativos — {{ $mesesEs[$mes] }} {{ $anio }}</div>
-                <div style="color:rgba(255,255,255,.65);font-size:.74rem;margin-top:.15rem;">Todos los gastos registrados en el período · haz clic en ✏️ para editar</div>
+                <div style="color:rgba(255,255,255,.65);font-size:.74rem;margin-top:.15rem;">Por el mes al que corresponden (no el del pago) · haz clic en ✏️ para editar</div>
             </div>
             <div style="display:flex;gap:.5rem;align-items:center;">
                 @if($esAdmin)
@@ -2783,6 +2783,10 @@ function renderGastosModal(data) {
         // Filas del grupo
         info.items.forEach(g => {
             const fechaStr = g.fecha ? g.fecha.substring(0,10).split('-').reverse().join('/') : '—';
+            // Corresponde a este mes pero se pagó en otro: en bancos sale en el mes del pago
+            const otroMes  = g.pagado_otro_mes
+                ? `<div title="Se pagó en otro mes: en bancos y efectivo aparece en ${mesLargo(g.fecha)}" style="font-size:.62rem;font-weight:700;color:#b45309;background:#fef3c7;border-radius:5px;padding:.05rem .3rem;margin-top:.15rem;display:inline-block;">Pagado en ${mesCorto(g.fecha)}</div>`
+                : '';
             const banco    = g.banco_nombre ? `🏦 ${g.banco_nombre}` : (g.forma_pago === 'efectivo' ? '💵 Efectivo' : (g.forma_pago || '—'));
             const tieneImg = !!g.imagen_url;
             const desc     = (g.descripcion || '—').replace(/</g,'&lt;');
@@ -2799,7 +2803,7 @@ function renderGastosModal(data) {
             html += `
             <tr id="gasto-row-${g.id}" style="border-bottom:1px solid #f1f5f9;transition:background .12s;"
                 onmouseover="this.style.background='#fffcfc'" onmouseout="this.style.background=''">
-                <td style="padding:.55rem .8rem;color:#64748b;font-size:.78rem;white-space:nowrap;">${fechaStr}</td>
+                <td style="padding:.55rem .8rem;color:#64748b;font-size:.78rem;white-space:nowrap;">${fechaStr}${otroMes}</td>
                 <td style="padding:.55rem .8rem;">
                     <div style="font-size:.73rem;color:#374151;display:flex;align-items:center;">
                         <span style="font-weight:600;">${desc}</span>${imgBadge}
@@ -2825,6 +2829,10 @@ function renderGastosModal(data) {
                         <div style="flex:0 0 105px;">
                             <label style="font-size:.65rem;font-weight:700;color:#92400e;display:block;margin-bottom:.15rem;">Fecha</label>
                             <input type="date" id="edit-fecha-${g.id}" value="${g.fecha ? g.fecha.substring(0,10) : ''}" style="width:100%;padding:.3rem .5rem;border:1px solid #fcd34d;border-radius:6px;font-size:.78rem;">
+                        </div>
+                        <div style="flex:0 0 150px;">
+                            <label style="font-size:.65rem;font-weight:700;color:#92400e;display:block;margin-bottom:.15rem;" title="Para la utilidad. La fecha sigue siendo la del pago (la que cuadra con el banco).">Mes al que corresponde</label>
+                            <select id="edit-periodo-${g.id}" style="width:100%;padding:.3rem .5rem;border:1px solid #fcd34d;border-radius:6px;font-size:.78rem;">${opcionesPeriodoGasto(g)}</select>
                         </div>
                         <div style="flex:2;min-width:150px;">
                             <label style="font-size:.65rem;font-weight:700;color:#92400e;display:block;margin-bottom:.15rem;">Descripción</label>
@@ -2859,7 +2867,53 @@ function renderGastosModal(data) {
         <td></td>
     </tr></tbody></table></div>`;
 
+    html += htmlGastosDeOtroMes(data.de_otro_mes || []);
+
     document.getElementById('modalGastosBody').innerHTML = html;
+}
+
+// ── Mes al que corresponde (egresos operativos) ──────────────────────
+const _MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function mesLargo(ymd) { const [a, m] = String(ymd).split('-').map(Number); return _MESES_LARGO[m-1] + ' ' + a; }
+function mesCorto(ymd) { const [a, m] = String(ymd).split('-').map(Number); return _MESES_LARGO[m-1].substring(0,3).toLowerCase() + ' ' + a; }
+
+// Opciones del selector: '' = el mes de la fecha; 12 meses antes y 2 después.
+function opcionesPeriodoGasto(g) {
+    const f = (g.fecha || '').substring(0,7);
+    if (!f) return '<option value="">Mismo mes de la fecha</option>';
+    const [a, m] = f.split('-').map(Number);
+    const actual = (g.periodo || '').substring(0,7);
+    let html = `<option value="">Mes del pago (${mesLargo(f)})</option>`;
+    let hay = !actual || actual === f;
+    for (let i = -12; i <= 2; i++) {
+        if (i === 0) continue;
+        const d  = new Date(a, m - 1 + i, 1);
+        const ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        if (ym === actual) hay = true;
+        html += `<option value="${ym}"${ym === actual ? ' selected' : ''}>${mesLargo(ym)}</option>`;
+    }
+    if (!hay) html += `<option value="${actual}" selected>${mesLargo(actual)}</option>`;
+    return html;
+}
+
+// Pagados en este mes pero de otro: salen del banco aquí, no pesan en esta utilidad.
+function htmlGastosDeOtroMes(lista) {
+    if (!lista.length) return '';
+    const fmtN  = v => '$ ' + Math.round(Number(v) || 0).toLocaleString('es-CO');
+    const total = lista.reduce((t, g) => t + (Number(g.valor) || 0), 0);
+    let html = `<div style="margin-top:1rem;border:1px dashed #f59e0b;border-radius:10px;background:#fffbeb;padding:.7rem .9rem;">
+        <div style="font-size:.74rem;font-weight:800;color:#92400e;margin-bottom:.2rem;">Pagados este mes, de otro mes — ${fmtN(total)}</div>
+        <div style="font-size:.68rem;color:#a16207;margin-bottom:.5rem;">Salen del banco y del efectivo en este mes, pero cuentan en la utilidad del mes al que corresponden.</div>`;
+    lista.forEach(g => {
+        const desc = (g.descripcion || g.pagado_a || '—').replace(/</g,'&lt;');
+        html += `<div style="display:flex;gap:.6rem;align-items:center;font-size:.76rem;padding:.25rem 0;border-top:1px solid #fde68a;">
+            <span style="color:#64748b;white-space:nowrap;">${g.fecha.substring(0,10).split('-').reverse().join('/')}</span>
+            <span style="flex:1;color:#374151;font-weight:600;">${desc}</span>
+            <span style="font-size:.66rem;font-weight:700;color:#b45309;background:#fef3c7;border-radius:5px;padding:.05rem .35rem;white-space:nowrap;">De ${mesLargo(g.periodo_efectivo)}</span>
+            <span style="font-family:monospace;font-weight:700;color:#b45309;white-space:nowrap;">${fmtN(g.valor)}</span>
+        </div>`;
+    });
+    return html + '</div>';
 }
 
 function verImagenGasto(url) {
@@ -2897,6 +2951,7 @@ async function guardarGasto(ev, id) {
     fd.append('descripcion', document.getElementById(`edit-desc-${id}`).value);
     fd.append('valor',       document.getElementById(`edit-valor-${id}`).value);
     fd.append('observacion', document.getElementById(`edit-obs-${id}`).value);
+    fd.append('periodo',     document.getElementById(`edit-periodo-${id}`)?.value || '');
     fd.append('tipo',        g.tipo       || 'otro');
     fd.append('forma_pago',  g.forma_pago || 'efectivo');
     if (g.pagado_a)        fd.append('pagado_a',       g.pagado_a);
@@ -2972,6 +3027,7 @@ function abrirModalGasto() {
         }
         const b64 = document.getElementById('modal-gasto-base64');
         if (b64) b64.value = '';
+        gasto_periodoCargar('modal-gasto', null);
     }
     document.getElementById('modal-gasto').style.display = 'flex';
 }
@@ -3025,6 +3081,7 @@ function abrirEditarGasto(id) {
         if(el) el.value = val ?? '';
     };
     set('fecha',            g.fecha ? g.fecha.substring(0,10) : '');
+    gasto_periodoCargar('modal-gasto', g);
     if(g.tipo !== 'pago_planilla') set('tipo', g.tipo ?? '');
     set('descripcion',      g.descripcion ?? '');
     set('pagado_a',         g.pagado_a    ?? '');
@@ -3051,6 +3108,7 @@ function abrirEditarGasto(id) {
     'modalId'     => 'modal-gasto',
     'imagenPaste' => true,
     'usuarios'    => $usuarios,
+    'conPeriodo'  => true,
 ])
 @endif
 
