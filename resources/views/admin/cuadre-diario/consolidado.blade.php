@@ -88,7 +88,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
             @unless($vistaMes)<th class="num">Caja menor</th>@endunless
             <th class="num">Efectivo recibido</th>
             <th class="num">Consignado</th>
-            <th class="num">Gastos efectivo</th>
+            <th class="num" title="Todo lo que salió del efectivo: gastos, traslados al banco y pagos de incapacidad">Salidas efectivo</th>
             <th class="num">{{ $vistaMes ? 'Neto efectivo' : 'Efectivo en caja' }}</th>
             <th>{{ $vistaMes ? 'Días cuadrados' : 'Estado' }}</th>
             <th style="text-align:center">Ver</th>
@@ -174,7 +174,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
             <th class="num">Facturas</th>
             <th class="num">Efectivo recibido</th>
             <th class="num">Consignado</th>
-            <th class="num">Gastos efectivo</th>
+            <th class="num" title="Todo lo que salió del efectivo: gastos, traslados al banco y pagos de incapacidad">Salidas efectivo</th>
             <th class="num">Neto efectivo</th>
             <th>Cuadrados</th>
             <th style="text-align:center">Ver</th>

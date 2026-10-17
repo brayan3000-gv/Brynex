@@ -1325,8 +1325,12 @@ class InformeController extends Controller
                           || $canal5EgresosMes > 0 || $canal5SaldoAnterior != 0);
 
         // ── Sumar ganancia admon de incapacidades al Canal 1 ────────────────
+        // Los «otros descuentos» también se quedan en la empresa: se le restan
+        // al afiliado como la admon, salen del Canal 5 y entran aquí. Antes
+        // salían del Canal 5 y no llegaban a ningún lado.
         $ingresos['admon_incapacidades'] = $canal5GananciaAdmon;
-        $ingresos['total'] += $canal5GananciaAdmon;
+        $ingresos['otros_incapacidades'] = $canal5OtrosDesc;
+        $ingresos['total'] += $canal5GananciaAdmon + $canal5OtrosDesc;
 
         // La mora utilizada ya fue descontada de la mora ganada en ingresos, no se debe sumar a los gastos operativos para evitar doble resta
         $gastosOpActualizado = $gastosOp;

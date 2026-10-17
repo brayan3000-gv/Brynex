@@ -1552,7 +1552,11 @@ class IncapacidadController extends Controller
                         ]);
                     }
 
-                    // 3c. Gasto tipo otros_incapacidad (Canal 5)
+                    // 3c. Gasto tipo otros_incapacidad (sale del Canal 5 → Canal 1)
+                    // Igual que la admon: se descuenta del neto al afiliado pero la
+                    // plata no sale de ninguna caja ni banco, se queda en la empresa.
+                    // Con la forma de pago del neto restaba del efectivo del cuadre
+                    // y del saldo del banco plata que seguía ahí.
                     if ((float) $otros > 0) {
                         DB::table('gastos')->insert([
                             'aliado_id' => $incActualizar->aliado_id,
@@ -1565,12 +1569,12 @@ class IncapacidadController extends Controller
                             'descripcion' => "Otros descuentos incapacidad #{$incActualizar->id}",
                             'pagado_a' => $nombreCliente,
                             'cc_pagado_a' => $incActualizar->cedula_usuario,
-                            'forma_pago' => $formaPago,
-                            'banco_origen_id' => $formaPago === 'transferencia_bancaria' ? $bancoId : null,
+                            'forma_pago' => 'interno',
+                            'banco_origen_id' => null,
                             'valor' => (int) $otros,
                             'recibo_caja' => null,
                             'lugar' => null,
-                            'observacion' => "Otros descuentos pago incapacidad #{$incActualizar->id}",
+                            'observacion' => "Otros descuentos pago incapacidad #{$incActualizar->id} — queda a la empresa, pasa a Canal 1",
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);

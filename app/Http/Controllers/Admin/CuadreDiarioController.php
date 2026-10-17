@@ -819,11 +819,18 @@ class CuadreDiarioController extends Controller
         $totalPrestado = (int) $facturasDia->where('es_prestamo', true)->sum('total')
                        + (int) $facturasSinPago->sum('total');
 
-        $gastosEfectivo = (int) Gasto::where('aliado_id', $aliadoId)
+        // Todo lo que salió del cajón ese día. Para arquear la caja da igual en
+        // qué se fue, pero solo una parte es gasto de la empresa: el traslado
+        // al banco sigue siendo plata de la empresa, y el pago de una
+        // incapacidad es plata del afiliado que entró por la razón social.
+        $salidasEfectivo = Gasto::where('aliado_id', $aliadoId)
             ->when($usuarioId, fn ($q) => $q->where('usuario_id', $usuarioId))
             ->whereDate('fecha', $fecha)
             ->where(fn($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco'))
-            ->sum('valor');
+            ->get(['tipo', 'valor']);
+        $salidasTraslado      = (int) $salidasEfectivo->where('tipo', 'efectivo_banco')->sum('valor');
+        $salidasIncapacidades = (int) $salidasEfectivo->whereIn('tipo', Gasto::TIPOS_INCAPACIDAD)->sum('valor');
+        $gastosEfectivo       = (int) $salidasEfectivo->sum('valor');
 
         // Consignado: solo lo que ESTE usuario registró en cuentas bancarias.
         $consignado = (int) Consignacion::where('aliado_id', $aliadoId)
@@ -863,6 +870,9 @@ class CuadreDiarioController extends Controller
             'num_sin_pago'       => $facturasSinPago->count(),
             'total_sin_pago'     => (int) $facturasSinPago->sum('total'),
             'gastos_efectivo'    => $gastosEfectivo,
+            'salidas_gastos'        => $gastosEfectivo - $salidasTraslado - $salidasIncapacidades,
+            'salidas_traslado'      => $salidasTraslado,
+            'salidas_incapacidades' => $salidasIncapacidades,
             'consignado'         => $consignado,
             'recibido_efectivo'  => $recibido,
             'saldo_esperado'     => $baseCaja + $recibido - $gastosEfectivo,

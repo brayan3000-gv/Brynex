@@ -236,10 +236,25 @@ $totalFacturas   = array_sum($canales['conteo']);
                 <span>💵 Recibido</span>
                 <b style="color:#15803d">{{ $fmt($resumen['recibido_efectivo']) }}</b>
             </div>
-            <div class="cd-eq" title="Gastos pagados del efectivo del día">
-                <span>📤 Gastos <span style="color:#94a3b8">({{ $gastos->count() }})</span></span>
-                <b style="color:{{ $resumen['gastos_efectivo'] > 0 ? '#dc2626' : '#94a3b8' }}">−{{ $fmt($resumen['gastos_efectivo']) }}</b>
+            {{-- Lo que salió del cajón, separado: solo el primer renglón es gasto
+                 de la empresa. El traslado sigue siendo de la empresa (está en el
+                 banco) y la incapacidad es plata del afiliado. --}}
+            <div class="cd-eq" title="Gastos de la empresa pagados del efectivo del día">
+                <span>📤 Gastos</span>
+                <b style="color:{{ $resumen['salidas_gastos'] > 0 ? '#dc2626' : '#94a3b8' }}">−{{ $fmt($resumen['salidas_gastos']) }}</b>
             </div>
+            @if($resumen['salidas_traslado'] > 0)
+            <div class="cd-eq" title="Efectivo llevado a una cuenta: no es gasto, la plata sigue siendo de la empresa">
+                <span>🏦 Llevado al banco</span>
+                <b style="color:#b45309">−{{ $fmt($resumen['salidas_traslado']) }}</b>
+            </div>
+            @endif
+            @if($resumen['salidas_incapacidades'] > 0)
+            <div class="cd-eq" title="Pagos de incapacidad al afiliado: no es gasto, es plata que la entidad le consignó a la razón social">
+                <span>🏥 Pagado de incapacidades</span>
+                <b style="color:#7c3aed">−{{ $fmt($resumen['salidas_incapacidades']) }}</b>
+            </div>
+            @endif
             <div class="cd-eq" title="Base de caja menor con la que arrancó el día">
                 <span>🪙 Base caja</span>
                 <b>{{ $fmt($resumen['base_caja']) }}</b>
@@ -395,11 +410,32 @@ $val = fn($v) => abs($v) >= 1 ? $fmt(round($v)) : null;
 @endif
 
 {{-- ═══════════ 3. Gastos del día ═══════════ --}}
+@php
+    // No todo lo que se registra como "gasto" es gasto de la empresa. Se
+    // separa en lo que sí lo es, lo que solo cambia de bolsillo (efectivo →
+    // banco, banco → banco), lo que es plata del afiliado (incapacidades) y lo
+    // que se le descontó al afiliado y se queda en la empresa (admon y otros
+    // descuentos de la incapacidad, que no salen de ninguna caja).
+    $tiposQuedan = ['admon_incapacidad', 'otros_incapacidad'];
+    $esMovimiento = fn($g) => $g->tipo === 'efectivo_banco' || $g->forma_pago === 'banco_banco';
+    $gruposGasto = [
+        ['titulo' => 'Gastos de la empresa', 'nota' => '', 'signo' => '-', 'color' => '#dc2626',
+         'items' => $gastos->filter(fn($g) => ! $esMovimiento($g) && ! in_array($g->tipo, \App\Models\Gasto::TIPOS_INCAPACIDAD))],
+        ['titulo' => 'Movimientos entre cuentas', 'nota' => 'no es gasto: la plata sigue siendo de la empresa', 'signo' => '-', 'color' => '#b45309',
+         'items' => $gastos->filter($esMovimiento)],
+        ['titulo' => 'Pagos de incapacidad', 'nota' => 'no es gasto: es plata del afiliado que entró por la razón social', 'signo' => '-', 'color' => '#7c3aed',
+         'items' => $gastos->filter(fn($g) => in_array($g->tipo, \App\Models\Gasto::TIPOS_INCAPACIDAD) && ! in_array($g->tipo, $tiposQuedan))],
+        ['titulo' => 'Descuentos de incapacidad que quedan a la empresa', 'nota' => 'no sale plata: es ingreso de la empresa', 'signo' => '+', 'color' => '#15803d',
+         'items' => $gastos->filter(fn($g) => in_array($g->tipo, $tiposQuedan))],
+    ];
+    $gruposGasto = array_filter($gruposGasto, fn($gr) => $gr['items']->isNotEmpty());
+    $totalGastosEmpresa = $gastos->filter(fn($g) => ! $esMovimiento($g) && ! in_array($g->tipo, \App\Models\Gasto::TIPOS_INCAPACIDAD))->sum('valor');
+@endphp
 <div class="cd-panel">
     <div class="cd-panel-head">
-        <div class="cd-panel-title">📋 {{ ($verTodos ?? false) ? 'Gastos del día — todos los usuarios' : 'Gastos que reportaste' }}</div>
+        <div class="cd-panel-title">📋 {{ ($verTodos ?? false) ? 'Gastos y movimientos del día — todos los usuarios' : 'Gastos y movimientos que reportaste' }}</div>
         <div style="font-size:.75rem;color:#64748b">
-            Total <strong style="color:#dc2626">-{{ $fmt($gastos->sum('valor')) }}</strong>
+            Gastos de la empresa <strong style="color:#dc2626">-{{ $fmt($totalGastosEmpresa) }}</strong>
         </div>
     </div>
     @if($gastos->isEmpty())
@@ -415,48 +451,62 @@ $val = fn($v) => abs($v) >= 1 ? $fmt(round($v)) : null;
             <th class="num">Valor</th>
             <th class="no-print" style="text-align:center">Acción</th>
         </tr></thead>
+        @foreach($gruposGasto as $grupo)
         <tbody>
-        @foreach($gastos as $g)
         <tr>
-            <td>
-                <span class="badge-tipo"
-                      style="background:{{ in_array($g->tipo, ['nomina','transferencia_banco','banco_banco']) ? '#b45309' : '#1d4ed8' }}">
-                    {{ $g->tipoLabel() }}
-                </span>
-            </td>
-            <td style="max-width:280px;font-size:.77rem">
-                {{ $g->descripcion }}
-                @if($g->pagado_a)<div style="color:#64748b;font-size:.7rem">→ {{ $g->pagado_a }}</div>@endif
-            </td>
-            <td style="font-size:.75rem">
-                {{ match($g->forma_pago) {
-                    'efectivo' => '💵 Efectivo',
-                    'transferencia_bancaria' => '🏦 Banco',
-                    'banco_banco' => '🔄 Banco→Banco',
-                    default => $g->forma_pago
-                } }}
-            </td>
-            <td style="font-size:.72rem;color:#64748b">
-                {{ $g->bancoOrigen?->banco ?? '—' }}@if($g->bancoDestino) → {{ $g->bancoDestino->banco }} @endif
-            </td>
-            <td class="num" style="color:#dc2626;font-weight:700">-{{ $fmt($g->valor) }}</td>
-            <td class="no-print" style="text-align:center">
-                @if(!$diaBloqueado)
-                <form method="POST" action="{{ route('admin.cuadre-diario.gasto.destroy', $g->id) }}"
-                      onsubmit="return confirm('¿Eliminar este gasto?')" style="display:inline">
-                    @csrf @method('DELETE')
-                    <button type="submit" style="background:#fee2e2;color:#991b1b;border:none;border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem">🗑️</button>
-                </form>
-                @else
-                <span style="color:#cbd5e1;font-size:.72rem">🔒</span>
-                @endif
+            <td colspan="6" style="background:#f8fafc;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:{{ $grupo['color'] }}">
+                {{ $grupo['titulo'] }}
+                @if($grupo['nota'])<span style="text-transform:none;font-weight:400;color:#64748b;letter-spacing:0"> — {{ $grupo['nota'] }}</span>@endif
             </td>
         </tr>
-        @endforeach
+            @foreach($grupo['items'] as $g)
+            <tr>
+                <td>
+                    <span class="badge-tipo"
+                          style="background:{{ in_array($g->tipo, ['nomina','transferencia_banco','banco_banco']) ? '#b45309' : '#1d4ed8' }}">
+                        {{ $g->tipoLabel() }}
+                    </span>
+                </td>
+                <td style="max-width:280px;font-size:.77rem">
+                    {{ $g->descripcion }}
+                    @if($g->pagado_a)<div style="color:#64748b;font-size:.7rem">→ {{ $g->pagado_a }}</div>@endif
+                </td>
+                <td style="font-size:.75rem">
+                    {{ match($g->forma_pago) {
+                        'efectivo' => '💵 Efectivo',
+                        'transferencia_bancaria' => '🏦 Banco',
+                        'banco_banco' => '🔄 Banco→Banco',
+                        'interno' => '↩️ No sale plata',
+                        default => $g->forma_pago
+                    } }}
+                </td>
+                <td style="font-size:.72rem;color:#64748b">
+                    {{ $g->bancoOrigen?->banco ?? '—' }}@if($g->bancoDestino) → {{ $g->bancoDestino->banco }} @endif
+                </td>
+                <td class="num" style="color:{{ $grupo['color'] }};font-weight:700">{{ $grupo['signo'] }}{{ $fmt($g->valor) }}</td>
+                <td class="no-print" style="text-align:center">
+                    @if(!$diaBloqueado)
+                    <form method="POST" action="{{ route('admin.cuadre-diario.gasto.destroy', $g->id) }}"
+                          onsubmit="return confirm('¿Eliminar este registro?')" style="display:inline">
+                        @csrf @method('DELETE')
+                        <button type="submit" style="background:#fee2e2;color:#991b1b;border:none;border-radius:5px;padding:.2rem .5rem;cursor:pointer;font-size:.72rem">🗑️</button>
+                    </form>
+                    @else
+                    <span style="color:#cbd5e1;font-size:.72rem">🔒</span>
+                    @endif
+                </td>
+            </tr>
+            @endforeach
+        <tr>
+            <td colspan="4" style="font-size:.7rem;color:#64748b;text-align:right">Subtotal</td>
+            <td class="num" style="color:{{ $grupo['color'] }};font-weight:800">{{ $grupo['signo'] }}{{ $fmt($grupo['items']->sum('valor')) }}</td>
+            <td></td>
+        </tr>
         </tbody>
+        @endforeach
         <tfoot><tr>
-            <td colspan="4" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.05em">Total gastos</td>
-            <td class="num" style="color:#f87171">-{{ $fmt($gastos->sum('valor')) }}</td>
+            <td colspan="4" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.05em">Total gastos de la empresa</td>
+            <td class="num" style="color:#f87171">-{{ $fmt($totalGastosEmpresa) }}</td>
             <td></td>
         </tr></tfoot>
     </table>

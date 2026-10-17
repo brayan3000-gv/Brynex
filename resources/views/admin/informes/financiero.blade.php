@@ -180,6 +180,12 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     <span class="fc-row-val" style="color:#f97316;">{{ $fmt($ingresos['admon_incapacidades']) }}</span>
                 </div>
                 @endif
+                @if(($ingresos['otros_incapacidades'] ?? 0) > 0)
+                <div class="fc-row" title="Otros descuentos que se le hicieron al afiliado en el pago de la incapacidad: se quedan en la empresa">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#fb923c;"></span>💊 Otros desc. incapacidades</div>
+                    <span class="fc-row-val" style="color:#fb923c;">{{ $fmt($ingresos['otros_incapacidades']) }}</span>
+                </div>
+                @endif
                 @if($desgloseAdmon['admin_asesor'] > 0)
                 <div class="fc-note" title="Comisión ganada por asesores en planillas — no pagada aún">
                     <span>↳ Comisión asesor <em>(ganada, pendiente)</em></span>
@@ -192,7 +198,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     <div class="fc-footer-l">Total Administración</div>
                     <div class="fc-footer-sub">admon + seguro + iva + otros + trámites + comisiones + excedentes</div>
                 </div>
-                <div class="fc-footer-v">{{ $fmt($ingresos['planillas'] + $ingresos['tramites'] + $sobrantePlanilla + ($ingresos['admon_incapacidades'] ?? 0)) }}</div>
+                <div class="fc-footer-v">{{ $fmt($ingresos['planillas'] + $ingresos['tramites'] + $sobrantePlanilla + ($ingresos['admon_incapacidades'] ?? 0) + ($ingresos['otros_incapacidades'] ?? 0)) }}</div>
             </div>
         </div>
 
@@ -393,7 +399,9 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 @endif
                 @if(($canal5OtrosDesc ?? 0) > 0)
                 <div class="fc-row">
-                    <div class="fc-row-label"><span class="fc-dot" style="background:#94a3b8;"></span>Otros descuentos</div>
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#94a3b8;"></span>
+                        <span>Otros descuentos <span style="color:#94a3b8;font-size:.68rem;">→ Canal 1</span></span>
+                    </div>
                     <span class="fc-row-val" style="color:#94a3b8;">{{ $fmt($canal5OtrosDesc) }}</span>
                 </div>
                 @endif
