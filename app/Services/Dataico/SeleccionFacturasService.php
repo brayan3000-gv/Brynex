@@ -139,6 +139,8 @@ class SeleccionFacturasService
                 DB::raw('SUM(ISNULL(CAST(f.admon      AS BIGINT), 0)
                            + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) AS base_admon'),
                 DB::raw('MIN(f.razon_social_id) AS razon_social_afiliacion_id'),
+                // ¿Sigue debiendo? Un préstamo sin pagar sale a crédito.
+                DB::raw("MAX(CASE WHEN f.estado = 'prestamo' THEN 1 ELSE 0 END) AS a_credito"),
             ])
             // Solo lo que entró por la cuenta de la razón social emisora, y la
             // plata entra por dos caminos distintos.
@@ -150,10 +152,12 @@ class SeleccionFacturasService
             // facturaban al facturar (si hubo pago inicial) o nunca.
             //
             // Con el abono se llega a la factura, y de la factura sale la
-            // administración a cobrar. El préstamo se emite cuando el cliente
-            // paga, que es cuando la plata efectivamente entra a BRYGAR.
+            // administración a cobrar. Los préstamos de antes del corte
+            // `dataico.prestamo_al_prestar_desde` se emiten cuando el cliente
+            // paga; desde el corte se emiten al prestar (ver condicionPrestamo).
             ->when(! $listaExplicita, fn ($q) => $q->where(function ($w) use ($cfg) {
-                $w->whereExists(function ($sub) use ($cfg) {
+                $this->condicionPrestamo($w, $cfg);
+                $w->orWhereExists(function ($sub) use ($cfg) {
                     $sub->select(DB::raw(1))
                         ->from('consignaciones as cs')
                         ->join('facturas as sf', 'sf.id', '=', 'cs.factura_id')
@@ -221,6 +225,33 @@ class SeleccionFacturasService
     }
 
     /**
+     * Préstamos que se emiten al prestar, aunque no haya entrado plata.
+     *
+     * El contador decidió (17-oct-2026) que el préstamo se factura cuando se
+     * presta, a crédito, y que el pago posterior es solo un recibo de pago de
+     * cartera. No hay cuenta por la que haya entrado la plata, así que el
+     * préstamo va a la emisora del aliado solo cuando tiene una sola activa;
+     * con varias no se sabe cuál, y sigue esperando el pago como antes.
+     */
+    private function condicionPrestamo($w, DataicoConfiguracion $cfg): void
+    {
+        $unica = DataicoConfiguracion::where('aliado_id', $cfg->aliado_id)->where('activo', true)->count() === 1;
+        $desde = (string) config('dataico.prestamo_al_prestar_desde');
+        if (! $unica || ! $desde) {
+            $w->whereRaw('1 = 0');
+
+            return;
+        }
+
+        $w->whereExists(fn ($s) => $s->select(DB::raw(1))->from('facturas as pf')
+            ->whereColumn('pf.numero_factura', 'f.numero_factura')
+            ->where('pf.aliado_id', $cfg->aliado_id)
+            ->whereNull('pf.deleted_at')
+            ->where('pf.es_prestamo', true)
+            ->whereDate('pf.fecha_pago', '>=', $desde));
+    }
+
+    /**
      * Grupos que quedan fuera por tener más de un adquiriente posible.
      *
      * No es una rareza teórica: son facturas reales cuyo `numero_factura`
@@ -262,7 +293,8 @@ class SeleccionFacturasService
         } else {
             $q->whereDate('f.fecha_pago', '>=', $cfg->fecha_inicio->toDateString())
                 ->where(function ($w) use ($cfg) {
-                    $w->whereExists(fn ($s) => $s->select(DB::raw(1))->from('consignaciones as cs')
+                    $this->condicionPrestamo($w, $cfg);
+                    $w->orWhereExists(fn ($s) => $s->select(DB::raw(1))->from('consignaciones as cs')
                         ->join('facturas as sf', 'sf.id', '=', 'cs.factura_id')
                         ->whereColumn('sf.numero_factura', 'f.numero_factura')
                         ->where('sf.aliado_id', $cfg->aliado_id)

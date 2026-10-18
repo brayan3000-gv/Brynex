@@ -337,7 +337,7 @@ class PrestamosController extends Controller
         // Detectar si es un lote de empresa (mismo numero_factura, varios clientes)
         $esLote = $factura->empresa_id && $factura->empresa_id != 1;
 
-        DB::transaction(function () use ($factura, $validated, $esLote, $aliadoId, $soportePath, $soporteNombre) {
+        $abono = DB::transaction(function () use ($factura, $validated, $esLote, $aliadoId, $soportePath, $soporteNombre) {
             // El abono se registra siempre en la factura de referencia del lote
             $abono = Abono::create([
                 'factura_id'       => $factura->id,
@@ -392,7 +392,13 @@ class PrestamosController extends Controller
                     ]);
                 }
             }
+
+            return $abono;
         });
+
+        // El préstamo ya se facturó al prestar: el pago solo lleva el recibo
+        // de pago de cartera (lo decidió el contador, 17-oct-2026).
+        $reciboUrl = route('admin.facturacion.recibo-abono', $abono->id);
 
         $factura->refresh()->load('abonos');
 
@@ -421,6 +427,7 @@ class PrestamosController extends Controller
                 'saldo_restante' => $saldoLote,
                 'pagado'         => $loteCompleto,
                 'estado'         => $loteCompleto ? Factura::ESTADO_PAGADA : Factura::ESTADO_PRESTAMO,
+                'recibo_url'     => $reciboUrl,
             ]);
         }
 
@@ -432,6 +439,7 @@ class PrestamosController extends Controller
             'saldo_restante' => $factura->saldo_pendiente_prestamo,
             'pagado'         => $factura->estado === Factura::ESTADO_PAGADA,
             'estado'         => $factura->estado,
+            'recibo_url'     => $reciboUrl,
         ]);
     }
 

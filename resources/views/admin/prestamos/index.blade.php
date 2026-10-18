@@ -643,6 +643,7 @@ document.getElementById('formAbonar').addEventListener('submit', async e => {
         return;
     }
     alert(res.mensaje || 'Abono registrado');
+    if (res.recibo_url) window.open(res.recibo_url, '_blank');
     if (res.ok) location.reload();
 });
 

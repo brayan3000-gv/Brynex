@@ -35,4 +35,14 @@ return [
 
     // Cuántas facturas emite como máximo una corrida del cierre diario.
     'lote_maximo' => (int) env('DATAICO_LOTE_MAXIMO', 400),
+
+    // Desde qué fecha de préstamo la factura sale AL PRESTAR, a crédito, y el
+    // pago posterior es solo un recibo de pago de cartera (lo decidió el
+    // contador, 17-oct-2026). Los préstamos de antes siguen saliendo cuando
+    // el cliente paga: sin este corte, la primera corrida emitía de golpe los
+    // 47 que BRYGAR tenía sin facturar desde julio.
+    'prestamo_al_prestar_desde' => env('DATAICO_PRESTAMO_AL_PRESTAR_DESDE', '2026-10-18'),
+
+    // Días que se le dan al cliente para pagar una factura a crédito.
+    'dias_credito' => (int) env('DATAICO_DIAS_CREDITO', 30),
 ];

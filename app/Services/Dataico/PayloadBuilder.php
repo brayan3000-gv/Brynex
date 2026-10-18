@@ -70,6 +70,7 @@ class PayloadBuilder
         // facturas que la DIAN ya aceptó — todas las del lote del 15-ago
         // llevan issue_date 15/08 y «JUNIO» en las notas.
         $fecha = now()->format('Y-m-d');
+        $aCredito = (int) ($grupo->a_credito ?? 0) === 1;
 
         $invoice = [
             // Va DENTRO de invoice. En la raíz del cuerpo el API responde 500
@@ -88,12 +89,18 @@ class PayloadBuilder
             'env' => $cfg->env ?: 'PRODUCCION',
 
             'issue_date' => $fecha,
-            'payment_date' => $fecha,
+            // Un préstamo que sigue debiendo sale A CRÉDITO, con fecha de pago
+            // a `dataico.dias_credito` días; cuando el cliente paga solo se le
+            // da el recibo de pago de cartera. Lo demás es de contado.
+            'payment_date' => $aCredito
+                ? now()->addDays((int) config('dataico.dias_credito', 30))->format('Y-m-d')
+                : $fecha,
             'invoice_type_code' => 'FACTURA_VENTA',
 
-            // Efectivo no llega hasta aquí: el criterio de selección exige una
-            // consignación en la cuenta de la razón social emisora.
-            'payment_means_type' => 'DEBITO',
+            // Efectivo de contado no llega hasta aquí: el criterio de selección
+            // exige una consignación en la cuenta de la razón social emisora
+            // (o que sea un préstamo, que no movió plata).
+            'payment_means_type' => $aCredito ? 'CREDITO' : 'DEBITO',
             'payment_means' => 'BANK_TRANSFER',
 
             'customer' => $this->customer($cfg, $adq),

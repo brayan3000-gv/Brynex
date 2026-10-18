@@ -1,5 +1,5 @@
 @extends(request()->boolean('modal') ? 'layouts.modal' : 'layouts.app')
-@section('modulo', 'Recibo de Abono')
+@section('modulo', 'Recibo de Pago')
 
 @php
 $factura = $abono->factura;
@@ -7,6 +7,14 @@ $cliente = $factura->contrato?->cliente;
 $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 $fmt = fn($v) => '$' . number_format($v ?? 0, 0, ',', '.');
 $totalAbonado = $factura->abonos->sum('valor');
+// El préstamo ya se facturó al prestar: su pago es un pago de cartera y lleva
+// el número de la factura electrónica que lo respalda, si ya salió.
+$esCartera = (bool) $factura->es_prestamo;
+$facturaElectronica = $esCartera
+    ? \App\Models\DataicoEnvio::where('aliado_id', $factura->aliado_id)
+        ->where('numero_factura', $factura->numero_factura)
+        ->where('estado', 'enviado')->value('dataico_numero')
+    : null;
 @endphp
 
 @section('contenido')
@@ -37,12 +45,15 @@ $totalAbonado = $factura->abonos->sum('valor');
 </div>
 
 <div class="ab-wrap">
-    <div class="ab-title">RECIBO DE ABONO</div>
+    <div class="ab-title">{{ $esCartera ? 'RECIBO DE PAGO DE CARTERA' : 'RECIBO DE ABONO' }}</div>
     <div class="ab-sub">BRYGAR — Asesores en Seguridad Social</div>
 
     <div class="ab-row"><span class="ab-lbl">Nº Abono</span><span class="ab-val">#{{ str_pad($abono->id, 5, '0', STR_PAD_LEFT) }}</span></div>
     <div class="ab-row"><span class="ab-lbl">Fecha</span><span class="ab-val">{{ $abono->fecha?->format('d/m/Y') }}</span></div>
     <div class="ab-row"><span class="ab-lbl">Factura asociada</span><span class="ab-val">#{{ str_pad($factura->numero_factura, 6, '0', STR_PAD_LEFT) }}</span></div>
+    @if($facturaElectronica)
+    <div class="ab-row"><span class="ab-lbl">Factura electrónica</span><span class="ab-val">{{ $facturaElectronica }}</span></div>
+    @endif
     <div class="ab-row"><span class="ab-lbl">Período</span><span class="ab-val">{{ $meses[$factura->mes] }} {{ $factura->anio }}</span></div>
     <div class="ab-row"><span class="ab-lbl">Cédula</span><span class="ab-val">{{ $factura->cedula }}</span></div>
     <div class="ab-row"><span class="ab-lbl">Trabajador</span><span class="ab-val">{{ $cliente?->nombres }} {{ $cliente?->apellidos }}</span></div>
@@ -78,6 +89,11 @@ $totalAbonado = $factura->abonos->sum('valor');
         </div>
     </div>
 
+    @if($esCartera)
+    <div class="nota">Pago de cartera de un préstamo ya facturado: no genera factura nueva.
+        @if($factura->saldo_restante > 0) No exonera del saldo pendiente.@endif</div>
+    @else
     <div class="nota">Este documento es constancia de abono parcial, no exonera de deuda pendiente.</div>
+    @endif
 </div>
 @endsection

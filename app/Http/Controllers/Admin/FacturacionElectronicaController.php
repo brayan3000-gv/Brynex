@@ -269,14 +269,20 @@ class FacturacionElectronicaController extends Controller
             $medioPago = ((int) ($grupo->total_consignado ?? 0)) > 0
                 ? 'BANK_TRANSFER'
                 : 'CASH';
+            // Préstamo que sigue debiendo: a crédito, con vencimiento a
+            // `dataico.dias_credito` días (igual que por el API).
+            $aCredito = (int) ($grupo->a_credito ?? 0) === 1;
+            $vencStr  = $aCredito && $grupo->fecha_pago
+                ? Carbon::parse($grupo->fecha_pago)->addDays((int) config('dataico.dias_credito', 30))->format('d/m/Y')
+                : $fechaStr;
 
             foreach ($items as $item) {
                 $rowData = [
                     $fechaStr,                              // FECHA_EXPEDICION
-                    $fechaStr,                              // FECHA_VENCIMIENTO
+                    $vencStr,                               // FECHA_VENCIMIENTO
                     '',                                     // NUMERO (vacío — el contador lo asigna)
                     $medioPago,                             // MEDIO_DE_PAGO
-                    'DEBITO',                               // TIPO_MEDIO_DE_PAGO
+                    $aCredito ? 'CREDITO' : 'DEBITO',       // TIPO_MEDIO_DE_PAGO
                     '',                                     // ORDEN_DE_COMPRA
                     'COP',                                  // MONEDA
                     'CO',                                   // CLIENTE_PAIS
@@ -391,6 +397,7 @@ class FacturacionElectronicaController extends Controller
                 DB::raw('MIN(CAST(f.fe_marcada AS INT)) AS fe_min'),
                 DB::raw('MAX(CAST(f.fe_marcada AS INT)) AS fe_max'),
                 DB::raw('MAX(f.fe_marcada_at)            AS fe_marcada_at'),
+                DB::raw("MAX(CASE WHEN f.estado = 'prestamo' THEN 1 ELSE 0 END) AS a_credito"),
             ]);
 
         // ── Filtros ─────────────────────────────────────────────────────────
