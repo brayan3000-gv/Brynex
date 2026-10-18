@@ -294,6 +294,17 @@ class Kernel extends ConsoleKernel
             ->runInBackground()
             ->appendOutputTo(storage_path('logs/cierres-foto.log'));
 
+        // Recordatorio del cierre por WhatsApp al superadmin: 3 días antes del
+        // fin de mes, el último día y el día 1 (con la diferencia de cada
+        // aliado). Corre a diario y solo habla esos tres días.
+        // Prueba: php artisan cierres:recordar --forzar=inicio --simular
+        $schedule->command('cierres:recordar')
+            ->dailyAt('08:00')
+            ->timezone('America/Bogota')
+            ->withoutOverlapping(30)
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/cierres-recordar.log'));
+
         // ── Reset mensual de n_plano ──────────────────────────────────
         // El día 1 de cada mes a las 00:01 (hora Colombia) resetea n_plano=1
         // y avanza mes_pagos/anio_pagos en todas las razones sociales.
