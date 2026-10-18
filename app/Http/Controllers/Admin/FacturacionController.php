@@ -2379,11 +2379,14 @@ class FacturacionController extends Controller
                         $pendiente -= $abono;
 
                         // Registrar abono en la fila de referencia (primera del lote)
+                        // La plata de la cartera ya está en el pago de la factura
+                        // nueva: el abono solo baja el préstamo, no es efectivo ni
+                        // consignación aparte (si no, se contaba dos veces).
                         Abono::create([
                             'factura_id' => $lote->first()->id,
                             'valor' => $abono,
                             'forma_pago' => $validated['forma_pago'] ?? 'efectivo',
-                            'valor_efectivo' => $abono,
+                            'valor_efectivo' => 0,
                             'valor_consignado' => 0,
                             'observacion' => $obsText,
                             'fecha' => today()->toDateString(),
@@ -2417,11 +2420,12 @@ class FacturacionController extends Controller
                         $abono = min($pendiente, $saldo);
                         $pendiente -= $abono;
 
+                        // Igual que en el lote: la plata está en la factura nueva.
                         Abono::create([
                             'factura_id' => $fp->id,
                             'valor' => $abono,
                             'forma_pago' => $validated['forma_pago'] ?? 'efectivo',
-                            'valor_efectivo' => $abono,
+                            'valor_efectivo' => 0,
                             'valor_consignado' => 0,
                             'observacion' => $obsText,
                             'fecha' => today()->toDateString(),

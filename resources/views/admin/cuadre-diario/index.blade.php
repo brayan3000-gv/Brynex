@@ -250,7 +250,7 @@ $totalFacturas   = array_sum($canales['conteo']);
                 <b>{{ $fmt($resumen['traia']) }}</b>
             </div>
             @endif
-            <div class="cd-eq" title="Facturas cobradas en efectivo + cartera recuperada + anticipos">
+            <div class="cd-eq" title="Facturas cobradas en efectivo + abonos + anticipos + incapacidades que la ARL pagó en efectivo">
                 <span>💵 Recibido</span>
                 <b style="color:#15803d">{{ $fmt($resumen['recibido_efectivo']) }}</b>
             </div>
@@ -418,7 +418,7 @@ $val = fn($v) => abs($v) >= 1 ? $fmt(round($v)) : null;
             </div>
 
             @forelse($cn['filas'] as $f)
-            <div class="cn-row">
+            <div class="cn-row" @if(!empty($f['aparte'])) style="opacity:.6;font-style:italic" title="Se cobra con la factura pero no es del canal: no suma al total" @endif>
                 <div class="cn-lbl"><span class="cn-dot" style="background:{{ $f['color'] }}"></span>{{ $f['etiqueta'] }}</div>
                 <div class="cn-v" style="color:{{ $val($f['efectivo'])   ? '#15803d' : '#cbd5e1' }}">{{ $val($f['efectivo'])   ?? '—' }}</div>
                 <div class="cn-v" style="color:{{ $val($f['consignado']) ? '#0369a1' : '#cbd5e1' }}">{{ $val($f['consignado']) ?? '—' }}</div>
@@ -438,6 +438,9 @@ $val = fn($v) => abs($v) >= 1 ? $fmt(round($v)) : null;
             </div>
             <div class="cn-foot-tot">
                 Total {{ $fmt(round($cn['total']['efectivo'] + $cn['total']['consignado'] + $cn['total']['prestado'])) }}
+                @isset($cn['empresa'])
+                · Queda a la empresa {{ $fmt(round(array_sum($cn['empresa']))) }}
+                @endisset
             </div>
         </div>
     </div>

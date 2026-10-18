@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\{Cuadre, Gasto, CajaMenor, CajaMovimiento, Consignacion, BancoCuenta, Factura, User, Anticipo};
+use App\Services\Caja\FlujoEfectivo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -170,37 +171,26 @@ class CuadreDiarioController extends Controller
             ? $q->get()->each(fn($r) => $r->dia = substr((string) $r->dia, 0, 10))
             : collect();
 
+        // El conteo de facturas del día: no préstamos, como siempre.
         $ingresos = $filas($enRango(DB::table('facturas')
             ->whereNull('deleted_at')
             ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
             ->where('es_prestamo', false), 'fecha_pago')
             ->groupBy('usuario_id', $porDia('fecha_pago'))
-            ->selectRaw('usuario_id AS uid, CAST(fecha_pago AS date) AS dia,
-                         SUM(ISNULL(valor_efectivo,0)) AS efectivo,
-                         SUM(ISNULL(valor_consignado,0)) AS consignado, COUNT(*) AS facturas'));
+            ->selectRaw('usuario_id AS uid, CAST(fecha_pago AS date) AS dia, COUNT(*) AS facturas'));
 
-        $cartera = $filas($enRango(DB::table('abonos')
-            ->join('facturas', 'abonos.factura_id', '=', 'facturas.id')
-            ->whereNull('facturas.deleted_at')
-            ->where('facturas.aliado_id', $aliadoId)->where('facturas.es_prestamo', true)
-            ->whereIn('abonos.usuario_id', $usuarioIds), 'abonos.fecha')
-            ->groupBy('abonos.usuario_id', $porDia('abonos.fecha'))
-            ->selectRaw('abonos.usuario_id AS uid, CAST(abonos.fecha AS date) AS dia,
-                         SUM(ISNULL(abonos.valor_efectivo,0)) AS t'));
-
-        $anticipos = $filas($enRango(DB::table('anticipos')
-            ->whereNull('deleted_at')
-            ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
-            ->whereIn('forma_pago', ['efectivo', 'nequi'])
-            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO]), 'fecha_pago')
-            ->groupBy('usuario_id', $porDia('fecha_pago'))
-            ->selectRaw('usuario_id AS uid, CAST(fecha_pago AS date) AS dia, SUM(ISNULL(valor,0)) AS t'));
-
-        $gastos = $filas($enRango(DB::table('gastos')
-            ->where('aliado_id', $aliadoId)->whereIn('usuario_id', $usuarioIds)
-            ->where(fn($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco')), 'fecha')
-            ->groupBy('usuario_id', $porDia('fecha'))
-            ->selectRaw('usuario_id AS uid, CAST(fecha AS date) AS dia, SUM(ISNULL(valor,0)) AS t'));
+        // El efectivo, con la regla única (FlujoEfectivo): lo que entra incluye
+        // lo que otra persona le entregó y lo que sale incluye lo que entregó
+        // y los retiros del dueño, para que el neto sea el mismo del índice.
+        $flujo = $usuarioIds ? FlujoEfectivo::porUsuarioDia((int) $aliadoId, $usuarioIds, $desde, $hasta) : [];
+        $efectivoFlujo = [];
+        $gastosFlujo   = [];
+        foreach ($flujo as $llave => $c) {
+            [$uid, $dia] = explode('|', $llave);
+            $t = FlujoEfectivo::resumir([$c]);
+            $efectivoFlujo[] = (object) ['uid' => $uid, 'dia' => $dia, 't' => $t['recibido'] + $t['recibidas']];
+            $gastosFlujo[]   = (object) ['uid' => $uid, 'dia' => $dia, 't' => $t['salidas'] + $t['dadas'] + $t['retiros']];
+        }
 
         $consignado = $filas($enRango(DB::table('consignaciones')
             ->whereNull('deleted_at')
@@ -227,11 +217,10 @@ class CuadreDiarioController extends Controller
                 $celdas[(int) $r->uid][$r->dia] = $celda;
             }
         };
-        $sumar($ingresos,   ['facturas' => 'facturas', 'efectivo' => 'efectivo']);
-        $sumar($cartera,    ['efectivo' => 't']);
-        $sumar($anticipos,  ['efectivo' => 't']);
-        $sumar($gastos,     ['gastos' => 't']);
-        $sumar($consignado, ['consignado' => 't']);
+        $sumar($ingresos,      ['facturas' => 'facturas']);
+        $sumar($efectivoFlujo, ['efectivo' => 't']);
+        $sumar($gastosFlujo,   ['gastos' => 't']);
+        $sumar($consignado,    ['consignado' => 't']);
         foreach ($cuadrados as $c) {
             $celdas[(int) $c->usuario_id][$c->fecha_inicio->toDateString()] ??= [];
         }
@@ -922,29 +911,12 @@ class CuadreDiarioController extends Controller
      */
     private function resumenDia(int $aliadoId, ?int $usuarioId, string $fecha, $facturasDia): array
     {
-        // Facturas cobradas en efectivo (los préstamos no entran: no hay plata).
-        $ingresosEfectivo = (int) $facturasDia
-            ->where('es_prestamo', false)
-            ->sum('valor_efectivo');
-
-        // Abonos en efectivo a préstamos: plata de cartera recuperada hoy.
-        $cobrosCartera = (int) DB::table('abonos')
-            ->join('facturas', 'abonos.factura_id', '=', 'facturas.id')
-            ->where('facturas.aliado_id', $aliadoId)
-            ->where('facturas.es_prestamo', true)
-            ->when($usuarioId, fn ($q) => $q->where('abonos.usuario_id', $usuarioId))
-            ->whereDate('abonos.fecha', $fecha)
-            ->sum('abonos.valor_efectivo');
-
-        // Anticipos en efectivo/Nequi. Los de transferencia ya viven en el
-        // saldo del banco, sumarlos aquí sería doble conteo. Igual con el maestro
-        // 'distribuido' de un anticipo de empresa: su plata ya está en los hijos.
-        $anticiposEfectivo = (int) Anticipo::where('aliado_id', $aliadoId)
-            ->when($usuarioId, fn ($q) => $q->where('usuario_id', $usuarioId))
-            ->whereIn('forma_pago', ['efectivo', 'nequi'])
-            ->whereDate('fecha_pago', $fecha)
-            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO])
-            ->sum('valor');
+        // Lo que entró y salió del efectivo sale de la regla única
+        // (FlujoEfectivo), la misma que usan el consolidado y el informe.
+        $flujo = FlujoEfectivo::totales($aliadoId, $usuarioId, $fecha, $fecha);
+        $ingresosEfectivo  = $flujo['facturas'];
+        $cobrosCartera     = $flujo['abonos'];
+        $anticiposEfectivo = $flujo['anticipos'];
 
         // Informativo: lo que se prestó hoy no es ingreso, es cartera. Junto al
         // préstamo formal va la factura que se marcó pagada sin recibir un peso
@@ -959,14 +931,9 @@ class CuadreDiarioController extends Controller
         // qué se fue, pero solo una parte es gasto de la empresa: el traslado
         // al banco sigue siendo plata de la empresa, y el pago de una
         // incapacidad es plata del afiliado que entró por la razón social.
-        $salidasEfectivo = Gasto::where('aliado_id', $aliadoId)
-            ->when($usuarioId, fn ($q) => $q->where('usuario_id', $usuarioId))
-            ->whereDate('fecha', $fecha)
-            ->where(fn($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco'))
-            ->get(['tipo', 'valor']);
-        $salidasTraslado      = (int) $salidasEfectivo->where('tipo', 'efectivo_banco')->sum('valor');
-        $salidasIncapacidades = (int) $salidasEfectivo->whereIn('tipo', Gasto::TIPOS_INCAPACIDAD)->sum('valor');
-        $gastosEfectivo       = (int) $salidasEfectivo->sum('valor');
+        $salidasTraslado      = $flujo['traslados'];
+        $salidasIncapacidades = $flujo['incapacidades'];
+        $gastosEfectivo       = $flujo['salidas'];
 
         // Consignado: solo lo que ESTE usuario registró en cuentas bancarias.
         $consignado = (int) Consignacion::where('aliado_id', $aliadoId)
@@ -991,12 +958,9 @@ class CuadreDiarioController extends Controller
         $baseCaja  = $usuarioId === null
             ? CajaMenor::montoActivoTotal($aliadoId)
             : CajaMenor::montoActivo($aliadoId, $usuarioId);
-        $recibido  = $ingresosEfectivo + $cobrosCartera + $anticiposEfectivo;
-
-        $mov       = $this->movimientosCaja($aliadoId, $usuarioId, $fecha, $fecha);
+        $recibido  = $flujo['recibido'];
         $traia     = $this->saldoAntesDe($aliadoId, $usuarioId, $fecha);
-        $pendiente = (int) $traia + $recibido + $mov['recibidas']
-                   - $gastosEfectivo - $mov['dadas'] - $mov['retiros'];
+        $pendiente = (int) $traia + $flujo['neto'];
 
         return [
             'total_facturado'    => (int) $conValor->sum('total'),
@@ -1005,97 +969,26 @@ class CuadreDiarioController extends Controller
             'ingresos_efectivo'  => $ingresosEfectivo,
             'cobros_cartera'     => $cobrosCartera,
             'anticipos_efectivo' => $anticiposEfectivo,
+            'opi_efectivo'       => $flujo['opi'],
             'total_prestado'     => $totalPrestado,
             'periodos'           => $periodos,
             'num_prestamos'      => $facturasDia->where('es_prestamo', true)->count(),
             'num_sin_pago'       => $facturasSinPago->count(),
             'total_sin_pago'     => (int) $facturasSinPago->sum('total'),
             'gastos_efectivo'    => $gastosEfectivo,
-            'salidas_gastos'        => $gastosEfectivo - $salidasTraslado - $salidasIncapacidades,
+            'salidas_gastos'        => $flujo['gastos'],
             'salidas_traslado'      => $salidasTraslado,
             'salidas_incapacidades' => $salidasIncapacidades,
             'consignado'         => $consignado,
             'recibido_efectivo'  => $recibido,
             'arrastra'           => $traia !== null,
             'traia'              => (int) $traia,
-            'entregas_recibidas' => $mov['recibidas'],
-            'entregas_dadas'     => $mov['dadas'],
-            'retiros_dueno'      => $mov['retiros'],
+            'entregas_recibidas' => $flujo['recibidas'],
+            'entregas_dadas'     => $flujo['dadas'],
+            'retiros_dueno'      => $flujo['retiros'],
             'pendiente_por_pasar' => $pendiente,
             'saldo_esperado'     => $baseCaja + $pendiente,
         ];
-    }
-
-    /**
-     * Entregas y retiros del dueño entre dos fechas (ambas incluidas).
-     *
-     * Con la caja de todos ($usuarioId null) una entrega sale de uno y entra a
-     * otro: suma igual en recibidas y en dadas, y se anula.
-     */
-    private function movimientosCaja(int $aliadoId, ?int $usuarioId, string $desde, string $hasta): array
-    {
-        $movs = CajaMovimiento::where('aliado_id', $aliadoId)
-            ->whereIn('tipo', [CajaMovimiento::TIPO_ENTREGA, CajaMovimiento::TIPO_RETIRO_DUENO])
-            ->whereDate('fecha', '>=', $desde)
-            ->whereDate('fecha', '<=', $hasta)
-            ->get(['tipo', 'usuario_origen_id', 'usuario_destino_id', 'valor']);
-
-        $entregas = $movs->where('tipo', CajaMovimiento::TIPO_ENTREGA);
-        $retiros  = $movs->where('tipo', CajaMovimiento::TIPO_RETIRO_DUENO);
-
-        if ($usuarioId === null) {
-            return [
-                'recibidas' => (int) $entregas->sum('valor'),
-                'dadas'     => (int) $entregas->sum('valor'),
-                'retiros'   => (int) $retiros->sum('valor'),
-            ];
-        }
-
-        return [
-            'recibidas' => (int) $entregas->where('usuario_destino_id', $usuarioId)->sum('valor'),
-            'dadas'     => (int) $entregas->where('usuario_origen_id', $usuarioId)->sum('valor'),
-            'retiros'   => (int) $retiros->where('usuario_origen_id', $usuarioId)->sum('valor'),
-        ];
-    }
-
-    /**
-     * Neto del efectivo de una persona (o de todos) entre dos fechas: lo que
-     * entró menos lo que salió, con las mismas reglas de resumenDia.
-     */
-    private function netoEfectivo(int $aliadoId, ?int $usuarioId, string $desde, string $hasta): int
-    {
-        $porUsuario = fn ($q, string $col = 'usuario_id') => $q->when($usuarioId, fn ($w) => $w->where($col, $usuarioId));
-
-        $facturas = (int) $porUsuario(Factura::where('aliado_id', $aliadoId))
-            ->where('es_prestamo', false)
-            ->whereDate('fecha_pago', '>=', $desde)
-            ->whereDate('fecha_pago', '<=', $hasta)
-            ->sum('valor_efectivo');
-
-        $cartera = (int) $porUsuario(DB::table('abonos')
-            ->join('facturas', 'abonos.factura_id', '=', 'facturas.id')
-            ->where('facturas.aliado_id', $aliadoId)
-            ->where('facturas.es_prestamo', true), 'abonos.usuario_id')
-            ->whereDate('abonos.fecha', '>=', $desde)
-            ->whereDate('abonos.fecha', '<=', $hasta)
-            ->sum('abonos.valor_efectivo');
-
-        $anticipos = (int) $porUsuario(Anticipo::where('aliado_id', $aliadoId))
-            ->whereIn('forma_pago', ['efectivo', 'nequi'])
-            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_DISTRIBUIDO])
-            ->whereDate('fecha_pago', '>=', $desde)
-            ->whereDate('fecha_pago', '<=', $hasta)
-            ->sum('valor');
-
-        $salidas = (int) $porUsuario(Gasto::where('aliado_id', $aliadoId))
-            ->where(fn ($q) => $q->where('forma_pago', 'efectivo')->orWhere('tipo', 'efectivo_banco'))
-            ->whereDate('fecha', '>=', $desde)
-            ->whereDate('fecha', '<=', $hasta)
-            ->sum('valor');
-
-        $mov = $this->movimientosCaja($aliadoId, $usuarioId, $desde, $hasta);
-
-        return $facturas + $cartera + $anticipos + $mov['recibidas'] - $salidas - $mov['dadas'] - $mov['retiros'];
     }
 
     /**
@@ -1133,7 +1026,7 @@ class CuadreDiarioController extends Controller
 
         $ayer = \Carbon\Carbon::parse($fecha)->subDay()->toDateString();
 
-        return (int) $inicial->valor + $this->netoEfectivo($aliadoId, $usuarioId, $desde, $ayer);
+        return (int) $inicial->valor + FlujoEfectivo::totales($aliadoId, $usuarioId, $desde, $ayer)['neto'];
     }
 
     /** Lo pendiente por pasar al terminar el día $hasta (null si no arrastra). */
@@ -1141,7 +1034,7 @@ class CuadreDiarioController extends Controller
     {
         $traia = $this->saldoAntesDe($aliadoId, $usuarioId, $hasta);
 
-        return $traia === null ? null : $traia + $this->netoEfectivo($aliadoId, $usuarioId, $hasta, $hasta);
+        return $traia === null ? null : $traia + FlujoEfectivo::totales($aliadoId, $usuarioId, $hasta, $hasta)['neto'];
     }
 
     /**
@@ -1201,9 +1094,12 @@ class CuadreDiarioController extends Controller
     /** Facturas que el usuario cobró ese día, con las columnas que usan el resumen y los canales. */
     private function facturasDelDia(int $aliadoId, ?int $usuarioId, string $fecha)
     {
+        // Los mismos estados que el informe: una pre-factura tiene fecha de
+        // pago pero no movió plata.
         return Factura::where('aliado_id', $aliadoId)
             ->when($usuarioId, fn ($q) => $q->where('usuario_id', $usuarioId))
             ->whereDate('fecha_pago', $fecha)
+            ->whereIn('estado', [Factura::ESTADO_PAGADA, Factura::ESTADO_ABONO, Factura::ESTADO_PRESTAMO])
             ->get([
                 'id', 'tipo', 'estado', 'es_prestamo', 'forma_pago', 'total',
                 'valor_efectivo', 'valor_consignado', 'numero_factura', 'factura_retiro_origen_id',
@@ -1394,15 +1290,19 @@ class CuadreDiarioController extends Controller
         $totalizar = function (array $filas) {
             $t = ['efectivo' => 0.0, 'consignado' => 0.0, 'prestado' => 0.0];
             foreach ($filas as $f) {
+                if (! empty($f['aparte'])) continue;   // se muestra, pero no es del canal
                 foreach ($t as $k => $_) $t[$k] += $f[$k];
             }
             return $t;
         };
 
         // ── Canal 1: Administración ──────────────────────────────────────
+        // La comisión del asesor se cobra con la factura pero es del asesor
+        // (se le paga cuando la pide): se muestra aparte y no suma al canal,
+        // igual que en el informe financiero, para que los dos den lo mismo.
         $c1 = [
             $fila('Administración',   'admon',        '#3b82f6'),
-            $fila('Comisión asesor',  'admin_asesor', '#f59e0b'),
+            ['aparte' => true] + $fila('Comisión asesor (del asesor)', 'admin_asesor', '#f59e0b'),
             $fila('Seguro',           'seguro',       '#0ea5e9'),
             $fila('Mensajería',       'mensajeria',   '#06b6d4'),
             $fila('IVA',              'iva',          '#8b5cf6'),
@@ -1470,6 +1370,12 @@ class CuadreDiarioController extends Controller
                     'n' => 2, 'titulo' => '🔖 Afiliaciones', 'gradiente' => '#5b21b6,#7c3aed',
                     'subtitulo' => 'Distribución del ingreso',
                     'filas' => $limpiar($c2), 'total' => $bruto,
+                    // Lo que queda a la empresa: el bruto menos asesor, retiro y
+                    // encargado. Es la cifra que el informe pone en el canal 2.
+                    'empresa' => array_map(
+                        fn ($col) => $bruto[$col] - $c2[1][$col] - $c2[2][$col] - $c2[4][$col],
+                        ['efectivo' => 'efectivo', 'consignado' => 'consignado', 'prestado' => 'prestado']
+                    ),
                 ],
                 [
                     'n' => 3, 'titulo' => '🏥 Seguridad Social', 'gradiente' => '#0f766e,#0d9488',
@@ -1857,6 +1763,8 @@ class CuadreDiarioController extends Controller
         // se carga también para usarla como respaldo.
         $query = Factura::where('aliado_id', $aliadoId)
             ->whereDate('fecha_pago', $fecha)
+            // Los mismos estados que el cuadre y el informe (FlujoEfectivo).
+            ->whereIn('estado', [Factura::ESTADO_PAGADA, Factura::ESTADO_ABONO, Factura::ESTADO_PRESTAMO])
             ->with(['empresa', 'razonSocial', 'usuario', 'contrato.razonSocial',
                    'contrato.tipoModalidad', 'consignaciones.bancoCuenta']);
 
@@ -2100,9 +2008,14 @@ class CuadreDiarioController extends Controller
             return collect();
         }
 
+        // Todos los abonos del día, no solo los de préstamos (un abono a una
+        // factura en estado `abono` también es plata), menos los que nacen de
+        // cobrar cartera junto con una factura nueva: esa plata ya está en el
+        // pago de la factura. La misma regla de FlujoEfectivo.
         return \App\Models\Abono::whereDate('fecha', $fecha)
+            ->where(fn($q) => $q->whereNull('observacion')
+                ->orWhere('observacion', 'not like', \App\Services\Caja\FlujoEfectivo::OBS_CARTERA_CRUZADA))
             ->whereHas('factura', fn($q) => $q->where('aliado_id', $aliadoId)
-                ->where('es_prestamo', true)
                 ->when($fEmpresa === 'individuales', fn($q2) => $q2->whereNull('empresa_id'))
                 ->when($fEmpresa && $fEmpresa !== 'individuales', fn($q2) => $q2->where('empresa_id', $fEmpresa)))
             ->when($fUsuario, fn($q) => $q->where('usuario_id', $fUsuario))

@@ -752,6 +752,14 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                         </div>
                         @endif
 
+                        {{-- Retiros del dueño: no son gasto, pero la plata sale de la caja --}}
+                        @if(($efMes->retiros ?? 0) > 0)
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#92400e;" title="Plata que el dueño sacó de la caja: no es gasto, se descuenta de la utilidad acumulada">
+                            <span>👤 Retiro del dueño</span>
+                            <span style="font-family:monospace;font-weight:700;">{{ $fmt($efMes->retiros) }}</span>
+                        </div>
+                        @endif
+
                         {{-- Saldo final --}}
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
                             <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">{{ $efMes->label_saldo }}</span>

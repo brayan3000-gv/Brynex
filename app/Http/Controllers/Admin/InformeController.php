@@ -1030,7 +1030,7 @@ class InformeController extends Controller
             ->whereNotNull('fecha_pago')
             ->whereMonth('fecha_pago', $mes)->whereYear('fecha_pago', $anio)
             ->selectRaw("
-                SUM(CASE WHEN estado IN ('pagada','abono','prestamo') AND numero_factura > 0 THEN total_ss + otros ELSE 0 END) AS recaudo_ss,
+                SUM(CASE WHEN estado IN ('pagada','abono','prestamo') AND numero_factura > 0 THEN total_ss + CASE WHEN tipo = 'otro_ingreso' THEN 0 ELSE otros END ELSE 0 END) AS recaudo_ss,
                 SUM(CASE WHEN estado IN ('pagada','abono','prestamo') AND numero_factura = 0 THEN total_ss ELSE 0 END) AS costo_retiros,
                 SUM(CASE WHEN estado IN ('pagada','abono','prestamo') THEN mora ELSE 0 END) AS mora_recogida,
                 SUM(CASE WHEN estado IN ('pagada','abono','prestamo') AND numero_factura > 0 AND tipo = 'planilla' THEN v_eps ELSE 0 END) AS ss_eps,
@@ -1418,40 +1418,16 @@ class InformeController extends Controller
                 $mCurr = $curr->month;
                 $yCurr = $curr->year;
 
-                $entM = (float) DB::table('facturas')
-                    ->where('aliado_id', $aid)->whereNull('deleted_at')
-                    ->whereIn('estado', ['pagada','abono'])
-                    ->whereNotNull('fecha_pago')
-                    ->whereMonth('fecha_pago', $mCurr)->whereYear('fecha_pago', $yCurr)
-                    ->where('valor_efectivo', '>', 0)
-                    ->where('es_prestamo', false)
-                    ->sum('valor_efectivo');
+                // La regla única de efectivo (FlujoEfectivo), la misma del mes
+                // en curso y del cuadre diario: antes este arrastre dejaba fuera
+                // los abonos y el efectivo de los préstamos.
+                $netoM = \App\Services\Caja\FlujoEfectivo::totales(
+                    (int) $aid, null,
+                    $curr->copy()->startOfMonth()->toDateString(),
+                    $curr->copy()->endOfMonth()->toDateString()
+                )['neto'];
 
-                // Sin maestros 'distribuido' ni borrados: ver $efAnticipos más abajo.
-                $antM = (float) DB::table('anticipos')
-                    ->where('aliado_id', $aid)
-                    ->whereIn('forma_pago', ['efectivo', 'nequi'])
-                    ->whereMonth('fecha_pago', $mCurr)->whereYear('fecha_pago', $yCurr)
-                    ->whereNull('deleted_at')
-                    ->whereNotIn('estado', ['devuelto', 'distribuido'])
-                    ->sum('valor');
-
-                $incM = $this->entradasIncapacidadEfectivo($aid, $mCurr, $yCurr);
-
-                $gastM = (float) DB::table('gastos')
-                    ->where('aliado_id', $aid)
-                    ->whereMonth('fecha', $mCurr)->whereYear('fecha', $yCurr)
-                    ->where('forma_pago', 'efectivo')
-                    ->where('tipo', '!=', 'efectivo_banco')
-                    ->sum('valor');
-
-                $consM = (float) DB::table('gastos')
-                    ->where('aliado_id', $aid)
-                    ->whereMonth('fecha', $mCurr)->whereYear('fecha', $yCurr)
-                    ->where('tipo', 'efectivo_banco')
-                    ->sum('valor');
-
-                $saldoEfectivoMesAnt = max(0.0, $saldoEfectivoMesAnt + ($entM + $antM + $incM) - ($gastM + $consM));
+                $saldoEfectivoMesAnt = max(0.0, $saldoEfectivoMesAnt + $netoM);
                 $curr->addMonth();
             }
         }
@@ -1508,52 +1484,21 @@ class InformeController extends Controller
         });
 
         // ── Efectivo del mes (para la tarjeta de caja) ──
-        $abonosEfectivoMes = (float) DB::table('abonos as a')
-            ->join('facturas as f', 'f.id', '=', 'a.factura_id')
-            ->where('f.aliado_id', $aid)
-            ->whereMonth('a.fecha', $mes)->whereYear('a.fecha', $anio)
-            ->where('a.forma_pago', 'efectivo')
-            ->sum('a.valor_efectivo');
+        // Con la regla única (FlujoEfectivo): la suma de los días del cuadre
+        // diario da exactamente esto.
+        $flujoMes = \App\Services\Caja\FlujoEfectivo::totales(
+            (int) $aid, null,
+            \Carbon\Carbon::createFromDate($anio, $mes, 1)->startOfMonth()->toDateString(),
+            \Carbon\Carbon::createFromDate($anio, $mes, 1)->endOfMonth()->toDateString()
+        );
+        $efEntradas       = (float) ($flujoMes['facturas'] + $flujoMes['abonos']);
+        $efAnticipos      = (float) $flujoMes['anticipos'];
+        $efIncapacidades  = (float) $flujoMes['opi'];
+        $efGastos         = (float) ($flujoMes['gastos'] + $flujoMes['incapacidades']);
+        $efConsignaciones = (float) $flujoMes['traslados'];
+        $efRetiros        = (float) $flujoMes['retiros'];
 
-        $efEntradas = (float) DB::table('facturas')
-            ->where('aliado_id', $aid)->whereNull('deleted_at')
-            ->whereIn('estado', ['pagada','abono'])
-            ->whereNotNull('fecha_pago')
-            ->whereMonth('fecha_pago', $mes)->whereYear('fecha_pago', $anio)
-            ->where('valor_efectivo', '>', 0)
-            ->sum('valor_efectivo') + $abonosEfectivoMes;
-
-        // Anticipos cobrados en efectivo o nequi en el mes (no devueltos ni borrados).
-        // El maestro 'distribuido' de un anticipo de empresa no es plata aparte: su
-        // valor ya está en los hijos que se repartieron por trabajador. Sumarlo
-        // contaba doble cada anticipo de empresa (BRYGAR sep-2026: $13M de más).
-        $efAnticipos = (float) DB::table('anticipos')
-            ->where('aliado_id', $aid)
-            ->whereIn('forma_pago', ['efectivo', 'nequi'])
-            ->whereMonth('fecha_pago', $mes)->whereYear('fecha_pago', $anio)
-            ->whereNull('deleted_at')
-            ->whereNotIn('estado', ['devuelto', 'distribuido'])
-            ->sum('valor');
-
-        // OPI de la ARL cobradas en efectivo: plata que entró a la caja, no a un banco.
-        $efIncapacidades = $this->entradasIncapacidadEfectivo($aid, $mes, $anio);
-
-        // Gastos ordinarios pagados en efectivo (excluyendo traslados a banco)
-        $efGastos = (float) DB::table('gastos')
-            ->where('aliado_id', $aid)
-            ->whereMonth('fecha', $mes)->whereYear('fecha', $anio)
-            ->where('forma_pago', 'efectivo')
-            ->where('tipo', '!=', 'efectivo_banco')
-            ->sum('valor');
-
-        // Consignaciones de efectivo al banco (traslados)
-        $efConsignaciones = (float) DB::table('gastos')
-            ->where('aliado_id', $aid)
-            ->whereMonth('fecha', $mes)->whereYear('fecha', $anio)
-            ->where('tipo', 'efectivo_banco')
-            ->sum('valor');
-
-        $efSalidas = $efGastos + $efConsignaciones;
+        $efSalidas = $efGastos + $efConsignaciones + $efRetiros;
         $saldoEfectivoActual = $saldoEfectivoMesAnt + ($efEntradas + $efAnticipos + $efIncapacidades) - $efSalidas;
 
         $efMes = (object)[
@@ -1564,6 +1509,7 @@ class InformeController extends Controller
             'salidas'        => $efSalidas,
             'gastos'         => $efGastos,
             'consignaciones' => $efConsignaciones,
+            'retiros'        => $efRetiros,
             'neto'           => ($efEntradas + $efAnticipos + $efIncapacidades) - $efSalidas,
             'saldo_actual'   => $saldoEfectivoActual,
             'label_saldo'    => $esMesActual ? 'Saldo actual' : 'Saldo al ' . \Carbon\Carbon::createFromDate($anio,$mes,1)->endOfMonth()->format('d/m/y'),
