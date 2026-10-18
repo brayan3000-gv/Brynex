@@ -1001,32 +1001,19 @@ class CuadreDiarioController extends Controller
      */
     private function saldoAntesDe(int $aliadoId, ?int $usuarioId, string $fecha): ?int
     {
-        if ($usuarioId === null) {
-            $conSaldo = CajaMovimiento::where('aliado_id', $aliadoId)
-                ->where('tipo', CajaMovimiento::TIPO_SALDO_INICIAL)
-                ->whereDate('fecha', '<=', $fecha)
-                ->distinct()
-                ->pluck('usuario_destino_id');
-            if ($conSaldo->isEmpty()) {
-                return null;
-            }
-
-            return (int) $conSaldo->sum(fn ($uid) => (int) $this->saldoAntesDe($aliadoId, (int) $uid, $fecha));
+        if ($usuarioId !== null) {
+            return FlujoEfectivo::saldoPersonaAntesDe($aliadoId, $usuarioId, $fecha);
         }
 
-        $inicial = CajaMovimiento::saldoInicialVigente($aliadoId, $usuarioId, $fecha);
-        if (! $inicial) {
+        $conSaldo = FlujoEfectivo::personasConSaldo($aliadoId, $fecha);
+        if (! $conSaldo) {
             return null;
         }
 
-        $desde = $inicial->fecha->toDateString();
-        if ($desde === $fecha) {
-            return (int) $inicial->valor;
-        }
-
-        $ayer = \Carbon\Carbon::parse($fecha)->subDay()->toDateString();
-
-        return (int) $inicial->valor + FlujoEfectivo::totales($aliadoId, $usuarioId, $desde, $ayer)['neto'];
+        return (int) array_sum(array_map(
+            fn ($uid) => (int) FlujoEfectivo::saldoPersonaAntesDe($aliadoId, $uid, $fecha),
+            $conSaldo
+        ));
     }
 
     /** Lo pendiente por pasar al terminar el día $hasta (null si no arrastra). */

@@ -51,6 +51,17 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
         </form>
     </div>
 
+    @if(session('success'))
+    <div style="background:#dcfce7;border:1px solid #86efac;color:#166534;padding:.6rem 1rem;border-radius:8px;margin-bottom:.8rem;font-size:.83rem">✅ {{ session('success') }}</div>
+    @endif
+    @if(session('error'))
+    <div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:.6rem 1rem;border-radius:8px;margin-bottom:.8rem;font-size:.83rem">❌ {{ session('error') }}</div>
+    @endif
+
+    {{-- Cierre del mes: utilidad, lo que pasa al mes siguiente, por cobrar,
+         dónde está la plata y si cuadra. Va antes que todo lo demás. --}}
+    @include('admin.informes.partials.cierre_mes')
+
     {{-- KPIs principales --}}
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.5rem;">
         <div class="fin-kpi" style="--c:#2563eb;">
@@ -582,47 +593,12 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:.85rem;">Distribución Ingresos</div>
             <canvas id="chartDona" height="140"></canvas>
 
-            {{-- Flujo disponible (saldos positivos del mes) --}}
-            @php
-                $flujoEfectivo  = $efMes->neto > 0 ? $efMes->neto : 0;
-                $flujoBancosSum = $bancos->filter(fn($b) => $b->saldo_mes > 0)->sum('saldo_mes');
-                $flujoTotal     = $flujoEfectivo + $flujoBancosSum;
-            @endphp
-            <div style="margin-top:1rem;border-top:1px solid #f1f5f9;padding-top:.85rem;display:flex;flex-direction:column;gap:.35rem;">
-                <div style="font-size:.6rem;font-weight:800;text-transform:uppercase;color:#94a3b8;letter-spacing:.06em;margin-bottom:.2rem;">
-                    💰 Flujo disponible
-                </div>
-
-                {{-- Efectivo --}}
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:#334155;font-weight:600;">
-                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;"></span>
-                        💵 Efectivo
-                    </span>
-                    <span style="font-size:.75rem;font-weight:800;color:#16a34a;font-family:monospace;">{{ $fmt($flujoEfectivo) }}</span>
-                </div>
-
-                {{-- Bancos (suma consolidada) --}}
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="display:flex;align-items:center;gap:.3rem;font-size:.72rem;color:#334155;font-weight:600;">
-                        <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#3b82f6;"></span>
-                        🏦 Bancos
-                    </span>
-                    <span style="font-size:.75rem;font-weight:800;color:#1d4ed8;font-family:monospace;">{{ $fmt($flujoBancosSum) }}</span>
-                </div>
-
-                {{-- Total --}}
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.3rem;padding-top:.4rem;border-top:1.5px solid #e2e8f0;">
-                    <span style="font-size:.72rem;font-weight:800;color:#0f172a;">Total disponible</span>
-                    <span style="font-size:.82rem;font-weight:900;color:#0f172a;font-family:monospace;">{{ $fmt($flujoTotal) }}</span>
-                </div>
-            </div>
         </div>
 
         {{-- Bancos + Efectivo --}}
         <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
-                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">Cuentas Bancarias &amp; Efectivo</div>
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;" title="Los saldos de cada cuenta están arriba, en «Dónde está la plata»">🏦 Movimientos del mes por cuenta <span style="text-transform:none;font-weight:500">— lo que entró y salió en {{ $mesesEs[$mes] }}</span></div>
                 <div style="font-size:.72rem;background:#f8fafc;border:1px solid #e2e8f0;padding:.22rem .65rem;border-radius:6px;color:#475569;font-weight:600;">
                     Arrastre Mes Anterior (Bancos + Efectivo): <span style="font-family:monospace;color:#0f172a;font-weight:700;">{{ $fmt($saldoTotalMesAnterior) }}</span>
                 </div>

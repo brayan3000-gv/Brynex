@@ -282,6 +282,18 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping(10)
             ->appendOutputTo(storage_path('logs/correos-buzon.log'));
 
+        // ── Foto del cierre de mes ────────────────────────────────────
+        // El día 1 a las 00:30 (hora Colombia) guarda cómo terminó el mes
+        // anterior en cada aliado con movimiento: lo que pasa al mes nuevo
+        // queda fijo y, si después alguien edita el mes, el informe avisa.
+        // Ejecución manual: php artisan cierres:foto --aliado=2 --mes=2026-09
+        $schedule->command('cierres:foto')
+            ->monthlyOn(1, '00:30')
+            ->timezone('America/Bogota')
+            ->withoutOverlapping(60)
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/cierres-foto.log'));
+
         // ── Reset mensual de n_plano ──────────────────────────────────
         // El día 1 de cada mes a las 00:01 (hora Colombia) resetea n_plano=1
         // y avanza mes_pagos/anio_pagos en todas las razones sociales.

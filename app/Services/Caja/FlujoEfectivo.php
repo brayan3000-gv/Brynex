@@ -152,6 +152,43 @@ class FlujoEfectivo
         return self::resumir($filas);
     }
 
+    /**
+     * Lo que una persona traía al empezar el día, sin la base de caja menor.
+     *
+     * Parte del último saldo inicial contado con fecha <= $fecha (que es el
+     * saldo al empezar ese día) y le suma lo que se movió desde entonces hasta
+     * el día anterior. null si la persona nunca tuvo saldo inicial: entonces
+     * no se sabe cuánto tiene.
+     */
+    public static function saldoPersonaAntesDe(int $aliadoId, int $usuarioId, string $fecha): ?int
+    {
+        $inicial = CajaMovimiento::saldoInicialVigente($aliadoId, $usuarioId, $fecha);
+        if (! $inicial) {
+            return null;
+        }
+
+        $desde = $inicial->fecha->toDateString();
+        if ($desde === $fecha) {
+            return (int) $inicial->valor;
+        }
+
+        $ayer = \Carbon\Carbon::parse($fecha)->subDay()->toDateString();
+
+        return (int) $inicial->valor + self::totales($aliadoId, $usuarioId, $desde, $ayer)['neto'];
+    }
+
+    /** Personas con saldo inicial contado con fecha <= $fecha: las que arrastran caja. */
+    public static function personasConSaldo(int $aliadoId, string $fecha): array
+    {
+        return CajaMovimiento::where('aliado_id', $aliadoId)
+            ->where('tipo', CajaMovimiento::TIPO_SALDO_INICIAL)
+            ->whereDate('fecha', '<=', $fecha)
+            ->distinct()
+            ->pluck('usuario_destino_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     /** Suma un conjunto de filas de porUsuarioDia. */
     public static function resumir(array $filas): array
     {

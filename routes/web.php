@@ -772,6 +772,8 @@ Route::middleware('auth')->group(function () {
             Route::middleware('permiso:informes.financiero_editar')->group(function () use ($ic) {
                 Route::patch('/financiero/consignacion/{id}', [$ic, 'editarConsignacion'])->name('financiero.consignacion.editar');
                 Route::post('/financiero/consignacion/{id}/imagen', [$ic, 'subirImagenConsignacionFinanciero'])->name('financiero.consignacion.imagen');
+                Route::post('/financiero/cierre/foto', [$ic, 'cierreFoto'])->name('financiero.cierre.foto');
+                Route::post('/financiero/cierre/saldos', [$ic, 'cierreSaldos'])->name('financiero.cierre.saldos');
             });
 
             // ── Extracto del banco: la bandeja de conciliación ─────────────

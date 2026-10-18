@@ -1662,7 +1662,30 @@ class InformeController extends Controller
         $usuarios = DB::table('users')->where('aliado_id', $aid)->where('activo', 1)->orderBy('nombre')->get(['id', 'nombre']);
         $esAdmin = Auth::user()->hasRole('superadmin');
 
+        // ── Cierre del mes: A utilidad · B pasa al mes · C por cobrar · D dónde está ──
+        $cierreVivo = \App\Services\Caja\CierreMes::calcular($aid, (int) $anio, (int) $mes, [
+            'ing_planillas'    => $ingPlanillas,
+            'ing_afiliaciones' => $ingresos['afiliaciones'],
+            'ing_tramites'     => $ingTramites,
+            'sobrante'         => $sobrantePlanilla,
+            'admon_inc'        => $canal5GananciaAdmon,
+            'otros_inc'        => $canal5OtrosDesc,
+            'gastos_op'        => $egresos['operativos'],
+            'comisiones'       => $egresos['comisiones'],
+            'ingresos_total'   => $ingresos['total'],
+            'egresos_total'    => $egresos['total'],
+            'utilidad'         => $utilidad,
+            'ss_por_pagar'     => $saldoSS,
+            'reserva_retiros'  => $subtotalRetiros,
+            'asesores'         => $saldoAsesores,
+            'incapacidades'    => $canal5SaldoAcumulado,
+            'bancos'           => $bancos,
+            'efectivo_viejo'   => $efMes->saldo_actual,
+        ]);
+        $cierre = \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
+
         return view('admin.informes.financiero', compact(
+            'cierre', 'cierreVivo',
             'mes','anio','ingresos','egresos','utilidad',
             'usuarios', 'esAdmin',
             'recaudoSS','pagadoSSRaw','saldoSS',
@@ -1888,6 +1911,64 @@ class InformeController extends Controller
             'ok'  => true,
             'url' => \Storage::url($path),
         ]);
+    }
+
+    // ── Cierre del mes: foto y saldos reales (solo superadmin) ───────────────
+    /**
+     * Guarda la foto de un mes que ya terminó. Normalmente la toma sola
+     * `cierres:foto` el día 1; esto sirve para la apertura o para rehacerla
+     * después de corregir algo del mes.
+     */
+    public function cierreFoto(Request $request)
+    {
+        abort_unless(Auth::user()->hasRole('superadmin'), 403, 'Solo el superadmin guarda la foto del cierre.');
+        $v = $request->validate(['mes' => 'required|integer|between:1,12', 'anio' => 'required|integer|min:2026', 'rehacer' => 'nullable|boolean']);
+
+        if (\Carbon\Carbon::createFromDate($v['anio'], $v['mes'], 1)->endOfMonth()->isFuture()) {
+            return back()->with('error', 'El mes todavía no termina: la foto se guarda sola el día 1.');
+        }
+
+        $vivo = self::cierreVivoDe($this, (int) $v['anio'], (int) $v['mes']);
+        \App\Services\Caja\CierreMes::guardarFoto($this->aliadoId(), (int) $v['anio'], (int) $v['mes'], $vivo, (bool) ($v['rehacer'] ?? false));
+
+        return back()->with('success', 'Foto del cierre guardada.');
+    }
+
+    /** Lo que hay de verdad en cada cuenta y en efectivo al cierre. */
+    public function cierreSaldos(Request $request)
+    {
+        abort_unless(Auth::user()->hasRole('superadmin'), 403, 'Solo el superadmin anota los saldos del cierre.');
+        $v = $request->validate([
+            'mes'        => 'required|integer|between:1,12',
+            'anio'       => 'required|integer|min:2026',
+            'bancos'     => 'nullable|array',
+            'bancos.*'   => 'nullable|integer',
+            'efectivo'   => 'nullable|array',
+            'efectivo.*' => 'nullable|integer',
+        ]);
+
+        $aid = $this->aliadoId();
+        $bancosAliado = BancoCuenta::where('aliado_id', $aid)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $reales = [
+            'bancos'   => collect($v['bancos'] ?? [])->filter(fn ($x, $id) => $x !== null && in_array((int) $id, $bancosAliado, true))
+                            ->map(fn ($x) => (int) $x)->all(),
+            'efectivo' => collect($v['efectivo'] ?? [])->filter(fn ($x) => $x !== null)->map(fn ($x) => (int) $x)->all(),
+        ];
+
+        \App\Services\Caja\CierreMes::guardarSaldosReales($aid, (int) $v['anio'], (int) $v['mes'], $reales, (int) Auth::id());
+
+        return back()->with('success', 'Saldos reales del cierre guardados.');
+    }
+
+    /**
+     * Los bloques del cierre de un mes, con las mismas cifras del estado
+     * financiero (se arma el informe del mes y se toma su cierre).
+     */
+    public static function cierreVivoDe(self $ctrl, int $anio, int $mes): array
+    {
+        $sub = Request::create('/admin/informes/financiero', 'GET', ['mes' => $mes, 'anio' => $anio]);
+
+        return $ctrl->estadoFinanciero($sub)->getData()['cierreVivo'];
     }
 
     // ── JSON: detalle gastos operativos (para modal Egresos Operativos) ──────
