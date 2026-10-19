@@ -60,7 +60,9 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
 
     {{-- Cierre del mes: utilidad, lo que pasa al mes siguiente, por cobrar,
          dónde está la plata y si cuadra. Va antes que todo lo demás. --}}
+    @if($cierre)
     @include('admin.informes.partials.cierre_mes')
+    @endif
 
     {{-- KPIs principales --}}
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.5rem;">

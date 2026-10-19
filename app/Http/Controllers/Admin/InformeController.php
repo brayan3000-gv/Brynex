@@ -1643,7 +1643,11 @@ class InformeController extends Controller
         $esAdmin = Auth::user()->hasRole('superadmin');
 
         // ── Cierre del mes: A utilidad · B pasa al mes · C por cobrar · D dónde está ──
-        $cierreVivo = \App\Services\Caja\CierreMes::calcular($aid, (int) $anio, (int) $mes, [
+        // El mes en curso no muestra cierre hasta su último día (lo pidió el
+        // dueño, 19-oct-2026): a mitad de mes no hay nada que cerrar y las
+        // cifras parciales confunden. Desde el día 1 siguiente sale el mes cerrado.
+        $mostrarCierre = ! $esMesActual || today()->isSameDay(today()->endOfMonth());
+        $cierreVivo = ! $mostrarCierre ? null : \App\Services\Caja\CierreMes::calcular($aid, (int) $anio, (int) $mes, [
             'ing_planillas'    => $ingPlanillas,
             'ing_afiliaciones' => $ingresos['afiliaciones'],
             'ing_tramites'     => $ingTramites,
@@ -1661,7 +1665,7 @@ class InformeController extends Controller
             'incapacidades'    => $canal5SaldoAcumulado,
             'bancos'           => $bancos,
         ]);
-        $cierre = \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
+        $cierre = $cierreVivo === null ? null : \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
 
         return view('admin.informes.financiero', compact(
             'cierre', 'cierreVivo',
