@@ -104,6 +104,11 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 {{-- Back --}}
 <a href="{{ route('admin.prestamos.index') }}?tab={{ $esLoteEmpresa ? 'empresas' : 'individuales' }}" class="back-link">← Volver a Préstamos</a>
 
+@php
+    // Condonado: se dio por saldado sin recibir la plata (lo marca condonar()).
+    $condonado = ($esLoteEmpresa ? $lote : collect([$factura]))
+        ->contains(fn ($f) => $f->estado !== 'prestamo' && str_contains((string) $f->observacion, 'CONDONADO:'));
+@endphp
 @if($esLoteEmpresa)
 {{-- ══ HEADER LOTE EMPRESA ══ --}}
 <div class="show-header">
@@ -111,7 +116,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
         <div class="show-title">
             🏢 {{ $factura->empresa->empresa }} — Factura #{{ $factura->numero_factura }}
             <span class="badge-estado {{ $lote_estado === 'prestamo' ? 'badge-prestamo' : 'badge-pagada' }}">
-                {{ $lote_estado === 'prestamo' ? 'Préstamo pendiente' : 'Saldado' }}
+                {{ $lote_estado === 'prestamo' ? 'Préstamo pendiente' : ($condonado ? 'Condonado' : 'Saldado') }}
             </span>
         </div>
         <div class="show-sub">
@@ -196,7 +201,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
                 </button>
                 @endrole
             @else
-                <div class="saldado-box">✅ Lote completamente saldado</div>
+                <div class="saldado-box">{{ $condonado ? '🤝 Deuda condonada' : '✅ Lote completamente saldado' }}</div>
             @endif
         </div>
     </div>
@@ -267,7 +272,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
                 </button>
                 @endrole
             @else
-                <div class="saldado-box">✅ Préstamo completamente saldado</div>
+                <div class="saldado-box">{{ $condonado ? '🤝 Deuda condonada' : '✅ Préstamo completamente saldado' }}</div>
             @endif
         </div>
     </div>
@@ -486,7 +491,8 @@ if (formCon) {
         });
         const res = await r.json();
         alert(res.mensaje || (res.ok ? 'Condonado.' : 'Error'));
-        if (res.ok) location.reload();
+        // Condonado ya no está por cobrar: de vuelta al listado.
+        if (res.ok) location.href = @js(route('admin.prestamos.index', ['tab' => $esLoteEmpresa ? 'empresas' : 'individuales']));
     });
 }
 </script>

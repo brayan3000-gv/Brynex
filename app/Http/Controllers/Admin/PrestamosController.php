@@ -245,6 +245,14 @@ class PrestamosController extends Controller
             // el detalle daba saldado un lote que el listado mostraba debiendo.
             $lote_saldo_pendiente = max(0, Factura::deudaLote($lote) - $lote_total_abonado);
 
+            // Si ninguna fila sigue como préstamo, el lote no debe nada: lo
+            // pactado puede superar lo abonado cuando el resto se condonó, y
+            // entonces el detalle seguía mostrando el saldo y el botón de
+            // condonar después de condonarlo (FRANCISCO JAVIER MORENO, $110.900).
+            if ($lote->where('estado', Factura::ESTADO_PRESTAMO)->isEmpty()) {
+                $lote_saldo_pendiente = 0;
+            }
+
             $lote_estado = $lote_saldo_pendiente > 0 ? Factura::ESTADO_PRESTAMO : Factura::ESTADO_PAGADA;
 
             // Gestiones por empresa_id (no por factura_id individual)
