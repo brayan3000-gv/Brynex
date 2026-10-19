@@ -134,6 +134,67 @@ class Consignacion extends BaseModel
         );
     }
 
+    /**
+     * La entrada al banco de un pago conjunto («Pagar todo»): una sola
+     * consignación por el total consignado, colgada del primer abono del
+     * pago. Cuadra uno a uno con el movimiento del extracto; con una por
+     * período eran cuatro líneas para una sola plata. Los demás abonos llevan
+     * su parte en valor_consignado, como las facturas 2..N de un lote.
+     *
+     * @param \Illuminate\Support\Collection<int, Abono> $abonos los del pago, el primero primero
+     */
+    public static function registrarDePago($abonos, int $aliadoId): ?self
+    {
+        $primero = $abonos->first();
+        $valor   = (int) $abonos->sum('valor_consignado');
+        $cuenta  = $abonos->firstWhere('banco_cuenta_id', '!=', null)?->banco_cuenta_id;
+        if (! $primero || $valor <= 0 || ! $cuenta) {
+            return null;
+        }
+
+        return static::firstOrCreate(
+            ['abono_id' => $primero->id],
+            [
+                'aliado_id'       => $aliadoId,
+                'factura_id'      => null,
+                'banco_cuenta_id' => $cuenta,
+                'fecha'           => $primero->fecha,
+                'valor'           => $valor,
+                'tipo'            => self::TIPO_ABONO,
+                'referencia'      => mb_substr('Abonos #' . $abonos->pluck('id')->join(', #'), 0, 100),
+                'confirmado'      => false,
+                'observacion'     => $primero->observacion,
+                'usuario_id'      => $primero->usuario_id,
+            ]
+        );
+    }
+
+    /**
+     * Al anular una factura que tiene abonos de un pago conjunto: la
+     * consignación es de todo el pago, así que no se borra entera. Pasa al
+     * primer abono que queda vivo en otra factura y baja a lo que esos abonos
+     * llevan consignado. Si no queda ninguno, se deja colgada de su abono y la
+     * borra la anulación como a cualquier otra.
+     */
+    public static function reajustarPago(int $pagoId, int $sinFacturaId): void
+    {
+        $delPago = Abono::where('pago_id', $pagoId)->orderBy('id')->get();
+        $consignacion = static::whereIn('abono_id', $delPago->pluck('id')->all())->first();
+        if (! $consignacion) {
+            return;
+        }
+
+        $quedan = $delPago->where('factura_id', '!=', $sinFacturaId)->where('valor_consignado', '>', 0)->values();
+        if ($quedan->isEmpty()) {
+            return;
+        }
+
+        $consignacion->update([
+            'abono_id' => $quedan->first()->id,
+            'valor'    => (int) $quedan->sum('valor_consignado'),
+        ]);
+    }
+
     // ── Helper: saldo actual de una cuenta bancaria ──────────────────
     /** Saldo de hoy de una cuenta bancaria (regla: App\Services\Caja\SaldosBanco). */
     public static function saldoBanco(int $aliadoId, int $bancoCuentaId): int

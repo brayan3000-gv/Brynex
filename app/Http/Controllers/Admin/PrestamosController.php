@@ -493,8 +493,9 @@ class PrestamosController extends Controller
     // consignación. El pago se reparte del período más antiguo al más nuevo y
     // queda un abono por período (cada factura sigue llevando lo suyo, y la
     // anulación de una factura se lleva solo su parte), todos con la misma
-    // fecha, cuenta y certificado. La consignación va primero y el efectivo
-    // completa, para que un pago mixto no parta cada período en dos.
+    // fecha, cuenta y certificado, pero una sola consignación en el banco. La
+    // consignación va primero y el efectivo completa, para que un pago mixto
+    // no parta cada período en dos.
     public function abonarCliente(Request $request)
     {
         $aliadoId = session('aliado_id_activo');
@@ -567,7 +568,6 @@ class PrestamosController extends Controller
                     'fecha'            => $validated['fecha'] ?? today()->toDateString(),
                     'usuario_id'       => Auth::id(),
                 ]);
-                Consignacion::registrarDeAbono($abono, (int) $aliadoId);
 
                 // Lo mismo que hace abonar() con un préstamo individual.
                 $f->refresh();
@@ -579,7 +579,13 @@ class PrestamosController extends Controller
                 $abonos[] = $abono;
             }
 
-            return collect($abonos);
+            // Todos los abonos del pago se marcan con el id del primero, y la
+            // plata entra al banco UNA vez (ver Consignacion::registrarDePago).
+            $abonos = collect($abonos);
+            Abono::whereIn('id', $abonos->pluck('id')->all())->update(['pago_id' => $abonos->first()->id]);
+            Consignacion::registrarDePago($abonos, (int) $aliadoId);
+
+            return $abonos;
         });
 
         $queda = max(0, $saldoTotal - (int) $validated['valor']);

@@ -40,6 +40,9 @@ class ConsignacionesDesdeAbonos extends Command
             ->whereNull('f.deleted_at')
             ->where('abonos.valor_consignado', '>', 0)
             ->whereNotNull('abonos.banco_cuenta_id')
+            // Un pago conjunto ya tiene UNA consignación por todos sus abonos
+            // (Consignacion::registrarDePago): los demás no están «sin» ella.
+            ->whereNull('abonos.pago_id')
             ->where('abonos.fecha', '>=', $this->option('desde'))
             ->when($this->option('aliado'), fn ($q, $a) => $q->where('f.aliado_id', (int) $a))
             ->whereNotExists(fn ($s) => $s->select(DB::raw(1))->from('consignaciones AS c')

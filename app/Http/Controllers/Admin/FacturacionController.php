@@ -3276,6 +3276,11 @@ class FacturacionController extends Controller
                 // Las consignaciones se eliminan físicamente (quedan en el snapshot de la bitácora),
                 // también las de los abonos, que no cuelgan de la factura.
                 DB::table('consignaciones')->where('factura_id', $f->id)->delete();
+                // Un pago conjunto tiene una sola consignación para varios
+                // períodos: la parte de los que no se anulan se queda en el banco.
+                DB::table('abonos')->where('factura_id', $f->id)->whereNotNull('pago_id')
+                    ->pluck('pago_id')->unique()
+                    ->each(fn ($pagoId) => \App\Models\Consignacion::reajustarPago((int) $pagoId, $f->id));
                 DB::table('consignaciones')
                     ->whereIn('abono_id', DB::table('abonos')->where('factura_id', $f->id)->select('id'))
                     ->delete();
