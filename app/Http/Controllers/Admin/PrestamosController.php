@@ -285,15 +285,14 @@ class PrestamosController extends Controller
         return view('admin.prestamos.show', compact('factura', 'gestiones', 'bancos', 'esLoteEmpresa'));
     }
 
-    // ─── Registrar abono al préstamo ─────────────────────────────────
-    public function abonar(Request $request, int $facturaId)
+    /**
+     * Valida el formulario de abono (el mismo para un período o para varios
+     * de un cliente), deja el desglose efectivo/consignado según la forma de
+     * pago y guarda el certificado. Devuelve [datos, ruta, nombre] o la
+     * respuesta 422 lista para devolver.
+     */
+    private function datosAbono(Request $request, $aliadoId): array|\Illuminate\Http\JsonResponse
     {
-        $aliadoId = session('aliado_id_activo');
-        $factura  = Factura::where('aliado_id', $aliadoId)
-            ->where('estado', Factura::ESTADO_PRESTAMO)
-            ->whereNull('deleted_at')
-            ->findOrFail($facturaId);
-
         // El certificado es obligatorio cuando entra plata por el banco:
         // sin él no hay cómo probar la consignación después.
         $exigeSoporte = in_array($request->input('forma_pago'), ['consignacion', 'mixto'], true);
@@ -363,6 +362,24 @@ class PrestamosController extends Controller
             $soportePath   = $archivo->store("prestamos/soportes/{$aliadoId}", 'local');
             $soporteNombre = mb_substr($archivo->getClientOriginalName(), 0, 200);
         }
+
+        return [$validated, $soportePath, $soporteNombre];
+    }
+
+    // ─── Registrar abono al préstamo ─────────────────────────────────
+    public function abonar(Request $request, int $facturaId)
+    {
+        $aliadoId = session('aliado_id_activo');
+        $factura  = Factura::where('aliado_id', $aliadoId)
+            ->where('estado', Factura::ESTADO_PRESTAMO)
+            ->whereNull('deleted_at')
+            ->findOrFail($facturaId);
+
+        $datos = $this->datosAbono($request, $aliadoId);
+        if ($datos instanceof \Illuminate\Http\JsonResponse) {
+            return $datos;
+        }
+        [$validated, $soportePath, $soporteNombre] = $datos;
 
         // Detectar si es un lote de empresa (mismo numero_factura, varios clientes)
         $esLote = $factura->empresa_id && $factura->empresa_id != 1;
@@ -469,6 +486,131 @@ class PrestamosController extends Controller
             'estado'         => $factura->estado,
             'recibo_url'     => $reciboUrl,
         ]);
+    }
+
+    // ─── Pagar varios períodos de un cliente con un solo pago ────────
+    // Un cliente que debe varios meses suele pagarlos con una sola
+    // consignación. El pago se reparte del período más antiguo al más nuevo y
+    // queda un abono por período (cada factura sigue llevando lo suyo, y la
+    // anulación de una factura se lleva solo su parte), todos con la misma
+    // fecha, cuenta y certificado. La consignación va primero y el efectivo
+    // completa, para que un pago mixto no parta cada período en dos.
+    public function abonarCliente(Request $request)
+    {
+        $aliadoId = session('aliado_id_activo');
+
+        $ids = collect((array) $request->input('factura_ids'))
+            ->map(fn ($i) => (int) $i)->filter()->unique()->values();
+
+        $facturas = Factura::where('aliado_id', $aliadoId)
+            ->where('estado', Factura::ESTADO_PRESTAMO)
+            ->whereNull('empresa_id')
+            ->whereNull('deleted_at')
+            ->whereIn('id', $ids->all())
+            ->with('abonos')
+            ->get()
+            ->sortBy(fn ($f) => (int) $f->anio * 100 + (int) $f->mes)
+            ->values();
+
+        if ($ids->count() < 2 || $facturas->count() !== $ids->count()) {
+            return response()->json(['ok' => false, 'message' => 'Alguno de los períodos ya no está pendiente. Recarga la página.'], 422);
+        }
+        if ($facturas->pluck('cedula')->map(fn ($c) => (string) $c)->unique()->count() > 1) {
+            return response()->json(['ok' => false, 'message' => 'Los períodos tienen que ser del mismo cliente.'], 422);
+        }
+
+        // Antes de guardar el certificado: un pago mayor que la deuda no tiene
+        // a qué período ir (en un solo período el exceso se tragaba sin aviso).
+        $saldoTotal = (int) $facturas->sum('saldo_pendiente_prestamo');
+        if ((int) $request->input('valor') > $saldoTotal) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'El pago es mayor que lo que debe en estos períodos ($' . number_format($saldoTotal, 0, ',', '.') . ').',
+            ], 422);
+        }
+
+        $datos = $this->datosAbono($request, $aliadoId);
+        if ($datos instanceof \Illuminate\Http\JsonResponse) {
+            return $datos;
+        }
+        [$validated, $soportePath, $soporteNombre] = $datos;
+
+        $n = $facturas->count();
+        $obs = trim((string) ($validated['observacion'] ?? ''));
+        $observacion = mb_substr(($obs !== '' ? $obs . ' · ' : '') . 'Pago de ' . $n . ' períodos en uno', 0, 500);
+
+        $abonos = DB::transaction(function () use ($facturas, $validated, $aliadoId, $soportePath, $soporteNombre, $observacion) {
+            $restante   = (int) $validated['valor'];
+            $consignado = (int) $validated['valor_consignado'];
+            $abonos     = [];
+
+            foreach ($facturas as $f) {
+                $parte = min($restante, (int) $f->saldo_pendiente_prestamo);
+                if ($parte <= 0) {
+                    continue;
+                }
+                $restante -= $parte;
+                $pc = min($consignado, $parte);
+                $consignado -= $pc;
+                $pe = $parte - $pc;
+
+                $abono = Abono::create([
+                    'factura_id'       => $f->id,
+                    'valor'            => $parte,
+                    'forma_pago'       => $pc > 0 && $pe > 0 ? 'mixto' : ($pc > 0 ? 'consignacion' : 'efectivo'),
+                    'valor_efectivo'   => $pe,
+                    'valor_consignado' => $pc,
+                    'banco_cuenta_id'  => $pc > 0 ? ($validated['banco_cuenta_id'] ?? null) : null,
+                    'observacion'      => $observacion,
+                    'soporte_path'     => $soportePath,
+                    'soporte_nombre'   => $soporteNombre,
+                    'fecha'            => $validated['fecha'] ?? today()->toDateString(),
+                    'usuario_id'       => Auth::id(),
+                ]);
+                Consignacion::registrarDeAbono($abono, (int) $aliadoId);
+
+                // Lo mismo que hace abonar() con un préstamo individual.
+                $f->refresh();
+                if ($f->estaCompletamentePagada()) {
+                    $f->update(['estado' => Factura::ESTADO_PAGADA, 'saldo_proximo' => 0]);
+                } else {
+                    $f->update(['saldo_proximo' => -$f->saldo_pendiente_prestamo]);
+                }
+                $abonos[] = $abono;
+            }
+
+            return collect($abonos);
+        });
+
+        $queda = max(0, $saldoTotal - (int) $validated['valor']);
+        $aviso = \App\Services\Caja\CierreMes::avisoMesVerificado((int) $aliadoId, $abonos->first()->fecha);
+        $mensaje = $queda > 0
+            ? '💰 Pago repartido en ' . $abonos->count() . ' períodos. Sigue debiendo: $' . number_format($queda, 0, ',', '.')
+            : '✅ ' . $abonos->count() . ' períodos saldados con un solo pago.';
+
+        return response()->json([
+            'ok'         => true,
+            'mensaje'    => $aviso ? $mensaje . "\n\n" . $aviso : $mensaje,
+            'recibo_url' => route('admin.prestamos.recibo-pago', ['abonos' => $abonos->pluck('id')->join(',')]),
+        ]);
+    }
+
+    // ─── Recibo de un pago repartido en varios períodos ─────────────
+    public function reciboPago(Request $request)
+    {
+        $aliadoId = session('aliado_id_activo');
+        $ids = collect(explode(',', (string) $request->query('abonos')))
+            ->map(fn ($i) => (int) $i)->filter()->unique()->take(50);
+
+        $abonos = Abono::whereIn('id', $ids->all())
+            ->whereHas('factura', fn ($q) => $q->where('aliado_id', $aliadoId))
+            ->with(['factura.contrato.cliente', 'usuario'])
+            ->get()
+            ->sortBy(fn ($a) => (int) $a->factura->anio * 100 + (int) $a->factura->mes)
+            ->values();
+        abort_if($abonos->isEmpty(), 404);
+
+        return view('admin.prestamos.recibo-pago', compact('abonos'));
     }
 
     // ─── Condonar préstamo (solo superadmin) ─────────────────────────

@@ -850,6 +850,8 @@ Route::middleware('auth')->group(function () {
             Route::get('/api/pendientes', [$pc, 'apiPendientes'])->name('api.pendientes');
             Route::get('/abono/{id}/soporte', [$pc, 'descargarSoporteAbono'])->name('abono.soporte');
             Route::post('/abono/{id}/soporte', [$pc, 'adjuntarSoporteAbono'])->name('abono.soporte.adjuntar');
+            Route::post('/abonar-cliente', [$pc, 'abonarCliente'])->name('abonar-cliente');
+            Route::get('/recibo-pago', [$pc, 'reciboPago'])->name('recibo-pago');
             Route::get('/{id}', [$pc, 'show'])->name('show');
             Route::post('/{id}/abonar', [$pc, 'abonar'])->name('abonar');
             Route::post('/{id}/condonar', [$pc, 'condonar'])->name('condonar');

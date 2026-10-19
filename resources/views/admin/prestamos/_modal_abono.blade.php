@@ -2,8 +2,10 @@
     Modal para registrar el abono de un préstamo. Lo comparten el listado y el
     detalle: antes cada uno tenía su copia y se desfasaban.
 
-    Se abre con abrirAbonar(id, saldo, nombre?) y necesita $bancos (las
-    cuentas del aliado) y las clases .modal-bg / cerrarModal() de la página.
+    Se abre con abrirAbonar(id, saldo, nombre?, varios?) y necesita $bancos
+    (las cuentas del aliado) y las clases .modal-bg / cerrarModal() de la
+    página. Con varios = {ids: [...], periodos: [...]} paga de una vez varios
+    períodos de un cliente (PrestamosController::abonarCliente).
 --}}
 <style>
 .abm-box { width:min(500px,96vw); padding:0; border-radius:18px; overflow:hidden; display:flex; flex-direction:column; }
@@ -21,6 +23,8 @@
 .abm-saldo-val { font-size:1.25rem; font-weight:800; color:#14532d; font-family:ui-monospace,monospace; }
 .abm-queda { font-size:.72rem; color:#475569; text-align:right; }
 .abm-queda b { color:#0f172a; }
+.abm-varios { display:none; background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af; border-radius:10px; padding:.5rem .75rem; font-size:.76rem; margin:-.4rem 0 1rem; line-height:1.4; }
+.abm-varios.on { display:block; }
 
 .abm-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
 @media (max-width:520px) { .abm-row { grid-template-columns:1fr; } }
@@ -87,6 +91,7 @@
             </div>
             <div class="abm-queda" id="ab-queda"></div>
         </div>
+        <div class="abm-varios" id="ab-varios"></div>
 
         <div id="ab-err" class="abm-err"></div>
 
@@ -188,13 +193,20 @@
         return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     };
     let saldoActual = 0;
+    let variosIds = null;   // ids de los períodos cuando se paga todo junto
     let objUrl = null;
 
     if (/Mac|iPhone|iPad/.test(navigator.platform)) $('ab-kbd').textContent = '⌘';
 
     // ── Abrir ────────────────────────────────────────────────
-    window.abrirAbonar = function (id, saldo, nombre) {
+    window.abrirAbonar = function (id, saldo, nombre, varios) {
         saldoActual = parseInt(saldo) || 0;
+        variosIds = varios && varios.ids && varios.ids.length > 1 ? varios.ids : null;
+        $('ab-varios').classList.toggle('on', !!variosIds);
+        $('ab-varios').innerHTML = variosIds
+            ? '📅 <b>Pago de ' + variosIds.length + ' períodos:</b> ' + (varios.periodos || []).join(', ')
+              + '.<br>Se reparte del más antiguo al más nuevo y queda un abono en cada uno, con un solo recibo.'
+            : '';
         $('ab-id').value = id;
         $('ab-nombre').textContent = nombre ? '👤 ' + nombre : 'Préstamo #' + id;
         $('ab-saldo').textContent = pesos(saldoActual);
@@ -361,11 +373,16 @@
             mostrarError('Pon la fecha del pago (no puede ser posterior a hoy).');
             return;
         }
+        if (variosIds && valor > saldoActual) {
+            mostrarError('El pago es mayor que lo que debe en estos períodos (' + pesos(saldoActual) + ').');
+            return;
+        }
         const exige = forma === 'consignacion' || forma === 'mixto';
         if (exige && !$('ab-banco').value) { mostrarError('Dinos a qué cuenta entró la consignación.'); return; }
         if (exige && !$('ab-sop').files.length) { mostrarError('Adjunta el certificado de la consignación: pégalo con Ctrl+V o búscalo.'); return; }
 
         const fd = new FormData();
+        if (variosIds) variosIds.forEach(i => fd.append('factura_ids[]', i));
         fd.append('valor',            valor);
         fd.append('forma_pago',       forma);
         fd.append('valor_efectivo',   ef);
@@ -380,7 +397,8 @@
         btn.disabled = true;
         btn.textContent = '⏳ Registrando…';
         try {
-            const r = await fetch(`/admin/prestamos/${id}/abonar`, {
+            const url = variosIds ? '/admin/prestamos/abonar-cliente' : `/admin/prestamos/${id}/abonar`;
+            const r = await fetch(url, {
                 method: 'POST', headers: { 'X-CSRF-TOKEN': CSRF_AB, 'Accept': 'application/json' }, body: fd
             });
             const res = await r.json().catch(() => ({}));

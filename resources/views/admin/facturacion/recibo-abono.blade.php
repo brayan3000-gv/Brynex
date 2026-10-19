@@ -56,7 +56,7 @@ $facturaElectronica = $esCartera
     @endif
     <div class="ab-row"><span class="ab-lbl">Período</span><span class="ab-val">{{ $meses[$factura->mes] }} {{ $factura->anio }}</span></div>
     <div class="ab-row"><span class="ab-lbl">Cédula</span><span class="ab-val">{{ $factura->cedula }}</span></div>
-    <div class="ab-row"><span class="ab-lbl">Trabajador</span><span class="ab-val">{{ $cliente?->nombres }} {{ $cliente?->apellidos }}</span></div>
+    <div class="ab-row"><span class="ab-lbl">Trabajador</span><span class="ab-val">{{ nombre_oracion($cliente?->nombre_completo) }}</span></div>
     <div class="ab-row"><span class="ab-lbl">Forma de pago</span><span class="ab-val">{{ ucfirst($abono->forma_pago) }}</span></div>
     @if($abono->observacion)
     <div class="ab-row"><span class="ab-lbl">Observación</span><span class="ab-val">{{ $abono->observacion }}</span></div>

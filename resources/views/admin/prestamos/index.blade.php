@@ -270,6 +270,9 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
                 <div style="display:flex;gap:.3rem;justify-content:center;flex-wrap:wrap;">
                     @if($varios)
                         <button type="button" class="btn-sm btn-ver" onclick="togglePeriodos('{{ $gid }}', event)">📅 Períodos</button>
+                        {{-- Una sola consignación para todos sus meses: se reparte del más antiguo al más nuevo. --}}
+                        <button type="button" class="btn-sm btn-abono"
+                                onclick="abrirAbonar({{ $f1->id }}, {{ $c->saldo }}, @js($c->nombre), @js(['ids' => $c->facturas->pluck('id')->values(), 'periodos' => $c->facturas->map(fn ($f) => $meses[$f->mes] . ' ' . $f->anio)->values()]))">💰 Pagar todo</button>
                     @else
                         <a href="{{ route('admin.prestamos.show', $f1->id) }}" class="btn-sm btn-ver">👁 Ver</a>
                         <button onclick="abrirAbonar({{ $f1->id }}, {{ $f1->saldo_pendiente_prestamo }}, @js($c->nombre))"
