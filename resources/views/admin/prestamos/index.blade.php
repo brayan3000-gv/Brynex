@@ -93,6 +93,18 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 .tag-pagado    { background:#dcfce7; color:#15803d; }
 .tag-condonado { background:#fef3c7; color:#b45309; }
 
+/* ── Individuales agrupados por cliente ── */
+.tag-periodo { background:#dbeafe; color:#1d4ed8; padding:.15rem .5rem; border-radius:20px; font-size:.7rem; font-weight:700; }
+.tag-varios  { background:#fef3c7; color:#b45309; padding:.15rem .55rem; border-radius:20px; font-size:.7rem; font-weight:800; display:inline-flex; align-items:center; gap:.25rem; }
+.tag-varios .caret { display:inline-block; transition:transform .15s; font-size:.65rem; }
+.tbl-prest tbody.grp { border-bottom:1px solid #f1f5f9; }
+.tbl-prest tr.fila-varios { cursor:pointer; }
+.tbl-prest tbody.grp.abierto tr.fila-cli { background:#fffbeb; }
+.tbl-prest tbody.grp.abierto .tag-varios .caret { transform:rotate(90deg); }
+.tbl-prest tr.fila-periodo { background:#fafafa; border-bottom:1px dashed #e2e8f0; }
+.tbl-prest tr.fila-periodo td { padding-top:.35rem; padding-bottom:.35rem; font-size:.77rem; }
+.tbl-prest tr.fila-subtotal td { font-weight:700; color:#334155; font-size:.72rem; background:#f1f5f9; }
+
 /* ── Empty ── */
 .empty-state { text-align:center; padding:3rem; color:#94a3b8; }
 
@@ -128,7 +140,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
     <div class="tabs-bar">
         <a href="?tab=individuales{{ $buscar ? '&buscar='.urlencode($buscar) : '' }}"
            class="tab-link {{ $tab === 'individuales' ? 'active' : '' }}">
-            👤 Individuales ({{ $individuales->count() }})
+            👤 Individuales ({{ $clientesInd->count() }})
         </a>
         <a href="?tab=empresas{{ $buscar ? '&buscar='.urlencode($buscar) : '' }}"
            class="tab-link {{ $tab === 'empresas' ? 'active' : '' }}">
@@ -176,22 +188,26 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 </div>
 
 {{-- ══ TAB INDIVIDUALES ══ --}}
+{{-- Una fila por cliente. El que debe varios meses sale una sola vez con
+     «Varios» y los totales; sus períodos se despliegan debajo, cada uno con su
+     propio abono (el abono se registra contra una factura). Cada cliente es su
+     propio <tbody> para que al ordenar sus períodos no se separen de él. --}}
 @if($tab === 'individuales')
 <div class="tbl-wrap">
-    @if($individuales->isEmpty())
+    @if($clientesInd->isEmpty())
     <div class="empty-state">
         <div style="font-size:2.5rem;">✅</div>
         <div style="font-size:1rem;font-weight:700;margin-top:.5rem;color:#0f172a;">Sin préstamos individuales pendientes</div>
     </div>
     @else
-    <table class="tbl-prest">
+    <table class="tbl-prest" data-grupos>
         <thead>
             <tr>
                 <th data-sort="num" title="Semáforo de gestión — ordena por riesgo"></th>
                 <th data-sort="texto">Cliente</th>
                 <th data-sort="num">Cédula</th>
                 <th data-sort="texto">Asesor</th>
-                <th data-sort="num">Período</th>
+                <th data-sort="num" title="Ordena por el período más antiguo que debe">Período</th>
                 <th data-sort="num" class="text-right">Valor original</th>
                 <th data-sort="num" class="text-right">Abonado</th>
                 <th data-sort="num" class="text-right">Saldo deuda</th>
@@ -199,15 +215,9 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
                 <th style="text-align:center">Acciones</th>
             </tr>
         </thead>
-        <tbody>
-        @foreach($individuales as $f)
+        @foreach($clientesInd as $c)
         @php
-        $nombre = trim(
-            ($f->contrato?->cliente?->primer_nombre ?? '') . ' ' .
-            ($f->contrato?->cliente?->primer_apellido ?? '')
-        );
-        $nombre = nombre_oracion($nombre);
-        $sem = $f->semaforo;
+        $sem = $c->semaforo;
         $semTip = match($sem) {
             'verde'    => 'Gestionado recientemente',
             'amarillo' => 'Hace 3–7 días sin gestión',
@@ -216,33 +226,41 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
         };
         // Peso para ordenar por la columna del semáforo: primero lo más urgente.
         $riesgo = match($sem) { 'rojo' => 3, 'gris' => 2, 'amarillo' => 1, default => 0 };
+        $varios = $c->facturas->count() > 1;
+        $f1     = $c->facturas->first();   // la más antigua
+        $gid    = 'cli-' . $loop->index;
         @endphp
-        <tr>
+        <tbody class="grp" id="{{ $gid }}">
+        <tr class="{{ $varios ? 'fila-cli fila-varios' : 'fila-cli' }}" @if($varios) onclick="togglePeriodos('{{ $gid }}', event)" @endif>
             <td style="text-align:center;" data-v="{{ $riesgo }}">
                 <span class="sem sem-{{ $sem }}" title="{{ $semTip }}"></span>
             </td>
-            <td data-v="{{ $nombre }}">
-                <div style="font-weight:700;color:#1e3a5f;">{{ $nombre ?: '—' }}</div>
+            <td data-v="{{ $c->nombre }}">
+                <div style="font-weight:700;color:#1e3a5f;">{{ $c->nombre ?: '—' }}</div>
             </td>
-            <td style="font-family:monospace;color:#64748b;font-size:.78rem;" data-v="{{ (int)$f->cedula }}">
-                {{ $f->cedula }}
+            <td style="font-family:monospace;color:#64748b;font-size:.78rem;" data-v="{{ (int)$c->cedula }}">
+                {{ $c->cedula }}
             </td>
-            <td style="font-size:.75rem;color:#64748b;" data-v="{{ $f->contrato?->asesor?->nombre ?? '' }}">{{ $f->contrato?->asesor?->nombre ?? '—' }}</td>
-            <td data-v="{{ (int)$f->anio * 100 + (int)$f->mes }}">
-                <span style="background:#dbeafe;color:#1d4ed8;padding:.15rem .5rem;border-radius:20px;font-size:.7rem;font-weight:700;">
-                    {{ $meses[$f->mes] }} {{ $f->anio }}
-                </span>
+            <td style="font-size:.75rem;color:#64748b;" data-v="{{ $c->asesor ?? '' }}">{{ $c->asesor ?? '—' }}</td>
+            <td data-v="{{ (int)$f1->anio * 100 + (int)$f1->mes }}">
+                @if($varios)
+                    <span class="tag-varios" title="{{ $c->facturas->map(fn($f) => $meses[$f->mes].' '.$f->anio)->join(', ') }}">
+                        <span class="caret">▸</span> Varios ({{ $c->facturas->count() }})
+                    </span>
+                @else
+                    <span class="tag-periodo">{{ $meses[$f1->mes] }} {{ $f1->anio }}</span>
+                @endif
             </td>
-            <td style="text-align:right;font-family:monospace;font-weight:600;" data-v="{{ (int)$f->total }}">{{ $fmt($f->total) }}</td>
-            <td style="text-align:right;" class="monto-abono" data-v="{{ (int)$f->total_abonado }}">{{ $fmt($f->total_abonado) }}</td>
-            <td style="text-align:right;" class="monto-deuda" data-v="{{ (int)$f->saldo_pendiente_prestamo }}">{{ $fmt($f->saldo_pendiente_prestamo) }}</td>
-            <td style="font-size:.73rem;" data-v="{{ $f->ultima_gestion?->fecha_llamada?->timestamp ?? 0 }}">
-                @if($f->ultima_gestion)
+            <td style="text-align:right;font-family:monospace;font-weight:600;" data-v="{{ $c->total }}">{{ $fmt($c->total) }}</td>
+            <td style="text-align:right;" class="monto-abono" data-v="{{ $c->total_abonado }}">{{ $fmt($c->total_abonado) }}</td>
+            <td style="text-align:right;" class="monto-deuda" data-v="{{ $c->saldo }}">{{ $fmt($c->saldo) }}</td>
+            <td style="font-size:.73rem;" data-v="{{ $c->ultima_gestion?->fecha_llamada?->timestamp ?? 0 }}">
+                @if($c->ultima_gestion)
                     <div style="font-weight:600;color:#334155;">
-                        {{ \App\Models\BitacoraCobro::RESULTADOS[$f->ultima_gestion->resultado] ?? $f->ultima_gestion->resultado }}
+                        {{ \App\Models\BitacoraCobro::RESULTADOS[$c->ultima_gestion->resultado] ?? $c->ultima_gestion->resultado }}
                     </div>
                     <div style="color:#94a3b8;font-size:.68rem;">
-                        {{ $f->ultima_gestion->fecha_llamada->format('d/m/Y') }}
+                        {{ $c->ultima_gestion->fecha_llamada->format('d/m/Y') }}
                     </div>
                 @else
                     <span style="color:#cbd5e1;">Sin gestiones</span>
@@ -250,19 +268,54 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
             </td>
             <td style="text-align:center;">
                 <div style="display:flex;gap:.3rem;justify-content:center;flex-wrap:wrap;">
-                    <a href="{{ route('admin.prestamos.show', $f->id) }}" class="btn-sm btn-ver">👁 Ver</a>
-                    <button onclick="abrirAbonar({{ $f->id }}, {{ $f->saldo_pendiente_prestamo }}, '{{ addslashes($nombre) }}')"
-                            class="btn-sm btn-abono">💰 Abonar</button>
-                    <button onclick="abrirGestion({{ $f->id }})"
+                    @if($varios)
+                        <button type="button" class="btn-sm btn-ver" onclick="togglePeriodos('{{ $gid }}', event)">📅 Períodos</button>
+                    @else
+                        <a href="{{ route('admin.prestamos.show', $f1->id) }}" class="btn-sm btn-ver">👁 Ver</a>
+                        <button onclick="abrirAbonar({{ $f1->id }}, {{ $f1->saldo_pendiente_prestamo }}, @js($c->nombre))"
+                                class="btn-sm btn-abono">💰 Abonar</button>
+                    @endif
+                    {{-- La gestión es de la persona: se anota en su deuda más antigua. --}}
+                    <button onclick="abrirGestion({{ $f1->id }})"
                             class="btn-sm btn-gestion">📞 Gestión</button>
                 </div>
             </td>
         </tr>
-        @endforeach
+        @if($varios)
+            @foreach($c->facturas as $f)
+            <tr class="fila-periodo" hidden>
+                <td></td>
+                <td colspan="3" style="font-size:.74rem;color:#64748b;padding-left:1.6rem;">
+                    ↳ Factura #{{ $f->numero_factura }}
+                </td>
+                <td><span class="tag-periodo">{{ $meses[$f->mes] }} {{ $f->anio }}</span></td>
+                <td style="text-align:right;font-family:monospace;">{{ $fmt($f->total) }}</td>
+                <td style="text-align:right;" class="monto-abono">{{ $fmt($f->total_abonado) }}</td>
+                <td style="text-align:right;" class="monto-deuda">{{ $fmt($f->saldo_pendiente_prestamo) }}</td>
+                <td></td>
+                <td style="text-align:center;">
+                    <div style="display:flex;gap:.3rem;justify-content:center;flex-wrap:wrap;">
+                        <a href="{{ route('admin.prestamos.show', $f->id) }}" class="btn-sm btn-ver">👁 Ver</a>
+                        <button onclick="abrirAbonar({{ $f->id }}, {{ $f->saldo_pendiente_prestamo }}, @js($c->nombre . ' · ' . $meses[$f->mes] . ' ' . $f->anio))"
+                                class="btn-sm btn-abono">💰 Abonar</button>
+                    </div>
+                </td>
+            </tr>
+            @endforeach
+            <tr class="fila-periodo fila-subtotal" hidden>
+                <td></td>
+                <td colspan="4" style="padding-left:1.6rem;">Total {{ $c->facturas->count() }} períodos</td>
+                <td style="text-align:right;font-family:monospace;">{{ $fmt($c->total) }}</td>
+                <td style="text-align:right;" class="monto-abono">{{ $fmt($c->total_abonado) }}</td>
+                <td style="text-align:right;" class="monto-deuda">{{ $fmt($c->saldo) }}</td>
+                <td colspan="2"></td>
+            </tr>
+        @endif
         </tbody>
+        @endforeach
         <tfoot>
         <tr style="background:#0f172a;color:#fff;font-weight:700;">
-            <td colspan="5" style="padding:.5rem .7rem;font-size:.72rem;">TOTALES ({{ $individuales->count() }} préstamos)</td>
+            <td colspan="5" style="padding:.5rem .7rem;font-size:.72rem;">TOTALES ({{ $clientesInd->count() }} clientes · {{ $individuales->count() }} préstamos)</td>
             <td style="text-align:right;padding:.5rem .7rem;font-family:monospace;">{{ $fmt($individuales->sum('total')) }}</td>
             <td style="text-align:right;padding:.5rem .7rem;font-family:monospace;color:#86efac;">{{ $fmt($individuales->sum('total_abonado')) }}</td>
             <td style="text-align:right;padding:.5rem .7rem;font-family:monospace;color:#fca5a5;">{{ $fmt($totalDeudaInd) }}</td>
@@ -505,19 +558,35 @@ document.querySelectorAll('table.tbl-prest').forEach(tabla => {
             th.dataset.dir = asc ? 'asc' : 'desc';
             th.querySelector('.sort-ind').textContent = asc ? '▲' : '▼';
 
-            const tbody = tabla.tBodies[0];
-            [...tbody.rows]
+            // En la tabla agrupada por cliente se ordenan los clientes (cada
+            // uno es un <tbody>) por su fila principal, con sus períodos pegados.
+            const agrupada = tabla.hasAttribute('data-grupos');
+            const tbody    = tabla.tBodies[0];
+            const unidades = agrupada ? [...tabla.querySelectorAll('tbody.grp')] : [...tbody.rows];
+            const filaDe   = u => agrupada ? u.rows[0] : u;
+            unidades
                 .sort((a, b) => {
-                    const va = valorCelda(a.cells[col], tipo);
-                    const vb = valorCelda(b.cells[col], tipo);
+                    const va = valorCelda(filaDe(a).cells[col], tipo);
+                    const vb = valorCelda(filaDe(b).cells[col], tipo);
                     if (va < vb) return asc ? -1 : 1;
                     if (va > vb) return asc ? 1 : -1;
                     return 0;
                 })
-                .forEach(fila => tbody.appendChild(fila));
+                .forEach(u => agrupada ? tabla.insertBefore(u, tabla.tFoot) : tbody.appendChild(u));
         });
     });
 });
+
+// ── Períodos de un cliente ───────────────────────────────────
+function togglePeriodos(gid, ev) {
+    // Los botones y enlaces de la fila hacen lo suyo sin desplegar.
+    if (ev && ev.target.closest('a, button') && !ev.target.closest('[onclick^="togglePeriodos"]:not(tr)')) return;
+    if (ev) ev.stopPropagation();
+    const g = document.getElementById(gid);
+    const abrir = !g.classList.contains('abierto');
+    g.classList.toggle('abierto', abrir);
+    g.querySelectorAll('tr.fila-periodo').forEach(tr => tr.hidden = !abrir);
+}
 
 // ── Modales ───────────────────────────────────────────────────
 function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }

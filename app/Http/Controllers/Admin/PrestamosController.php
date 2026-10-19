@@ -137,12 +137,42 @@ class PrestamosController extends Controller
             return $f;
         })->sortByDesc('total')->values();
 
+        // ── Individuales agrupados por cliente ────────────────────────
+        // Un cliente que debe tres meses salía en tres filas y el listado se
+        // volvía larguísimo. Ahora es una fila por cliente con los totales, y
+        // sus períodos se despliegan debajo (cada uno con su propio abono).
+        // La llave es el cliente y no la cédula: CC 104915 ≠ CE 104915.
+        $clientesInd = $individuales
+            ->groupBy(fn ($f) => $f->contrato?->cliente?->id ? 'cl' . $f->contrato->cliente->id : 'cc' . $f->cedula)
+            ->map(function ($fs) {
+                $fs      = $fs->sortBy(fn ($f) => (int) $f->anio * 100 + (int) $f->mes)->values();
+                $primera = $fs->first();
+                $ultimaGestion = $fs->pluck('ultima_gestion')->filter()
+                    ->sortByDesc(fn ($g) => $g->fecha_llamada)->first();
+                $dias = $ultimaGestion ? (int) $ultimaGestion->fecha_llamada->diffInDays(now()) : null;
+
+                return (object) [
+                    'cedula'         => $primera->cedula,
+                    'nombre'         => nombre_oracion(trim(
+                        ($primera->contrato?->cliente?->primer_nombre ?? '') . ' ' .
+                        ($primera->contrato?->cliente?->primer_apellido ?? '')
+                    )),
+                    'asesor'         => $fs->last()->contrato?->asesor?->nombre,
+                    'facturas'       => $fs,
+                    'total'          => (int) $fs->sum('total'),
+                    'total_abonado'  => (int) $fs->sum('total_abonado'),
+                    'saldo'          => (int) $fs->sum('saldo_pendiente_prestamo'),
+                    'ultima_gestion' => $ultimaGestion,
+                    'semaforo'       => $this->calcularSemaforo($dias),
+                ];
+            })
+            ->sortByDesc('total')->values();
 
         // ── Cards resumen ─────────────────────────────────────────────
         $totalDeudaInd  = $individuales->sum('saldo_pendiente_prestamo');
         $totalDeudaEmp  = $empresasAgrupadas->sum('total_deuda');
         $totalPrestamos = $individuales->count() + $empresasAgrupadas->sum('cant_facturas');
-        $sinGestion     = $individuales->whereIn('semaforo', ['gris', 'rojo'])->count()
+        $sinGestion     = $clientesInd->whereIn('semaforo', ['gris', 'rojo'])->count()
                         + $empresasAgrupadas->whereIn('semaforo', ['gris', 'rojo'])->count();
 
         // El abono se registra desde este listado, y `abonar()` exige la cuenta
@@ -166,7 +196,7 @@ class PrestamosController extends Controller
         }
 
         return view('admin.prestamos.index', compact(
-            'individuales', 'empresasAgrupadas',
+            'individuales', 'clientesInd', 'empresasAgrupadas',
             'tab', 'buscar', 'sort',
             'totalDeudaInd', 'totalDeudaEmp', 'totalPrestamos', 'sinGestion',
             'bancos', 'pagados', 'cantPagados', 'totalPagado'
