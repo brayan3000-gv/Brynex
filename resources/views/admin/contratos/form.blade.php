@@ -314,13 +314,6 @@
         </div>
         @endif
         <div id="nota-plan-modalidad" style="display:none;font-size:.6rem;color:#94a3b8;margin-top:.15rem;">Seleccione primero la modalidad</div>
-        {{-- Este cliente no cumple requisitos para omitir pensión, así que los
-             planes sin AFP quedaron fuera de la lista. Tipo E - X1 sí los paga,
-             en una sola planilla, pero solo liquida por Simple. --}}
-        <div id="nota-afp-x1" style="display:none;font-size:.6rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:4px;padding:.25rem .4rem;margin-top:.25rem;line-height:1.35;">
-          No cumple requisitos para omitir pensión: los planes sin AFP no aparecen aquí.
-          Para salud sin pensión use la modalidad <b>Tipo E - X1</b> (una sola planilla, solo liquida por Simple).
-        </div>
 
       </div>
       <div>
@@ -2937,9 +2930,6 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
 
     let planActualPermitido  = false;
     let planesAgregados      = [];
-    // Cuántos planes sin AFP se cayeron por la regla: es lo que decide si hay
-    // que ofrecerle Tipo E - X1 en vez de dejarlo sin opciones.
-    let planesOcultosSinAfp  = 0;
 
     _OPTS_PLAN.forEach(({ el, value, text }) => {
         if (!value) { selPlan.appendChild(el); return; }  // opción vacía siempre
@@ -2984,7 +2974,7 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
             && el.dataset.pen  !== '1'
             && el.dataset.caja !== '1';
         const exceptuarSoloArl = esSoloArlPlan && (esIndepRS || esIndepMod);
-        if (aplicarAfpObligatorio && el.dataset.pen !== '1' && !exceptuarSoloArl) { planesOcultosSinAfp++; return; }
+        if (aplicarAfpObligatorio && el.dataset.pen !== '1' && !exceptuarSoloArl) return;
 
         // ── Cliente pensionado: fuera los planes con AFP ────────────
         // Un pensionado ya no cotiza a pensión, así que ofrecerle un plan con AFP
@@ -3007,21 +2997,6 @@ function filtrarPlanes(modalidadId, evitarRecalcular = false) {
         planesAgregados.push(planId);
         if (planId === valorActual) planActualPermitido = true;
     });
-
-    // ── Aviso de Tipo E - X1 ───────────────────────────────────────────────
-    // Solo cuando la regla de AFP dejó al cliente sin los planes sin pensión y
-    // está parado en otra modalidad: ahí es donde no entiende por qué el plan
-    // que buscaba no aparece. Dentro de X1 no se muestra —ya está donde debía—.
-    // Solo donde X1 es de verdad una alternativa: es una modalidad de
-    // DEPENDIENTE. Al independiente y al tiempo parcial también se les esconden
-    // planes sin AFP, pero mandarlos a X1 sería mandarlos a donde no caben.
-    const notaX1 = document.getElementById('nota-afp-x1');
-    if (notaX1) {
-        const x1EsAlternativa = planesOcultosSinAfp > 0
-            && !esX1
-            && !esIndepMod && !esTP && !esIndepRS;
-        notaX1.style.display = x1EsAlternativa ? 'block' : 'none';
-    }
 
     // ── Referencia del plan: cuando hay rsLock usamos PLAN_ORIGINAL_ID ──────
     // selPlan.value pudo haber sido limpiado por una selección incompatible
