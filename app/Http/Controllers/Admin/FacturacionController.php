@@ -2363,13 +2363,9 @@ class FacturacionController extends Controller
                             break;
                         }
 
-                        // Saldo a nivel de lote: misma lógica que PrestamosController e InformeController.
-                        // valor_prestamo = monto explícito del préstamo al facturar (fuente de verdad).
+                        // Saldo a nivel de lote: la regla única de Factura::deudaLote.
                         $abonosLote = $lote->sum(fn ($f) => (int) $f->abonos->sum('valor'));
-                        $valorPrestamo = (int) $lote->sum('valor_prestamo');
-                        $saldoLote = $valorPrestamo > 0
-                            ? max(0, $valorPrestamo - $abonosLote)
-                            : max(0, abs((int) $lote->sum('saldo_proximo')) - $abonosLote);
+                        $saldoLote = max(0, Factura::deudaLote($lote) - $abonosLote);
 
                         if ($saldoLote <= 0) {
                             continue;

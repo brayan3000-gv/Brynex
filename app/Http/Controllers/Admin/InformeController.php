@@ -3878,8 +3878,7 @@ class InformeController extends Controller
         $anio = (int)$request->input('anio', now()->year);
 
         // Misma lógica que PrestamosController@index (tab empresas):
-        //   saldo_lote = SUM(valor_prestamo) - SUM(abonos_lote)
-        // valor_prestamo = monto explícito capturado al facturar (fuente de verdad).
+        //   saldo_lote = Factura::deudaLote(lote) - SUM(abonos_lote)
         // Para individuales: abs(saldo_proximo) - abonos (correcto por fila).
         $rows = DB::table('facturas AS f')
             ->where('f.aliado_id', $aid)
@@ -3943,12 +3942,8 @@ class InformeController extends Controller
             ->groupBy('numero_factura')
             ->map(function($lote) {
                 $abonosLote    = (int)$lote->sum('total_abonado');
-                $valorPrestamo = $lote->sum('valor_prestamo');
-
-                // Usar valor_prestamo como fuente de verdad (igual que módulo préstamos)
-                $prestadoLote = $valorPrestamo > 0
-                    ? (int)$valorPrestamo
-                    : abs((int)$lote->sum('saldo_proximo'));
+                // La misma regla del módulo de préstamos: Factura::deudaLote.
+                $prestadoLote = \App\Models\Factura::deudaLote($lote);
 
                 $saldoLote = max(0, $prestadoLote - $abonosLote);
 

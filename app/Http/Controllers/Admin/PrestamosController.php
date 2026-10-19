@@ -84,17 +84,8 @@ class PrestamosController extends Controller
             $lotes = $facturas->groupBy('numero_factura')->map(function ($lote) {
                 $primera = $lote->first();
                 $abonosLote    = (int)$lote->sum(fn($f) => $f->abonos->sum('valor'));
-                $valorPrestamo = (int)$lote->sum('valor_prestamo');
-                // Saldo a nivel de lote — usa valor_prestamo como fuente de verdad.
-                // valor_prestamo = monto explícito del préstamo al facturar ($22K total).
-                // Fallback: abs(saldo_proximo) para facturas antiguas sin valor_prestamo.
-                // Manda la deuda mas grande de las dos: `valor_prestamo` es lo que
-                // se pacto al facturar y a veces quedo por debajo de lo que la
-                // factura realmente debia (17 lotes asi en la base). Cuando eso
-                // pasa y hay un abono, la resta daba 0 y el lote DESAPARECIA del
-                // listado con deuda viva — EL EMBAL escondia $549.200 de julio.
-                $deudaLote = max($valorPrestamo, abs((int) $lote->sum('saldo_proximo')));
-                $saldoLote = max(0, $deudaLote - $abonosLote);
+                // Regla única del lote: ver Factura::deudaLote().
+                $saldoLote = max(0, Factura::deudaLote($lote) - $abonosLote);
                 return (object)[
                     'numero_factura'  => $primera->numero_factura,
                     'mes'             => $primera->mes,
@@ -220,13 +211,9 @@ class PrestamosController extends Controller
             $lote_total          = $lote->sum('total');
             $lote_total_abonado  = $lote->sum(fn($f) => (int)$f->abonos->sum('valor'));
 
-            // Saldo real = valor_prestamo (fuente de verdad explícita) - abonos posteriores.
-            // NO usar saldo_proximo: puede ser incorrecto si efectivo se distribuyó mal.
-            // Fallback a abs(saldo_proximo) para facturas antiguas sin valor_prestamo.
-            $valorPrestamoLote = (int)$lote->sum('valor_prestamo');
-            $lote_saldo_pendiente = $valorPrestamoLote > 0
-                ? max(0, $valorPrestamoLote - $lote_total_abonado)
-                : max(0, abs((int)$lote->sum('saldo_proximo')) - $lote_total_abonado);
+            // La misma regla del listado (Factura::deudaLote): con la suya propia
+            // el detalle daba saldado un lote que el listado mostraba debiendo.
+            $lote_saldo_pendiente = max(0, Factura::deudaLote($lote) - $lote_total_abonado);
 
             $lote_estado = $lote_saldo_pendiente > 0 ? Factura::ESTADO_PRESTAMO : Factura::ESTADO_PAGADA;
 
@@ -368,12 +355,8 @@ class PrestamosController extends Controller
                     ->with('abonos')
                     ->get();
 
-                // Saldo ORIGINAL del lote: usar valor_prestamo como fuente de verdad
-                // o fallback a abs(saldo_proximo)
-                $valorPrestamoLote = (int)$lote->sum('valor_prestamo');
-                $saldoOriginalLote = $valorPrestamoLote > 0
-                    ? $valorPrestamoLote
-                    : abs((int)$lote->sum('saldo_proximo'));
+                // Lo que debía el lote (regla única: Factura::deudaLote).
+                $saldoOriginalLote = Factura::deudaLote($lote);
                 $totalAbonadoLote  = $lote->sum(fn($f) => (int)$f->abonos->sum('valor'));
                 $loteCompleto      = $totalAbonadoLote >= $saldoOriginalLote;
 
@@ -421,11 +404,8 @@ class PrestamosController extends Controller
                 ->get();
 
             // Calcular el saldo restante real del lote de forma unificada
-            $valorPrestamoLote = (int)$loteActualizado->sum('valor_prestamo');
             $totalAbonadoLote  = $loteActualizado->sum(fn($f) => (int)$f->abonos->sum('valor'));
-            $saldoLote = $valorPrestamoLote > 0
-                ? max(0, $valorPrestamoLote - $totalAbonadoLote)
-                : max(0, abs((int)$loteActualizado->sum('saldo_proximo')) - $totalAbonadoLote);
+            $saldoLote = max(0, Factura::deudaLote($loteActualizado) - $totalAbonadoLote);
 
             $loteCompleto = $saldoLote <= 0;
 

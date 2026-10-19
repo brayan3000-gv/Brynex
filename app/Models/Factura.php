@@ -156,6 +156,25 @@ class Factura extends BaseModel
         return max(0, (int)$saldoOriginal - $this->total_abonado);
     }
 
+    /**
+     * Lo que debe un lote de empresa (las filas de un mismo numero_factura),
+     * antes de descontar los abonos. Acepta modelos o arreglos.
+     *
+     * Manda la deuda más grande entre lo pactado (`valor_prestamo`) y lo que
+     * las facturas quedaron debiendo (`saldo_proximo`): en 17 lotes lo pactado
+     * quedó por debajo, y con la resta contra `valor_prestamo` un abono los
+     * dejaba en cero con deuda viva. Una sola regla para el listado, el
+     * detalle, el abono, la cartera al facturar y los informes: cuando cada
+     * pantalla usaba la suya, EL EMBAL salía debiendo $549.200 en el listado y
+     * saldado al abrirlo.
+     */
+    public static function deudaLote(iterable $lote): int
+    {
+        $lote = collect($lote);
+
+        return max((int) $lote->sum('valor_prestamo'), abs((int) $lote->sum('saldo_proximo')));
+    }
+
     /** Genera el siguiente número de factura para un aliado */
     public static function siguienteNumero(int $aliadoId): int
     {
