@@ -1647,7 +1647,9 @@ class InformeController extends Controller
         // dueño, 19-oct-2026): a mitad de mes no hay nada que cerrar y las
         // cifras parciales confunden. Desde el día 1 siguiente sale el mes cerrado.
         $mostrarCierre = ! $esMesActual || today()->isSameDay(today()->endOfMonth());
-        $cierreVivo = ! $mostrarCierre ? null : \App\Services\Caja\CierreMes::calcular($aid, (int) $anio, (int) $mes, [
+        // Se calcula siempre: aunque el cierre no se muestre, «cómo está la
+        // plata» y el efectivo por recoger salen de aquí.
+        $cierreVivo = \App\Services\Caja\CierreMes::calcular($aid, (int) $anio, (int) $mes, [
             'ing_planillas'    => $ingPlanillas,
             'ing_afiliaciones' => $ingresos['afiliaciones'],
             'ing_tramites'     => $ingTramites,
@@ -1665,10 +1667,13 @@ class InformeController extends Controller
             'incapacidades'    => $canal5SaldoAcumulado,
             'bancos'           => $bancos,
         ]);
-        $cierre = $cierreVivo === null ? null : \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
+        $cierreHoy = \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
+        $cierre    = $mostrarCierre ? $cierreHoy : null;
+        $plata     = \App\Services\Caja\CierreMes::plata($aid, (int) $anio, (int) $mes, $cierreHoy);
+        $porRecoger = array_values(array_filter($cierreHoy['efectivo'], fn ($e) => (int) ($e['real'] ?? $e['saldo']) !== 0));
 
         return view('admin.informes.financiero', compact(
-            'cierre', 'cierreVivo',
+            'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger',
             'mes','anio','ingresos','egresos','utilidad',
             'usuarios', 'esAdmin',
             'recaudoSS','pagadoSSRaw','saldoSS',

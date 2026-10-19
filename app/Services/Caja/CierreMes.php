@@ -197,6 +197,74 @@ class CierreMes
     }
 
     /**
+     * Cómo está la plata de la empresa (todas las cuentas y cajas, no una
+     * cuenta): lo que hay, lo que no es suyo, lo que prestó y lo que debería
+     * ser según el cierre anterior más la ganancia del mes.
+     *
+     * Un saldo de incapacidades en negativo es plata que la empresa le
+     * adelantó al afiliado y que la EPS o la ARL todavía debe: va con lo
+     * prestado, no resta de lo ajeno.
+     */
+    public static function plata(int $aliadoId, int $anio, int $mes, array $c): array
+    {
+        $ajeno  = (int) $c['total_b'];
+        $cobrar = (int) $c['total_c'];
+        $adelantado = 0;
+        foreach ($c['b'] as $it) {
+            if ($it[0] === 'incapacidades' && $it[3] < 0) {
+                $adelantado = -$it[3];
+            }
+        }
+        $ajeno  += $adelantado;
+        $cobrar += $adelantado;
+        $es = (int) $c['total_d'] - $ajeno + $cobrar;
+
+        // Lo que debería ser: lo que era de la empresa al cierre anterior
+        // (su foto, con lo real anotado) + la ganancia del mes − los retiros.
+        $deberia = null;
+        $ant = Carbon::createFromDate($anio, $mes, 1)->subMonth();
+        $filaAnt = CierreMesModel::de($aliadoId, $ant->year, $ant->month);
+        if ($filaAnt?->foto) {
+            $cAnt = self::componer($aliadoId, $ant->year, $ant->month, $filaAnt->foto);
+            $deberia = self::plataSinAnterior($cAnt) + (int) $c['a']['utilidad'] - (int) $c['a']['retiros'];
+        }
+
+        $sinVerificar = array_values(array_filter(
+            array_merge($c['bancos'], $c['efectivo']),
+            fn ($f) => $f['real'] === null && ! in_array($f['origen'] ?? (($f['verificado'] ?? false) ? 'verificado' : 'sin_verificar'), ['verificado', 'manual', 'arrastre', 'personal'], true)
+                && (int) $f['saldo'] !== 0
+        ));
+
+        return [
+            'bancos'        => (int) $c['total_bancos'],
+            'efectivo'      => (int) $c['total_efectivo'],
+            'hay'           => (int) $c['total_d'],
+            'ajeno'         => $ajeno,
+            'ajeno_detalle' => array_values(array_filter($c['b'], fn ($it) => $it[3] > 0)),
+            'cobrar'        => $cobrar,
+            'adelantado'    => $adelantado,
+            'es'            => $es,
+            'deberia'       => $deberia,
+            'diferencia'    => $deberia === null ? null : $es - $deberia,
+            'mes_anterior'  => $ant->locale('es')->monthName,
+            'sin_verificar' => count($sinVerificar),
+        ];
+    }
+
+    /** Lo que es de la empresa según un cierre, sin mirar el anterior. */
+    private static function plataSinAnterior(array $c): int
+    {
+        $adelantado = 0;
+        foreach ($c['b'] as $it) {
+            if ($it[0] === 'incapacidades' && $it[3] < 0) {
+                $adelantado = -$it[3];
+            }
+        }
+
+        return (int) $c['total_d'] - ((int) $c['total_b'] + $adelantado) + ((int) $c['total_c'] + $adelantado);
+    }
+
+    /**
      * Aviso para quien registra un movimiento con fecha de un mes cuyo cierre
      * ya se verificó (se anotaron los saldos reales). Se deja registrar —lo
      * decidió el dueño—, pero la diferencia de ese mes cambia; el mes actual

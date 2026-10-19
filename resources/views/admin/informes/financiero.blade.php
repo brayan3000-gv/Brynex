@@ -595,15 +595,55 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:.85rem;">Distribución Ingresos</div>
             <canvas id="chartDona" height="140"></canvas>
 
+            {{-- Cómo está la plata de la EMPRESA (todas las cuentas y cajas, no
+                 una cuenta). Ver App\Services\Caja\CierreMes::plata(). --}}
+            @php
+                $pl = $plata;
+                $fila = function ($label, $valor, $color = '#334155', $peso = 600, $title = '') use ($fmt) {
+                    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;" title="'.e($title).'">'
+                        .'<span style="font-size:.7rem;color:#475569;font-weight:'.$peso.';">'.$label.'</span>'
+                        .'<span style="font-size:.74rem;font-weight:'.max($peso, 700).';color:'.$color.';font-family:monospace;white-space:nowrap;">'.$fmt($valor).'</span></div>';
+                };
+                $corteTxt = ($mes == now()->month && $anio == now()->year) ? 'hoy' : 'al cierre';
+            @endphp
+            <div style="margin-top:1rem;border-top:1px solid #f1f5f9;padding-top:.85rem;display:flex;flex-direction:column;gap:.3rem;">
+                <div style="font-size:.6rem;font-weight:800;text-transform:uppercase;color:#94a3b8;letter-spacing:.06em;margin-bottom:.15rem;">
+                    💰 Cómo está la plata {{ $corteTxt }}
+                </div>
+                <div style="font-size:.6rem;color:#94a3b8;margin:-.15rem 0 .25rem;">La empresa: todas las cuentas y cajas</div>
+                {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo verificado') !!}
+                {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'Lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
+                <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
+                {!! $fila('= Hay', $pl['hay'], '#0f172a', 800) !!}
+                {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 600,
+                    collect($pl['ajeno_detalle'])->map(fn ($it) => $it[1].': $'.number_format($it[3], 0, ',', '.'))->implode(' · ')) !!}
+                {!! $fila('+ Prestado, falta que entre', $pl['cobrar'], '#7c3aed', 600,
+                    'Cartera de clientes'.($pl['adelantado'] ? ' + $'.number_format($pl['adelantado'], 0, ',', '.').' de incapacidades adelantadas al afiliado (la EPS o ARL todavía debe)' : '')) !!}
+                <div style="border-top:1.5px solid #e2e8f0;margin:.15rem 0"></div>
+                {!! $fila('= Es de Brygar', $pl['es'], '#0f172a', 800, 'Lo que hay − lo que no es de Brygar + lo prestado') !!}
+                @if($pl['deberia'] !== null)
+                    {!! $fila('Debería ser', $pl['deberia'], '#64748b', 600, 'Lo que era de Brygar al cierre de '.$pl['mes_anterior'].' + la ganancia del mes − los retiros del dueño') !!}
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:.3rem .4rem;border-radius:6px;background:{{ abs($pl['diferencia']) < 1 ? '#ecfdf5' : '#fef2f2' }};">
+                        <span style="font-size:.7rem;font-weight:800;color:{{ abs($pl['diferencia']) < 1 ? '#065f46' : '#991b1b' }};">{{ abs($pl['diferencia']) < 1 ? '✅ Cuadra' : '⚠️ Diferencia' }}</span>
+                        <span style="font-size:.78rem;font-weight:900;font-family:monospace;color:{{ abs($pl['diferencia']) < 1 ? '#065f46' : '#991b1b' }};">{{ $pl['diferencia'] > 0 ? '+' : '' }}{{ $fmt($pl['diferencia']) }}</span>
+                    </div>
+                    @if(abs($pl['diferencia']) >= 1)
+                    <div style="font-size:.6rem;color:#94a3b8;line-height:1.35;">
+                        {{ $pl['diferencia'] > 0 ? 'Hay más plata de la que se explica' : 'Falta plata' }}: revisa efectivo sin contar, consignaciones en otra cuenta, gastos o retiros sin anotar.
+                        @if($pl['sin_verificar']) {{ $pl['sin_verificar'] }} {{ $pl['sin_verificar'] === 1 ? 'caja o cuenta arrancó' : 'cajas o cuentas arrancaron' }} el mes sin verificar.@endif
+                    </div>
+                    @endif
+                @else
+                    <div style="font-size:.6rem;color:#94a3b8;line-height:1.35;">Sin foto del cierre de {{ $pl['mes_anterior'] }}: no se puede decir cuánto debería ser.</div>
+                @endif
+            </div>
         </div>
 
         {{-- Bancos + Efectivo --}}
         <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
                 <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;" title="Los saldos de cada cuenta están arriba, en «Dónde está la plata»">🏦 Movimientos del mes por cuenta <span style="text-transform:none;font-weight:500">— lo que entró y salió en {{ $mesesEs[$mes] }}</span></div>
-                <div style="font-size:.72rem;background:#f8fafc;border:1px solid #e2e8f0;padding:.22rem .65rem;border-radius:6px;color:#475569;font-weight:600;">
-                    Arrastre Mes Anterior (Bancos + Efectivo): <span style="font-family:monospace;color:#0f172a;font-weight:700;">{{ $fmt($saldoTotalMesAnterior) }}</span>
-                </div>
+                <div style="font-size:.66rem;color:#94a3b8;">Cómo está la plata de la empresa: a la izquierda, debajo de la gráfica</div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;">
 
@@ -743,6 +783,33 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                             <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">{{ $efMes->label_saldo }}</span>
                             <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">{{ $fmt($efMes->saldo_actual) }}</span>
                         </div>
+                    </div>
+                </div>
+
+                {{-- Tarjeta Efectivo por recoger: lo que cada persona tiene por entregar --}}
+                <div class="bank-card" onclick="window.location='{{ route('admin.cuadre-diario.consolidado', ['vista' => 'mes', 'mes' => sprintf('%04d-%02d', $anio, $mes)]) }}'"
+                     title="Ver el consolidado de caja del mes" style="border-top-color:#0d9488;">
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">💵 Efectivo</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Por recoger</div>
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">
+                            {{ ($mes == now()->month && $anio == now()->year) ? 'Lo tienen hoy' : 'Lo tenían al cierre' }}
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#0f766e;line-height:1.1;">{{ $fmt(collect($porRecoger)->sum(fn ($e) => $e['real'] ?? $e['saldo'])) }}</div>
+                    </div>
+                    <div style="margin-top:.6rem;padding-top:.5rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.25rem;">
+                        @forelse($porRecoger as $e)
+                        @php $v = $e['real'] ?? $e['saldo']; @endphp
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:.3rem;">
+                            <span style="font-size:.66rem;color:#475569;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;"
+                                  title="{{ $e['verificado'] ? 'Arrancó el mes con lo contado' : 'Arrancó el mes sin efectivo contado: se cuenta desde 0' }}">
+                                {{ $e['nombre'] }}@unless($e['verificado']) <span style="color:#d97706">⚠</span>@endunless
+                            </span>
+                            <span style="font-size:.7rem;font-weight:800;font-family:monospace;white-space:nowrap;flex-shrink:0;color:{{ $v < 0 ? '#dc2626' : '#0f766e' }};">{{ $fmt($v) }}</span>
+                        </div>
+                        @empty
+                        <div style="font-size:.66rem;color:#94a3b8;">Nadie tiene efectivo por entregar.</div>
+                        @endforelse
                     </div>
                 </div>
 
