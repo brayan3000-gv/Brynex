@@ -480,12 +480,31 @@ class PrestamosController extends Controller
             return response()->json(['ok' => false, 'mensaje' => 'Debe indicar el motivo de la condonación.'], 422);
         }
 
-        $factura->update([
-            'estado'        => Factura::ESTADO_PAGADA,
-            'saldo_proximo' => 0,
-            'observacion'   => ($factura->observacion ? $factura->observacion . ' | ' : '') .
-                               'CONDONADO: ' . $motivo . ' — ' . Auth::user()->nombre . ' ' . now()->format('d/m/Y'),
-        ]);
+        // En un lote de empresa se condona el lote completo. Antes solo se
+        // marcaba la fila del clic: las demás seguían como préstamo y, como los
+        // abonos del lote viven en la fila de referencia (que ya no salía en el
+        // listado), el lote reaparecía debiendo casi todo. FRANCISCO JAVIER
+        // MORENO: se condonaron $110.900 y el listado pasó a $1.003.900.
+        $esLote = $factura->empresa_id && $factura->empresa_id != 1;
+        $filas  = $esLote
+            ? Factura::where('aliado_id', $aliadoId)
+                ->where('numero_factura', $factura->numero_factura)
+                ->where('empresa_id', $factura->empresa_id)
+                ->where('estado', Factura::ESTADO_PRESTAMO)
+                ->whereNull('deleted_at')
+                ->get()
+            : collect([$factura]);
+
+        $nota = 'CONDONADO: ' . $motivo . ' — ' . Auth::user()->nombre . ' ' . now()->format('d/m/Y');
+        DB::transaction(function () use ($filas, $nota) {
+            foreach ($filas as $f) {
+                $f->update([
+                    'estado'        => Factura::ESTADO_PAGADA,
+                    'saldo_proximo' => 0,
+                    'observacion'   => mb_substr(($f->observacion ? $f->observacion . ' | ' : '') . $nota, 0, 500),
+                ]);
+            }
+        });
 
         return response()->json([
             'ok'     => true,
