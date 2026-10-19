@@ -67,11 +67,13 @@ class CierreMes
         // ── D: dónde está la plata ───────────────────────────────────────
         $bancos = [];
         $pendientePersonales = 0;
+        $cuentasEnNegativo = [];
         foreach ($inf['bancos'] as $b) {
             $saldo    = (int) $b->saldo_actual;
             $personal = (bool) ($b->uso_personal ?? false);
             if ($personal && $saldo < 0) {
                 $pendientePersonales += -$saldo;
+                $cuentasEnNegativo[] = trim(($b->banco ?? '') . ' ' . ($b->nombre ?? '')) . ' $' . number_format(-$saldo, 0, ',', '.');
             }
             if ($saldo == 0 && (int) $b->ing_mes == 0 && (int) $b->sal_mes == 0) {
                 continue;
@@ -117,8 +119,16 @@ class CierreMes
             ['asesores',      'Comisiones de asesores por pagar', 'se pagan cuando las piden', (int) $inf['asesores']],
             ['incapacidades', 'Saldo de incapacidades', 'plata de los afiliados que entró y no se ha liquidado', (int) round($inf['incapacidades'])],
             ['a_favor',       'Saldos a favor de clientes', 'pagaron de más; pasa hasta que se aplique', $aFavor],
-            ['personales',    'Pendiente a tus cuentas personales', 'el negocio pagó con tu plata: transfiere para dejarlas en 0', $pendientePersonales],
+            ['personales',    'Prestado por el dueño', $cuentasEnNegativo
+                ? 'el negocio pagó con tu plata desde ' . implode(', ', $cuentasEnNegativo) . ': pendiente por recuperar'
+                : 'tus cuentas personales no están en negativo', $pendientePersonales],
         ];
+
+        // Lo que falta que entre, separado: los préstamos del mes (lo que
+        // muestra la tarjeta de préstamos), los de meses anteriores y lo demás
+        // que deben los clientes, neto de sus saldos a favor.
+        [$prestMes, $prestAnt] = self::prestamosPendientes($aliadoId, $inicio->toDateString(), $corte->toDateString());
+        $otras = $porCobrar - $prestMes - $prestAnt;
 
         return [
             'anio'      => $anio,
@@ -128,7 +138,11 @@ class CierreMes
             'a'         => $a,
             'b'         => $b,
             'total_b'   => (int) array_sum(array_column($b, 3)),
-            'c'         => [['cartera', 'Cartera de clientes', 'préstamos y facturas que quedaron debiendo', $porCobrar]],
+            'c'         => [
+                ['prestamos_mes', 'Préstamos de ' . $inicio->locale('es')->monthName, 'los que muestra la tarjeta de préstamos', $prestMes],
+                ['prestamos_ant', 'Préstamos de meses anteriores', 'siguen sin pagar', $prestAnt],
+                ['otras',         'Otras deudas de clientes', 'facturas que quedaron debiendo, menos sus saldos a favor', $otras],
+            ],
             'total_c'   => $porCobrar,
             'bancos'    => $bancos,
             'efectivo'  => $efectivo,
@@ -240,8 +254,15 @@ class CierreMes
             'efectivo'      => (int) $c['total_efectivo'],
             'hay'           => (int) $c['total_d'],
             'ajeno'         => $ajeno,
-            'ajeno_detalle' => array_values(array_filter($c['b'], fn ($it) => $it[3] > 0)),
+            // Todo lo que suma al total, también lo negativo (la reserva de
+            // retiros en déficit), para que los renglones den el total. El
+            // saldo de incapacidades en negativo no: ese va con lo prestado.
+            'ajeno_detalle' => array_values(array_filter($c['b'], fn ($it) => (int) $it[3] !== 0
+                && ! ($it[0] === 'incapacidades' && $it[3] < 0))),
             'cobrar'        => $cobrar,
+            'cobrar_detalle' => array_values(array_filter(array_merge($c['c'], $adelantado
+                ? [['incapacidades', 'Incapacidades adelantadas al afiliado', 'la EPS o la ARL todavía debe', $adelantado]] : []),
+                fn ($it) => (int) $it[3] !== 0)),
             'adelantado'    => $adelantado,
             'es'            => $es,
             'deberia'       => $deberia,
@@ -310,6 +331,23 @@ class CierreMes
         $fila->save();
 
         return $fila;
+    }
+
+    /**
+     * Lo que falta por cobrar de los préstamos: [hechos en el mes, hechos antes].
+     * Es el `saldo_proximo` negativo de las facturas que siguen en préstamo.
+     */
+    public static function prestamosPendientes(int $aliadoId, string $inicioMes, string $corte): array
+    {
+        $r = DB::table('facturas')
+            ->where('aliado_id', $aliadoId)->whereNull('deleted_at')
+            ->where('estado', 'prestamo')->where('saldo_proximo', '<', 0)
+            ->whereDate('fecha_pago', '<=', $corte)
+            ->selectRaw('SUM(CASE WHEN fecha_pago >= ? THEN CAST(-saldo_proximo AS BIGINT) ELSE 0 END) AS mes,
+                         SUM(CASE WHEN fecha_pago <  ? THEN CAST(-saldo_proximo AS BIGINT) ELSE 0 END) AS antes', [$inicioMes, $inicioMes])
+            ->first();
+
+        return [(int) ($r->mes ?? 0), (int) ($r->antes ?? 0)];
     }
 
     /** Anticipos recibidos hasta el corte que no se habían aplicado a una factura de antes del corte. */

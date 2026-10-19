@@ -615,10 +615,20 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'Lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
                 <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
                 {!! $fila('= Hay', $pl['hay'], '#0f172a', 800) !!}
-                {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 600,
-                    collect($pl['ajeno_detalle'])->map(fn ($it) => $it[1].': $'.number_format($it[3], 0, ',', '.'))->implode(' · ')) !!}
-                {!! $fila('+ Prestado, falta que entre', $pl['cobrar'], '#7c3aed', 600,
-                    'Cartera de clientes'.($pl['adelantado'] ? ' + $'.number_format($pl['adelantado'], 0, ',', '.').' de incapacidades adelantadas al afiliado (la EPS o ARL todavía debe)' : '')) !!}
+                {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 700, 'Plata que está en las cuentas o en efectivo pero es de otros, o que Brygar debe') !!}
+                @foreach($pl['ajeno_detalle'] as [$k, $n, $sub, $v])
+                <div style="display:flex;justify-content:space-between;gap:.4rem;padding-left:.7rem;" title="{{ $sub }}">
+                    <span style="font-size:.62rem;color:#64748b;">└ {{ $n }}</span>
+                    <span style="font-size:.64rem;color:#b45309;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
+                </div>
+                @endforeach
+                {!! $fila('+ Prestado, falta que entre', $pl['cobrar'], '#7c3aed', 700, 'Lo que le deben a Brygar: ya contó como ingreso y falta que llegue la plata') !!}
+                @foreach($pl['cobrar_detalle'] as [$k, $n, $sub, $v])
+                <div style="display:flex;justify-content:space-between;gap:.4rem;padding-left:.7rem;" title="{{ $sub }}">
+                    <span style="font-size:.62rem;color:#64748b;">└ {{ $n }}</span>
+                    <span style="font-size:.64rem;color:#7c3aed;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
+                </div>
+                @endforeach
                 <div style="border-top:1.5px solid #e2e8f0;margin:.15rem 0"></div>
                 {!! $fila('= Es de Brygar', $pl['es'], '#0f172a', 800, 'Lo que hay − lo que no es de Brygar + lo prestado') !!}
                 @if($pl['deberia'] !== null)
