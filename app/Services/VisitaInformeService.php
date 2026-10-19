@@ -1,0 +1,256 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Anticipo;
+use App\Models\Cliente;
+use App\Models\Contrato;
+use App\Models\Factura;
+use Illuminate\Support\Collection;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
+/**
+ * Lo que se mira después de (o durante) una visita: qué se recogió en un
+ * rango de fechas, con el abono de la empresa a cada persona, y qué le falta
+ * a cada persona de una empresa para completar su mes.
+ *
+ * No calcula nada propio: lo que falta sale de VisitaCobroService::resumen,
+ * el mismo cálculo que ve quien cobra en el puesto.
+ */
+class VisitaInformeService
+{
+    public function __construct(private VisitaCobroService $cobros) {}
+
+    /**
+     * Lo cobrado desde /visita entre dos fechas, una fila por persona, más el
+     * detalle de cada cobro y de cada abono de la empresa en esas fechas.
+     *
+     * @return array{personas: Collection, cobros: Collection, empresa: Collection}
+     */
+    public function cobros(int $aliadoId, string $desde, string $hasta, ?int $empresaId): array
+    {
+        $enRango = fn ($q) => $q->where('aliado_id', $aliadoId)
+            ->whereDate('fecha_pago', '>=', $desde)->whereDate('fecha_pago', '<=', $hasta);
+
+        $facturas = Factura::query()->tap($enRango)
+            ->where('observacion', 'LIKE', 'Cobro en visita%')->where('estado', '!=', 'anulada')
+            ->with('usuario:id,nombre')->get();
+        $anticipos = Anticipo::query()->tap($enRango)
+            ->where('observacion', 'LIKE', 'Cobro en visita%')
+            ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_ANULADO])
+            ->with('usuario:id,nombre')->get();
+
+        // Igual que la caja de la pantalla: de la factura solo cuenta la plata
+        // nueva, no lo que puso de anticipos anteriores.
+        $cobros = $facturas->map(fn ($f) => [
+            'fecha' => $f->fecha_pago, 'hora' => $f->created_at?->format('g:i a'), 'orden' => $f->created_at?->timestamp,
+            'cedula' => (string) $f->cedula,
+            'tipo' => 'Factura '.ReciboVisitaService::periodo((int) $f->mes, (int) $f->anio),
+            'numero' => (string) ($f->numero_factura ?: $f->id),
+            'efectivo' => (int) $f->valor_efectivo, 'transferencia' => (int) $f->valor_consignado,
+            'cobro' => $f->usuario?->nombre, 'nota' => $this->nota($f->observacion),
+        ])->concat($anticipos->map(fn ($a) => [
+            'fecha' => $a->fecha_pago, 'hora' => $a->created_at?->format('g:i a'), 'orden' => $a->created_at?->timestamp,
+            'cedula' => (string) $a->cedula,
+            'tipo' => 'Anticipo · '.(Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago),
+            'numero' => 'ANT-'.$a->id,
+            'efectivo' => $a->forma_pago === 'efectivo' ? (int) $a->valor : 0,
+            'transferencia' => $a->forma_pago === 'efectivo' ? 0 : (int) $a->valor,
+            'cobro' => $a->usuario?->nombre, 'nota' => $this->nota($a->observacion),
+        ]));
+
+        $clientes = $this->clientes($aliadoId, $cobros->pluck('cedula')->unique()->values());
+        if ($empresaId) {
+            $cobros = $cobros->filter(fn ($c) => (int) ($clientes[$c['cedula']]->cod_empresa ?? 0) === $empresaId);
+        }
+        $cobros = $cobros->sortBy('orden')->values();
+        $cedulas = $cobros->pluck('cedula')->unique()->values();
+
+        // Lo que la empresa repartió a esas mismas personas en esas fechas
+        // (las partes de un anticipo por NIT).
+        $empresa = collect();
+        foreach ($cedulas->chunk(1000) as $lote) {
+            $empresa = $empresa->concat(Anticipo::query()->tap($enRango)
+                ->whereNotNull('anticipo_padre_id')
+                ->whereIn('cedula', $lote->all())
+                ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_ANULADO])
+                ->orderBy('fecha_pago')->get());
+        }
+
+        $personas = $cedulas->map(function ($cedula) use ($cobros, $empresa, $clientes) {
+            $suyos = $cobros->where('cedula', $cedula);
+            $efectivo = (int) $suyos->sum('efectivo');
+            $transfer = (int) $suyos->sum('transferencia');
+            $deEmpresa = (int) $empresa->where('cedula', $cedula)->sum('valor');
+
+            return [
+                'cedula' => $cedula,
+                'nombre' => $clientes->get($cedula)?->nombre_completo ?? '',
+                'empresa' => $clientes->get($cedula)?->empresa?->empresa ?? 'Individual',
+                'efectivo' => $efectivo,
+                'transferencia' => $transfer,
+                'abono' => $efectivo + $transfer,
+                'abono_empresa' => $deEmpresa,
+                'total' => $efectivo + $transfer + $deEmpresa,
+                'cobros' => $suyos->count(),
+                'cobro' => $suyos->pluck('cobro')->filter()->unique()->implode(', '),
+            ];
+        })->sortBy([['empresa', 'asc'], ['nombre', 'asc']])->values();
+
+        $nombres = $personas->pluck('nombre', 'cedula');
+        $empresas = $personas->pluck('empresa', 'cedula');
+
+        return [
+            'personas' => $personas,
+            'cobros' => $cobros->map(fn ($c) => $c + ['nombre' => $nombres[$c['cedula']] ?? '', 'empresa' => $empresas[$c['cedula']] ?? '']),
+            'empresa' => $empresa->map(fn ($a) => [
+                'fecha' => $a->fecha_pago, 'cedula' => (string) $a->cedula,
+                'nombre' => $nombres[(string) $a->cedula] ?? '', 'empresa' => $empresas[(string) $a->cedula] ?? '',
+                'valor' => (int) $a->valor, 'numero' => 'ANT-'.$a->id, 'de' => 'ANT-'.$a->anticipo_padre_id,
+                'periodo' => $a->periodo_mes ? ReciboVisitaService::periodo((int) $a->periodo_mes, (int) $a->periodo_anio) : '',
+            ]),
+        ];
+    }
+
+    /** El Excel de cobros(): personas, cada cobro y cada abono de la empresa. Devuelve la ruta temporal. */
+    public function excelCobros(array $datos): string
+    {
+        $libro = new Spreadsheet;
+
+        $hoja = $libro->getActiveSheet()->setTitle('Por persona');
+        $this->tabla($hoja, ['Cédula', 'Nombre completo', 'Empresa', 'Efectivo', 'Transferencia', 'Abono de la persona',
+            'Abono de la empresa', 'Total', 'Cobros', 'Cobró'], $datos['personas']->map(fn ($p) => [
+                $p['cedula'], $p['nombre'], $p['empresa'], $p['efectivo'], $p['transferencia'], $p['abono'],
+                $p['abono_empresa'], $p['total'], $p['cobros'], $p['cobro'],
+            ]), ['D', 'E', 'F', 'G', 'H'], '1e40af', true);
+
+        $this->tabla($libro->createSheet()->setTitle('Cada cobro'), ['Fecha', 'Hora', 'Cédula', 'Nombre completo', 'Empresa',
+            'Tipo', 'N.º', 'Efectivo', 'Transferencia', 'Valor', 'Cobró', 'Nota'], $datos['cobros']->map(fn ($c) => [
+                $c['fecha']?->format('Y-m-d'), $c['hora'], $c['cedula'], $c['nombre'], $c['empresa'], $c['tipo'], $c['numero'],
+                $c['efectivo'], $c['transferencia'], $c['efectivo'] + $c['transferencia'], $c['cobro'], $c['nota'],
+            ]), ['H', 'I', 'J'], '059669');
+
+        $this->tabla($libro->createSheet()->setTitle('Abonos de la empresa'), ['Fecha', 'Cédula', 'Nombre completo', 'Empresa',
+            'Valor', 'Para el mes', 'N.º', 'Parte de'], $datos['empresa']->map(fn ($a) => [
+                $a['fecha']?->format('Y-m-d'), $a['cedula'], $a['nombre'], $a['empresa'], $a['valor'], $a['periodo'], $a['numero'], $a['de'],
+            ]), ['E'], '7c3aed');
+
+        $libro->setActiveSheetIndex(0);
+        $ruta = tempnam(sys_get_temp_dir(), 'visita');
+        (new Xlsx($libro))->save($ruta);
+
+        return $ruta;
+    }
+
+    /**
+     * Los contratos vigentes de la gente de una empresa (por cod_empresa del
+     * cliente, el mismo criterio de la lista de la pantalla). Lo que falta de
+     * cada uno se pide aparte, por tandas: ver faltantes().
+     */
+    public function contratosDeEmpresa(int $aliadoId, int $empresaId): array
+    {
+        $clientes = Cliente::where('aliado_id', $aliadoId)->where('cod_empresa', $empresaId)->get()->keyBy(fn ($c) => (string) $c->cedula);
+
+        $contratos = collect();
+        foreach ($clientes->keys()->chunk(1000) as $lote) {
+            $contratos = $contratos->concat(Contrato::where('aliado_id', $aliadoId)->where('estado', 'vigente')
+                ->whereIn('cedula', $lote->all())->with('razonSocial')->get());
+        }
+        $porCedula = $contratos->countBy(fn ($k) => (string) $k->cedula);
+
+        return $contratos->map(fn ($k) => [
+            'contrato_id' => (int) $k->id,
+            'cedula' => (string) $k->cedula,
+            'nombre' => $clientes->get((string) $k->cedula)?->nombre_completo ?? '',
+            'razon_social' => $k->razonSocial?->razon_social ?? '—',
+            // Con dos contratos vigentes, los anticipos de la cédula se ven
+            // en los dos: no se suman dos veces.
+            'varios' => $porCedula[(string) $k->cedula] > 1,
+        ])->sortBy('nombre')->values()->all();
+    }
+
+    /** Lo que falta en cada contrato, separando lo que abonó la empresa de lo que abonó la persona. */
+    public function faltantes(int $aliadoId, array $contratoIds): array
+    {
+        return Contrato::where('aliado_id', $aliadoId)->where('estado', 'vigente')->whereIn('id', $contratoIds)->get()
+            ->map(function ($k) {
+                try {
+                    $r = $this->cobros->resumen($k);
+                } catch (\Throwable $e) {
+                    report($e);
+
+                    return ['contrato_id' => (int) $k->id, 'error' => 'No se pudo calcular.'];
+                }
+
+                return [
+                    'contrato_id' => (int) $k->id,
+                    'periodo' => $r['periodo'],
+                    'total_mes' => $r['total_mes'],
+                    'abono_empresa' => $r['anticipos_empresa'],
+                    'abono_persona' => $r['anticipos'] - $r['anticipos_empresa'] + $r['saldo_favor'],
+                    'falta' => $r['falta'],
+                    'facturable' => $r['facturable'],
+                    'motivo' => $r['motivo_no_factura'],
+                ];
+            })->values()->all();
+    }
+
+    private function clientes(int $aliadoId, Collection $cedulas): Collection
+    {
+        $clientes = collect();
+        foreach ($cedulas->chunk(1000) as $lote) {
+            $clientes = $clientes->concat(Cliente::where('aliado_id', $aliadoId)->whereIn('cedula', $lote->all())
+                ->with('empresa:id,empresa')->get());
+        }
+
+        return $clientes->keyBy(fn ($c) => (string) $c->cedula);
+    }
+
+    /** "Cobro en visita · SAMASU · puesto 4" → "SAMASU · puesto 4". */
+    private function nota(?string $observacion): string
+    {
+        return trim(preg_replace('/^Cobro en visita\s*·?\s*/u', '', (string) $observacion));
+    }
+
+    private function tabla(Worksheet $hoja, array $titulos, Collection $filas, array $colsPlata, string $color, bool $totales = false): void
+    {
+        $ultima = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($titulos));
+        $hoja->fromArray($titulos, null, 'A1');
+        $hoja->getStyle("A1:{$ultima}1")->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => $color]],
+        ]);
+        // strictNullComparison: sin esto fromArray descarta los 0.
+        $hoja->fromArray($filas->values()->all(), null, 'A2', true);
+        $fin = $filas->count() + 1;
+
+        // La cédula como texto: Excel no la redondea ni la pone en notación científica.
+        foreach ($titulos as $i => $t) {
+            if ($t === 'Cédula') {
+                $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 1);
+                for ($f = 2; $f <= $fin; $f++) {
+                    $hoja->setCellValueExplicit("{$col}{$f}", (string) $hoja->getCell("{$col}{$f}")->getValue(),
+                        \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                }
+            }
+        }
+
+        if ($totales && $filas->isNotEmpty()) {
+            $hoja->setCellValue('A'.($fin + 1), 'TOTAL');
+            foreach ($colsPlata as $col) {
+                $hoja->setCellValue("{$col}".($fin + 1), "=SUM({$col}2:{$col}{$fin})");
+            }
+            $hoja->getStyle('A'.($fin + 1).":{$ultima}".($fin + 1))->getFont()->setBold(true);
+            $fin++;
+        }
+        foreach ($colsPlata as $col) {
+            $hoja->getStyle("{$col}2:{$col}{$fin}")->getNumberFormat()->setFormatCode('$#,##0');
+        }
+        foreach (range(1, count($titulos)) as $i) {
+            $hoja->getColumnDimension(\PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i))->setAutoSize(true);
+        }
+        $hoja->freezePane('A2');
+    }
+}

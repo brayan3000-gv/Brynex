@@ -115,6 +115,10 @@
         .cargando { display: inline-block; width: 16px; height: 16px; border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: gira .7s linear infinite; }
         @keyframes gira { to { transform: rotate(360deg); } }
 
+        .progreso { height: 4px; background: var(--borde); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+        .progreso div { height: 100%; background: var(--azul); transition: width .3s; }
+        .item .falta-v { font-weight: 800; font-size: 1rem; }
+
         @media (min-width: 700px) {
             .hoja { top: 4vh; bottom: 4vh; border-radius: 18px; max-height: none; }
         }
@@ -126,6 +130,8 @@
     <div class="cab-in">
         <div class="cab-fila">
             <h1>🛵 Cobro en visita</h1>
+            <button type="button" class="volver" x-show="esSuperadmin" x-cloak @click="verExcel = true"
+                    style="background:rgba(255,255,255,.14);border:0;border-radius:8px;padding:5px 9px;cursor:pointer">⬇ Excel</button>
             <a class="volver" href="{{ route('dashboard') }}">← Panel</a>
         </div>
         <div class="caja">
@@ -135,6 +141,7 @@
         </div>
         <div class="empresa">
             <input list="lista-empresas" placeholder="🏢 Empresa que visitas (opcional)" x-model="empresaTexto" @change="elegirEmpresa()">
+            <button type="button" x-show="empresaId" x-cloak @click="abrirFaltantes()" title="Lo que le falta a cada persona de la empresa">📋 Faltan</button>
             <button type="button" x-show="empresaId" x-cloak @click="empresaTexto=''; elegirEmpresa()">✕</button>
         </div>
         <datalist id="lista-empresas">
@@ -171,6 +178,98 @@
         </template>
     </div>
 </main>
+
+{{-- ── Excel de lo cobrado en el mes (solo superadmin) ───────── --}}
+<template x-if="verExcel">
+<div>
+    <div class="hoja-fondo" @click="verExcel = false"></div>
+    <section class="hoja">
+        <div class="hoja-cab">
+            <div style="flex:1;min-width:0">
+                <h2>⬇ Excel de abonos en visita</h2>
+                <div style="color:var(--tenue);font-size:.8rem">Lo que recogieron todos los que cobraron en visita.</div>
+            </div>
+            <button class="cerrar" @click="verExcel = false">✕</button>
+        </div>
+        <div class="tarjeta">
+            <label class="campo" style="margin-top:0">Mes</label>
+            <select class="entrada" x-model="excel.mes">
+                <template x-for="m in meses()" :key="m.valor"><option :value="m.valor" x-text="m.nombre" :selected="m.valor === excel.mes"></option></template>
+            </select>
+            <label x-show="empresaId" style="display:flex;align-items:center;gap:8px;font-size:.84rem;margin-top:12px">
+                <input type="checkbox" x-model="excel.soloEmpresa"> <span x-text="'Solo la gente de ' + empresaTexto"></span>
+            </label>
+            <div style="color:var(--tenue);font-size:.76rem;margin-top:10px">Una fila por persona: cédula, nombre completo, su abono (efectivo y transferencia), el abono de la empresa a esa persona en el mes y quién cobró. En otras hojas, cada cobro y cada abono de la empresa.</div>
+            <div class="btns"><a class="btn" :href="urlExcel()">Descargar Excel</a></div>
+        </div>
+    </section>
+</div>
+</template>
+
+{{-- ── Lo que falta en la empresa ────────────────────────────── --}}
+<template x-if="faltantes">
+<div>
+    <div class="hoja-fondo" @click="cerrarFaltantes()"></div>
+    <section class="hoja">
+        <div class="hoja-cab">
+            <div style="flex:1;min-width:0">
+                <h2 x-text="'Lo que falta · ' + faltantes.empresa"></h2>
+                <div style="color:var(--tenue);font-size:.8rem">Del mes que se cobra hoy a cada uno, después de lo que abonó la empresa y la persona.</div>
+            </div>
+            <button class="cerrar" @click="cerrarFaltantes()">✕</button>
+        </div>
+
+        <div class="tarjeta">
+            <div class="fila"><span x-text="'Personas con contrato vigente · ' + faltantes.contratos.length"></span></div>
+            <div class="fila"><span>Ya completaron</span><b class="num" style="color:var(--verde)" x-text="completos()"></b></div>
+            <div class="sep"></div>
+            <div class="falta"><span style="font-weight:700">Falta en total</span><b class="num" x-text="plata(totalFalta())"></b></div>
+            <template x-if="calculados() < faltantes.contratos.length">
+                <div>
+                    <div class="progreso"><div :style="'width:' + (100 * calculados() / Math.max(1, faltantes.contratos.length)) + '%'"></div></div>
+                    <div style="color:var(--tenue);font-size:.74rem;margin-top:4px" x-text="'Calculando ' + calculados() + ' de ' + faltantes.contratos.length + '…'"></div>
+                </div>
+            </template>
+        </div>
+
+        <input type="search" class="entrada" style="margin-bottom:10px" placeholder="🔎 Filtrar por nombre o cédula" x-model="faltantesFiltro" autocomplete="off">
+        <label style="display:flex;align-items:center;gap:8px;font-size:.84rem;margin:0 0 10px 2px">
+            <input type="checkbox" x-model="ocultarCompletos"> Ocultar los que ya completaron
+        </label>
+
+        <div class="ayuda" x-show="!faltantes.contratos.length">Esta empresa no tiene personas con contrato vigente.</div>
+        <div class="lista">
+            <template x-for="f in listaFaltantes()" :key="f.contrato_id">
+                <button type="button" class="item" @click="abrirCliente(f.cedula)">
+                    <div style="flex:1;min-width:0">
+                        <div class="nom" x-text="f.nombre || ('CC ' + f.cedula)"></div>
+                        <div class="sub">
+                            <span x-text="'CC ' + f.cedula"></span>
+                            <span x-show="f.varios" x-text="' · ' + f.razon_social"></span>
+                        </div>
+                        <template x-if="f.calc && !f.calc.error">
+                            <div class="sub" style="margin-top:2px">
+                                <span x-text="f.calc.periodo + ': ' + plata(f.calc.total_mes)"></span>
+                                <span x-show="f.calc.abono_empresa" x-text="' · empresa ' + plata(f.calc.abono_empresa)"></span>
+                                <span x-show="f.calc.abono_persona" x-text="' · abonó ' + plata(f.calc.abono_persona)"></span>
+                            </div>
+                        </template>
+                        <div class="sub" style="color:var(--ambar)" x-show="f.calc && !f.calc.facturable && f.calc.motivo" x-text="f.calc && f.calc.motivo"></div>
+                        <div class="sub" style="color:var(--rojo)" x-show="f.calc && f.calc.error" x-text="f.calc && f.calc.error"></div>
+                    </div>
+                    <div style="text-align:right;flex-shrink:0">
+                        <template x-if="!f.calc"><span class="cargando" style="color:var(--tenue)"></span></template>
+                        <template x-if="f.calc && !f.calc.error && f.calc.falta > 0">
+                            <div><div class="falta-v num" x-text="plata(f.calc.falta)"></div><div class="sub">falta</div></div>
+                        </template>
+                        <template x-if="f.calc && !f.calc.error && f.calc.falta === 0"><span class="chip verde">✓ completo</span></template>
+                    </div>
+                </button>
+            </template>
+        </div>
+    </section>
+</div>
+</template>
 
 {{-- ── Ficha del cliente ─────────────────────────────────────── --}}
 <template x-if="cliente">
@@ -413,7 +512,11 @@ function visita() {
         cobrar: @json(route('admin.visita.cobrar')),
         enviar: @json(route('admin.visita.recibo.enviar')),
         hoy: @json(route('admin.visita.hoy')),
+        faltantes: @json(route('admin.visita.faltantes')),
+        calcular: @json(route('admin.visita.faltantes.calcular')),
+        excel: @json(route('admin.visita.excel')),
     };
+    const fechaLocal = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const EMPRESAS = @json($empresas);
     const recordar = (k, v) => { try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (_) {} };
     const leerLS = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
@@ -429,6 +532,8 @@ function visita() {
         envio: { texto: '', clase: '', enviando: false, ok: false, intentado: false },
         verHoy: false, arrastrando: false,
         esSuperadmin: @json($esSuperadmin), usuarios: @json($usuarios), yo: {{ (int) auth()->id() }}, usuarioHoy: '', hoyOtro: null, cargandoHoy: false,
+        verExcel: false, excel: { mes: fechaLocal(new Date()).slice(0, 7), soloEmpresa: false },
+        faltantes: null, faltantesFiltro: '', ocultarCompletos: false, faltantesTurno: 0,
 
         iniciar() {
             const e = EMPRESAS.find(x => String(x.id) === leerLS('visita.empresa'));
@@ -455,6 +560,7 @@ function visita() {
             this.empresaId = e ? e.id : null;
             if (!e) this.empresaTexto = '';
             recordar('visita.empresa', e ? String(e.id) : null);
+            this.cerrarFaltantes();
             this.buscar();
         },
 
@@ -482,6 +588,74 @@ function visita() {
             } catch (e) { alert(e.message); this.usuarioHoy = ''; }
             finally { this.cargandoHoy = false; }
         },
+
+        // Los últimos 12 meses, el actual primero.
+        meses() {
+            const hoy = new Date();
+            return Array.from({ length: 12 }, (_, i) => {
+                const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+                const nombre = d.toLocaleDateString('es-CO', { month: 'long', year: 'numeric' }).replace(' de ', ' ');
+                return { valor: fechaLocal(d).slice(0, 7), nombre: nombre.charAt(0).toUpperCase() + nombre.slice(1) };
+            });
+        },
+        urlExcel() {
+            const [a, m] = this.excel.mes.split('-').map(Number);
+            const p = new URLSearchParams({ desde: fechaLocal(new Date(a, m - 1, 1)), hasta: fechaLocal(new Date(a, m, 0)) });
+            if (this.empresaId && this.excel.soloEmpresa) p.set('empresa_id', this.empresaId);
+            return URL.excel + '?' + p;
+        },
+
+        // Lo que falta en la empresa: primero la lista de contratos y luego
+        // el cálculo por tandas, que es lento (pasa por el facturador).
+        async abrirFaltantes() {
+            if (!this.empresaId) return;
+            const turno = ++this.faltantesTurno;
+            this.faltantesFiltro = '';
+            this.faltantes = { empresa: this.empresaTexto, contratos: [] };
+            try {
+                const d = await this.pedir(URL.faltantes + '?' + new URLSearchParams({ empresa_id: this.empresaId }));
+                if (turno !== this.faltantesTurno) return;
+                this.faltantes = { empresa: d.empresa, contratos: d.contratos.map(c => ({ ...c, calc: null })) };
+                await this.calcularFaltantes(this.faltantes.contratos.map(c => c.contrato_id), turno);
+            } catch (e) { if (turno === this.faltantesTurno) { alert(e.message); this.faltantes = null; } }
+        },
+        async calcularFaltantes(ids, turno) {
+            const tandas = [];
+            for (let i = 0; i < ids.length; i += 6) tandas.push(ids.slice(i, i + 6));
+            const trabajar = async () => {
+                while (tandas.length && turno === this.faltantesTurno) {
+                    const tanda = tandas.shift();
+                    try {
+                        const p = new URLSearchParams(); tanda.forEach(id => p.append('ids[]', id));
+                        const d = await this.pedir(URL.calcular + '?' + p);
+                        if (turno !== this.faltantesTurno || !this.faltantes) return;
+                        d.faltantes.forEach(r => { const c = this.faltantes.contratos.find(x => x.contrato_id === r.contrato_id); if (c) c.calc = r; });
+                    } catch (e) {
+                        if (turno !== this.faltantesTurno || !this.faltantes) return;
+                        tanda.forEach(id => { const c = this.faltantes.contratos.find(x => x.contrato_id === id); if (c) c.calc = { error: 'No se pudo calcular.' }; });
+                    }
+                }
+            };
+            await Promise.all([trabajar(), trabajar()]);
+        },
+        cerrarFaltantes() { this.faltantesTurno++; this.faltantes = null; },
+        // Después de cobrarle a alguien desde la lista, su fila se recalcula.
+        refrescarFaltante(cedula) {
+            if (!this.faltantes) return;
+            const ids = this.faltantes.contratos.filter(c => c.cedula === cedula).map(c => { c.calc = null; return c.contrato_id; });
+            if (ids.length) this.calcularFaltantes(ids, this.faltantesTurno);
+        },
+        listaFaltantes() {
+            const q = this.faltantesFiltro.trim().toLowerCase();
+            return this.faltantes.contratos
+                .filter(c => !q || c.nombre.toLowerCase().includes(q) || c.cedula.includes(q))
+                .filter(c => !this.ocultarCompletos || !c.calc || c.calc.error || c.calc.falta > 0)
+                // Primero los que más deben; los que no se han calculado, al final.
+                .sort((a, b) => (b.calc && !b.calc.error ? b.calc.falta : -1) - (a.calc && !a.calc.error ? a.calc.falta : -1));
+        },
+        calculados() { return this.faltantes.contratos.filter(c => c.calc).length; },
+        completos() { return this.faltantes.contratos.filter(c => c.calc && !c.calc.error && c.calc.falta === 0).length; },
+        totalFalta() { return this.faltantes.contratos.reduce((t, c) => t + (c.calc && !c.calc.error ? c.calc.falta : 0), 0); },
 
         async pedir(url, opciones = {}) {
             const r = await fetch(url, { credentials: 'same-origin', ...opciones,
@@ -515,7 +689,7 @@ function visita() {
             } catch (e) { alert(e.message); this.cliente = null; }
             finally { this.cargandoCliente = false; }
         },
-        cerrarCliente() { this.cliente = null; this.contratos = []; this.anticipos = []; this.anticiposEmpresa = []; this.abiertos = {}; },
+        cerrarCliente() { if (this.cliente) this.refrescarFaltante(this.cliente.cedula); this.cliente = null; this.contratos = []; this.anticipos = []; this.anticiposEmpresa = []; this.abiertos = {}; },
         gruposAnticipos() {
             const g = [];
             if (this.anticipos.length) g.push({ titulo: 'Anticipos a su favor', sub: 'CC ' + this.cliente.cedula, items: this.anticipos });
@@ -664,6 +838,7 @@ function visita() {
         },
 
         siguiente() {
+            if (this.cliente) this.refrescarFaltante(this.cliente.cedula);
             this.cobro = null; this.resultado = null; this.cliente = null; this.contratos = [];
             this.texto = '';
             this.buscar();

@@ -894,6 +894,13 @@
             </a>
             @endcan
 
+            @can('facturacion.generar')
+            <a href="{{ route('admin.visita.index') }}" class="menu-item">
+                <div class="icono">🛵</div>
+                <div class="label">Cobro en visita</div>
+            </a>
+            @endcan
+
             @can('informes.ver')
             <div class="menu-sep"></div>
             <a href="{{ route('admin.informes.hub') }}"
@@ -1169,13 +1176,18 @@
         </div>
 
         {{-- Sección financiero --}}
-        @canany(['cuadre_diario.ver', 'cotizaciones.ver'])
+        @canany(['cuadre_diario.ver', 'cotizaciones.ver', 'facturacion.generar'])
         <div class="drawer-sep"></div>
         <div class="drawer-section">
             <div class="drawer-section-label">Financiero</div>
             @can('cuadre_diario.ver')
             <a href="{{ route('admin.cuadre-diario.index') }}" class="drawer-item {{ request()->routeIs('admin.cuadre-diario*') ? 'activo' : '' }}">
                 <span class="di-icon">🧾</span> Cuadre Caja
+            </a>
+            @endcan
+            @can('facturacion.generar')
+            <a href="{{ route('admin.visita.index') }}" class="drawer-item">
+                <span class="di-icon">🛵</span> Cobro en visita
             </a>
             @endcan
             @can('cotizaciones.ver')

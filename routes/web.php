@@ -1026,6 +1026,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/recibo', [$vc, 'recibo'])->name('recibo');
         Route::post('/cobrar', [$vc, 'cobrar'])->name('cobrar');
         Route::post('/recibo/enviar', [$vc, 'enviarRecibo'])->name('recibo.enviar');
+        Route::get('/faltantes', [$vc, 'faltantes'])->name('faltantes');
+        Route::get('/faltantes/calcular', [$vc, 'calcularFaltantes'])->name('faltantes.calcular');
+        Route::get('/excel', [$vc, 'excel'])->name('excel');   // solo superadmin (ver el controlador)
     });
 
     // ── Cuadre Diario ────────────────────────────────────────────────

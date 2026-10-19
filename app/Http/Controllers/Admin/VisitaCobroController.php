@@ -12,10 +12,12 @@ use App\Models\Factura;
 use App\Models\User;
 use App\Services\ReciboVisitaService;
 use App\Services\VisitaCobroService;
+use App\Services\VisitaInformeService;
 use App\Services\WhatsappApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 /**
  * Cobro en visita: pantalla para el celular con la que se recorre una empresa
@@ -30,6 +32,7 @@ class VisitaCobroController extends Controller
     public function __construct(
         private VisitaCobroService $cobros,
         private ReciboVisitaService $recibos,
+        private VisitaInformeService $informes,
     ) {}
 
     public function index()
@@ -282,6 +285,62 @@ class VisitaCobroController extends Controller
         }
 
         return response()->json($resumen);
+    }
+
+    /** Los contratos vigentes de la gente de una empresa, sin calcular todavía lo que falta. */
+    public function faltantes(Request $request)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $empresa = Empresa::where('aliado_id', $aliadoId)->findOrFail($request->integer('empresa_id'));
+
+        return response()->json([
+            'empresa' => $empresa->empresa,
+            'contratos' => $this->informes->contratosDeEmpresa($aliadoId, (int) $empresa->id),
+        ]);
+    }
+
+    /**
+     * Lo que falta en unos pocos contratos. La pantalla los pide por tandas
+     * para ir llenando la lista: cada uno pasa por el cálculo completo del
+     * facturador y una empresa grande tiene decenas.
+     */
+    public function calcularFaltantes(Request $request)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $v = $request->validate(['ids' => 'required|array|max:10', 'ids.*' => 'integer']);
+
+        return response()->json(['faltantes' => $this->informes->faltantes($aliadoId, $v['ids'])]);
+    }
+
+    /** Excel de lo cobrado en visita entre dos fechas. Solo el superadmin. */
+    public function excel(Request $request)
+    {
+        abort_unless($this->esSuperadmin(), 403, 'Solo el superadministrador descarga el Excel de las visitas.');
+        $aliadoId = (int) session('aliado_id_activo');
+
+        $v = $request->validate([
+            'desde' => 'required|date',
+            'hasta' => 'required|date|after_or_equal:desde',
+            'empresa_id' => 'nullable|integer',
+        ]);
+        $empresa = ! empty($v['empresa_id'])
+            ? Empresa::where('aliado_id', $aliadoId)->findOrFail($v['empresa_id'])
+            : null;
+
+        $ruta = $this->informes->excelCobros(
+            $this->informes->cobros($aliadoId, $v['desde'], $v['hasta'], $empresa?->id ? (int) $empresa->id : null)
+        );
+        // Un mes completo (lo que pide la pantalla) se nombra por el mes.
+        $desde = \Carbon\Carbon::parse($v['desde']);
+        $hasta = \Carbon\Carbon::parse($v['hasta']);
+        $periodo = $desde->isSameDay($desde->copy()->startOfMonth()) && $hasta->isSameDay($desde->copy()->endOfMonth())
+            ? Str::slug(ReciboVisitaService::periodo($desde->month, $desde->year), '_')
+            : $v['desde'].'_a_'.$v['hasta'];
+        $nombre = 'cobros_visita_'.($empresa ? Str::slug($empresa->empresa, '_').'_' : '').$periodo.'.xlsx';
+
+        return response()->download($ruta, $nombre, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
     }
 
     private function esSuperadmin(): bool

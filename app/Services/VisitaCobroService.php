@@ -95,6 +95,9 @@ class VisitaCobroService
             'total_mes' => $totalMes,
             'saldo_favor' => $saldoFavor,
             'anticipos' => $totalAnticipos,
+            // La parte que puso la empresa (lo repartido de un anticipo por
+            // NIT); el resto lo abonó la persona. Ver faltantes por empresa.
+            'anticipos_empresa' => (int) $anticipos->whereNotNull('anticipo_padre_id')->sum('valor_disponible'),
             'anticipo_ids' => $anticipos->pluck('id')->all(),
             // Cada anticipo con su recibo: el cliente suele preguntar cuáles
             // fueron cuando tiene dos o tres.
