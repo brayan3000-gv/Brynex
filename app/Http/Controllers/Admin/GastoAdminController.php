@@ -201,7 +201,8 @@ class GastoAdminController extends Controller
             return redirect()->back()->with('error', 'Error al registrar el gasto: ' . $e->getMessage());
         }
 
-        return redirect()->back()->with('success', 'Gasto registrado correctamente.');
+        return redirect()->back()->with('success', trim('Gasto registrado correctamente. '
+            . (\App\Services\Caja\CierreMes::avisoMesVerificado((int) $aid, $data['fecha']) ?? '')));
     }
 
     // ── Actualizar gasto ──────────────────────────────────────────────

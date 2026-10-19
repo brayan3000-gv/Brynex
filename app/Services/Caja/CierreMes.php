@@ -15,13 +15,15 @@ use Illuminate\Support\Facades\DB;
  *   C · Por cobrar     lo que ya contó como ingreso y falta que entre
  *   D · Dónde está     saldo de cada cuenta y efectivo de cada persona
  *
- * Cuadra cuando  D = utilidad acumulada + B − C. La utilidad acumulada parte
- * del primer cierre del aliado (la apertura, cuya diferencia se absorbe una
- * sola vez) y cada mes suma su utilidad y resta los retiros del dueño.
+ * Cada mes se revisa solo (19-oct-2026): cada cuenta y el efectivo de cada
+ * persona arrancan con lo VERIFICADO al cierre anterior (o 0 «sin
+ * verificar»; las de razón social siguen con su saldo, ver SaldosBanco) y la
+ * diferencia entre lo real anotado y lo que dice BryNex es lo que no se
+ * registró en ESE mes. Lo que se debe (B y C) sí sigue hasta que se pague.
  *
- * Las cuentas personales (uso_personal) solo llevan lo del negocio: si quedan
- * en negativo el negocio le debe a la cuenta («pendiente a la cuenta», va en
- * B); si quedan en positivo es plata del negocio que está ahí (va en D).
+ * Las cuentas personales (uso_personal) arrancan cada mes en 0 y solo llevan
+ * lo del negocio del mes: si quedan en negativo el negocio le debe a la cuenta
+ * («pendiente a la cuenta», va en B); en positivo es plata del negocio (D).
  *
  * Reglas acordadas con el dueño el 16/17-oct-2026 (ver memoria
  * cierre-mensual-reglas): administración y afiliaciones cuentan en el mes en
@@ -40,7 +42,6 @@ class CierreMes
         $inicio = Carbon::createFromDate($anio, $mes, 1)->startOfMonth();
         $fin    = $inicio->copy()->endOfMonth();
         $corte  = $fin->isFuture() ? today() : $fin;
-        $sig    = $corte->copy()->addDay()->toDateString();
 
         $retiros = FlujoEfectivo::totales($aliadoId, null, $inicio->toDateString(), $corte->toDateString())['retiros'];
 
@@ -78,7 +79,9 @@ class CierreMes
             $bancos[] = [
                 'id'       => (int) $b->id,
                 'nombre'   => trim(($b->banco ?? '') . ' ' . ($b->nombre ?? '')),
-                'tipo'     => $personal ? 'personal' : (($b->cobro ?? false) ? 'cobro' : 'razon_social'),
+                'tipo'     => $personal ? 'personal' : (($b->incapacidad ?? false) ? 'razon_social' : (($b->cobro ?? false) ? 'cobro' : 'negocio')),
+                'inicial'  => (int) ($b->saldo_inicial ?? 0),
+                'origen'   => $b->origen_saldo ?? 'sin_verificar',
                 'saldo'    => $personal && $saldo < 0 ? 0 : $saldo,
                 'saldo_cuenta' => $saldo,
                 'entro'    => (int) $b->ing_mes,
@@ -86,13 +89,23 @@ class CierreMes
             ];
         }
 
-        $personas = FlujoEfectivo::personasConSaldo($aliadoId, $sig);
+        $c = $corte->toDateString();
+        $personas = FlujoEfectivo::personasDelMes($aliadoId, $c);
         $nombres  = User::whereIn('id', $personas ?: [0])->pluck('nombre', 'id');
-        $efectivo = array_map(fn ($uid) => [
-            'id'     => $uid,
-            'nombre' => $nombres[$uid] ?? "Usuario $uid",
-            'saldo'  => (int) FlujoEfectivo::saldoPersonaAntesDe($aliadoId, $uid, $sig),
-        ], $personas);
+        $efectivo = array_map(function ($uid) use ($aliadoId, $c, $nombres, $inicio) {
+            $apertura = FlujoEfectivo::aperturaPersona($aliadoId, $uid, $c);
+            $mes      = FlujoEfectivo::totales($aliadoId, $uid, $apertura['fecha'] ?? $inicio->toDateString(), $c);
+
+            return [
+                'id'         => $uid,
+                'nombre'     => $nombres[$uid] ?? "Usuario $uid",
+                'inicial'    => (int) ($apertura['valor'] ?? 0),
+                'verificado' => $apertura !== null,
+                'entro'      => $mes['recibido'] + $mes['recibidas'],
+                'salio'      => $mes['salidas'] + $mes['dadas'] + $mes['retiros'],
+                'saldo'      => (int) ($apertura['valor'] ?? 0) + $mes['neto'],
+            ];
+        }, $personas);
 
         // ── B: lo que pasa al mes siguiente; C: lo que falta por cobrar ──
         [$aFavor, $porCobrar] = self::saldosClientes($aliadoId, $corte->toDateString());
@@ -119,10 +132,6 @@ class CierreMes
             'total_c'   => $porCobrar,
             'bancos'    => $bancos,
             'efectivo'  => $efectivo,
-            'efectivo_contado' => ! empty($personas),
-            // Sin caja por persona no hay efectivo contado: queda el cálculo
-            // viejo del informe, que suma todo lo cobrado sin restar lo entregado.
-            'efectivo_viejo'   => (int) $inf['efectivo_viejo'],
         ];
     }
 
@@ -137,32 +146,20 @@ class CierreMes
         $datos = $fila?->foto ?: $vivo;
         $reales = $fila?->saldos_reales ?? [];
 
-        // D con lo real donde se anotó.
-        $totalBancos = 0;
-        foreach ($datos['bancos'] as &$bk) {
-            $bk['real'] = isset($reales['bancos'][$bk['id']]) ? (int) $reales['bancos'][$bk['id']] : null;
-            $totalBancos += $bk['real'] ?? $bk['saldo'];
+        // D con lo real donde se anotó: la diferencia de cada fila es lo que no
+        // se registró en el mes en esa cuenta o con esa persona.
+        $totalBancos = 0; $totalEfectivo = 0; $diferencia = 0; $verificadas = 0; $porVerificar = 0;
+        foreach (['bancos', 'efectivo'] as $grupo) {
+            foreach ($datos[$grupo] as &$item) {
+                $real = $reales[$grupo][$item['id']] ?? null;
+                $item['real'] = $real === null ? null : (int) $real;
+                $item['diferencia'] = $real === null ? null : (int) $real - $item['saldo'];
+                $valor = $item['real'] ?? $item['saldo'];
+                $grupo === 'bancos' ? $totalBancos += $valor : $totalEfectivo += $valor;
+                if ($real === null) { $porVerificar++; } else { $verificadas++; $diferencia += $item['diferencia']; }
+            }
+            unset($item);
         }
-        unset($bk);
-        $totalEfectivo = 0;
-        foreach ($datos['efectivo'] as &$ef) {
-            $ef['real'] = isset($reales['efectivo'][$ef['id']]) ? (int) $reales['efectivo'][$ef['id']] : null;
-            $totalEfectivo += $ef['real'] ?? $ef['saldo'];
-        }
-        unset($ef);
-        if (! $datos['efectivo_contado']) {
-            $totalEfectivo = $datos['efectivo_viejo'];
-        }
-        $totalD = $totalBancos + $totalEfectivo;
-
-        $neto = $datos['a']['utilidad'] - $datos['a']['retiros'];
-        [$utilAntes, $apertura, $faltan] = self::utilidadAntesDe($aliadoId, $anio, $mes, $fila);
-        if ($apertura) {
-            // Primer cierre: la utilidad con que arranca es la que hace cuadrar.
-            $utilAntes = $totalD - $datos['total_b'] + $datos['total_c'] - $neto;
-        }
-        $utilDespues = $utilAntes + $neto;
-        $esperado    = $utilDespues + $datos['total_b'] - $datos['total_c'];
 
         $anterior = CierreMesModel::anteriorConFoto($aliadoId, $anio, $mes);
 
@@ -174,6 +171,7 @@ class CierreMes
                 'Lo que pasa al mes'   => [$fila->foto['total_b'], $vivo['total_b']],
                 'Por cobrar'           => [$fila->foto['total_c'], $vivo['total_c']],
                 'Saldo de bancos'      => [array_sum(array_column($fila->foto['bancos'], 'saldo')), array_sum(array_column($vivo['bancos'], 'saldo'))],
+                'Efectivo'             => [array_sum(array_column($fila->foto['efectivo'] ?? [], 'saldo')), array_sum(array_column($vivo['efectivo'], 'saldo'))],
             ] as $nombre => [$antes, $ahora]) {
                 if (abs($ahora - $antes) >= 1) {
                     $cambios[] = [$nombre, $ahora - $antes];
@@ -185,20 +183,38 @@ class CierreMes
             'fila_id'        => $fila?->id,
             'foto_at'        => $fila?->foto_at,
             'saldos_at'      => $fila?->saldos_at,
-            'hay_reales'     => ! empty($reales),
+            'hay_reales'     => ! empty($reales['bancos'] ?? []) || ! empty($reales['efectivo'] ?? []),
             'total_bancos'   => $totalBancos,
             'total_efectivo' => $totalEfectivo,
-            'total_d'        => $totalD,
-            'es_apertura'    => $apertura,
-            'faltan_fotos'   => $faltan,
-            'util_antes'     => $utilAntes,
-            'util_despues'   => $utilDespues,
-            'esperado'       => $esperado,
-            'diferencia'     => $totalD - $esperado,
+            'total_d'        => $totalBancos + $totalEfectivo,
+            'verificadas'    => $verificadas,
+            'por_verificar'  => $porVerificar,
+            'diferencia'     => $diferencia,
             'llego'          => $anterior?->foto['total_b'] ?? null,
             'llego_detalle'  => $anterior?->foto['b'] ?? [],
             'cambios'        => $cambios,
         ];
+    }
+
+    /**
+     * Aviso para quien registra un movimiento con fecha de un mes cuyo cierre
+     * ya se verificó (se anotaron los saldos reales). Se deja registrar —lo
+     * decidió el dueño—, pero la diferencia de ese mes cambia; el mes actual
+     * no, porque arranca de lo verificado. null si no aplica.
+     */
+    public static function avisoMesVerificado(int $aliadoId, $fecha): ?string
+    {
+        $f = Carbon::parse($fecha);
+        if ($f->isSameMonth(today()) || $f->isFuture()) {
+            return null;
+        }
+        $fila = CierreMesModel::de($aliadoId, $f->year, $f->month);
+        if (! $fila || empty($fila->saldos_reales['bancos'] ?? []) && empty($fila->saldos_reales['efectivo'] ?? [])) {
+            return null;
+        }
+
+        return '⚠️ ' . ucfirst($f->locale('es')->monthName) . ' ya tiene el cierre verificado: este registro cambia su diferencia. '
+            . 'El mes actual no se toca porque arranca de lo verificado.';
     }
 
     /** Guarda la foto del mes. Sin $rehacer no toca una foto que ya existe. */
@@ -211,13 +227,7 @@ class CierreMes
 
         $fila->foto    = $vivo;
         $fila->foto_at = now();
-        $fila->es_apertura = ! CierreMesModel::where('aliado_id', $aliadoId)
-            ->whereNotNull('foto')
-            ->where(fn ($q) => $q->where('anio', '<', $anio)->orWhere(fn ($w) => $w->where('anio', $anio)->where('mes', '<', $mes)))
-            ->exists();
         $fila->save();
-
-        self::recalcularApertura($fila);
 
         return $fila;
     }
@@ -231,61 +241,7 @@ class CierreMes
         $fila->saldos_at     = now();
         $fila->save();
 
-        self::recalcularApertura($fila);
-
         return $fila;
-    }
-
-    /**
-     * La utilidad acumulada al terminar la apertura es la que la hace cuadrar,
-     * con sus saldos reales si ya se anotaron. Los meses siguientes parten de
-     * ahí y no la guardan: se suman sus fotos.
-     */
-    private static function recalcularApertura(CierreMesModel $fila): void
-    {
-        if (! $fila->es_apertura || ! $fila->foto) {
-            return;
-        }
-        $c = self::componer($fila->aliado_id, $fila->anio, $fila->mes, $fila->foto);
-        $fila->utilidad_acumulada = $c['util_despues'];
-        $fila->save();
-    }
-
-    /**
-     * Utilidad acumulada al empezar el mes: la de la apertura más la utilidad
-     * menos los retiros de cada foto que vino después.
-     *
-     * @return array{0:int, 1:bool, 2:array}  [utilidad, es la apertura, meses sin foto]
-     */
-    private static function utilidadAntesDe(int $aliadoId, int $anio, int $mes, ?CierreMesModel $fila): array
-    {
-        if ($fila?->es_apertura) {
-            return [0, true, []];
-        }
-
-        $apertura = CierreMesModel::where('aliado_id', $aliadoId)->where('es_apertura', true)
-            ->whereNotNull('foto')
-            ->where(fn ($q) => $q->where('anio', '<', $anio)->orWhere(fn ($w) => $w->where('anio', $anio)->where('mes', '<', $mes)))
-            ->orderByDesc('anio')->orderByDesc('mes')->first();
-        if (! $apertura) {
-            return [0, true, []];
-        }
-
-        $util  = (int) $apertura->utilidad_acumulada;
-        $faltan = [];
-        $cursor = Carbon::createFromDate($apertura->anio, $apertura->mes, 1)->addMonth();
-        $hasta  = Carbon::createFromDate($anio, $mes, 1);
-        while ($cursor->lt($hasta)) {
-            $f = CierreMesModel::de($aliadoId, $cursor->year, $cursor->month);
-            if ($f?->foto) {
-                $util += (int) $f->foto['a']['utilidad'] - (int) $f->foto['a']['retiros'];
-            } else {
-                $faltan[] = $cursor->format('Y-m');
-            }
-            $cursor->addMonth();
-        }
-
-        return [$util, false, $faltan];
     }
 
     /** Anticipos recibidos hasta el corte que no se habían aplicado a una factura de antes del corte. */

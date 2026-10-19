@@ -34,6 +34,10 @@ class AnticipoController extends Controller
             'imagen'         => 'nullable|file|mimes:jpg,jpeg,png,pdf,webp|max:8192',
         ]);
 
+        if ($r = $this->confirmarEfectivoGrande($request, $validated, ! empty($validated['empresa_id']))) {
+            return $r;
+        }
+
         // Debe venir al menos un vínculo (contrato O empresa)
         if (empty($validated['contrato_id']) && empty($validated['empresa_id'])) {
             return response()->json([
@@ -129,7 +133,8 @@ class AnticipoController extends Controller
 
         return response()->json([
             'ok'          => true,
-            'mensaje'     => 'Anticipo registrado correctamente.',
+            'mensaje'     => trim('Anticipo registrado correctamente. '
+                . (\App\Services\Caja\CierreMes::avisoMesVerificado((int) $aliadoId, $validated['fecha_pago']) ?? '')),
             'anticipo_id' => $anticipo->id,
             'saldo_total' => Anticipo::saldoDisponible(
                 $aliadoId,
@@ -602,6 +607,33 @@ class AnticipoController extends Controller
     }
 
     // ── 7. Registrar anticipo distribuido desde empresa ────────────────
+    /** Desde este valor, un anticipo de empresa en efectivo pide confirmar que fueron billetes. */
+    private const UMBRAL_EFECTIVO_EMPRESA = 1000000;
+
+    /**
+     * Un anticipo de empresa grande en efectivo pide confirmación.
+     *
+     * En agosto de 2026 los anticipos de SAMASU se registraron en efectivo y
+     * el extracto mostró que llegaron por transferencia a BRYGAR SAS: la caja
+     * quedó con plata que nadie tenía y el banco sin la entrada. Lo decidió el
+     * dueño el 19-oct-2026. La pantalla repite el envío con confirmo_efectivo=1.
+     */
+    private function confirmarEfectivoGrande(Request $request, array $validated, bool $esEmpresa)
+    {
+        if (! $esEmpresa || $validated['forma_pago'] !== 'efectivo'
+            || (int) $validated['valor'] < self::UMBRAL_EFECTIVO_EMPRESA || $request->boolean('confirmo_efectivo')) {
+            return null;
+        }
+
+        return response()->json([
+            'ok' => false,
+            'confirmar_efectivo' => true,
+            'mensaje' => '¿Seguro que este anticipo de $' . number_format((int) $validated['valor'], 0, ',', '.')
+                . ' llegó en EFECTIVO (billetes)? Si la empresa lo transfirió, cámbialo a transferencia y elige la cuenta: '
+                . 'si no, la caja queda con plata que nadie tiene y el banco sin la entrada.',
+        ], 409);
+    }
+
     public function storeDistribuido(Request $request)
     {
         $aliadoId = session('aliado_id_activo');
@@ -622,6 +654,10 @@ class AnticipoController extends Controller
             'distribucion.*.periodo_mes'=> 'nullable|integer|min:1|max:12',
             'distribucion.*.periodo_anio'=> 'nullable|integer|min:2020|max:2100',
         ]);
+
+        if ($r = $this->confirmarEfectivoGrande($request, $validated, true)) {
+            return $r;
+        }
 
         // Validar que forma de pago transferencia venga con banco_cuenta_id
         if ($validated['forma_pago'] === 'transferencia' && empty($validated['banco_cuenta_id'])) {
@@ -741,7 +777,8 @@ class AnticipoController extends Controller
 
         return response()->json([
             'ok'          => true,
-            'mensaje'     => 'Anticipo distribuido registrado correctamente.',
+            'mensaje'     => trim('Anticipo distribuido registrado correctamente. '
+                . (\App\Services\Caja\CierreMes::avisoMesVerificado((int) $aliadoId, $validated['fecha_pago']) ?? '')),
             'anticipo_id' => $maestro->id,
         ]);
     }

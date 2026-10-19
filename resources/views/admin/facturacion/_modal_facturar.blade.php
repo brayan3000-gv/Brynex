@@ -1160,6 +1160,7 @@ window.ANT = {
             fd.append('referencia',      document.getElementById('ant-ref').value || '');
             fd.append('observacion',     document.getElementById('ant-obs').value || '');
             fd.append('imagen',          this._archivo);
+            if (this._confirmoEfectivo) fd.append('confirmo_efectivo', '1');
             fetchOpts = { method:'POST', headers:{'Accept':'application/json','X-CSRF-TOKEN':csrfToken}, body:fd };
         } else {
             fetchOpts = {
@@ -1174,6 +1175,7 @@ window.ANT = {
                     banco_cuenta_id: document.getElementById('ant-banco').value || null,
                     referencia:      document.getElementById('ant-ref').value || null,
                     observacion:     document.getElementById('ant-obs').value || null,
+                    confirmo_efectivo: this._confirmoEfectivo ? 1 : 0,
                 }),
             };
         }
@@ -1182,6 +1184,18 @@ window.ANT = {
             const res  = await fetch('/admin/anticipos', fetchOpts);
 
             const data = await res.json();
+
+            // Anticipo de empresa grande en efectivo: confirmar que fueron billetes.
+            if (res.status === 409 && data.confirmar_efectivo) {
+                btn.disabled = false;
+                btn.textContent = '💰 Registrar';
+                if (confirm(data.mensaje)) {
+                    this._confirmoEfectivo = true;
+                    return this.guardar();
+                }
+                return;
+            }
+            this._confirmoEfectivo = false;
 
             if (res.status === 409 && data.alerta) {
                 // Referencia duplicada — advertir pero dejar al usuario decidir

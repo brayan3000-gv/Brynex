@@ -391,7 +391,8 @@ class CuadreDiarioController extends Controller
             return back()->with('error', 'Error al registrar el gasto: ' . $e->getMessage());
         }
 
-        return back()->with('success', 'Gasto registrado correctamente.');
+        return back()->with('success', trim('Gasto registrado correctamente. '
+            . (\App\Services\Caja\CierreMes::avisoMesVerificado((int) $aliadoId, $validated['fecha']) ?? '')));
     }
 
     // ── Eliminar gasto ───────────────────────────────────────────────
@@ -501,7 +502,8 @@ class CuadreDiarioController extends Controller
             'registrado_por'     => $yo,
         ]);
 
-        return back()->with('success', CajaMovimiento::TIPOS[$tipo] . ' registrado.');
+        return back()->with('success', trim(CajaMovimiento::TIPOS[$tipo] . ' registrado. '
+            . (\App\Services\Caja\CierreMes::avisoMesVerificado($aliadoId, $validated['fecha']) ?? '')));
     }
 
     public function eliminarMovimientoCaja(int $movId)
@@ -960,7 +962,7 @@ class CuadreDiarioController extends Controller
             : CajaMenor::montoActivo($aliadoId, $usuarioId);
         $recibido  = $flujo['recibido'];
         $traia     = $this->saldoAntesDe($aliadoId, $usuarioId, $fecha);
-        $pendiente = (int) $traia + $flujo['neto'];
+        $pendiente = $traia + $flujo['neto'];
 
         return [
             'total_facturado'    => (int) $conValor->sum('total'),
@@ -981,8 +983,9 @@ class CuadreDiarioController extends Controller
             'salidas_incapacidades' => $salidasIncapacidades,
             'consignado'         => $consignado,
             'recibido_efectivo'  => $recibido,
-            'arrastra'           => $traia !== null,
-            'traia'              => (int) $traia,
+            'arrastra'           => true,
+            'apertura_verificada' => $this->aperturaVerificada($aliadoId, $usuarioId, $fecha),
+            'traia'              => $traia,
             'entregas_recibidas' => $flujo['recibidas'],
             'entregas_dadas'     => $flujo['dadas'],
             'retiros_dueno'      => $flujo['retiros'],
@@ -999,29 +1002,36 @@ class CuadreDiarioController extends Controller
      * el día anterior. null si la persona nunca tuvo saldo inicial: entonces
      * no arrastra nada. Con la caja de todos suma el de cada persona.
      */
-    private function saldoAntesDe(int $aliadoId, ?int $usuarioId, string $fecha): ?int
+    private function saldoAntesDe(int $aliadoId, ?int $usuarioId, string $fecha): int
     {
         if ($usuarioId !== null) {
             return FlujoEfectivo::saldoPersonaAntesDe($aliadoId, $usuarioId, $fecha);
         }
 
-        $conSaldo = FlujoEfectivo::personasConSaldo($aliadoId, $fecha);
-        if (! $conSaldo) {
-            return null;
-        }
-
         return (int) array_sum(array_map(
-            fn ($uid) => (int) FlujoEfectivo::saldoPersonaAntesDe($aliadoId, $uid, $fecha),
-            $conSaldo
+            fn ($uid) => FlujoEfectivo::saldoPersonaAntesDe($aliadoId, $uid, $fecha),
+            FlujoEfectivo::personasDelMes($aliadoId, $fecha)
         ));
     }
 
-    /** Lo pendiente por pasar al terminar el día $hasta (null si no arrastra). */
-    private function saldoAlCierre(int $aliadoId, int $usuarioId, string $hasta): ?int
+    /** ¿El mes de $fecha arrancó con efectivo contado para esta persona (o alguna, con null)? */
+    private function aperturaVerificada(int $aliadoId, ?int $usuarioId, string $fecha): bool
     {
-        $traia = $this->saldoAntesDe($aliadoId, $usuarioId, $hasta);
+        $ids = $usuarioId !== null ? [$usuarioId] : FlujoEfectivo::personasDelMes($aliadoId, $fecha);
+        foreach ($ids as $uid) {
+            if (FlujoEfectivo::aperturaPersona($aliadoId, (int) $uid, $fecha) !== null) {
+                return true;
+            }
+        }
 
-        return $traia === null ? null : $traia + FlujoEfectivo::totales($aliadoId, $usuarioId, $hasta, $hasta)['neto'];
+        return false;
+    }
+
+    /** Lo pendiente por pasar al terminar el día $hasta. */
+    private function saldoAlCierre(int $aliadoId, int $usuarioId, string $hasta): int
+    {
+        return $this->saldoAntesDe($aliadoId, $usuarioId, $hasta)
+            + FlujoEfectivo::totales($aliadoId, $usuarioId, $hasta, $hasta)['neto'];
     }
 
     /**

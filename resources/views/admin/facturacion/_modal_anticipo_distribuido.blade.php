@@ -1135,6 +1135,8 @@ const MAD = {
         }
 
         let endpoint = '/admin/anticipos';
+        // Ya confirmó que un anticipo grande en efectivo sí fueron billetes.
+        if (this._confirmoEfectivo) formData.append('confirmo_efectivo', '1');
 
         if (this.filas.length > 0) {
             endpoint = '/admin/anticipos/distribuir';
@@ -1185,6 +1187,16 @@ const MAD = {
         })
         .then(res => res.json())
         .then(data => {
+            if (data.confirmar_efectivo) {
+                btnReg.removeAttribute('disabled');
+                btnReg.innerText = '✓ Registrar Anticipo';
+                if (confirm(data.mensaje)) {
+                    this._confirmoEfectivo = true;
+                    this.registrar();
+                }
+                return;
+            }
+            this._confirmoEfectivo = false;
             if (data.ok && data.anticipo_id) {
                 this.cerrar();
                 

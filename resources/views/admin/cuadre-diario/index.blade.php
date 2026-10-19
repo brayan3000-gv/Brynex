@@ -245,7 +245,7 @@ $totalFacturas   = array_sum($canales['conteo']);
         @endif
         <div style="margin-top:.45rem;padding-top:.4rem;border-top:1px solid #dbeafe">
             @if($resumen['arrastra'])
-            <div class="cd-eq" title="Lo que quedó pendiente por pasar al terminar el día anterior">
+            <div class="cd-eq" title="Lo que quedó pendiente por pasar al terminar el día anterior, contando desde el inicio del mes">
                 <span>↪️ Traía de antes</span>
                 <b>{{ $fmt($resumen['traia']) }}</b>
             </div>
@@ -571,10 +571,10 @@ $val = fn($v) => abs($v) >= 1 ? $fmt(round($v)) : null;
             @endif
         </div>
     </div>
-    @if(!$resumen['arrastra'] && !($verTodos ?? false))
-    <div style="font-size:.74rem;color:#64748b;padding:.2rem .1rem .5rem">
-        Esta caja todavía no tiene saldo inicial: cada día arranca de cero. Cuando se cuente el
-        efectivo, el superadmin lo pone con «Saldo inicial contado» y desde ahí se arrastra lo pendiente por pasar.
+    @if(!$resumen['apertura_verificada'] && !($verTodos ?? false))
+    <div style="font-size:.74rem;color:#9a3412;background:#fff7ed;border-radius:6px;padding:.4rem .6rem;margin-bottom:.5rem">
+        ⚠️ Este mes arrancó sin efectivo contado verificado: lo pendiente por pasar se cuenta desde 0 el día 1.
+        Lo contado se anota en el cierre del mes anterior (estado financiero) o con «Saldo inicial contado».
     </div>
     @endif
     @if($movimientosCaja->isEmpty())

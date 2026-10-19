@@ -43,6 +43,8 @@ class Gasto extends BaseModel
         'papeleria' => 'Papelería / útiles',
         'viaticos' => 'Viáticos / transporte',
         'servicios' => 'Pago servicios',
+        // Lo crea solo la carga del extracto: 4x1000, cuota de manejo, IVA…
+        'cargos_bancarios' => 'Cargos bancarios',
         // NÓMINA
         'salarios' => 'Salarios',
         'vales' => 'Vales',
@@ -65,7 +67,7 @@ class Gasto extends BaseModel
     // ── Agrupación para <optgroup> en el select ──────────────────────────────────────
     const TIPOS_GRUPOS = [
         '💱 Movimientos' => ['efectivo_banco', 'banco_banco'],
-        '🏢 Gastos Sede' => ['facturas', 'arriendo', 'papeleria', 'viaticos', 'servicios'],
+        '🏢 Gastos Sede' => ['facturas', 'arriendo', 'papeleria', 'viaticos', 'servicios', 'cargos_bancarios'],
         '👥 Nómina' => ['salarios', 'vales', 'comisiones_nomina', 'nomina'],
         '📦 Otros' => ['otros', 'otro_oficina', 'otro_admin'],
         '🏥 Incapacidades' => ['pago_incapacidad', 'cuatropormil_incapacidad', 'otros_incapacidad', 'admon_incapacidad'],

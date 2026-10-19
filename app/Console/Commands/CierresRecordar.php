@@ -79,7 +79,7 @@ class CierresRecordar extends Command
 
         $lineas = $filas->map(function ($f) use ($nombres) {
             $c = CierreMes::componer((int) $f->aliado_id, (int) $f->anio, (int) $f->mes, $f->foto);
-            $estado = $c['es_apertura'] ? 'apertura'
+            $estado = $c['verificadas'] === 0 ? 'sin verificar'
                 : (abs($c['diferencia']) < 1 ? 'cuadra' : 'diferencia $' . number_format($c['diferencia'], 0, ',', '.'));
 
             return '• ' . ($nombres[$f->aliado_id] ?? "Aliado {$f->aliado_id}") . ': '

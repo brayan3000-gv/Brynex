@@ -90,7 +90,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
             <th class="num">Consignado</th>
             <th class="num" title="Todo lo que salió del efectivo: gastos, traslados al banco y pagos de incapacidad">Salidas efectivo</th>
             <th class="num">{{ $vistaMes ? 'Neto efectivo' : 'Efectivo del día' }}</th>
-            <th class="num" title="Lo que la persona tiene por entregar o consignar al terminar {{ $vistaMes ? 'el mes' : 'el día' }}. Solo si su caja tiene saldo inicial contado.">Pendiente por pasar</th>
+            <th class="num" title="Lo que la persona tiene por entregar o consignar al terminar {{ $vistaMes ? 'el mes' : 'el día' }}, contando desde el inicio del mes (con lo contado al cierre anterior, o desde 0).">Pendiente por pasar</th>
             <th>{{ $vistaMes ? 'Días cuadrados' : 'Estado' }}</th>
             <th style="text-align:center">Ver</th>
         </tr></thead>

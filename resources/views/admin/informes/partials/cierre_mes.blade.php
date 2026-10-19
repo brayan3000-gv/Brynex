@@ -11,7 +11,14 @@
     $sigNom  = $mesesEs[($mes % 12) + 1] ?? '';
     $antNom  = $mesesEs[$mes === 1 ? 12 : $mes - 1] ?? '';
     $corteTx = \Carbon\Carbon::parse($c['corte'])->format('d/m/Y');
-    $tipoEtq = ['cobro' => ['cobro', '#dbeafe', '#1e40af'], 'razon_social' => ['razón social', '#dcfce7', '#166534'], 'personal' => ['personal', '#ede9fe', '#5b21b6']];
+    $tipoEtq = ['cobro' => ['cobro', '#dbeafe', '#1e40af'], 'negocio' => ['negocio', '#e0f2fe', '#075985'], 'razon_social' => ['razón social', '#dcfce7', '#166534'], 'personal' => ['personal', '#ede9fe', '#5b21b6']];
+    $origenEtq = [
+        'verificado'    => ['verificado', '#dcfce7', '#166534', 'el saldo real anotado al cierre del mes anterior'],
+        'manual'        => ['saldo inicial', '#dcfce7', '#166534', 'saldo inicial anotado a mano este mes'],
+        'arrastre'      => ['viene del mes anterior', '#e0f2fe', '#075985', 'cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades'],
+        'personal'      => ['0 cada mes', '#ede9fe', '#5b21b6', 'cuenta personal: solo se lleva lo del negocio en el mes'],
+        'sin_verificar' => ['0 · sin verificar', '#fef3c7', '#92400e', 'no se anotó el saldo real del cierre anterior: el mes arranca en 0'],
+    ];
     $pesos   = fn ($v) => ($v < 0 ? '−' : '') . '$' . number_format(abs((int) $v), 0, ',', '.');
 @endphp
 <style>
@@ -59,7 +66,6 @@
                 @elseif($c['foto_at']) foto del {{ $c['foto_at']->format('d/m/Y H:i') }} · lo que pasó a {{ $sigNom }} quedó fijo
                 @else el mes terminó y todavía no tiene foto
                 @endif
-                @if($c['es_apertura']) · <b style="color:#fde68a">primer cierre (apertura)</b>@endif
             </p>
         </div>
         <span class="cm-chip" style="{{ $c['en_curso'] ? 'background:#fef3c7;color:#92400e' : ($c['foto_at'] ? 'background:#d1fae5;color:#065f46' : 'background:#fee2e2;color:#991b1b') }}">
@@ -118,7 +124,7 @@
         <div><div class="l">Utilidad {{ $c['en_curso'] ? 'a la fecha' : 'de ' . $mesNom }}</div><div class="n">{{ $pesos($c['a']['utilidad']) }}</div></div>
         <div style="margin-left:auto;font-size:.74rem;opacity:.9;text-align:right;line-height:1.5">
             Retiros del dueño en el mes: {{ $pesos($c['a']['retiros']) }}<br>
-            Utilidad acumulada al terminar: <b>{{ $pesos($c['util_despues']) }}</b>
+            Queda en la empresa: <b>{{ $pesos($c['a']['utilidad'] - $c['a']['retiros']) }}</b>
         </div>
     </div>
 
@@ -150,64 +156,49 @@
     </div>
 
     {{-- ── 4 · Dónde está la plata ─────────────────────────────────────── --}}
-    <div class="cm-sec">🏦 4 · Dónde está la plata al {{ $corteTx }} <span>— saldos, no lo que se movió en el mes</span></div>
+    <div class="cm-sec">🏦 4 · Dónde está la plata al {{ $corteTx }} <span>— cada cuenta arranca con lo verificado al cierre anterior y suma solo lo del mes</span></div>
+    @php $editable = $esSuper && !$c['en_curso']; @endphp
     <form method="POST" action="{{ route('admin.informes.financiero.cierre.saldos') }}" class="cm-card">
         @csrf
         <input type="hidden" name="mes" value="{{ $mes }}"><input type="hidden" name="anio" value="{{ $anio }}">
-        <table class="cm-tbl">
-            <thead><tr><th>Cuenta</th><th class="n">Saldo según BryNex</th><th class="n">Saldo real</th><th class="n">Diferencia</th><th class="n">En el mes</th></tr></thead>
+        @foreach([['bancos', 'Cuenta', $c['bancos']], ['efectivo', 'Efectivo · quién lo tiene', $c['efectivo']]] as [$grupo, $titulo, $filas])
+        <table class="cm-tbl" @if($grupo === 'efectivo') style="border-top:1px solid #e2e8f0" @endif>
+            <thead><tr><th>{{ $titulo }}</th><th class="n">Arrancó</th><th class="n">Entró</th><th class="n">Salió</th><th class="n">Según BryNex</th><th class="n">{{ $grupo === 'bancos' ? 'Saldo real' : 'Contado' }}</th><th class="n">Diferencia</th></tr></thead>
             <tbody>
-            @foreach($c['bancos'] as $b)
-                @php $etq = $tipoEtq[$b['tipo']] ?? $tipoEtq['cobro']; @endphp
+            @forelse($filas as $f)
+                @php
+                    $o = $grupo === 'bancos' ? ($origenEtq[$f['origen']] ?? $origenEtq['sin_verificar']) : ($f['verificado'] ? $origenEtq['verificado'] : $origenEtq['sin_verificar']);
+                    $etq = $grupo === 'bancos' ? ($tipoEtq[$f['tipo']] ?? $tipoEtq['negocio']) : null;
+                @endphp
                 <tr>
-                    <td><b>{{ $b['nombre'] }}</b> <span class="cm-etq" style="background:{{ $etq[1] }};color:{{ $etq[2] }}">{{ $etq[0] }}</span>
-                        @if($b['tipo'] === 'personal' && $b['saldo_cuenta'] < 0)<div style="font-size:.64rem;color:#7c3aed">en negativo: va arriba como pendiente a la cuenta</div>@endif
+                    <td><b>{{ $f['nombre'] }}</b>
+                        @if($etq)<span class="cm-etq" style="background:{{ $etq[1] }};color:{{ $etq[2] }}">{{ $etq[0] }}</span>@endif
+                        @if($grupo === 'bancos' && $f['tipo'] === 'personal' && $f['saldo_cuenta'] < 0)<div style="font-size:.64rem;color:#7c3aed">en negativo: va arriba como pendiente a la cuenta</div>@endif
                     </td>
-                    <td class="n" style="{{ $b['saldo'] < 0 ? 'color:#dc2626' : '' }}">{{ $pesos($b['saldo']) }}</td>
+                    <td class="n">{{ $pesos($f['inicial']) }}<div><span class="cm-etq" title="{{ $o[3] }}" style="background:{{ $o[1] }};color:{{ $o[2] }}">{{ $o[0] }}</span></div></td>
+                    <td class="n" style="color:#15803d">{{ $f['entro'] ? $pesos($f['entro']) : '—' }}</td>
+                    <td class="n" style="color:#b91c1c">{{ $f['salio'] ? $pesos($f['salio']) : '—' }}</td>
+                    <td class="n" style="font-weight:700;{{ $f['saldo'] < 0 ? 'color:#dc2626' : '' }}">{{ $pesos($f['saldo']) }}</td>
                     <td class="n">
-                        @if($esSuper && !$c['en_curso'])
-                        <input class="cm-in" type="number" step="1" name="bancos[{{ $b['id'] }}]" value="{{ $b['real'] }}" placeholder="—">
-                        @else {{ $b['real'] === null ? '—' : $pesos($b['real']) }} @endif
+                        @if($editable)
+                        <input class="cm-in" type="number" step="1" name="{{ $grupo }}[{{ $f['id'] }}]" value="{{ $f['real'] }}" placeholder="—">
+                        @else {{ $f['real'] === null ? '—' : $pesos($f['real']) }} @endif
                     </td>
-                    <td class="n" style="{{ $b['real'] !== null && $b['real'] != $b['saldo'] ? 'color:#dc2626;font-weight:700' : 'color:#94a3b8' }}">{{ $b['real'] === null ? '—' : $pesos($b['real'] - $b['saldo']) }}</td>
-                    <td class="n" style="font-size:.66rem;color:#94a3b8">@if($b['entro'])entró {{ $pesos($b['entro']) }}<br>@endif @if($b['salio'])salió {{ $pesos($b['salio']) }}@endif @if(!$b['entro'] && !$b['salio'])sin movimiento @endif</td>
+                    <td class="n" style="{{ $f['diferencia'] ? 'color:#dc2626;font-weight:700' : 'color:#94a3b8' }}">{{ $f['diferencia'] === null ? '—' : $pesos($f['diferencia']) }}</td>
                 </tr>
-            @endforeach
-            <tr style="background:#fafbfc"><td><b>Total bancos</b></td><td class="n" colspan="2"><b>{{ $pesos($c['total_bancos']) }}</b></td><td colspan="2"></td></tr>
+            @empty
+                <tr><td colspan="7" style="font-size:.74rem;color:#94a3b8">Nadie manejó efectivo este mes.</td></tr>
+            @endforelse
+            <tr style="background:#fafbfc"><td colspan="4"><b>Total {{ $grupo === 'bancos' ? 'bancos' : 'efectivo' }}</b> <span style="font-size:.66rem;color:#94a3b8">(lo real donde se anotó)</span></td>
+                <td class="n" colspan="2"><b>{{ $pesos($grupo === 'bancos' ? $c['total_bancos'] : $c['total_efectivo']) }}</b></td><td></td></tr>
             </tbody>
         </table>
-        <table class="cm-tbl" style="border-top:1px solid #e2e8f0">
-            <thead><tr><th>Efectivo · quién lo tiene</th><th class="n">Según BryNex</th><th class="n">Contado</th><th class="n">Diferencia</th><th></th></tr></thead>
-            <tbody>
-            @if($c['efectivo_contado'])
-                @foreach($c['efectivo'] as $e)
-                <tr>
-                    <td><b>{{ $e['nombre'] }}</b></td>
-                    <td class="n">{{ $pesos($e['saldo']) }}</td>
-                    <td class="n">
-                        @if($esSuper && !$c['en_curso'])
-                        <input class="cm-in" type="number" step="1" name="efectivo[{{ $e['id'] }}]" value="{{ $e['real'] }}" placeholder="—">
-                        @else {{ $e['real'] === null ? '—' : $pesos($e['real']) }} @endif
-                    </td>
-                    <td class="n" style="{{ $e['real'] !== null && $e['real'] != $e['saldo'] ? 'color:#dc2626;font-weight:700' : 'color:#94a3b8' }}">{{ $e['real'] === null ? '—' : $pesos($e['real'] - $e['saldo']) }}</td>
-                    <td></td>
-                </tr>
-                @endforeach
-            @else
-                <tr><td colspan="5" style="font-size:.74rem;color:#9a3412;background:#fff7ed">
-                    Ninguna caja tiene saldo inicial contado: se usa el efectivo que calcula el informe,
-                    <b>{{ $pesos($c['efectivo_viejo']) }}</b>, que suma lo cobrado sin restar lo que cada persona entregó.
-                    Con «Saldo inicial contado» en el cuadre de cada persona esto se reemplaza por lo contado.
-                </td></tr>
-            @endif
-            <tr style="background:#fafbfc"><td><b>Total efectivo</b></td><td class="n" colspan="2"><b>{{ $pesos($c['total_efectivo']) }}</b></td><td colspan="2"></td></tr>
-            </tbody>
-        </table>
-        @if($esSuper && !$c['en_curso'])
-        <details id="cm-reales" style="padding:.6rem .9rem;border-top:1px solid #f1f5f9">
-            <summary style="font-size:.74rem;color:#1e40af;cursor:pointer;font-weight:700">¿Ya anotaste los saldos reales? Guárdalos aquí</summary>
+        @endforeach
+        @if($editable)
+        <details id="cm-reales" style="padding:.6rem .9rem;border-top:1px solid #f1f5f9" @if(!$c['hay_reales']) open @endif>
+            <summary style="font-size:.74rem;color:#1e40af;cursor:pointer;font-weight:700">Guardar los saldos reales del cierre</summary>
             <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-top:.5rem;flex-wrap:wrap">
-                <span style="font-size:.7rem;color:#64748b">Escribe el saldo del extracto de cada cuenta y lo contado de cada persona al {{ $corteTx }}. Lo que dejes vacío se toma como el saldo según BryNex.
+                <span style="font-size:.7rem;color:#64748b">Saldo del extracto de cada cuenta y lo contado de cada persona al {{ $corteTx }}. Con esto arranca {{ $sigNom }}; lo que dejes vacío arranca en 0 «sin verificar» (las de razón social siguen con su saldo).
                     @if($c['saldos_at']) Últimos guardados: {{ $c['saldos_at']->format('d/m/Y H:i') }}.@endif</span>
                 <button class="cm-btn" style="background:#1e40af;color:#fff">Guardar saldos reales</button>
             </div>
@@ -216,32 +207,23 @@
     </form>
 
     {{-- ── 5 · ¿Cuadra? ────────────────────────────────────────────────── --}}
-    <div class="cm-sec">✅ 5 · ¿Cuadra?</div>
+    <div class="cm-sec">✅ 5 · ¿Cuadra? <span>— lo real contra BryNex, solo de este mes</span></div>
     <div class="cm-card" style="border-width:2px">
-        <div class="cm-eq">
-            <div><div class="l">Dónde está la plata</div><div class="n">{{ $pesos($c['total_d']) }}</div></div>
-            <div class="op">=</div>
-            <div><div class="l">Utilidad acumulada</div><div class="n">{{ $pesos($c['util_despues']) }}</div></div>
-            <div class="op">+</div>
-            <div><div class="l">Pasa al mes</div><div class="n">{{ $pesos($c['total_b']) }}</div></div>
-            <div class="op">−</div>
-            <div><div class="l">Por cobrar</div><div class="n">{{ $pesos($c['total_c']) }}</div></div>
+        @if($c['verificadas'] === 0)
+        <div class="cm-res" style="background:#fff7ed;color:#9a3412">
+            {{ $c['en_curso'] ? 'El mes está en curso: se revisa al cerrar, anotando los saldos reales.' : 'Anota los saldos reales de las cuentas y el efectivo contado para saber si el mes cuadra.' }}
         </div>
-        @if($c['es_apertura'])
-        <div class="cm-res" style="background:#eef2ff;color:#3730a3">
-            Primer cierre: la utilidad acumulada al empezar ({{ $pesos($c['util_antes']) }}) es la que hace cuadrar este mes; queda como ajuste de apertura.
-            Desde el mes siguiente, cualquier diferencia es algo nuevo que hay que buscar.
+        @elseif($c['diferencia'] == 0)
+        <div class="cm-res" style="background:#ecfdf5;color:#065f46">
+            ✅ Cuadra: en las {{ $c['verificadas'] }} cuentas y cajas verificadas lo real es igual a lo registrado.
+            @if($c['por_verificar']) <span style="font-weight:500">Faltan {{ $c['por_verificar'] }} por verificar.</span>@endif
         </div>
-        @elseif(abs($c['diferencia']) < 1)
-        <div class="cm-res" style="background:#ecfdf5;color:#065f46">✅ Cuadra: diferencia $0.</div>
         @else
         <div class="cm-res" style="background:#fef2f2;color:#991b1b">
-            ❌ Diferencia {{ $pesos($c['diferencia']) }}: {{ $c['diferencia'] > 0 ? 'hay más plata de la que se explica' : 'falta plata' }}.
-            <span style="font-weight:500">Revisa consignaciones sin confirmar, efectivo sin entregar, gastos sin registrar o retiros del dueño sin anotar.</span>
+            ❌ Diferencia del mes {{ $pesos($c['diferencia']) }}: {{ $c['diferencia'] > 0 ? 'hay más plata de la que se registró' : 'falta plata, o salió algo que no se registró' }}.
+            <span style="font-weight:500">Mira la columna «Diferencia»: es lo que no se registró este mes en esa cuenta o con esa persona — consignaciones en otra cuenta, cobros del banco, gastos o retiros sin anotar, o algo en tránsito al cierre.
+            @if($c['por_verificar']) Faltan {{ $c['por_verificar'] }} por verificar.@endif</span>
         </div>
-        @endif
-        @if($c['faltan_fotos'])
-        <div class="cm-res" style="background:#fff7ed;color:#9a3412;font-weight:500">Faltan las fotos de {{ implode(', ', $c['faltan_fotos']) }}: su utilidad no está sumada a la acumulada.</div>
         @endif
     </div>
 </div>

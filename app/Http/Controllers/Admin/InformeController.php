@@ -1388,10 +1388,13 @@ class InformeController extends Controller
         $bancoIds = $bancos->pluck('id')->toArray();
 
         $fechaFin = $esMesActual ? null : \Carbon\Carbon::createFromDate($anio, $mes, 1)->endOfMonth()->toDateString();
-        $saldosBancos = \App\Models\Consignacion::saldosBancosOptimizados($aid, $bancoIds, $fechaFin);
+        // Regla única (SaldosBanco): cada mes parte de lo verificado al cierre anterior.
+        $saldosBancos = \App\Services\Caja\SaldosBanco::al($aid, $bancoIds, $fechaFin ?? today()->toDateString());
 
         $bancos = $bancos->map(function($b) use($saldosBancos, $esMesActual, $mes, $anio){
-            $b->saldo_actual = (int)($saldosBancos[$b->id] ?? 0);
+            $b->saldo_actual  = (int)($saldosBancos[$b->id]['saldo'] ?? 0);
+            $b->saldo_inicial = (int)($saldosBancos[$b->id]['inicial'] ?? 0);
+            $b->origen_saldo  = $saldosBancos[$b->id]['origen'] ?? 'sin_verificar';
             $b->label_saldo  = $esMesActual ? 'Saldo actual' : 'Saldo al ' . \Carbon\Carbon::createFromDate($anio,$mes,1)->endOfMonth()->format('d/m/y');
             return $b;
         });
@@ -1407,35 +1410,12 @@ class InformeController extends Controller
             $totalBancosMesAnt = (float)collect($saldosBancosMesAnt)->sum();
         }
 
-        // Calcular el arrastre de efectivo secuencialmente mes a mes para respetar la regla de no saldo negativo físico
-        $saldoEfectivoMesAnt = 0.0;
-        $start = \Carbon\Carbon::createFromDate(2026, 7, 1)->startOfMonth();
-        $end = \Carbon\Carbon::createFromDate($anioAnt, $mesAnt, 1)->startOfMonth();
-
-        if ($end->greaterThanOrEqualTo($start)) {
-            $curr = $start->copy();
-            while ($curr->lessThanOrEqualTo($end)) {
-                $mCurr = $curr->month;
-                $yCurr = $curr->year;
-
-                // La regla única de efectivo (FlujoEfectivo), la misma del mes
-                // en curso y del cuadre diario: antes este arrastre dejaba fuera
-                // los abonos y el efectivo de los préstamos.
-                $netoM = \App\Services\Caja\FlujoEfectivo::totales(
-                    (int) $aid, null,
-                    $curr->copy()->startOfMonth()->toDateString(),
-                    $curr->copy()->endOfMonth()->toDateString()
-                )['neto'];
-
-                $saldoEfectivoMesAnt = max(0.0, $saldoEfectivoMesAnt + $netoM);
-                $curr->addMonth();
-            }
-        }
-
-        // Para julio de 2026, el saldo inicial de la caja es el recaudo de SS de junio
-        if ($mes == 7 && $anio == 2026) {
-            $saldoEfectivoMesAnt = $ssMesAnteriorParaActual;
-        }
+        // El efectivo arranca cada mes con lo CONTADO que se anotó al cierre del
+        // mes anterior (0 si no se anotó). Antes se arrastraba un cálculo desde
+        // julio que sumaba lo cobrado sin restar lo entregado entre personas, y
+        // en BRYGAR daba $68M de efectivo que nadie tenía.
+        $cierreAntEf = \App\Models\CierreMes::de((int) $aid, (int) $anioAnt, (int) $mesAnt);
+        $saldoEfectivoMesAnt = (float) array_sum($cierreAntEf?->saldos_reales['efectivo'] ?? []);
         $saldoTotalMesAnterior = $totalBancosMesAnt + $saldoEfectivoMesAnt;
 
         // ── Desglose de ingresos y egresos del mes por banco ──
@@ -1680,7 +1660,6 @@ class InformeController extends Controller
             'asesores'         => $saldoAsesores,
             'incapacidades'    => $canal5SaldoAcumulado,
             'bancos'           => $bancos,
-            'efectivo_viejo'   => $efMes->saldo_actual,
         ]);
         $cierre = \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
 

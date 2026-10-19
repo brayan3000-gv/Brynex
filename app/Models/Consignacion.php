@@ -135,187 +135,22 @@ class Consignacion extends BaseModel
     }
 
     // ── Helper: saldo actual de una cuenta bancaria ──────────────────
-    /**
-     * Calcula el saldo real de una cuenta bancaria combinando:
-     *  + consignaciones confirmadas (clientes + traslados efectivo + banco recibido)
-     *  – gastos cuyo banco_origen_id = $bancoCuentaId (pagos y transferencias salientes)
-     */
+    /** Saldo de hoy de una cuenta bancaria (regla: App\Services\Caja\SaldosBanco). */
     public static function saldoBanco(int $aliadoId, int $bancoCuentaId): int
     {
-        // ── Estrategia: si existe un saldo_inicial en saldos_banco, úsalo
-        // como punto de partida y solo cuenta movimientos POSTERIORES a esa fecha.
-        // Si no existe, recalcula desde el principio (comportamiento original).
-        $ledger = DB::table('saldos_banco')
-            ->where('aliado_id', $aliadoId)
-            ->where('banco_cuenta_id', $bancoCuentaId)
-            ->where('tipo', 'saldo_inicial')
-            ->orderByDesc('fecha')
-            ->orderByDesc('id')
-            ->first(['fecha', 'saldo_acumulado']);
-
-        if ($ledger) {
-            $baseDate = $ledger->fecha;
-            $baseSaldo = (int) $ledger->saldo_acumulado; // normalmente 0
-
-            $entradas = (int) static::where('aliado_id', $aliadoId)
-                ->where('banco_cuenta_id', $bancoCuentaId)
-                ->where('fecha', '>=', '2026-07-01')
-                ->where('fecha', '>=', $baseDate)
-                ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-                ->value('total');
-
-            $salidas = (int) DB::table('gastos')
-                ->where('aliado_id', $aliadoId)
-                ->where('banco_origen_id', $bancoCuentaId)
-                ->where('fecha', '>=', '2026-07-01')
-                ->where('tipo', '!=', 'ajuste_apertura')
-                ->where('tipo', '!=', 'efectivo_banco')
-                ->where('fecha', '>=', $baseDate)
-                ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-                ->value('total');
-
-            return $baseSaldo + $entradas - $salidas;
-        }
-
-        // ── Fallback: recalcular todo el historial ────────────────────────
-        // Usa selectRaw + alias para compatibilidad con SQL Server (no value(DB::raw()))
-        $entradas = (int) static::where('aliado_id', $aliadoId)
-            ->where('banco_cuenta_id', $bancoCuentaId)
-            ->where('fecha', '>=', '2026-07-01')
-            ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-            ->value('total');
-
-        $salidas = (int) DB::table('gastos')
-            ->where('aliado_id', $aliadoId)
-            ->where('banco_origen_id', $bancoCuentaId)
-            ->where('fecha', '>=', '2026-07-01')
-            ->where('tipo', '!=', 'efectivo_banco')
-            ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-            ->value('total');
-
-        return $entradas - $salidas;
+        // Una sola regla para todo el sistema: ver App\Services\Caja\SaldosBanco.
+        return \App\Services\Caja\SaldosBanco::hoy($aliadoId, $bancoCuentaId);
     }
 
     /**
-     * Calcula los saldos de múltiples cuentas bancarias en un lote optimizado.
-     * Retorna un array asociativo [banco_cuenta_id => saldo].
+     * Saldos de varias cuentas [banco_cuenta_id => saldo] al día $fechaFin (hoy
+     * si es null). Regla: App\Services\Caja\SaldosBanco.
      */
     public static function saldosBancosOptimizados(int $aliadoId, array $bancoCuentaIds, ?string $fechaFin = null): array
     {
-        if (empty($bancoCuentaIds)) {
-            return [];
-        }
+        $saldos = \App\Services\Caja\SaldosBanco::al($aliadoId, $bancoCuentaIds, $fechaFin ?? today()->toDateString());
 
-        $saldos = array_fill_keys($bancoCuentaIds, 0);
-
-        // 1. Obtener los saldos iniciales (ledgers) si existen para estos bancos
-        $ledgersQuery = DB::table('saldos_banco')
-            ->where('aliado_id', $aliadoId)
-            ->whereIn('banco_cuenta_id', $bancoCuentaIds)
-            ->where('tipo', 'saldo_inicial');
-
-        // Siempre aplicar el corte de julio 2026
-        $ledgersQuery->where('fecha', '>=', '2026-07-01');
-        if ($fechaFin) {
-            $ledgersQuery->where('fecha', '<=', $fechaFin);
-        }
-
-        $ledgers = $ledgersQuery->orderByDesc('fecha')
-            ->orderByDesc('id')
-            ->get()
-            ->groupBy('banco_cuenta_id');
-
-        $bancosConLedger = [];
-        $bancosSinLedger = [];
-
-        foreach ($bancoCuentaIds as $bancoId) {
-            if ($ledgers->has($bancoId)) {
-                $bancosConLedger[] = $bancoId;
-            } else {
-                $bancosSinLedger[] = $bancoId;
-            }
-        }
-
-        // 2. Procesar en lote bancos SIN ledger (la gran mayoría)
-        if (! empty($bancosSinLedger)) {
-            $entradasQuery = DB::table('consignaciones')
-                ->where('aliado_id', $aliadoId)
-                ->whereNull('deleted_at')
-                ->where('fecha', '>=', '2026-07-01')
-                ->whereIn('banco_cuenta_id', $bancosSinLedger);
-
-            if ($fechaFin) {
-                $entradasQuery->where('fecha', '<=', $fechaFin);
-            }
-
-            $entradas = $entradasQuery
-                ->groupBy('banco_cuenta_id')
-                ->selectRaw('banco_cuenta_id, ISNULL(SUM(CAST(valor AS BIGINT)), 0) as total')
-                ->pluck('total', 'banco_cuenta_id')
-                ->toArray();
-
-            $salidasQuery = DB::table('gastos')
-                ->where('aliado_id', $aliadoId)
-                ->where('fecha', '>=', '2026-07-01')
-                ->where('tipo', '!=', 'efectivo_banco')
-                ->whereIn('banco_origen_id', $bancosSinLedger);
-
-            if ($fechaFin) {
-                $salidasQuery->where('fecha', '<=', $fechaFin);
-            }
-
-            $salidas = $salidasQuery
-                ->groupBy('banco_origen_id')
-                ->selectRaw('banco_origen_id, ISNULL(SUM(CAST(valor AS BIGINT)), 0) as total')
-                ->pluck('total', 'banco_origen_id')
-                ->toArray();
-
-            foreach ($bancosSinLedger as $bancoId) {
-                $ent = (int) ($entradas[$bancoId] ?? 0);
-                $sal = (int) ($salidas[$bancoId] ?? 0);
-                $saldos[$bancoId] = $ent - $sal;
-            }
-        }
-
-        // 3. Procesar bancos CON ledger de forma individual (son muy pocos o ninguno)
-        foreach ($bancosConLedger as $bancoId) {
-            $ledger = $ledgers->get($bancoId)->first();
-            $baseDate = $ledger->fecha;
-            $baseSaldo = (int) $ledger->saldo_acumulado;
-
-            $entradasQuery = static::where('aliado_id', $aliadoId)
-                ->where('banco_cuenta_id', $bancoId)
-                ->where('fecha', '>=', '2026-07-01')
-                ->where('fecha', '>=', $baseDate);
-
-            if ($fechaFin) {
-                $entradasQuery->where('fecha', '<=', $fechaFin);
-            }
-
-            $entradas = (int) $entradasQuery
-                ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-                ->value('total');
-
-            $salidasQuery = DB::table('gastos')
-                ->where('aliado_id', $aliadoId)
-                ->where('banco_origen_id', $bancoId)
-                ->where('fecha', '>=', '2026-07-01')
-                ->where('tipo', '!=', 'ajuste_apertura')
-                ->where('tipo', '!=', 'efectivo_banco')
-                ->where('fecha', '>=', $baseDate);
-
-            if ($fechaFin) {
-                $salidasQuery->where('fecha', '<=', $fechaFin);
-            }
-
-            $salidas = (int) $salidasQuery
-                ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-                ->value('total');
-
-            $saldos[$bancoId] = $baseSaldo + $entradas - $salidas;
-        }
-
-        return $saldos;
+        return array_map(fn ($s) => $s['saldo'], $saldos) + array_fill_keys($bancoCuentaIds, 0);
     }
 
     /**
@@ -328,68 +163,11 @@ class Consignacion extends BaseModel
         return static::saldosBancosOptimizados($aliadoId, $bancoCuentaIds);
     }
 
-    /**
-     * Calcula el saldo de un banco al CIERRE de un mes/año específico.
-     * Usado en el informe financiero cuando el filtro es un mes pasado.
-     *
-     * Lógica:
-     *  - Si existe saldo_inicial anterior o igual al último día del mes → parte desde él
-     *  - Suma entradas y resta salidas hasta el último día del mes (inclusive)
-     */
+    /** Saldo de una cuenta al cierre de un mes (regla: App\Services\Caja\SaldosBanco). */
     public static function saldoBancoAlFin(int $aliadoId, int $bancoCuentaId, int $mes, int $anio): int
     {
-        // Último día del mes filtrado
         $fechaFin = \Carbon\Carbon::createFromDate($anio, $mes, 1)->endOfMonth()->toDateString();
 
-        // Buscar saldo_inicial que aplique (anterior o igual al cierre del mes)
-        $ledger = DB::table('saldos_banco')
-            ->where('aliado_id', $aliadoId)
-            ->where('banco_cuenta_id', $bancoCuentaId)
-            ->where('tipo', 'saldo_inicial')
-            ->where('fecha', '<=', $fechaFin)
-            ->orderByDesc('fecha')
-            ->orderByDesc('id')
-            ->first(['fecha', 'saldo_acumulado']);
-
-        if ($ledger) {
-            $baseDate = $ledger->fecha;
-            $baseSaldo = (int) $ledger->saldo_acumulado;
-
-            $entradas = (int) static::where('aliado_id', $aliadoId)
-                ->where('banco_cuenta_id', $bancoCuentaId)
-                ->where('fecha', '>', $baseDate)
-                ->where('fecha', '<=', $fechaFin)
-                ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-                ->value('total');
-
-            $salidas = (int) DB::table('gastos')
-                ->where('aliado_id', $aliadoId)
-                ->where('banco_origen_id', $bancoCuentaId)
-                ->where('tipo', '!=', 'ajuste_apertura')
-                ->where('fecha', '>', $baseDate)
-                ->where('fecha', '<=', $fechaFin)
-                ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-                ->value('total');
-
-            return $baseSaldo + $entradas - $salidas;
-        }
-
-        // Fallback: sumar todo hasta el cierre del mes
-        $entradas = (int) static::where('aliado_id', $aliadoId)
-            ->where('banco_cuenta_id', $bancoCuentaId)
-            ->where('fecha', '>=', '2026-07-01')
-            ->where('fecha', '<=', $fechaFin)
-            ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-            ->value('total');
-
-        $salidas = (int) DB::table('gastos')
-            ->where('aliado_id', $aliadoId)
-            ->where('banco_origen_id', $bancoCuentaId)
-            ->where('fecha', '>=', '2026-07-01')
-            ->where('fecha', '<=', $fechaFin)
-            ->selectRaw('ISNULL(SUM(CAST(valor AS BIGINT)), 0) AS total')
-            ->value('total');
-
-        return $entradas - $salidas;
+        return \App\Services\Caja\SaldosBanco::al($aliadoId, [$bancoCuentaId], $fechaFin)[$bancoCuentaId]['saldo'] ?? 0;
     }
 }

@@ -153,40 +153,79 @@ class FlujoEfectivo
     }
 
     /**
-     * Lo que una persona traía al empezar el día, sin la base de caja menor.
+     * Con qué arrancó una persona el mes de $fecha: el «saldo inicial contado»
+     * más reciente de ese mes (caja_movimientos) o, si no hay, lo contado que
+     * el superadmin anotó al cierre del mes anterior (cierres_mes). Cada mes
+     * empieza con lo verificado: un mes sin cierre no arrastra un saldo
+     * calculado con errores. null si no hay nada verificado.
      *
-     * Parte del último saldo inicial contado con fecha <= $fecha (que es el
-     * saldo al empezar ese día) y le suma lo que se movió desde entonces hasta
-     * el día anterior. null si la persona nunca tuvo saldo inicial: entonces
-     * no se sabe cuánto tiene.
+     * @return array{fecha:string, valor:int}|null  saldo al empezar `fecha`
      */
-    public static function saldoPersonaAntesDe(int $aliadoId, int $usuarioId, string $fecha): ?int
+    public static function aperturaPersona(int $aliadoId, int $usuarioId, string $fecha): ?array
     {
-        $inicial = CajaMovimiento::saldoInicialVigente($aliadoId, $usuarioId, $fecha);
-        if (! $inicial) {
-            return null;
+        $inicio = \Carbon\Carbon::parse($fecha)->startOfMonth();
+
+        $mov = CajaMovimiento::where('aliado_id', $aliadoId)
+            ->where('tipo', CajaMovimiento::TIPO_SALDO_INICIAL)
+            ->where('usuario_destino_id', $usuarioId)
+            ->whereDate('fecha', '>=', $inicio->toDateString())
+            ->whereDate('fecha', '<=', $fecha)
+            ->orderByDesc('fecha')->orderByDesc('id')
+            ->first();
+        if ($mov) {
+            return ['fecha' => $mov->fecha->toDateString(), 'valor' => (int) $mov->valor];
         }
 
-        $desde = $inicial->fecha->toDateString();
-        if ($desde === $fecha) {
-            return (int) $inicial->valor;
+        $ant = $inicio->copy()->subMonth();
+        $contado = \App\Models\CierreMes::de($aliadoId, $ant->year, $ant->month)?->saldos_reales['efectivo'][$usuarioId] ?? null;
+
+        return $contado === null ? null : ['fecha' => $inicio->toDateString(), 'valor' => (int) $contado];
+    }
+
+    /**
+     * Lo que una persona traía al empezar el día, sin la base de caja menor.
+     *
+     * Parte de la apertura del mes (aperturaPersona) y le suma lo que se movió
+     * desde entonces hasta el día anterior. Sin apertura verificada arranca el
+     * mes en 0: igual se arrastra lo de los días anteriores del mes, que es lo
+     * que la persona tiene pendiente por pasar.
+     */
+    public static function saldoPersonaAntesDe(int $aliadoId, int $usuarioId, string $fecha): int
+    {
+        $apertura = self::aperturaPersona($aliadoId, $usuarioId, $fecha)
+            ?? ['fecha' => \Carbon\Carbon::parse($fecha)->startOfMonth()->toDateString(), 'valor' => 0];
+
+        if ($apertura['fecha'] === $fecha) {
+            return $apertura['valor'];
         }
 
         $ayer = \Carbon\Carbon::parse($fecha)->subDay()->toDateString();
 
-        return (int) $inicial->valor + self::totales($aliadoId, $usuarioId, $desde, $ayer)['neto'];
+        return $apertura['valor'] + self::totales($aliadoId, $usuarioId, $apertura['fecha'], $ayer)['neto'];
     }
 
-    /** Personas con saldo inicial contado con fecha <= $fecha: las que arrastran caja. */
-    public static function personasConSaldo(int $aliadoId, string $fecha): array
+    /**
+     * Personas que manejan efectivo en el mes de $fecha hasta ese día: las que
+     * tienen apertura verificada y las que movieron efectivo.
+     */
+    public static function personasDelMes(int $aliadoId, string $fecha): array
     {
-        return CajaMovimiento::where('aliado_id', $aliadoId)
+        $inicio = \Carbon\Carbon::parse($fecha)->startOfMonth();
+        $ant    = $inicio->copy()->subMonth();
+
+        $ids = CajaMovimiento::where('aliado_id', $aliadoId)
             ->where('tipo', CajaMovimiento::TIPO_SALDO_INICIAL)
+            ->whereDate('fecha', '>=', $inicio->toDateString())
             ->whereDate('fecha', '<=', $fecha)
-            ->distinct()
-            ->pluck('usuario_destino_id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+            ->pluck('usuario_destino_id')->map(fn ($id) => (int) $id)->all();
+        $ids = array_merge($ids, array_map('intval', array_keys(
+            \App\Models\CierreMes::de($aliadoId, $ant->year, $ant->month)?->saldos_reales['efectivo'] ?? []
+        )));
+        foreach (array_keys(self::porUsuarioDia($aliadoId, null, $inicio->toDateString(), $fecha)) as $llave) {
+            $ids[] = (int) explode('|', $llave)[0];
+        }
+
+        return array_values(array_unique(array_filter($ids)));
     }
 
     /** Suma un conjunto de filas de porUsuarioDia. */

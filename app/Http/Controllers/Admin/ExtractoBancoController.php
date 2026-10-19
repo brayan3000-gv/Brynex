@@ -343,6 +343,15 @@ class ExtractoBancoController extends Controller
             true
         );
 
+        // Los cobros del banco quedan como un gasto por mes: si no, cada cierre
+        // los mostraba como diferencia (ver CargosBancariosService).
+        $cargos = (new \App\Services\Banco\CargosBancariosService)->registrar(
+            $cuenta,
+            Carbon::parse($r['desde']),
+            Carbon::parse($r['hasta']),
+            (int) auth()->id()
+        );
+
         Bitacora::registrar(
             'cargar_extracto', 'BancoMovimiento', (int) $cuenta->id,
             "Extracto cargado ({$r['desde']} a {$r['hasta']}): {$r['nuevos']} movimientos nuevos, {$cruce['confirmadas']} consignaciones confirmadas",
@@ -358,7 +367,8 @@ class ExtractoBancoController extends Controller
         $aviso = "Extracto de {$r['desde']} a {$r['hasta']}: {$r['nuevos']} movimientos nuevos"
             .($r['repetidos'] ? " ({$r['repetidos']} ya estaban)" : '')
             .'. Entradas: '.count($cruce['cruces'])." cruzadas, {$cruce['confirmadas']} consignaciones confirmadas."
-            .' Salidas: '.count($cruceGastos['cruces']).' cruzadas contra gastos.';
+            .' Salidas: '.count($cruceGastos['cruces']).' cruzadas contra gastos.'
+            .($cargos ? ' Cargos bancarios registrados: '.collect($cargos)->map(fn ($v, $m) => $m.' $'.number_format($v, 0, ',', '.'))->implode(', ').'.' : '');
 
         // El propio archivo dice cuánto debía sumar; si no cuadra llegó
         // recortado y más vale decirlo que dejar medio mes sin conciliar.
