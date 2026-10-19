@@ -742,6 +742,12 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
 
                     {{-- Movimientos del mes --}}
                     <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        {{-- Con cuánto arrancó el mes: lo contado al cierre anterior.
+                             Sin esto el neto del mes parecía el saldo. --}}
+                        <div style="display:flex;justify-content:space-between;align-items:center;" title="Lo contado al cierre del mes anterior (0 si no se anotó)">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↪ Arrancó el mes</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#334155;font-family:monospace;">{{ $fmt($efMes->saldo_actual - $efMes->neto) }}</span>
+                        </div>
                         {{-- Entró total e hijos --}}
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
