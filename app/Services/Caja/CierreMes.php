@@ -3,6 +3,7 @@
 namespace App\Services\Caja;
 
 use App\Models\CierreMes as CierreMesModel;
+use App\Models\Factura;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -127,7 +128,10 @@ class CierreMes
         // Lo que falta que entre, separado: los préstamos del mes (lo que
         // muestra la tarjeta de préstamos), los de meses anteriores y lo demás
         // que deben los clientes, neto de sus saldos a favor.
-        [$prestMes, $prestAnt] = self::prestamosPendientes($aliadoId, $inicio->toDateString(), $corte->toDateString());
+        // saldosClientes suma el saldo_proximo de los préstamos sin sus abonos:
+        // lo ya abonado se quita del total para que no cuente dos veces.
+        [$prestMes, $prestAnt, $yaAbonado] = self::prestamosPendientes($aliadoId, $inicio->toDateString(), $corte->toDateString());
+        $porCobrar = max(0, $porCobrar - $yaAbonado);
         $otras = $porCobrar - $prestMes - $prestAnt;
 
         return [
@@ -334,20 +338,50 @@ class CierreMes
     }
 
     /**
-     * Lo que falta por cobrar de los préstamos: [hechos en el mes, hechos antes].
-     * Es el `saldo_proximo` negativo de las facturas que siguen en préstamo.
+     * Lo que falta por cobrar de los préstamos: [hechos en el mes, hechos antes,
+     * lo que ya abonaron].
+     *
+     * Misma regla que el listado de /admin/prestamos: el `saldo_proximo`
+     * negativo de la factura MENOS sus abonos, y en las de empresa por lote
+     * (Factura::deudaLote). El abono no toca `saldo_proximo` mientras el
+     * préstamo no se salde, así que sin restarlo el informe contaba dos veces
+     * la plata: en el banco y como «falta que entre» (Brygar, oct-2026:
+     * $18,3M aquí contra $8,7M en el listado).
      */
     public static function prestamosPendientes(int $aliadoId, string $inicioMes, string $corte): array
     {
-        $r = DB::table('facturas')
+        $filas = DB::table('facturas')
             ->where('aliado_id', $aliadoId)->whereNull('deleted_at')
-            ->where('estado', 'prestamo')->where('saldo_proximo', '<', 0)
+            ->where('estado', 'prestamo')
             ->whereDate('fecha_pago', '<=', $corte)
-            ->selectRaw('SUM(CASE WHEN fecha_pago >= ? THEN CAST(-saldo_proximo AS BIGINT) ELSE 0 END) AS mes,
-                         SUM(CASE WHEN fecha_pago <  ? THEN CAST(-saldo_proximo AS BIGINT) ELSE 0 END) AS antes', [$inicioMes, $inicioMes])
-            ->first();
+            ->get(['id', 'numero_factura', 'empresa_id', 'fecha_pago', 'saldo_proximo', 'valor_prestamo']);
 
-        return [(int) ($r->mes ?? 0), (int) ($r->antes ?? 0)];
+        $abonos = DB::table('abonos')
+            ->whereIn('factura_id', $filas->pluck('id'))
+            ->whereDate('fecha', '<=', $corte)
+            ->groupBy('factura_id')
+            ->selectRaw('factura_id, SUM(CAST(valor AS BIGINT)) AS v')
+            ->pluck('v', 'factura_id');
+
+        $mes = $antes = $bruto = 0;
+        $sumar = function (int $pendiente, $fila) use ($inicioMes, &$mes, &$antes) {
+            substr((string) $fila->fecha_pago, 0, 10) >= $inicioMes ? $mes += $pendiente : $antes += $pendiente;
+        };
+
+        foreach ($filas->whereNull('empresa_id') as $f) {
+            $deuda = max(0, -(int) $f->saldo_proximo);
+            $bruto += $deuda;
+            $sumar(max(0, $deuda - (int) ($abonos[$f->id] ?? 0)), $f);
+        }
+
+        $lotes = $filas->whereNotNull('empresa_id')->groupBy(fn ($f) => $f->empresa_id . '|' . $f->numero_factura);
+        foreach ($lotes as $lote) {
+            $bruto += (int) $lote->sum(fn ($f) => max(0, -(int) $f->saldo_proximo));
+            $abonado = (int) $lote->sum(fn ($f) => (int) ($abonos[$f->id] ?? 0));
+            $sumar(max(0, Factura::deudaLote($lote) - $abonado), $lote->first());
+        }
+
+        return [$mes, $antes, max(0, $bruto - $mes - $antes)];
     }
 
     /** Anticipos recibidos hasta el corte que no se habían aplicado a una factura de antes del corte. */
