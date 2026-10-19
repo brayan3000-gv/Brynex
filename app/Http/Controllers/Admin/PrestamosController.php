@@ -285,8 +285,13 @@ class PrestamosController extends Controller
             'banco_cuenta_id'  => ($exigeSoporte ? 'required' : 'nullable')
                                   . '|integer|exists:banco_cuentas,id',
             'observacion'      => 'nullable|string|max:500',
+            // El día en que de verdad entró la plata (el del recibo de la
+            // consignación), no el día en que alguien lo anotó: con la fecha
+            // de registro el banco y el cuadre la mostraban en el día que no era.
+            'fecha'            => 'nullable|date|before_or_equal:today',
             'soporte'          => ($exigeSoporte ? 'required' : 'nullable') . '|file|mimes:jpeg,jpg,png,pdf|max:10240',
         ], [
+            'fecha.before_or_equal' => 'La fecha del pago no puede ser posterior a hoy.',
             'banco_cuenta_id.required' => 'Dinos a qué cuenta entró la consignación.',
             'soporte.required' => 'Adjunta el certificado de la consignación.',
             'soporte.mimes'    => 'El certificado debe ser una imagen (JPG/PNG) o un PDF.',
@@ -349,7 +354,7 @@ class PrestamosController extends Controller
                 'observacion'      => $validated['observacion'] ?? null,
                 'soporte_path'     => $soportePath,
                 'soporte_nombre'   => $soporteNombre,
-                'fecha'            => today()->toDateString(),
+                'fecha'            => $validated['fecha'] ?? today()->toDateString(),
                 'usuario_id'       => Auth::id(),
             ]);
             Consignacion::registrarDeAbono($abono, (int) $aliadoId);
@@ -400,6 +405,11 @@ class PrestamosController extends Controller
         // de pago de cartera (lo decidió el contador, 17-oct-2026).
         $reciboUrl = route('admin.facturacion.recibo-abono', $abono->id);
 
+        // Un pago con fecha de un mes ya cerrado y verificado se deja guardar,
+        // pero cambia la diferencia de ese cierre: se avisa.
+        $aviso = \App\Services\Caja\CierreMes::avisoMesVerificado((int) $aliadoId, $abono->fecha);
+        $conAviso = fn (string $m) => $aviso ? $m . "\n\n" . $aviso : $m;
+
         $factura->refresh()->load('abonos');
 
         if ($esLote) {
@@ -421,9 +431,9 @@ class PrestamosController extends Controller
 
             return response()->json([
                 'ok'             => true,
-                'mensaje'        => $loteCompleto
+                'mensaje'        => $conAviso($loteCompleto
                     ? '✅ Préstamo de empresa saldado completamente.'
-                    : '💰 Abono registrado. Saldo pendiente del lote: $' . number_format($saldoLote, 0, ',', '.'),
+                    : '💰 Abono registrado. Saldo pendiente del lote: $' . number_format($saldoLote, 0, ',', '.')),
                 'saldo_restante' => $saldoLote,
                 'pagado'         => $loteCompleto,
                 'estado'         => $loteCompleto ? Factura::ESTADO_PAGADA : Factura::ESTADO_PRESTAMO,
@@ -433,9 +443,9 @@ class PrestamosController extends Controller
 
         return response()->json([
             'ok'             => true,
-            'mensaje'        => $factura->estaCompletamentePagada()
+            'mensaje'        => $conAviso($factura->estaCompletamentePagada()
                 ? '✅ Préstamo saldado completamente.'
-                : '💰 Abono registrado. Saldo pendiente: $' . number_format($factura->saldo_pendiente_prestamo, 0, ',', '.'),
+                : '💰 Abono registrado. Saldo pendiente: $' . number_format($factura->saldo_pendiente_prestamo, 0, ',', '.')),
             'saldo_restante' => $factura->saldo_pendiente_prestamo,
             'pagado'         => $factura->estado === Factura::ESTADO_PAGADA,
             'estado'         => $factura->estado,

@@ -187,7 +187,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
                 <span class="info-val">{{ $factura->empresa->empresa }}</span>
             </div>
             @if($lote_estado === 'prestamo')
-                <button class="btn-abonar" onclick="abrirAbonar({{ $factura->id }}, {{ $lote_saldo_pendiente }})">
+                <button class="btn-abonar" onclick="abrirAbonar({{ $factura->id }}, {{ $lote_saldo_pendiente }}, @js('🏢 ' . $factura->empresa->empresa))">
                     💰 Registrar Abono al Lote
                 </button>
                 @role('superadmin')
@@ -258,7 +258,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
             </div>
 
             @if($factura->estado === 'prestamo')
-                <button class="btn-abonar" onclick="abrirAbonar({{ $factura->id }}, {{ $factura->saldo_pendiente_prestamo }})">
+                <button class="btn-abonar" onclick="abrirAbonar({{ $factura->id }}, {{ $factura->saldo_pendiente_prestamo }}, @js(trim(nombre_oracion($factura->contrato?->cliente?->primer_nombre) . ' ' . nombre_oracion($factura->contrato?->cliente?->primer_apellido))))">
                     💰 Registrar Abono
                 </button>
                 @role('superadmin')
@@ -353,68 +353,7 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
 </div>{{-- /show-wrap --}}
 
 {{-- ══ MODAL ABONAR ══ --}}
-<div class="modal-bg" id="modalAbonar">
-<div class="modal-box" onclick="event.stopPropagation()">
-    <div class="modal-title">
-        <span>💰 Registrar Abono</span>
-        <button class="modal-close" onclick="cerrarModal('modalAbonar')">✕</button>
-    </div>
-    <div id="ab-saldo-info" style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:.45rem .75rem;margin-bottom:.8rem;font-size:.82rem;color:#15803d;font-weight:600;"></div>
-    <form id="formAbonar">
-        <input type="hidden" id="ab-id">
-        <div class="form-grp">
-            <label>Valor del abono *</label>
-            <input type="number" id="ab-valor" min="1" required>
-        </div>
-        <div class="form-grp">
-            <label>Forma de pago *</label>
-            <select id="ab-forma" onchange="toggleForma()">
-                <option value="efectivo">💵 Efectivo</option>
-                <option value="consignacion">🏦 Consignación</option>
-                <option value="mixto">🔀 Mixto</option>
-            </select>
-        </div>
-        {{-- El desglose solo se pregunta en un pago mixto: en efectivo o
-             consignación puros es el valor del abono completo, y pedirlo dos
-             veces solo servía para guardar una consignación con la plata
-             anotada en la casilla de efectivo. --}}
-        <div id="ab-mix-row" style="display:none;">
-            <div class="form-grp">
-                <label>Valor efectivo *</label>
-                <input type="number" id="ab-ef" min="0">
-            </div>
-            <div class="form-grp">
-                <label>Valor consignado *</label>
-                <input type="number" id="ab-cs" min="0">
-                <div style="font-size:.7rem;color:#94a3b8;margin-top:.15rem;">Los dos tienen que sumar el valor del abono.</div>
-            </div>
-        </div>
-        {{-- A qué cuenta entró la plata. Sin esto no hay forma de saber qué
-             recaudo le corresponde a cada razón social, y la facturación
-             electrónica —que emite lo que entra a la cuenta de la emisora— se
-             queda sin ver los pagos de préstamos. --}}
-        <div id="ab-banco-row" class="form-grp" style="display:none;">
-            <label id="ab-banco-lbl">🏦 Cuenta que recibió el pago *</label>
-            <select id="ab-banco">
-                <option value="">— Elige la cuenta —</option>
-                @foreach($bancos as $b)
-                    <option value="{{ $b->id }}">{{ $b->banco }} — {{ $b->nombre }} ({{ $b->numero_cuenta }})</option>
-                @endforeach
-            </select>
-        </div>
-        <div id="ab-sop-row" class="form-grp">
-            <label id="ab-sop-lbl">📎 Certificado de la consignación</label>
-            <input type="file" id="ab-sop" accept="image/jpeg,image/png,application/pdf">
-            <div style="font-size:.7rem;color:#94a3b8;margin-top:.15rem;">JPG, PNG o PDF — máximo 10 MB.</div>
-        </div>
-        <div class="form-grp">
-            <label>Observación</label>
-            <textarea id="ab-obs" rows="2"></textarea>
-        </div>
-        <button type="submit" class="btn-save btn-save-green">💰 Registrar Abono</button>
-    </form>
-</div>
-</div>
+@include('admin.prestamos._modal_abono')
 
 {{-- ══ MODAL GESTIÓN ══ --}}
 <div class="modal-bg" id="modalGestion">
@@ -477,67 +416,6 @@ const fmt  = v => '$' + parseInt(v||0).toLocaleString('es-CO');
 function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal-bg').forEach(m => {
     m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); });
-});
-
-// ── Abonar ───────────────────────────────────────────────────
-function abrirAbonar(id, saldo) {
-    document.getElementById('ab-id').value = id;
-    document.getElementById('ab-saldo-info').textContent = 'Saldo pendiente: ' + fmt(saldo);
-    document.getElementById('ab-valor').value = saldo;
-    document.getElementById('ab-ef').value = '';
-    document.getElementById('ab-cs').value = '';
-    document.getElementById('ab-obs').value = '';
-    document.getElementById('ab-sop').value = '';
-    document.getElementById('ab-banco').value = '';
-    toggleForma();
-    document.getElementById('modalAbonar').classList.add('open');
-}
-function toggleForma() {
-    const f = document.getElementById('ab-forma').value;
-    document.getElementById('ab-mix-row').style.display = (f==='mixto') ? '' : 'none';
-    // El certificado y la cuenta solo se exigen cuando hay plata entrando por
-    // el banco: en un abono en efectivo no hay cuenta que registrar.
-    const exige = (f==='consignacion'||f==='mixto');
-    document.getElementById('ab-banco-row').style.display = exige ? '' : 'none';
-    document.getElementById('ab-banco').required = exige;
-    document.getElementById('ab-sop').required = exige;
-    document.getElementById('ab-sop-lbl').textContent = exige
-        ? '📎 Certificado de la consignación *'
-        : '📎 Certificado / soporte (opcional)';
-}
-document.getElementById('formAbonar').addEventListener('submit', async e => {
-    e.preventDefault();
-    const id = document.getElementById('ab-id').value;
-    const fd = new FormData();
-    // El desglose se deduce de la forma de pago; solo el mixto lo trae escrito.
-    const valor = parseInt(document.getElementById('ab-valor').value) || 0;
-    const forma = document.getElementById('ab-forma').value;
-    const ef = forma === 'efectivo' ? valor : (forma === 'mixto' ? (parseInt(document.getElementById('ab-ef').value) || 0) : 0);
-    const cs = forma === 'consignacion' ? valor : (forma === 'mixto' ? (parseInt(document.getElementById('ab-cs').value) || 0) : 0);
-    if (forma === 'mixto' && ef + cs !== valor) {
-        alert('El efectivo y la consignación tienen que sumar ' + fmt(valor) + '.');
-        return;
-    }
-    fd.append('valor',            valor);
-    fd.append('forma_pago',       forma);
-    fd.append('valor_efectivo',   ef);
-    fd.append('valor_consignado', cs);
-    fd.append('observacion',      document.getElementById('ab-obs').value);
-    fd.append('banco_cuenta_id',  document.getElementById('ab-banco').value || '');
-    const sop = document.getElementById('ab-sop').files[0];
-    if (sop) fd.append('soporte', sop);
-
-    const r   = await fetch(`/admin/prestamos/${id}/abonar`, {
-        method:'POST', headers:{'X-CSRF-TOKEN':CSRF,'Accept':'application/json'}, body: fd
-    });
-    const res = await r.json();
-    if (!r.ok) {
-        alert(res.message || Object.values(res.errors || {}).flat().join('\n') || 'Error al registrar el abono');
-        return;
-    }
-    alert(res.mensaje || 'Abono registrado');
-    if (res.recibo_url) window.open(res.recibo_url, '_blank');
-    if (res.ok) location.reload();
 });
 
 // ── Gestión ──────────────────────────────────────────────────
