@@ -530,7 +530,7 @@ class CartaLaboralService
             'estilo' => 'certificacion',
             'ciudad_fecha' => null,
             'destinatario' => [],
-            'preambulo' => 'Quien suscribe, en nombre de **'.$empresa['nombre'].'**,',
+            'preambulo' => null,
             'titulo' => 'CERTIFICA:',
             'asunto' => null,
             'saludo' => null,
@@ -640,6 +640,7 @@ class CartaLaboralService
     {
         $existe = fn (string $ruta) => file_exists($ruta) ? $ruta : null;
         $logo = $existe(self::rutaLogo($d['empresa']['nit']));
+        $logo = $logo ? ($this->logoRecortado($logo) ?? $logo) : null;
         $sello = $existe(self::rutaSello($d['empresa']['nit']));
         $sello = $sello ? ($this->selloInclinado($sello) ?? $sello) : null;
 
@@ -658,6 +659,78 @@ class CartaLaboralService
             'firma_es_sello' => false,
             'marca' => $logo && $d['destino'] === 'certificacion' ? $this->marcaAgua($logo) : null,
         ];
+    }
+
+    /**
+     * El logo sin el margen vacío que suele traer (transparente, blanco o un
+     * marco punteado de recorte en el borde): así se alinea con el nombre de la
+     * empresa. Se cuentan como dibujo los pixeles opacos que no son casi
+     * blancos, sin mirar los 3 pixeles del borde. Queda en el temporal con el
+     * mtime en el nombre: si cambian el logo, se rehace.
+     */
+    private function logoRecortado(string $logo): ?string
+    {
+        $destino = sys_get_temp_dir().'/carta_logo_'.md5($logo.filemtime($logo)).'.png';
+        if (file_exists($destino)) {
+            return $destino;
+        }
+
+        $img = @imagecreatefrompng($logo);
+        if (! $img) {
+            return null;
+        }
+        imagepalettetotruecolor($img);
+        $ancho = imagesx($img);
+        $alto = imagesy($img);
+
+        // Un logo enorme se mide sobre una copia chica: el recorte es el mismo.
+        $escala = max($ancho, $alto) > 600 ? 600 / max($ancho, $alto) : 1;
+        $muestra = $img;
+        if ($escala < 1) {
+            $muestra = imagescale($img, (int) round($ancho * $escala), (int) round($alto * $escala));
+        }
+        $w = imagesx($muestra);
+        $h = imagesy($muestra);
+        $borde = 3;
+        [$x0, $y0, $x1, $y1] = [$w, $h, -1, -1];
+        for ($y = $borde; $y < $h - $borde; $y++) {
+            for ($x = $borde; $x < $w - $borde; $x++) {
+                $c = imagecolorat($muestra, $x, $y);
+                if ((($c >> 24) & 127) < 100 && min(($c >> 16) & 255, ($c >> 8) & 255, $c & 255) < 235) {
+                    $x0 = min($x0, $x); $x1 = max($x1, $x);
+                    $y0 = min($y0, $y); $y1 = max($y1, $y);
+                }
+            }
+        }
+        if ($muestra !== $img) {
+            imagedestroy($muestra);
+        }
+        if ($x1 < 0) {
+            imagedestroy($img);
+
+            return null;
+        }
+
+        // Si el dibujo llega al borde ignorado, se conserva hasta la orilla.
+        $x0 = $x0 <= $borde ? 0 : $x0;
+        $y0 = $y0 <= $borde ? 0 : $y0;
+        $x1 = $x1 >= $w - $borde - 1 ? $w - 1 : $x1;
+        $y1 = $y1 >= $h - $borde - 1 ? $h - 1 : $y1;
+
+        $recorte = imagecrop($img, [
+            'x' => (int) floor($x0 / $escala), 'y' => (int) floor($y0 / $escala),
+            'width' => (int) min($ancho, ceil(($x1 - $x0 + 1) / $escala)), 'height' => (int) min($alto, ceil(($y1 - $y0 + 1) / $escala)),
+        ]);
+        imagedestroy($img);
+        if (! $recorte) {
+            return null;
+        }
+        imagealphablending($recorte, false);
+        imagesavealpha($recorte, true);
+        imagepng($recorte, $destino, 6);
+        imagedestroy($recorte);
+
+        return $destino;
     }
 
     /** Grados que se tuerce el sello, para que parezca puesto a mano. */
@@ -776,15 +849,20 @@ class CartaLaboralService
         $encabezado = $seccion->addHeader();
         if ($certificacion) {
             // Membrete centrado: el logo al lado del nombre y el NIT; el logo también de fondo.
+            // Logo y nombre separados por una raya vertical, los dos centrados en la misma altura.
             $alineado = $img['logo'] ? Jc::START : Jc::CENTER;
-            $tabla = $encabezado->addTable(['alignment' => JcTable::CENTER]);
+            $tabla = $encabezado->addTable(['alignment' => JcTable::CENTER, 'cellMargin' => 0]);
             $fila = $tabla->addRow();
             if ($img['logo']) {
-                $fila->addCell(1700, ['valign' => 'center'])->addImage($img['logo'], ['height' => 50, 'alignment' => Jc::END]);
+                [$ancho, $alto] = getimagesize($img['logo']);
+                $altoLogo = (int) min(42, 140 * $alto / max(1, $ancho));
+                $fila->addCell(null, ['valign' => 'center', 'borderRightSize' => 12, 'borderRightColor' => $azul])
+                    ->addImage($img['logo'], ['height' => $altoLogo, 'alignment' => Jc::END, 'spaceAfter' => 0, 'indentation' => ['right' => 200]]);
             }
-            $texto = $fila->addCell(6000, ['valign' => 'center']);
-            $texto->addText($empresa['nombre'], ['bold' => true, 'size' => 16, 'color' => $azul], ['alignment' => $alineado, 'spaceAfter' => 0, 'indentation' => ['left' => $img['logo'] ? 200 : 0]]);
-            $texto->addText('NIT. '.$empresa['nit_formateado'], ['bold' => true, 'size' => 10.5], ['alignment' => $alineado, 'spaceAfter' => 0, 'indentation' => ['left' => $img['logo'] ? 200 : 0]]);
+            $texto = $fila->addCell(null, ['valign' => 'center']);
+            $sangria = ['left' => $img['logo'] ? 240 : 0];
+            $texto->addText($empresa['nombre'], ['bold' => true, 'size' => 16, 'color' => $azul], ['alignment' => $alineado, 'spaceAfter' => 0, 'indentation' => $sangria]);
+            $texto->addText('NIT. '.$empresa['nit_formateado'], ['bold' => true, 'size' => 10.5], ['alignment' => $alineado, 'spaceAfter' => 0, 'indentation' => $sangria]);
             $encabezado->addText('', ['size' => 4], ['spaceAfter' => 0, 'borderBottomSize' => 12, 'borderBottomColor' => $azul]);
             if ($img['marca']) {
                 [$ancho, $alto] = getimagesize($img['marca']);

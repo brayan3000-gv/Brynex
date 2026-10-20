@@ -14,10 +14,10 @@
     #marca img { width: 11.5cm; }
     #membrete { position: fixed; top: -2.9cm; left: 0; right: 0; height: 2.6cm; text-align: center; }
     #membrete table { margin: 0 auto; border-collapse: collapse; }
-    #membrete td { vertical-align: middle; padding: 0; }
-    #membrete td.logo { padding-right: 12pt; }
-    #membrete td.logo img { max-height: 1.9cm; max-width: 4.5cm; }
-    #membrete td.texto { text-align: left; }
+    #membrete td { vertical-align: middle; padding: 0; line-height: 1.15; }
+    #membrete td.logo { padding-right: 11pt; text-align: right; }
+    #membrete td.logo img { max-height: 1.45cm; max-width: 4.5cm; display: block; }
+    #membrete td.texto { text-align: left; padding-left: 11pt; border-left: 1.5px solid #1f3b64; }
     #membrete .nombre { font-size: 17pt; font-weight: bold; color: #1f3b64; letter-spacing: .5pt; }
     #membrete .nit { font-size: 10pt; font-weight: bold; color: #222; margin-top: 1pt; }
     #membrete .raya { margin-top: 5pt; border-top: 2px solid #1f3b64; border-bottom: .8px solid #1f3b64; height: 2px; }
@@ -25,7 +25,7 @@
            text-align: center; font-size: 8.5pt; color: #444; padding-top: 4pt; line-height: 1.35; }
     p { margin: 0 0 10pt 0; text-align: justify; }
     .preambulo { text-align: center; margin: 10pt 0 6pt; }
-    .titulo { text-align: center; font-weight: bold; font-size: 15pt; letter-spacing: 2pt; color: #1f3b64; margin: 4pt 0 18pt; }
+    .titulo { text-align: center; font-weight: bold; font-size: 15pt; letter-spacing: 2pt; color: #1f3b64; margin: 14pt 0 20pt; }
     .cierre { margin-top: 4pt; }
     .despedida { margin-top: 18pt; }
     .cierre-firma { page-break-inside: avoid; }
@@ -64,7 +64,9 @@
     @endforeach
 </div>
 
+@if($c['preambulo'])
 <p class="preambulo">{!! $negrilla($c['preambulo']) !!}</p>
+@endif
 
 <div class="titulo">{{ $c['titulo'] }}</div>
 
