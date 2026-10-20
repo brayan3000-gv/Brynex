@@ -506,9 +506,14 @@ class Contrato extends BaseModel
      *   - Cada entidad (ARL, AFP, CAJA) tiene sus propios días fijos.
      *   - No se usa $dias global para SS; se usan days del tipo_modalidad.
      *
-     * @param  int  $dias  Días cotizados en el mes (1-30). Ignorado en Tiempo Parcial.
+     * @param  int  $dias  Días cotizados en el mes (1-30). Ignorado en Tiempo Parcial,
+     *                     salvo en un retiro.
+     * @param  bool  $esRetiro  Retiro de Tiempo Parcial: la pensión y la caja se
+     *                          recortan a los días del retiro, igual que el archivo
+     *                          plano (PilaCotizanteCalculator: min(dias_caja, num_dias)).
+     *                          Un TP(7-14) retirado a 7 días paga 7 y 7, no 7 y 14.
      */
-    public function calcularCotizacion(int $dias = 30, ?bool $ivaCliente = null): array
+    public function calcularCotizacion(int $dias = 30, ?bool $ivaCliente = null, bool $esRetiro = false): array
     {
         $ibcRaw = (float) ($this->ibc ?? 0);
         $salRaw = (float) ($this->salario ?? 0);
@@ -569,9 +574,17 @@ class Contrato extends BaseModel
             //   AFP  = SM × factor_afp × pctPen  (factor = dias_afp/28 aprox)
             //   CAJA = SM × factor_caja × pctCaja (puede diferir de AFP)
             $diasP = $this->diasTiempoParcial(); // ['arl'=>30, 'afp'=>7, 'caja'=>14, ...]
-            $factorMap = [7 => 0.25, 14 => 0.50, 21 => 0.75, 30 => 1.00];
-            $factorAfp = $factorMap[$diasP['afp']] ?? 1.0;
-            $factorCaja = $factorMap[$diasP['caja']] ?? 1.0;
+            if ($esRetiro && $dias > 0) {
+                // Mismo recorte que el plano; sin él la caja del retiro se
+                // guardaba por 14 días (35.100) cuando la planilla lleva 7.
+                $diasP['afp'] = min($diasP['afp'], $dias);
+                $diasP['caja'] = min($diasP['caja'], $dias);
+            }
+            // Por semanas, como el plano (Decreto 2616): 1-7 días = 1 semana,
+            // 8-14 = 2, 15-21 = 3 y más = 4. Un retiro a 5 días es una semana.
+            $factorPorDias = fn (int $d) => $d <= 0 ? 1.0 : min(4, (int) ceil($d / 7)) / 4;
+            $factorAfp = $factorPorDias((int) $diasP['afp']);
+            $factorCaja = $factorPorDias((int) $diasP['caja']);
 
             // SM desde ConfiguracionBrynex (fuente correcta del sistema)
             $sm = (float) ConfiguracionBrynex::obtener('salario_minimo', 1423500);
