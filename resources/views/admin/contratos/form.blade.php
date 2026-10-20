@@ -1080,6 +1080,19 @@
   <div style="background:#fff;border-radius:14px;padding:1.5rem;max-width:720px;width:95%;box-shadow:0 20px 60px rgba(0,0,0,0.3);transition: max-width 0.2s ease;">
     <h3 style="margin:0 0 1rem;color:#dc2626;font-size:0.95rem;">&#128683; Retirar Contrato #{{ $contrato->id }}</h3>
 
+    {{-- La afiliación nunca se cobró: retirarlo no la borra, sigue pendiente en Cobros.
+         Con el motivo de error no se cobra, y el aviso se esconde. --}}
+    @if(!empty($afiliacionPendiente))
+    <div id="mr-afil-pendiente" data-motivos-error="{{ implode(',', $motivosErrorRetiro ?? []) }}"
+         style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.55rem .75rem;margin-bottom:1rem;font-size:.75rem;color:#92400e;line-height:1.5;">
+        ⚠️ La afiliación de <strong>{{ $afiliacionPendiente['periodo'] }}</strong>
+        (<strong>${{ number_format($afiliacionPendiente['valor'], 0, ',', '.') }}</strong>) nunca se cobró.
+        Retirarlo no la borra: sigue pendiente en Cobros hasta que se facture.
+        <a href="{{ $afiliacionPendiente['url'] }}" target="_blank" style="color:#92400e;font-weight:700;">Facturarla</a>
+        <br><span style="opacity:.8;">Si fue un error o una prueba, usa el motivo «Error - Sin Afiliación» y no se cobra.</span>
+    </div>
+    @endif
+
     {{-- Selector de tipo de retiro --}}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:1rem;">
       <label id="mr-lbl-real" onclick="mrTipo('real')"
@@ -1607,6 +1620,11 @@ function mrInitSelects() {
 // ── Validar estilo del select de Motivo obligatoriedad ───────────────────
 function mrValidarMotivoStyle(el) {
     const alertEl = document.getElementById('mr-motivo-alert');
+    const afilEl = document.getElementById('mr-afil-pendiente');
+    if (afilEl) {
+        const errores = (afilEl.dataset.motivosError || '').split(',');
+        afilEl.style.display = errores.includes(el.value) ? 'none' : 'block';
+    }
     if (el.value) {
         el.style.borderColor = '#cbd5e1';
         el.style.background = '#ffffff';

@@ -730,7 +730,9 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
 
     {{-- TIPO (AFIL / PLAN / RETIRO / RETIRO INF. / ret.) --}}
     <td class="c-ctr">
-        @if($esRetiroInformativo)
+        @if($c->es_afil_atrasada_sola ?? false)
+            <span class="badge-tipo badge-afil" title="Afiliación de {{ $c->afil_atrasada['periodo'] ?? '' }} que nunca se cobró{{ $c->estado === 'retirado' ? ' — contrato ya retirado' : '' }}">📌 AFIL <span style="font-size:.55rem;opacity:.7;">{{ $c->afil_atrasada['periodo'] ?? '' }}</span></span>
+        @elseif($esRetiroInformativo)
             <span class="badge-tipo" style="background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;font-size:.6rem;" title="Retiro informativo — sin costo SS">⚪ RETIRO INF.</span>
         @elseif($esRetiro)
             <span class="badge-tipo" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;" title="Retiro marcado en este periodo">🔴 RETIRO</span>
@@ -776,6 +778,13 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
     {{-- Total estimado --}}
     <td class="num-col c-total" title="SS: {{ $fmt($c->v_ss) }}">
         {{ $fmt($c->total_estimado + ($c->mora_estimada ?? 0)) }}
+        {{-- Afiliación de un mes anterior que nunca se cobró: va aparte del cobro del mes --}}
+        @if(($c->afil_atrasada ?? null) && !($c->es_afil_atrasada_sola ?? false))
+        <div style="font-size:.6rem;font-weight:700;color:#b45309;white-space:nowrap;"
+             title="La afiliación de {{ $c->afil_atrasada['periodo'] }} nunca se cobró. Se factura en ese mes.">
+            ⚠ + afil. {{ $c->afil_atrasada['periodo'] }} {{ $fmt($c->afil_atrasada['valor']) }}
+        </div>
+        @endif
     </td>
 
     {{-- Mora estimada --}}

@@ -493,6 +493,9 @@ body{display:flex;flex-direction:column}
 
         <div id="retirar-periodo" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:.5rem .75rem;margin-bottom:.75rem;font-size:.75rem;color:#166534;"></div>
 
+        {{-- La afiliación nunca se cobró: retirarlo no la borra, sigue pendiente en Cobros --}}
+        <div id="retirar-afil-pendiente" style="display:none;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:.55rem .75rem;margin-bottom:.75rem;font-size:.75rem;color:#92400e;line-height:1.5;"></div>
+
         {{-- Sin clave del portal no se puede tocar Sura: se pide aquí mismo --}}
         <div id="retirar-credencial" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:.7rem .8rem;margin-bottom:.75rem;">
             <div style="font-size:.75rem;color:#1e40af;margin-bottom:.5rem;line-height:1.5;">
@@ -949,6 +952,7 @@ async function abrirRetirar(id, nombre) {
     document.getElementById('retirar-contenido').style.display  = 'none';
     document.getElementById('retirar-resultado').style.display  = 'none';
     document.getElementById('retirar-credencial').style.display = 'none';
+    document.getElementById('retirar-afil-pendiente').style.display = 'none';
     document.getElementById('retirar-observacion').value = '';
     document.getElementById('modalRetirar').classList.add('open');
 
@@ -975,6 +979,23 @@ async function abrirRetirar(id, nombre) {
     document.getElementById('retirar-motivo').innerHTML =
         '<option value="">-- Seleccione --</option>' +
         (d.motivos || []).map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
+
+    // Afiliación sin cobrar: se avisa salvo que el motivo sea un error, que no se cobra.
+    const afil = d.afiliacion_pendiente;
+    const cajaAfil = document.getElementById('retirar-afil-pendiente');
+    const motivosError = (d.motivos_error || []).map(String);
+    const pintarAfil = () => {
+        const esError = motivosError.includes(document.getElementById('retirar-motivo').value);
+        cajaAfil.style.display = afil && !esError ? 'block' : 'none';
+    };
+    cajaAfil.innerHTML = afil
+        ? `⚠️ La afiliación de <strong>${afil.periodo}</strong> (<strong>$${Number(afil.valor).toLocaleString('es-CO')}</strong>) nunca se cobró. ` +
+          `Retirarlo no la borra: sigue pendiente en Cobros hasta que se facture. ` +
+          `<a href="${afil.url}" target="_blank" style="color:#92400e;font-weight:700;">Facturarla</a>` +
+          `<br><span style="opacity:.8;">Si fue un error o una prueba, usa el motivo «Error - Sin Afiliación» y no se cobra.</span>`
+        : '';
+    document.getElementById('retirar-motivo').onchange = pintarAfil;
+    pintarAfil();
 
     const btn = document.getElementById('retirar-btn');
     btn.disabled = false; btn.textContent = RETIRAR_TEXTO;

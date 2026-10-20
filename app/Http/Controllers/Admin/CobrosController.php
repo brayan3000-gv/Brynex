@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\{Contrato, Factura, BitacoraCobro, ConfiguracionBrynex, ArlTarifa, Empresa, BancoCuenta, TipoModalidad};
 use App\Models\{WhatsappConfig, WhatsappEnvioMasivo, WhatsappEnvioMasivoDetalle, WhatsappMensaje};
+use App\Services\AfiliacionPendienteService;
 use App\Services\MoraClienteService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -347,8 +348,49 @@ class CobrosController extends Controller
         $contratosRetInf = $qRetInf->get();
         $contratosRetInf->each(fn($c) => $c->_es_retiro_informativo_directo = true);
 
-        // Unir vigentes + retirados-con-factura-retiro + retirados-con-planilla-normal + informativos
-        $contratos = $contratos->concat($contratosRetirados)->concat($contratosRetNormal)->concat($contratosRetInf);
+        // ── QUINTO GRUPO: afiliación de un mes anterior que nunca se cobró ──
+        // Cobros mira un mes a la vez y la afiliación solo se pide en el mes de
+        // ingreso: si no se pagó y la persona se retiró, no quedaba en ningún
+        // lado (CC 16770992, oct-2026). Ver AfiliacionPendienteService.
+        $afilAtrasadas = AfiliacionPendienteService::anterioresAlPeriodo($aliadoId, $mes, $anio);
+        $idsAfilSueltos = $afilAtrasadas->keys()
+            ->diff($idsYaCaptadosTodos)
+            ->diff($contratosRetInf->pluck('id')->map(fn ($id) => (int) $id))
+            ->values();
+
+        $contratosAfilPend = collect();
+        if ($idsAfilSueltos->isNotEmpty()) {
+            $qAfil = Contrato::where('aliado_id', $aliadoId)
+                ->whereIn('id', $idsAfilSueltos->all())
+                ->with(['cliente.empresa', 'tipoModalidad', 'razonSocial', 'asesor', 'plan', 'eps', 'arl', 'pension', 'caja']);
+
+            if ($soloInd === 'individual') {
+                $qAfil->whereIn('cedula', function ($sub) use ($aliadoId) {
+                    $sub->from('clientes')->select('cedula')->where('aliado_id', $aliadoId)
+                        ->where(function ($sq) { $sq->where('cod_empresa', 1)->orWhereNull('cod_empresa'); });
+                });
+            } elseif ($soloInd === 'empresas') {
+                $qAfil->whereIn('cedula', function ($sub) use ($aliadoId) {
+                    $sub->from('clientes')->select('cedula')->where('aliado_id', $aliadoId)
+                        ->where('cod_empresa', '>', 1)->whereNotNull('cod_empresa');
+                });
+            }
+            if ($rsId)     $qAfil->where('razon_social_id', $rsId);
+            if ($asesorId) $qAfil->where('asesor_id', $asesorId);
+            if ($buscar) {
+                $qAfil->where(function ($sq) use ($buscar) {
+                    $sq->where('cedula', 'like', "%$buscar%")
+                       ->orWhereHas('cliente', fn($cq) => $cq
+                           ->wherePalabrasSinTildes(['primer_nombre', 'segundo_nombre', 'primer_apellido', 'segundo_apellido'], $buscar));
+                });
+            }
+            if ($tipoModalFiltro) $qAfil->where('tipo_modalidad_id', $tipoModalFiltro);
+
+            $contratosAfilPend = $qAfil->get();
+        }
+
+        // Unir vigentes + retirados-con-factura-retiro + retirados-con-planilla-normal + informativos + afiliaciones atrasadas
+        $contratos = $contratos->concat($contratosRetirados)->concat($contratosRetNormal)->concat($contratosRetInf)->concat($contratosAfilPend);
 
 
         // ── Facturas del mes para estos contratos ───────────────────
@@ -583,15 +625,62 @@ class CobrosController extends Controller
         $contratosRetNormalIds = $contratosRetNormal->pluck('id')->flip()->all();
         // IDs de retiros informativos directos (4° grupo, por fecha_retiro)
         $contratosRetInfIds = $contratosRetInf->pluck('id')->flip()->all();
+        // IDs de afiliaciones atrasadas que no venían en ningún otro grupo (5° grupo)
+        $contratosAfilPendIds = $contratosAfilPend->pluck('id')->flip()->all();
 
         $contratos = $contratos->map(function ($c) use (
             $mes, $anio, $facturasPorContrato, $facturasPorCedula, $ultimasLlamadas, $flagsPorContrato,
             $moraPorContrato, $cedulasConPrestamo, $morasDiasPorContrato, $arlPorNit,
-            $contratosRetiradosIds, $contratosRetNormalIds, $contratosRetInfIds
+            $contratosRetiradosIds, $contratosRetNormalIds, $contratosRetInfIds,
+            $contratosAfilPendIds, $afilAtrasadas
         ) {
             $esRetiradoPeriodo   = isset($contratosRetiradosIds[$c->id]);
             $esRetiradoPosterior = isset($contratosRetNormalIds[$c->id]);
             $esRetiroInfDirecto  = isset($contratosRetInfIds[$c->id]);
+
+            // ── Afiliación atrasada sin otro cobro en el periodo (5° grupo) ──────
+            // Lo único que se le cobra es la afiliación de su mes de ingreso.
+            if (isset($contratosAfilPendIds[$c->id])) {
+                $afil    = $afilAtrasadas->get((int) $c->id);
+                $empresa = $c->cliente?->empresa;
+                $arlObj  = $c->arl;
+
+                $c->es_afil_atrasada_sola  = true;
+                $c->es_retiro              = false;
+                $c->es_retiro_informativo  = false;
+                $c->es_afil                = true;
+                $c->es_ind_act_primer_mes  = false;
+                $c->es_ir_alerta           = false;
+                $c->dias_cotiz_estim       = 0;
+                $c->v_eps = $c->v_arl = $c->v_pen = $c->v_caja = $c->v_ss = 0;
+                $c->total_estimado         = (int) ($afil['valor'] ?? 0);
+                $c->mora_estimada          = 0;
+                $c->mora_dias              = 0;
+                $c->fact_emitida           = false;
+                $c->fact_pagada            = false;
+                $c->fact_estado            = null;
+                $c->fact_numero            = null;
+                $c->fact_id                = null;
+                $c->fact_n_planilla        = null;
+                $c->fact_local_plano       = null;
+                $c->fact_n_plano           = null;
+                $c->fact_saldo_pend        = 0;
+                $c->eps_nombre             = $c->eps?->nombre         ?? 'Ninguna';
+                $c->arl_nombre             = $arlObj?->nombre_arl     ?? $arlObj?->razon_social ?? 'Ninguna';
+                $c->afp_nombre             = $c->pension?->razon_social ?? 'Ninguna';
+                $c->caja_nombre            = $c->caja?->nombre        ?? 'Ninguna';
+                $c->plan_nombre            = $c->plan?->nombre        ?? 'Estándar';
+                $c->tipo_mod_nombre        = $c->tipoModalidad?->nombre ?? '—';
+                $c->dias_cotizados         = 0;
+                $c->ultima_llamada         = null;
+                $c->dias_sin_llamar        = null;
+                $c->semaforo               = 'gris';
+                $c->tiene_prestamo         = isset($cedulasConPrestamo[$c->cedula]);
+                $c->es_empresa             = $empresa && $empresa->id != 1;
+                $c->nombre_empresa         = $c->es_empresa ? $empresa->empresa : null;
+                $c->administracion         = 0;
+                return $c;
+            }
 
             // ── Camino rápido para contratos RETIRADOS del periodo ──────────
             if ($esRetiradoPeriodo) {
@@ -877,6 +966,19 @@ class CobrosController extends Controller
             return $c;
         });
 
+        // ── Afiliación atrasada de cada fila ────────────────────────
+        // Si la fila ya pide la afiliación este mes (Gestión ARL vigente,
+        // Ingreso-Retiro) sin factura, es ese mismo cobro: no se repite.
+        $contratos = $contratos->map(function ($c) use ($afilAtrasadas) {
+            $afil = $afilAtrasadas->get((int) $c->id);
+            if ($afil && ! ($c->es_afil_atrasada_sola ?? false)
+                && ($c->es_afil ?? false) && ! ($c->fact_emitida ?? false)) {
+                $afil = null;
+            }
+            $c->afil_atrasada = $afil;
+            return $c;
+        });
+
         // ── Ordenamiento en colección (campos calculados en PHP) ────
         if ($sort === 'n_planilla') {
             $contratos = $contratos->sort(function ($a, $b) use ($dir) {
@@ -908,6 +1010,8 @@ class CobrosController extends Controller
         // ── Filtro estado de pago ───────────────────────────────────
         if ($soloPend === 'pendiente') {
             $contratos = $contratos->filter(function ($c) {
+                // Debe la afiliación de un mes anterior: pendiente aunque el mes esté pago
+                if ($c->afil_atrasada ?? null) return true;
                 // Retirados del periodo siempre están «pagados», nunca pendientes
                 if ($c->es_retiro ?? false) return false;
                 if ($c->fact_emitida) {
@@ -1202,9 +1306,33 @@ class CobrosController extends Controller
         // eran 1,9 s de PHP puro, más de la mitad de lo que tardaba la página.
         $contratosPorCedula = $contratosActivos->groupBy(fn ($c) => (string) $c->cedula);
 
+        // ── Afiliaciones de meses anteriores que nunca se cobraron ──────
+        // Siguen contando aunque la persona ya esté retirada. Gestión ARL
+        // vigente se salta: esa ya sale como afiliación pendiente del mes.
+        $afilAtrasadas = AfiliacionPendienteService::anterioresAlPeriodo($aliadoId, $mes, $anio);
+        $afilAtrasadasPorEmpresa = collect();
+        if ($afilAtrasadas->isNotEmpty()) {
+            $empresaPorCedula = $clientesPorEmpresa->flatten(1)
+                ->mapWithKeys(fn ($cl) => [(string) $cl->cedula => (int) $cl->cod_empresa]);
+            $arlVigentes = $contratosActivos->where('tipo_modalidad_id', 15)->pluck('id')
+                ->map(fn ($id) => (int) $id)->flip();
+
+            $afilAtrasadasPorEmpresa = Contrato::where('aliado_id', $aliadoId)
+                ->whereIn('id', $afilAtrasadas->keys())
+                ->get(['id', 'cedula'])
+                ->reject(fn ($c) => $arlVigentes->has((int) $c->id))
+                ->groupBy(fn ($c) => $empresaPorCedula[(string) $c->cedula] ?? 0)
+                ->map(fn ($g) => [
+                    'cant'     => $g->count(),
+                    'valor'    => $g->sum(fn ($c) => $afilAtrasadas[(int) $c->id]['valor']),
+                    'periodos' => $g->map(fn ($c) => $afilAtrasadas[(int) $c->id]['periodo'])->unique()->values()->all(),
+                ]);
+        }
+
         $empresas = $empresas->map(function ($emp) use (
             $mes, $anio, $clientesPorEmpresa, $contratosPorCedula,
-            $facturasMes, $ultimasLlamadasEmp, $cedulasPagadasEmp, $moraEmpPorContrato
+            $facturasMes, $ultimasLlamadasEmp, $cedulasPagadasEmp, $moraEmpPorContrato,
+            $afilAtrasadasPorEmpresa
         ) {
             $contrEmp = ($clientesPorEmpresa->get($emp->id)?->pluck('cedula') ?? collect())
                 ->map(fn ($ced) => (string) $ced)
@@ -1254,7 +1382,8 @@ class CobrosController extends Controller
                 }
             }
 
-            $totalPend = $afil_pend + $indep_pend + $plan_pend;
+            $atrasadas = $afilAtrasadasPorEmpresa->get($emp->id);
+            $totalPend = $afil_pend + $indep_pend + $plan_pend + ($atrasadas['cant'] ?? 0);
 
             // Semáforo por empresa
             $ultimaLlamada = $ultimasLlamadasEmp->get($emp->id);
@@ -1280,6 +1409,9 @@ class CobrosController extends Controller
             $emp->cant          = $cant;
             $emp->pagados       = $pagados;
             $emp->afil_pend     = $afil_pend;
+            $emp->afil_atrasadas          = $atrasadas['cant'] ?? 0;
+            $emp->afil_atrasadas_valor    = $atrasadas['valor'] ?? 0;
+            $emp->afil_atrasadas_periodos = $atrasadas['periodos'] ?? [];
             $emp->indep_pend    = $indep_pend;
             $emp->plan_pend     = $plan_pend;
             $emp->total_pend    = $totalPend;
@@ -1290,7 +1422,7 @@ class CobrosController extends Controller
             $emp->semaforo      = $semaforo;
 
             return $emp;
-        })->filter(fn($emp) => $emp->cant > 0)
+        })->filter(fn($emp) => $emp->cant > 0 || $emp->afil_atrasadas > 0)
           ->when($semaforoFiltro, fn($col) => $col->where('semaforo', $semaforoFiltro))
           ->when($soloPlant,      fn($col) => $col->where('plan_pend', '>', 0))
           ->when($soloPend,       fn($col) => $col->where('total_pend', '>', 0))

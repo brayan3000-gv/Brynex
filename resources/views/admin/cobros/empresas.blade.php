@@ -368,7 +368,16 @@ $nombreEnc = $emp->encargado_id ? ($usuariosDisponibles->firstWhere('id', $emp->
     <td class="num-cell num-pag">{{ $fmt($emp->pagados) }}</td>
 
     {{-- Afiliaciones pendientes --}}
-    <td class="num-cell {{ $emp->afil_pend > 0 ? 'num-afil' : 'num-0' }}">{{ $fmt($emp->afil_pend) }}</td>
+    <td class="num-cell {{ $emp->afil_pend > 0 ? 'num-afil' : 'num-0' }}">
+        {{ $fmt($emp->afil_pend) }}
+        {{-- Afiliaciones de meses anteriores que nunca se cobraron (también de retirados) --}}
+        @if(($emp->afil_atrasadas ?? 0) > 0)
+        <div style="margin-top:.15rem;font-size:.6rem;font-weight:700;color:#b45309;white-space:nowrap;"
+             title="Afiliación sin cobrar de {{ implode(', ', $emp->afil_atrasadas_periodos) }}. Se factura en la planilla de la empresa de ese mes.">
+            ⚠ +{{ $emp->afil_atrasadas }} atrasada{{ $emp->afil_atrasadas > 1 ? 's' : '' }} · ${{ number_format($emp->afil_atrasadas_valor, 0, '', '.') }}
+        </div>
+        @endif
+    </td>
 
     {{-- Independientes pendientes --}}
     <td class="num-cell {{ $emp->indep_pend > 0 ? 'num-ind' : 'num-0' }}">{{ $fmt($emp->indep_pend) }}</td>

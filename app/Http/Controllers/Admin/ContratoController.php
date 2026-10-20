@@ -374,9 +374,15 @@ class ContratoController extends Controller
             self::arlsPorNitDeContratos(collect([$contrato]))
         );
 
+        // Para avisar en el modal de retiro: retirarlo no borra lo que debe.
+        $afiliacionPendiente = $contrato->estado !== 'retirado'
+            ? \App\Services\AfiliacionPendienteService::conEnlace($contrato)
+            : null;
+        $motivosErrorRetiro = \App\Services\AfiliacionPendienteService::motivosError();
+
         return view('admin.contratos.form', array_merge(
             $this->datosFormulario($alidoId, $cliente, $contrato->razon_social_id, $contrato->id),
-            compact('contrato', 'cliente', 'backUrl', 'radicadosPorTipo', 'rsBloquedaPorAfiliacion', 'rsDesbloqueoSuperadmin', 'economicoDesbloqueado', 'otrosContratosVigentes', 'tienePlanillaConDias', 'retiroInfoBloqueado', 'retiroInfoForzado', 'rsIrOpciones', 'rsIrPreviewId', 'rsIrHayDisponible', 'diaIngresoIr', 'arlEfectivaNombre')
+            compact('contrato', 'cliente', 'backUrl', 'radicadosPorTipo', 'afiliacionPendiente', 'motivosErrorRetiro', 'rsBloquedaPorAfiliacion', 'rsDesbloqueoSuperadmin', 'economicoDesbloqueado', 'otrosContratosVigentes', 'tienePlanillaConDias', 'retiroInfoBloqueado', 'retiroInfoForzado', 'rsIrOpciones', 'rsIrPreviewId', 'rsIrHayDisponible', 'diaIngresoIr', 'arlEfectivaNombre')
         ));
     }
 

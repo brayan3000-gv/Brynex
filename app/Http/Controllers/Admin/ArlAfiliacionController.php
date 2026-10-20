@@ -9,6 +9,7 @@ use App\Models\ArlCentroTrabajo;
 use App\Models\Bitacora;
 use App\Models\Contrato;
 use App\Models\DocumentoCliente;
+use App\Services\AfiliacionPendienteService;
 use App\Services\ArlSura\ArlAfiliacionService;
 use App\Services\ArlSura\ArlCentrosService;
 use App\Services\ArlSura\ArlDatosFaltantesService;
@@ -557,6 +558,8 @@ class ArlAfiliacionController extends Controller
             'fecha_arl'   => $contrato->fecha_arl?->format('d/m/Y'),
             'motivos'     => DB::table('motivos_retiro')->where('activo', true)
                 ->orderBy('nombre')->get(['id', 'nombre']),
+            'motivos_error'        => AfiliacionPendienteService::motivosError(),
+            'afiliacion_pendiente' => AfiliacionPendienteService::conEnlace($contrato),
         ]);
     }
 
