@@ -1,6 +1,6 @@
 {{--
     Certificación laboral «A quien interese» (CartaLaboralService::pdf). Membrete
-    centrado, el logo de fondo como marca de agua y CERTIFICA: con sus «Que…».
+    centrado con el logo al lado del nombre, el logo de fondo como marca de agua y CERTIFICA: con sus «Que…».
     El texto llega armado en $c; el Word sale del mismo $c.
 --}}
 <!DOCTYPE html>
@@ -8,12 +8,16 @@
 <head>
 <meta charset="UTF-8">
 <style>
-    @page { margin: 3.9cm 2.5cm 2.6cm 2.5cm; }
+    @page { margin: 3.5cm 2.5cm 2.6cm 2.5cm; }
     body { font-family: DejaVu Sans, Arial, sans-serif; font-size: 10.5pt; line-height: 1.5; color: #111; }
     #marca { position: fixed; top: 4.2cm; left: 0; right: 0; text-align: center; }
     #marca img { width: 11.5cm; }
-    #membrete { position: fixed; top: -3.2cm; left: 0; right: 0; height: 2.9cm; text-align: center; }
-    #membrete img { max-height: 1.25cm; max-width: 5cm; margin-bottom: 3pt; }
+    #membrete { position: fixed; top: -2.9cm; left: 0; right: 0; height: 2.6cm; text-align: center; }
+    #membrete table { margin: 0 auto; border-collapse: collapse; }
+    #membrete td { vertical-align: middle; padding: 0; }
+    #membrete td.logo { padding-right: 12pt; }
+    #membrete td.logo img { max-height: 1.9cm; max-width: 4.5cm; }
+    #membrete td.texto { text-align: left; }
     #membrete .nombre { font-size: 17pt; font-weight: bold; color: #1f3b64; letter-spacing: .5pt; }
     #membrete .nit { font-size: 10pt; font-weight: bold; color: #222; margin-top: 1pt; }
     #membrete .raya { margin-top: 5pt; border-top: 2px solid #1f3b64; border-bottom: .8px solid #1f3b64; height: 2px; }
@@ -42,9 +46,15 @@
 @endif
 
 <div id="membrete">
-    @if($img['logo'])<img src="{{ $img['logo'] }}"><br>@endif
-    <div class="nombre">{{ $empresa['nombre'] }}</div>
-    <div class="nit">NIT. {{ $empresa['nit_formateado'] }}</div>
+    <table>
+        <tr>
+            @if($img['logo'])<td class="logo"><img src="{{ $img['logo'] }}"></td>@endif
+            <td class="{{ $img['logo'] ? 'texto' : '' }}">
+                <div class="nombre">{{ $empresa['nombre'] }}</div>
+                <div class="nit">NIT. {{ $empresa['nit_formateado'] }}</div>
+            </td>
+        </tr>
+    </table>
     <div class="raya"></div>
 </div>
 

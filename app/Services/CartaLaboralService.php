@@ -13,6 +13,7 @@ use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
+use PhpOffice\PhpWord\SimpleType\JcTable;
 
 /**
  * Cartas laborales a nombre de una razón social: para la caja de
@@ -312,6 +313,8 @@ class CartaLaboralService
             'fecha_retiro' => $in['fecha_retiro'] ?? null,
             'salario' => (int) $in['salario'],
             'auxilio_transporte' => $destino === 'certificacion' && ! empty($in['incluir_salario']) ? (int) ($in['auxilio_transporte'] ?? 0) : 0,
+            'comisiones' => ! empty($in['incluir_comisiones']),
+            'comisiones_valor' => ! empty($in['incluir_comisiones']) ? (int) ($in['comisiones_valor'] ?? 0) : 0,
             'tipo_contrato' => array_key_exists($in['tipo_contrato'] ?? '', self::TIPOS_CONTRATO) ? $in['tipo_contrato'] : '',
             // La carta a la caja siempre lleva jornada y salario: es lo que piden.
             'incluir_salario' => $destino === 'caja' || ! empty($in['incluir_salario']),
@@ -361,8 +364,11 @@ class CartaLaboralService
         }
 
         if ($d['destino'] === 'caja') {
-            if ($d['salario'] > 4 * $smmlv) {
-                $avisos[] = 'El salario supera 4 salarios mínimos: no da derecho a cuota monetaria.';
+            $ingreso = $d['salario'] + ($d['comisiones_valor'] ?? 0);
+            if ($ingreso > 4 * $smmlv) {
+                $avisos[] = ($d['comisiones_valor'] ?? 0) > 0
+                    ? 'El salario con las comisiones supera 4 salarios mínimos: no da derecho a cuota monetaria.'
+                    : 'El salario supera 4 salarios mínimos: no da derecho a cuota monetaria.';
             }
             if ($d['firmante']['tipo'] !== 'representante') {
                 $avisos[] = 'Las cajas suelen pedir la firma del representante legal.';
@@ -429,6 +435,13 @@ class CartaLaboralService
         }
         if ($d['incluir_salario'] && $d['salario'] > 0) {
             $condiciones[] = ['Salario', $this->salario($d['salario'], $d['anio']).'.'];
+        }
+        if (! empty($d['comisiones'])) {
+            $valor = (int) ($d['comisiones_valor'] ?? 0);
+            $condiciones[] = ['Comisiones', $valor > 0
+                ? 'ingresos variables por comisiones, con un promedio mensual de '.mb_strtolower(NumeroALetras::convertir($valor))
+                    .$this->deMillones(NumeroALetras::convertir($valor)).' pesos ($'.number_format($valor, 0, ',', '.').').'
+                : 'ingresos variables por comisiones, adicionales al salario.'];
         }
 
         $interesado = $f ? 'la interesada' : 'el interesado';
@@ -502,6 +515,12 @@ class CartaLaboralService
             $parrafos[] = $texto.'.';
         }
 
+        if (! empty($d['comisiones'])) {
+            $valor = (int) ($d['comisiones_valor'] ?? 0);
+            $parrafos[] = 'Que adicionalmente '.($retirado ? 'percibía' : 'percibe').' ingresos variables por concepto de comisiones'
+                .($valor > 0 ? ', por un promedio mensual de '.$this->pesosMcte($valor) : '').'.';
+        }
+
         $fecha = Carbon::parse($d['fecha'])->locale('es');
         $dia = (int) $fecha->day;
         $expedicion = ($dia === 1 ? 'al primer (1) día' : 'a los '.$this->numero($dia).' días')
@@ -544,6 +563,12 @@ class CartaLaboralService
         return strlen($digitos) === 10
             ? substr($digitos, 0, 3).' '.substr($digitos, 3, 3).' '.substr($digitos, 6)
             : trim($numero);
+    }
+
+    /** " de" tras un millón redondo: "un millón de pesos". */
+    private function deMillones(string $letras): string
+    {
+        return str_ends_with($letras, 'MILLÓN') || str_ends_with($letras, 'MILLONES') ? ' de' : '';
     }
 
     /** "UN MILLÓN … PESOS M/CTE ($1.750.905)" */
@@ -743,22 +768,24 @@ class CartaLaboralService
         $word->setDefaultFontSize(11);
 
         $seccion = $word->addSection([
-            'marginTop' => $certificacion ? 2100 : 1700, 'marginBottom' => 1400,
+            'marginTop' => $certificacion ? 1900 : 1700, 'marginBottom' => 1400,
             'marginLeft' => 1500, 'marginRight' => 1500,
             'headerHeight' => 500, 'footerHeight' => 500,
         ]);
 
         $encabezado = $seccion->addHeader();
         if ($certificacion) {
-            // Membrete centrado: logo, nombre y NIT; el logo también de fondo.
+            // Membrete centrado: el logo al lado del nombre y el NIT; el logo también de fondo.
+            $alineado = $img['logo'] ? Jc::START : Jc::CENTER;
+            $tabla = $encabezado->addTable(['alignment' => JcTable::CENTER]);
+            $fila = $tabla->addRow();
             if ($img['logo']) {
-                $encabezado->addImage($img['logo'], ['height' => 40, 'alignment' => Jc::CENTER]);
+                $fila->addCell(1700, ['valign' => 'center'])->addImage($img['logo'], ['height' => 50, 'alignment' => Jc::END]);
             }
-            $encabezado->addText($empresa['nombre'], ['bold' => true, 'size' => 16, 'color' => $azul], ['alignment' => Jc::CENTER, 'spaceAfter' => 0]);
-            $encabezado->addText('NIT. '.$empresa['nit_formateado'], ['bold' => true, 'size' => 10.5], [
-                'alignment' => Jc::CENTER, 'spaceAfter' => 0,
-                'borderBottomSize' => 12, 'borderBottomColor' => $azul,
-            ]);
+            $texto = $fila->addCell(6000, ['valign' => 'center']);
+            $texto->addText($empresa['nombre'], ['bold' => true, 'size' => 16, 'color' => $azul], ['alignment' => $alineado, 'spaceAfter' => 0, 'indentation' => ['left' => $img['logo'] ? 200 : 0]]);
+            $texto->addText('NIT. '.$empresa['nit_formateado'], ['bold' => true, 'size' => 10.5], ['alignment' => $alineado, 'spaceAfter' => 0, 'indentation' => ['left' => $img['logo'] ? 200 : 0]]);
+            $encabezado->addText('', ['size' => 4], ['spaceAfter' => 0, 'borderBottomSize' => 12, 'borderBottomColor' => $azul]);
             if ($img['marca']) {
                 [$ancho, $alto] = getimagesize($img['marca']);
                 $anchoMarca = 340;

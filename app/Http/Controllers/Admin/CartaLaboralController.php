@@ -205,6 +205,8 @@ class CartaLaboralController extends Controller
             'fecha_retiro' => 'nullable|date|after_or_equal:fecha_ingreso',
             'salario' => 'required|integer|min:0',
             'auxilio_transporte' => 'nullable|integer|min:0',
+            'incluir_comisiones' => 'nullable|boolean',
+            'comisiones_valor' => 'nullable|integer|min:0',
             'tipo_contrato' => 'nullable|in:indefinido,fijo,obra,aprendizaje',
             'incluir_salario' => 'nullable|boolean',
             'incluir_jornada' => 'nullable|boolean',

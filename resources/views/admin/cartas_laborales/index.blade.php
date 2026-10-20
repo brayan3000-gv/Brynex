@@ -179,6 +179,15 @@
                     <input type="number" name="auxilio_transporte" x-model.number="f.auxilio_transporte" min="0">
                     <div class="cl-nota" style="margin-top:.2rem">En 0 no sale. Es de ley hasta 2 mínimos.</div>
                 </div>
+                <div class="cl-campo cl-ancho">
+                    <input type="hidden" name="incluir_comisiones" :value="f.incluir_comisiones ? 1 : 0">
+                    <label style="font-size:.8rem;text-transform:none;letter-spacing:0;color:#334155;font-weight:600"><input type="checkbox" x-model="f.incluir_comisiones" @change="revisar()"> Recibe ingresos extra por comisiones</label>
+                </div>
+                <div class="cl-campo" x-show="f.incluir_comisiones" x-cloak>
+                    <label>Promedio mensual de comisiones ($)</label>
+                    <input type="number" name="comisiones_valor" x-model.number="f.comisiones_valor" min="0">
+                    <div class="cl-nota" style="margin-top:.2rem">Opcional: vacío o en 0 solo dice que recibe comisiones, sin valor.</div>
+                </div>
                 <div class="cl-campo"><label>Año de las condiciones</label><input type="number" name="anio" x-model.number="f.anio" min="2000" max="2100" required></div>
                 <div class="cl-campo"><label>Días al mes</label><input type="number" name="dias_mes" x-model.number="f.dias_mes" min="1" max="30" @input="f.horas_mes = f.dias_mes >= 30 ? 210 : f.dias_mes * 7"></div>
                 <div class="cl-campo"><label>Horas al mes</label><input type="number" name="horas_mes" x-model.number="f.horas_mes" min="0" max="400"></div>
@@ -400,7 +409,7 @@ function cartaLaboral() {
                     trabajador_documento: p.trabajador_documento, trabajador_genero: p.trabajador_genero,
                     cargo: p.cargo, fecha_ingreso: p.fecha_ingreso, fecha_retiro: p.fecha_retiro || '',
                     salario: p.salario, auxilio_transporte: p.auxilio_transporte, tipo_contrato: p.tipo_contrato, anio: p.anio, dias_mes: p.dias_mes, horas_mes: p.horas_mes, jornada: p.jornada,
-                    incluir_jornada: false, incluir_salario: true,
+                    incluir_jornada: false, incluir_salario: true, incluir_comisiones: false, comisiones_valor: '',
                     caja_nombre: p.caja_nombre, ciudad: p.ciudad, fecha: p.fecha,
                     firmante_tipo: 'representante', firmante_user_id: '', firmante_cargo: '', cargo_opcion: '',
                     firmante_celular: p.representante?.celular || '', sello_en_firma: false,
