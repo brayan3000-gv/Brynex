@@ -382,6 +382,46 @@ class VisitaCobroService
         return strtolower($foto->getClientOriginalExtension() ?: $foto->guessExtension() ?: 'jpg');
     }
 
+    /**
+     * La factura que dejó el mismo cobro que cada anticipo: cuando lo pagado
+     * cubre el mes, cobrar() factura con una parte y el resto queda de
+     * anticipo, en dos registros sin llave entre ellos. Para cuadrar lo que
+     * se recibió se muestran juntos (el anticipo por el total y lo de la
+     * factura como aplicado).
+     *
+     * Se reconocen por cédula, usuario y día, con el anticipo creado hasta un
+     * minuto después de la factura. Cada factura va con un solo anticipo (el
+     * primero), para no contar dos veces su plata.
+     *
+     * @param  \Illuminate\Support\Collection<\App\Models\Factura>  $facturas
+     * @param  \Illuminate\Support\Collection<Anticipo>  $anticipos
+     * @return array<int, \App\Models\Factura> anticipo_id => factura
+     */
+    public static function facturasDelCobro($facturas, $anticipos): array
+    {
+        $esVisita = fn ($r) => str_starts_with((string) $r->observacion, 'Cobro en visita');
+        $libres = $facturas->filter($esVisita)->where('estado', '!=', 'anulada')->keyBy('id');
+        $pares = [];
+
+        foreach ($anticipos->filter($esVisita)->sortBy('id') as $a) {
+            if (! $a->created_at) {
+                continue;
+            }
+            $f = $libres->first(fn ($f) => $f->created_at
+                && (string) $f->cedula === (string) $a->cedula
+                && (int) $f->usuario_id === (int) $a->usuario_id
+                && $f->fecha_pago?->toDateString() === $a->fecha_pago?->toDateString()
+                && $f->created_at->lte($a->created_at)
+                && $f->created_at->diffInSeconds($a->created_at) <= 60);
+            if ($f) {
+                $pares[(int) $a->id] = $f;
+                $libres->forget($f->id);
+            }
+        }
+
+        return $pares;
+    }
+
     private function observacion(array $pago): string
     {
         $nota = trim((string) ($pago['nota'] ?? ''));

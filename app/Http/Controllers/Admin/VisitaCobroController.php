@@ -453,7 +453,12 @@ class VisitaCobroController extends Controller
                 ->pluck('nombre', 'id')
             : collect();
 
-        $movs = $facturas->map(fn ($f) => [
+        // El cobro que quedó en factura + anticipo va en una fila, la del
+        // anticipo, por todo lo recibido (ver VisitaCobroService::facturasDelCobro).
+        $delCobro = VisitaCobroService::facturasDelCobro($facturas, $anticipos);
+        $yaEnAnticipo = collect($delCobro)->pluck('id')->flip();
+
+        $movs = $facturas->reject(fn ($f) => $yaEnAnticipo->has($f->id))->map(fn ($f) => [
             'hora' => $f->created_at?->format('g:i a'),
             'nombre' => $f->contrato?->cliente?->nombre_corto ?: $f->cedula,
             'tipo' => 'Factura '.ReciboVisitaService::periodo((int) $f->mes, (int) $f->anio),
@@ -461,15 +466,21 @@ class VisitaCobroController extends Controller
             'valor' => (int) $f->valor_efectivo + (int) $f->valor_consignado,
             'url' => route('admin.visita.recibo', ['f' => $f->id]),
             'orden' => $f->created_at?->timestamp,
-        ])->concat($anticipos->map(fn ($a) => [
-            'hora' => $a->created_at?->format('g:i a'),
-            'nombre' => $a->contrato?->cliente?->nombre_corto ?: $a->cedula,
-            'tipo' => 'Anticipo · '.(Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago),
-            'cobro' => $nombres[$a->usuario_id] ?? null,
-            'valor' => (int) $a->valor,
-            'url' => route('admin.visita.recibo', ['a' => [$a->id]]),
-            'orden' => $a->created_at?->timestamp,
-        ]))->sortByDesc('orden')->values();
+        ])->concat($anticipos->map(function ($a) use ($delCobro, $nombres) {
+            $f = $delCobro[(int) $a->id] ?? null;
+
+            return [
+                'hora' => $a->created_at?->format('g:i a'),
+                'nombre' => $a->contrato?->cliente?->nombre_corto ?: $a->cedula,
+                'tipo' => $f
+                    ? 'Factura '.ReciboVisitaService::periodo((int) $f->mes, (int) $f->anio).' + anticipo'
+                    : 'Anticipo · '.(Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago),
+                'cobro' => $nombres[$a->usuario_id] ?? null,
+                'valor' => (int) $a->valor + (int) $f?->valor_efectivo + (int) $f?->valor_consignado,
+                'url' => route('admin.visita.recibo', array_filter(['f' => $f?->id, 'a' => [$a->id]])),
+                'orden' => $a->created_at?->timestamp,
+            ];
+        }))->sortByDesc('orden')->values();
 
         return [
             'efectivo' => $efectivo,

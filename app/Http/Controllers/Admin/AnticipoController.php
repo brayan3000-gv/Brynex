@@ -920,14 +920,31 @@ class AnticipoController extends Controller
             ->with(['contrato.plan', 'empresa', 'factura', 'usuario'])
             ->orderByDesc('fecha_pago')
             ->orderByDesc('id')
-            ->get()
-            ->map(fn($a) => [
+            ->get();
+
+        // Un cobro en visita que alcanzó para el mes quedó partido en factura +
+        // anticipo: la fila del anticipo muestra lo recibido completo y la
+        // parte de la factura como aplicada, para cuadrar con el recibo.
+        $deVisita = $anticipos->filter(fn ($a) => str_starts_with((string) $a->observacion, 'Cobro en visita'));
+        $delCobro = $deVisita->isEmpty() ? [] : \App\Services\VisitaCobroService::facturasDelCobro(
+            Factura::where('aliado_id', $aliadoId)->where('cedula', $cedula)
+                ->where('observacion', 'LIKE', 'Cobro en visita%')
+                ->whereBetween('fecha_pago', [$deVisita->min('fecha_pago')->toDateString(), $deVisita->max('fecha_pago')->toDateString()])
+                ->get(),
+            $deVisita
+        );
+
+        $anticipos = $anticipos->map(function ($a) use ($delCobro) {
+            $fc = $a->trashed() ? null : ($delCobro[(int) $a->id] ?? null);
+            $enFactura = $fc ? (int) $fc->valor_efectivo + (int) $fc->valor_consignado : 0;
+
+            return [
                 'id'               => $a->id,
                 'fecha_pago'       => $a->fecha_pago?->format('d/m/Y'),
                 'forma_pago'       => $a->forma_pago,
                 'forma_label'      => Anticipo::FORMAS_PAGO[$a->forma_pago] ?? ucfirst($a->forma_pago),
-                'valor'            => $a->valor,
-                'valor_aplicado'   => $a->valor_aplicado,
+                'valor'            => (int) $a->valor + $enFactura,
+                'valor_aplicado'   => (int) $a->valor_aplicado + $enFactura,
                 'valor_disponible' => $a->trashed() ? 0 : $a->valor_disponible,
                 'estado'           => $a->trashed() ? 'anulado' : $a->estado,
                 'estado_label'     => $a->etiqueta_estado,
@@ -942,7 +959,14 @@ class AnticipoController extends Controller
                 'empresa_nombre'   => $a->empresa?->empresa,
                 'plan_nombre'      => $a->contrato?->plan?->nombre,
                 'origen'           => $a->origen ?? 'individual',
-            ]);
+                // La factura que pagó el mismo cobro (ver arriba).
+                'cobro_factura_numero' => $fc?->numero_factura,
+                'cobro_factura_mes'    => $fc?->mes,
+                'cobro_factura_anio'   => $fc?->anio,
+                'cobro_factura_valor'  => $enFactura,
+                'cobro_factura_url'    => $fc ? route('admin.facturacion.recibo', $fc->id) : null,
+            ];
+        });
 
         return response()->json([
             'ok'       => true,

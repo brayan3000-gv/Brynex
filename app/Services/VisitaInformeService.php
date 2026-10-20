@@ -42,24 +42,39 @@ class VisitaInformeService
             ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_ANULADO])
             ->with('usuario:id,nombre')->get();
 
+        // Un cobro que alcanzó para el mes quedó en factura + anticipo: va en
+        // una sola fila, la del anticipo, por todo lo recibido y con la parte
+        // de la factura como aplicada (igual que el recibo que le llegó).
+        $delCobro = VisitaCobroService::facturasDelCobro($facturas, $anticipos);
+        $yaEnAnticipo = collect($delCobro)->pluck('id')->flip();
+        $periodo = fn ($f) => ReciboVisitaService::periodo((int) $f->mes, (int) $f->anio);
+
         // Igual que la caja de la pantalla: de la factura solo cuenta la plata
         // nueva, no lo que puso de anticipos anteriores.
-        $cobros = $facturas->map(fn ($f) => [
+        $cobros = $facturas->reject(fn ($f) => $yaEnAnticipo->has($f->id))->map(fn ($f) => [
             'fecha' => $f->fecha_pago, 'hora' => $f->created_at?->format('g:i a'), 'orden' => $f->created_at?->timestamp,
             'cedula' => (string) $f->cedula,
-            'tipo' => 'Factura '.ReciboVisitaService::periodo((int) $f->mes, (int) $f->anio),
+            'tipo' => 'Factura '.$periodo($f),
             'numero' => (string) ($f->numero_factura ?: $f->id),
             'efectivo' => (int) $f->valor_efectivo, 'transferencia' => (int) $f->valor_consignado,
+            'aplicado' => (int) $f->valor_efectivo + (int) $f->valor_consignado,
+            'factura' => (string) ($f->numero_factura ?: $f->id).' · '.$periodo($f),
             'cobro' => $f->usuario?->nombre, 'nota' => $this->nota($f->observacion),
-        ])->concat($anticipos->map(fn ($a) => [
-            'fecha' => $a->fecha_pago, 'hora' => $a->created_at?->format('g:i a'), 'orden' => $a->created_at?->timestamp,
-            'cedula' => (string) $a->cedula,
-            'tipo' => 'Anticipo · '.(Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago),
-            'numero' => 'ANT-'.$a->id,
-            'efectivo' => $a->forma_pago === 'efectivo' ? (int) $a->valor : 0,
-            'transferencia' => $a->forma_pago === 'efectivo' ? 0 : (int) $a->valor,
-            'cobro' => $a->usuario?->nombre, 'nota' => $this->nota($a->observacion),
-        ]));
+        ])->concat($anticipos->map(function ($a) use ($delCobro, $periodo) {
+            $f = $delCobro[(int) $a->id] ?? null;
+
+            return [
+                'fecha' => $a->fecha_pago, 'hora' => $a->created_at?->format('g:i a'), 'orden' => $a->created_at?->timestamp,
+                'cedula' => (string) $a->cedula,
+                'tipo' => 'Anticipo · '.(Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago),
+                'numero' => 'ANT-'.$a->id,
+                'efectivo' => ($a->forma_pago === 'efectivo' ? (int) $a->valor : 0) + (int) $f?->valor_efectivo,
+                'transferencia' => ($a->forma_pago === 'efectivo' ? 0 : (int) $a->valor) + (int) $f?->valor_consignado,
+                'aplicado' => (int) $f?->valor_efectivo + (int) $f?->valor_consignado,
+                'factura' => $f ? (string) ($f->numero_factura ?: $f->id).' · '.$periodo($f) : '',
+                'cobro' => $a->usuario?->nombre, 'nota' => $this->nota($a->observacion),
+            ];
+        }));
 
         $clientes = $this->clientes($aliadoId, $cobros->pluck('cedula')->unique()->values());
         if ($empresaId) {
@@ -127,10 +142,11 @@ class VisitaInformeService
             ]), ['D', 'E', 'F', 'G', 'H'], '1e40af', true);
 
         $this->tabla($libro->createSheet()->setTitle('Cada cobro'), ['Fecha', 'Hora', 'Cédula', 'Nombre completo', 'Empresa',
-            'Tipo', 'N.º', 'Efectivo', 'Transferencia', 'Valor', 'Cobró', 'Nota'], $datos['cobros']->map(fn ($c) => [
+            'Tipo', 'N.º', 'Efectivo', 'Transferencia', 'Valor', 'Aplicado a la factura', 'Quedó de anticipo', 'Factura', 'Cobró', 'Nota'], $datos['cobros']->map(fn ($c) => [
                 $c['fecha']?->format('Y-m-d'), $c['hora'], $c['cedula'], $c['nombre'], $c['empresa'], $c['tipo'], $c['numero'],
-                $c['efectivo'], $c['transferencia'], $c['efectivo'] + $c['transferencia'], $c['cobro'], $c['nota'],
-            ]), ['H', 'I', 'J'], '059669');
+                $c['efectivo'], $c['transferencia'], $c['efectivo'] + $c['transferencia'], $c['aplicado'],
+                $c['efectivo'] + $c['transferencia'] - $c['aplicado'], $c['factura'], $c['cobro'], $c['nota'],
+            ]), ['H', 'I', 'J', 'K', 'L'], '059669');
 
         $this->tabla($libro->createSheet()->setTitle('Abonos de la empresa'), ['Fecha', 'Cédula', 'Nombre completo', 'Empresa',
             'Valor', 'Para el mes', 'N.º', 'Parte de'], $datos['empresa']->map(fn ($a) => [

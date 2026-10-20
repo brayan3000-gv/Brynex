@@ -614,12 +614,18 @@ async function cargarAnticiposCliente() {
         tbody.innerHTML = data.anticipos.map(a => {
             const badge = estadoBadge[a.estado] || estadoBadge.aplicado;
             const emoji = formaEmoji[a.forma_pago] || '💳';
-            const facturaHtml = a.factura_numero
-                ? `<a href="${a.factura_recibo_url}" target="_blank"
-                      style="font-size:.68rem;color:#1d4ed8;font-weight:700;text-decoration:none;
-                             background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:.08rem .3rem;">
-                      #${a.factura_numero} <span style="opacity:.7">${a.factura_mes}/${a.factura_anio}</span>
-                   </a>`
+            const linkFactura = (url, numero, mes, anio, valor) =>
+                `<a href="${url}" target="_blank" ${valor ? `title="El mismo cobro pagó ${HI_FMT(valor)} de esta factura"` : ''}
+                    style="display:inline-block;font-size:.68rem;color:#1d4ed8;font-weight:700;text-decoration:none;white-space:nowrap;
+                           background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:.08rem .3rem;margin:.05rem 0;">
+                    #${numero} <span style="opacity:.7">${mes}/${anio}</span>${valor ? ` <span style="color:#15803d">· ${HI_FMT(valor)}</span>` : ''}
+                 </a>`;
+            const facturas = [];
+            // La factura que pagó el mismo cobro en visita, por la parte aplicada.
+            if (a.cobro_factura_numero) facturas.push(linkFactura(a.cobro_factura_url, a.cobro_factura_numero, a.cobro_factura_mes, a.cobro_factura_anio, a.cobro_factura_valor));
+            if (a.factura_numero) facturas.push(linkFactura(a.factura_recibo_url, a.factura_numero, a.factura_mes, a.factura_anio, 0));
+            const facturaHtml = facturas.length
+                ? facturas.join('<br>')
                 : `<span style="color:#94a3b8;font-size:.68rem;">—</span>`;
 
             const anuladoStyle = a.anulado ? 'opacity:.7;' : '';
