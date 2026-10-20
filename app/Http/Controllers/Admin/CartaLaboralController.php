@@ -63,6 +63,8 @@ class CartaLaboralController extends Controller
     {
         $cedula = trim((string) $request->query('cedula'));
         abort_if($cedula === '', 422, 'Escribe una cédula.');
+        // La cédula es numérica en la BD: un nombre escrito aquí rompía la consulta (error 500).
+        abort_unless(ctype_digit($cedula), 422, 'Escribe solo el número de cédula, sin letras ni puntos.');
         $aliadoId = $this->aliadoId();
 
         $cliente = Cliente::where('aliado_id', $aliadoId)->where('cedula', $cedula)->first();

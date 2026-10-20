@@ -65,7 +65,9 @@
             </button>
         </form>
 
-        <template x-if="buscado && !contratos.length">
+        <p class="cl-error" style="margin:.7rem 0 0" x-show="errorBusqueda" x-text="errorBusqueda" x-cloak></p>
+
+        <template x-if="buscado && !contratos.length && !errorBusqueda">
             <p class="cl-nota" style="margin-top:.7rem">No hay contratos con esa cédula en este aliado.</p>
         </template>
 
@@ -362,7 +364,7 @@ function cartaLaboral() {
         cargos: @json($cargos),
         f: {},
         jornadaManual: false,
-        avisos: [], error: '', mensaje: '',
+        avisos: [], error: '', mensaje: '', errorBusqueda: '',
         firma: { abierta: false, cedula: '', nombre: '', archivo: null, vista: '', guardando: false, error: '' },
 
         iniciar() { if (this.cedula) this.buscar(); },
@@ -383,10 +385,11 @@ function cartaLaboral() {
         },
 
         async buscar() {
-            this.buscando = true; this.listo = false; this.error = '';
+            this.buscando = true; this.listo = false; this.error = ''; this.errorBusqueda = '';
             try {
                 const r = await fetch(rutas.buscar + '?cedula=' + encodeURIComponent(this.cedula), { headers: { Accept: 'application/json' } });
-                const d = await r.json();
+                const d = await r.json().catch(() => ({}));
+                if (!r.ok) { this.errorBusqueda = d.message || 'No se pudo buscar.'; this.contratos = []; this.cliente = null; return; }
                 this.cliente = d.cliente; this.contratos = d.contratos || [];
                 this.buscado = true;
                 const vigentes = this.contratos.filter(c => c.estado === 'vigente' && c.tiene_razon_social);
