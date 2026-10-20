@@ -105,8 +105,8 @@
         <div class="cl-card">
             <h2>2. ¿Para qué es la carta?</h2>
             <div class="cl-tabs">
-                <button type="button" class="cl-tab" :class="{sel: f.destino === 'caja'}" @click="f.destino = 'caja'; revisar()">🏦 Caja de compensación (subsidio)</button>
                 <button type="button" class="cl-tab" :class="{sel: f.destino === 'certificacion'}" @click="f.destino = 'certificacion'; revisar()">📄 Certificación laboral</button>
+                <button type="button" class="cl-tab" :class="{sel: f.destino === 'caja'}" @click="f.destino = 'caja'; revisar()">🏦 Caja de compensación (subsidio)</button>
             </div>
             <p class="cl-nota" style="margin:.6rem 0 0" x-show="f.destino === 'caja'">Va dirigida a la caja e incluye jornada y salario del año: es lo que piden para el subsidio familiar monetario.</p>
             <p class="cl-nota" style="margin:.6rem 0 0" x-show="f.destino === 'certificacion'" x-cloak>«A quien interese»: membrete centrado, el logo de fondo y «CERTIFICA:». Escoge abajo si lleva jornada, salario y auxilio de transporte.</p>
@@ -205,9 +205,9 @@
         </div>
 
         <div class="cl-card">
-            <h2>6. Destinatario y fecha</h2>
+            <h2 x-text="f.destino === 'caja' ? '6. Destinatario y fecha' : '6. Lugar y fecha'">6. Lugar y fecha</h2>
             <div class="cl-grid">
-                <div class="cl-campo" x-show="f.destino === 'caja'"><label>Caja de compensación</label><input name="caja_nombre" x-model="f.caja_nombre"></div>
+                <div class="cl-campo" x-show="f.destino === 'caja'"><label>Caja de compensación</label><input name="caja_nombre" x-model="f.caja_nombre" :disabled="f.destino !== 'caja'"></div>
                 <div class="cl-campo"><label>Ciudad</label><input name="ciudad" x-model="f.ciudad" required></div>
                 <div class="cl-campo"><label>Fecha de la carta</label><input type="date" name="fecha" x-model="f.fecha" required></div>
             </div>
@@ -407,7 +407,7 @@ function cartaLaboral() {
                 this.jornadaManual = false;
                 this.f = {
                     contrato_id: p.contrato_id, razon_social_id: p.razon_social_id,
-                    destino: this.f.destino || 'caja',
+                    destino: this.f.destino || 'certificacion',
                     trabajador_nombre: p.trabajador_nombre, trabajador_tipo_doc: p.trabajador_tipo_doc,
                     trabajador_documento: p.trabajador_documento, trabajador_genero: p.trabajador_genero,
                     cargo: p.cargo, fecha_ingreso: p.fecha_ingreso, fecha_retiro: p.fecha_retiro || '',

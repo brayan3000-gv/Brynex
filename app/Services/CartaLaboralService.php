@@ -810,8 +810,9 @@ class CartaLaboralService
     public function pdf(array $d): \Barryvdh\DomPDF\PDF
     {
         // DomPDF no lee fuera de su chroot: las imágenes van incrustadas.
+        // Solo las rutas: 'firma_es_sello' es un booleano y pasa tal cual.
         $img = array_map(
-            fn ($ruta) => $ruta ? 'data:image/png;base64,'.base64_encode(file_get_contents($ruta)) : null,
+            fn ($ruta) => is_string($ruta) && $ruta !== '' ? 'data:image/png;base64,'.base64_encode(file_get_contents($ruta)) : $ruta,
             $this->imagenes($d)
         );
 
