@@ -42,7 +42,8 @@
 .cl-tabla td{padding:.45rem .55rem;border-bottom:1px solid #f1f5f9;vertical-align:middle}
 .cl-modal{position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:1rem}
 .cl-modal-box{background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.25);width:100%;max-width:520px;padding:1.1rem 1.25rem}
-.cl-canvas{border:1.5px dashed #94a3b8;border-radius:10px;width:100%;height:170px;touch-action:none;background:#fff}
+.cl-subir{display:flex;align-items:center;justify-content:center;border:1.5px dashed #94a3b8;border-radius:10px;min-height:150px;background:#f8fafc;cursor:pointer;padding:.8rem;text-align:center}
+.cl-subir img{max-height:130px;max-width:100%}
 .cl-nota{font-size:.72rem;color:#64748b}
 </style>
 
@@ -216,7 +217,7 @@
                             <div class="cl-nota">Representante legal</div>
                         </div>
                         <span class="cl-badge" :class="representante.tiene_firma ? 'cl-ok' : 'cl-gris'" x-text="representante.tiene_firma ? '✓ Firma guardada' : 'Sin firma: línea para firmar a mano'"></span>
-                        <button type="button" class="cl-btn sec" @click="abrirFirma(representante.documento, representante.nombre)" x-text="representante.tiene_firma ? 'Cambiar firma' : '✍️ Subir o dibujar firma'"></button>
+                        <button type="button" class="cl-btn sec" @click="abrirFirma(representante.documento, representante.nombre)" x-text="representante.tiene_firma ? 'Cambiar firma' : '⬆️ Subir firma (PNG)'"></button>
                     </div>
                 </template>
                 <template x-if="!representante || !representante.documento">
@@ -248,13 +249,18 @@
                 <template x-if="usuarioSel()">
                     <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:.7rem">
                         <span class="cl-badge" :class="usuarioSel().tiene_firma ? 'cl-ok' : 'cl-gris'" x-text="usuarioSel().tiene_firma ? '✓ Firma guardada' : 'Sin firma: línea para firmar a mano'"></span>
-                        <button type="button" class="cl-btn sec" @click="abrirFirma(usuarioSel().cedula, usuarioSel().nombre)" x-text="usuarioSel().tiene_firma ? 'Cambiar firma' : '✍️ Subir o dibujar firma'"></button>
+                        <button type="button" class="cl-btn sec" @click="abrirFirma(usuarioSel().cedula, usuarioSel().nombre)" x-text="usuarioSel().tiene_firma ? 'Cambiar firma' : '⬆️ Subir firma (PNG)'"></button>
                     </div>
                 </template>
             </div>
         </div>
 
         <div class="cl-card" style="margin-top:-.6rem">
+            <input type="hidden" name="sello_en_firma" :value="f.sello_en_firma ? 1 : 0">
+            <label style="font-size:.8rem;display:flex;gap:.45rem;align-items:flex-start;margin-bottom:.8rem" x-show="empresa?.tiene_sello">
+                <input type="checkbox" x-model="f.sello_en_firma" @change="revisar()" style="margin-top:.15rem">
+                <span>Poner el <strong>sello</strong> en el lugar de la firma <span class="cl-nota">(para sellos que ya traen la firma; así no se usa la imagen de la firma)</span></span>
+            </label>
             <div class="cl-grid">
                 <div class="cl-campo"><label>Celular de quien firma</label><input name="firmante_celular" x-model.trim="f.firmante_celular" inputmode="tel" placeholder="Ej. 300 156 3615"></div>
             </div>
@@ -312,13 +318,13 @@
     <div class="cl-modal" x-show="firma.abierta" x-cloak @click.self="firma.abierta = false">
         <div class="cl-modal-box">
             <h2 style="font-size:1rem;margin:0 0 .2rem">Firma de <span x-text="firma.nombre"></span></h2>
-            <p class="cl-nota" style="margin:0 0 .8rem">Dibújala con el dedo o el mouse, o sube una foto de la firma (mejor en fondo blanco o transparente).</p>
-            <canvas x-ref="lienzo" class="cl-canvas" width="900" height="340"
-                    @pointerdown="trazoInicio($event)" @pointermove="trazoMover($event)" @pointerup="firma.dibujando = false" @pointerleave="firma.dibujando = false"></canvas>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin:.5rem 0 .8rem;gap:.5rem;flex-wrap:wrap">
-                <button type="button" class="cl-btn sec" @click="limpiarLienzo()">Borrar</button>
-                <label class="cl-nota">o sube una imagen: <input type="file" x-ref="archivoFirma" accept=".png,.jpg,.jpeg,.webp" @change="firma.archivo = $event.target.files[0]"></label>
-            </div>
+            <p class="cl-nota" style="margin:0 0 .8rem">Sube la firma escaneada, mejor en <strong>PNG con fondo transparente</strong> para que se vea limpia sobre la línea. También sirve JPG en fondo blanco.</p>
+            <label class="cl-subir">
+                <input type="file" x-ref="archivoFirma" accept=".png,.jpg,.jpeg,.webp" style="display:none" @change="escogerArchivoFirma($event)">
+                <img x-show="firma.vista" :src="firma.vista" alt="Firma">
+                <span x-show="!firma.vista" class="cl-nota">📎 Toca aquí para escoger la imagen</span>
+            </label>
+            <div style="height:.8rem"></div>
             <p class="cl-error" x-show="firma.error" x-text="firma.error"></p>
             <div style="display:flex;justify-content:flex-end;gap:.5rem">
                 <button type="button" class="cl-btn sec" @click="firma.abierta = false">Cancelar</button>
@@ -348,7 +354,7 @@ function cartaLaboral() {
         f: {},
         jornadaManual: false,
         avisos: [], error: '', mensaje: '',
-        firma: { abierta: false, cedula: '', nombre: '', archivo: null, dibujando: false, hayTrazo: false, guardando: false, error: '' },
+        firma: { abierta: false, cedula: '', nombre: '', archivo: null, vista: '', guardando: false, error: '' },
 
         iniciar() { if (this.cedula) this.buscar(); },
 
@@ -397,7 +403,7 @@ function cartaLaboral() {
                     incluir_jornada: false, incluir_salario: true,
                     caja_nombre: p.caja_nombre, ciudad: p.ciudad, fecha: p.fecha,
                     firmante_tipo: 'representante', firmante_user_id: '', firmante_cargo: '', cargo_opcion: '',
-                    firmante_celular: p.representante?.celular || '',
+                    firmante_celular: p.representante?.celular || '', sello_en_firma: false,
                     empresa_direccion: p.empresa?.direccion || '', empresa_telefono: p.empresa?.telefono || '', empresa_correo: p.empresa?.correo || '',
                 };
                 this.listo = true;
@@ -434,34 +440,18 @@ function cartaLaboral() {
 
         // ── Firma ──
         abrirFirma(cedula, nombre) {
-            Object.assign(this.firma, { abierta: true, cedula, nombre, archivo: null, hayTrazo: false, error: '' });
-            this.$nextTick(() => { this.limpiarLienzo(); if (this.$refs.archivoFirma) this.$refs.archivoFirma.value = ''; });
+            Object.assign(this.firma, { abierta: true, cedula, nombre, archivo: null, vista: '', error: '' });
+            this.$nextTick(() => { if (this.$refs.archivoFirma) this.$refs.archivoFirma.value = ''; });
         },
-        punto(e) {
-            const c = this.$refs.lienzo, b = c.getBoundingClientRect();
-            return [(e.clientX - b.left) * c.width / b.width, (e.clientY - b.top) * c.height / b.height];
-        },
-        trazoInicio(e) {
-            const ctx = this.$refs.lienzo.getContext('2d');
-            ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#0b1f4d';
-            ctx.beginPath(); ctx.moveTo(...this.punto(e));
-            this.firma.dibujando = true; this.firma.hayTrazo = true;
-        },
-        trazoMover(e) {
-            if (!this.firma.dibujando) return;
-            const ctx = this.$refs.lienzo.getContext('2d');
-            ctx.lineTo(...this.punto(e)); ctx.stroke();
-        },
-        limpiarLienzo() {
-            const c = this.$refs.lienzo; c.getContext('2d').clearRect(0, 0, c.width, c.height);
-            this.firma.hayTrazo = false;
+        escogerArchivoFirma(e) {
+            this.firma.archivo = e.target.files[0] || null;
+            this.firma.vista = this.firma.archivo ? URL.createObjectURL(this.firma.archivo) : '';
         },
         async guardarFirma() {
             const fd = new FormData();
             fd.append('cedula', this.firma.cedula);
-            if (this.firma.archivo) fd.append('firma', this.firma.archivo);
-            else if (this.firma.hayTrazo) fd.append('firma_dibujo', this.$refs.lienzo.toDataURL('image/png'));
-            else { this.firma.error = 'Dibuja la firma o sube una imagen.'; return; }
+            if (!this.firma.archivo) { this.firma.error = 'Escoge la imagen de la firma.'; return; }
+            fd.append('firma', this.firma.archivo);
 
             this.firma.guardando = true; this.firma.error = '';
             try {

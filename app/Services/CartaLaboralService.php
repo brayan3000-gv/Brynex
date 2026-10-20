@@ -90,22 +90,17 @@ class CartaLaboralService
     }
 
     /**
-     * Guarda una imagen subida (o un PNG en base64 dibujado en pantalla) como
-     * PNG, conservando la transparencia.
+     * Guarda una imagen subida como PNG, conservando la transparencia. La
+     * firma ya no se dibuja en pantalla: se veía poco profesional.
      */
-    public static function guardarPng(UploadedFile|string $origen, string $destino): void
+    public static function guardarPng(UploadedFile $origen, string $destino): void
     {
-        if ($origen instanceof UploadedFile) {
-            $mime = $origen->getMimeType();
-            $img = match (true) {
-                str_contains($mime, 'jpeg') => @imagecreatefromjpeg($origen->getRealPath()),
-                str_contains($mime, 'webp') => @imagecreatefromwebp($origen->getRealPath()),
-                default => @imagecreatefrompng($origen->getRealPath()),
-            };
-        } else {
-            $datos = str_contains($origen, ',') ? explode(',', $origen, 2)[1] : $origen;
-            $img = @imagecreatefromstring((string) base64_decode($datos, true));
-        }
+        $mime = $origen->getMimeType();
+        $img = match (true) {
+            str_contains($mime, 'jpeg') => @imagecreatefromjpeg($origen->getRealPath()),
+            str_contains($mime, 'webp') => @imagecreatefromwebp($origen->getRealPath()),
+            default => @imagecreatefrompng($origen->getRealPath()),
+        };
 
         if (! $img) {
             throw ValidationException::withMessages(['imagen' => 'No se pudo leer la imagen.']);
@@ -329,6 +324,7 @@ class CartaLaboralService
             'ciudad' => trim((string) ($in['ciudad'] ?? 'Santiago de Cali')),
             'fecha' => $in['fecha'] ?? now()->toDateString(),
             'firmante' => $firmante,
+            'sello_en_firma' => ! empty($in['sello_en_firma']) && $empresa['tiene_sello'],
         ];
     }
 
@@ -389,7 +385,7 @@ class CartaLaboralService
         if (! $d['empresa']['tiene_sello']) {
             $avisos[] = 'La razón social no tiene sello: la carta sale sin él.';
         }
-        if (! file_exists(self::rutaFirma($d['firmante']['documento']))) {
+        if (empty($d['sello_en_firma']) && ! file_exists(self::rutaFirma($d['firmante']['documento']))) {
             $avisos[] = 'Quien firma no tiene firma guardada: queda la línea para firmar a mano.';
         }
 
@@ -619,11 +615,21 @@ class CartaLaboralService
     {
         $existe = fn (string $ruta) => file_exists($ruta) ? $ruta : null;
         $logo = $existe(self::rutaLogo($d['empresa']['nit']));
+        $sello = $existe(self::rutaSello($d['empresa']['nit']));
+
+        // Sellos que ya traen la firma: el sello va sobre la línea y no se repite al lado.
+        if (! empty($d['sello_en_firma']) && $sello) {
+            return [
+                'logo' => $logo, 'sello' => null, 'firma' => $sello, 'firma_es_sello' => true,
+                'marca' => $logo && $d['destino'] === 'certificacion' ? $this->marcaAgua($logo) : null,
+            ];
+        }
 
         return [
             'logo' => $logo,
             'sello' => $existe(self::rutaSello($d['empresa']['nit'])),
             'firma' => $d['firmante']['documento'] ? $existe(self::rutaFirma($d['firmante']['documento'])) : null,
+            'firma_es_sello' => false,
             'marca' => $logo && $d['destino'] === 'certificacion' ? $this->marcaAgua($logo) : null,
         ];
     }
@@ -788,7 +794,7 @@ class CartaLaboralService
         $fila = $tabla->addRow();
         $celda = $fila->addCell(5200, ['valign' => 'bottom']);
         if ($img['firma']) {
-            $celda->addImage($img['firma'], ['height' => 55]);
+            $celda->addImage($img['firma'], ['height' => $img['firma_es_sello'] ? 80 : 55]);
         } else {
             $celda->addTextBreak(3);
         }

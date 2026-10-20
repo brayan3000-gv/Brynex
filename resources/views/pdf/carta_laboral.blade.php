@@ -32,6 +32,7 @@
     .firma { width: 100%; border-collapse: collapse; margin-top: 4pt; }
     .firma td { vertical-align: bottom; padding: 0; }
     .firma .img-firma { height: 1.7cm; }
+    .firma .img-sello-firma { max-height: 2.8cm; max-width: 6cm; margin-bottom: -.35cm; }
     .firma .espacio { height: 1.7cm; }
     .firma p { margin: 0; text-align: left; }
     .firma .sello { text-align: center; vertical-align: middle; }
@@ -104,7 +105,7 @@
     <tr>
         <td style="width:58%">
             @if($img['firma'])
-                <img class="img-firma" src="{{ $img['firma'] }}">
+                <img class="{{ $img['firma_es_sello'] ? 'img-sello-firma' : 'img-firma' }}" src="{{ $img['firma'] }}">
             @else
                 <div class="espacio"></div>
             @endif

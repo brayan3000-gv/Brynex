@@ -175,10 +175,8 @@ class CartaLaboralController extends Controller
     {
         $request->validate([
             'cedula' => 'required|string|max:20',
-            'firma' => 'nullable|file|mimes:png,jpg,jpeg,webp|max:5120',
-            'firma_dibujo' => 'nullable|string',
-        ]);
-        abort_if(! $request->hasFile('firma') && ! $request->filled('firma_dibujo'), 422, 'Sube o dibuja la firma.');
+            'firma' => 'required|file|mimes:png,jpg,jpeg,webp|max:5120',
+        ], ['firma.required' => 'Sube la imagen de la firma.']);
 
         $aliadoId = $this->aliadoId();
         $cedula = $request->input('cedula');
@@ -187,7 +185,7 @@ class CartaLaboralController extends Controller
         $esUsuario = $this->servicio->usuariosFirmantes($aliadoId)->contains('cedula', $cedula);
         abort_unless($esRepresentante || $esUsuario, 403, 'Esa cédula no es de un representante ni de un usuario de este aliado.');
 
-        CartaLaboralService::guardarPng($request->file('firma') ?? $request->input('firma_dibujo'), CartaLaboralService::rutaFirma($cedula));
+        CartaLaboralService::guardarPng($request->file('firma'), CartaLaboralService::rutaFirma($cedula));
 
         Bitacora::registrar('updated', 'FirmaCartaLaboral', null, "Firma guardada para cartas laborales (Cédula: {$cedula}).", null, $aliadoId);
 
@@ -221,6 +219,7 @@ class CartaLaboralController extends Controller
             'firmante_user_id' => 'nullable|required_if:firmante_tipo,usuario|integer',
             'firmante_cargo' => 'nullable|required_if:firmante_tipo,usuario|string|max:120',
             'firmante_celular' => 'nullable|string|max:30',
+            'sello_en_firma' => 'nullable|boolean',
             'empresa_direccion' => 'nullable|string|max:200',
             'empresa_telefono' => 'nullable|string|max:80',
             'empresa_correo' => 'nullable|string|max:120',
