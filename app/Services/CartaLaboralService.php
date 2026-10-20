@@ -38,6 +38,21 @@ class CartaLaboralService
     /** Ley 789 de 2002, art. 3: la cuota monetaria exige al menos 96 horas de trabajo al mes. */
     public const HORAS_MINIMAS_SUBSIDIO = 96;
 
+    /** Cargos con que suele firmar un usuario; en pantalla también se puede escribir otro. */
+    public const CARGOS_FIRMANTE = [
+        'Recursos Humanos', 'Talento Humano', 'Gestión Humana',
+        'Gerencia', 'Gerencia General', 'Gerencia Administrativa',
+        'Dirección Administrativa', 'Administración', 'Coordinación de Nómina',
+        'Contabilidad', 'Asistente Administrativa',
+    ];
+
+    public const TIPOS_CONTRATO = [
+        'indefinido' => 'un contrato a término indefinido',
+        'fijo' => 'un contrato a término fijo',
+        'obra' => 'un contrato por obra o labor',
+        'aprendizaje' => 'un contrato de aprendizaje',
+    ];
+
     private const DOCUMENTOS = [
         'CC' => 'cédula de ciudadanía',
         'CE' => 'cédula de extranjería',
@@ -124,6 +139,7 @@ class CartaLaboralService
         $horas = $dias >= 30 ? self::HORAS_MES_COMPLETO : $dias * 7;
 
         $ultima = CartaLaboral::where('aliado_id', $aliadoId)->latest('id')->first();
+        $salario = (int) round((float) $contrato->salario);
 
         return [
             'contrato_id' => $contrato->id,
@@ -137,7 +153,9 @@ class CartaLaboralService
             'fecha_ingreso' => $contrato->fecha_ingreso ? Carbon::parse($contrato->fecha_ingreso)->toDateString() : null,
             'fecha_retiro' => $contrato->estado === 'retirado' && $contrato->fecha_retiro
                 ? Carbon::parse($contrato->fecha_retiro)->toDateString() : null,
-            'salario' => (int) round((float) $contrato->salario),
+            'salario' => $salario,
+            'auxilio_transporte' => $this->auxilioSugerido($salario, $dias),
+            'tipo_contrato' => 'indefinido',
             'dias_mes' => $dias,
             'horas_mes' => $horas,
             'jornada' => $this->jornadaSugerida($dias, $horas),
@@ -150,8 +168,39 @@ class CartaLaboralService
                 'tipo_doc' => $rs->rep_tipo_doc ?: 'CC',
                 'documento' => (string) $rs->cedula_rep,
                 'tiene_firma' => $rs->cedula_rep && file_exists(self::rutaFirma($rs->cedula_rep)),
+                'celular' => $rs->cedula_rep ? $this->celularRepresentante($rs, $aliadoId) : '',
             ] : null,
         ];
+    }
+
+    /** Auxilio de transporte de ley: solo hasta 2 mínimos, proporcional a los días trabajados. */
+    public function auxilioSugerido(int $salario, int $dias): int
+    {
+        if ($salario <= 0 || $salario > 2 * ConfiguracionBrynex::salarioMinimo()) {
+            return 0;
+        }
+
+        return (int) round(self::auxilioTransporte() * max(1, min(30, $dias)) / 30);
+    }
+
+    public static function auxilioTransporte(): int
+    {
+        return (int) ConfiguracionBrynex::obtener('auxilio_transporte', 249095);
+    }
+
+    /**
+     * Celular del representante: el de su última carta en esa razón social o,
+     * si nunca ha firmado, el suyo como cliente del aliado.
+     */
+    private function celularRepresentante(RazonSocial $rs, int $aliadoId): string
+    {
+        $ultima = CartaLaboral::where('aliado_id', $aliadoId)->where('razon_social_id', $rs->id)
+            ->where('firmante_tipo', 'representante')->latest('id')->first();
+        if ($ultima && ! empty($ultima->datos['firmante']['celular'])) {
+            return $ultima->datos['firmante']['celular'];
+        }
+
+        return (string) (\App\Models\Cliente::where('aliado_id', $aliadoId)->where('cedula', $rs->cedula_rep)->value('celular') ?? '');
     }
 
     /** Texto de la jornada a partir de días y horas al mes. */
@@ -197,7 +246,7 @@ class CartaLaboralService
                     ->orWhereHas('aliados', fn ($a) => $a->where('aliados.id', $aliadoId)->where('aliado_user.activo', true));
             })
             ->orderBy('nombre')
-            ->get(['id', 'nombre', 'cedula']);
+            ->get(['id', 'nombre', 'cedula', 'telefono']);
     }
 
     // ── De lo que llega del formulario a los datos de la carta ──────
@@ -233,6 +282,7 @@ class CartaLaboralService
                 'tipo_doc' => 'CC',
                 'documento' => (string) $user->cedula,
                 'cargo' => trim((string) ($in['firmante_cargo'] ?? '')),
+                'celular' => trim((string) ($in['firmante_celular'] ?? '')),
             ];
         } else {
             if (! $rs->nombre_rep || ! $rs->cedula_rep) {
@@ -245,6 +295,7 @@ class CartaLaboralService
                 'tipo_doc' => $rs->rep_tipo_doc ?: 'CC',
                 'documento' => (string) $rs->cedula_rep,
                 'cargo' => 'Representante legal',
+                'celular' => trim((string) ($in['firmante_celular'] ?? '')),
             ];
         }
 
@@ -265,6 +316,8 @@ class CartaLaboralService
             'fecha_ingreso' => $in['fecha_ingreso'],
             'fecha_retiro' => $in['fecha_retiro'] ?? null,
             'salario' => (int) $in['salario'],
+            'auxilio_transporte' => $destino === 'certificacion' && ! empty($in['incluir_salario']) ? (int) ($in['auxilio_transporte'] ?? 0) : 0,
+            'tipo_contrato' => array_key_exists($in['tipo_contrato'] ?? '', self::TIPOS_CONTRATO) ? $in['tipo_contrato'] : '',
             // La carta a la caja siempre lleva jornada y salario: es lo que piden.
             'incluir_salario' => $destino === 'caja' || ! empty($in['incluir_salario']),
             'incluir_jornada' => $destino === 'caja' || ! empty($in['incluir_jornada']),
@@ -326,6 +379,13 @@ class CartaLaboralService
             }
         }
 
+        if (($d['auxilio_transporte'] ?? 0) > 0 && $d['salario'] > 2 * $smmlv) {
+            $avisos[] = 'Con más de 2 salarios mínimos no hay auxilio de transporte de ley.';
+        }
+        if (($d['firmante']['celular'] ?? '') === '') {
+            $avisos[] = 'Quien firma no tiene celular: la carta sale sin él.';
+        }
+
         if (! $d['empresa']['tiene_sello']) {
             $avisos[] = 'La razón social no tiene sello: la carta sale sin él.';
         }
@@ -343,6 +403,10 @@ class CartaLaboralService
      */
     public function contenido(array $d): array
     {
+        if ($d['destino'] === 'certificacion') {
+            return $this->contenidoCertificacion($d);
+        }
+
         $t = $d['trabajador'];
         $f = $t['genero'] === 'F';
         $empresa = $d['empresa'];
@@ -381,6 +445,8 @@ class CartaLaboralService
             : [];
 
         return [
+            'estilo' => 'caja',
+            'preambulo' => null,
             'ciudad_fecha' => $d['ciudad'].', '.$this->fecha($d['fecha']),
             'destinatario' => $destinatario,
             'titulo' => $d['destino'] === 'caja' ? null : 'A QUIEN INTERESE',
@@ -395,8 +461,117 @@ class CartaLaboralService
             'condiciones' => $condiciones,
             'cierre' => $cierre,
             'despedida' => 'Atentamente,',
-            'firmante' => $d['firmante'] + ['empresa' => $empresa['nombre'], 'documento_formateado' => $this->documento($d['firmante']['documento'])],
+            'firmante' => $this->firmante($d),
         ];
+    }
+
+    /**
+     * La certificación «A quien interese», al estilo de las que expiden las
+     * empresas: CERTIFICA: y una sucesión de «Que…», con el salario en letras
+     * y la fecha de expedición al cierre.
+     */
+    private function contenidoCertificacion(array $d): array
+    {
+        $t = $d['trabajador'];
+        $f = $t['genero'] === 'F';
+        $empresa = $d['empresa'];
+        $retirado = (bool) $d['fecha_retiro'];
+        $docLargo = self::DOCUMENTOS[$t['tipo_doc']] ?? 'documento de identidad';
+
+        $vinculo = $retirado
+            ? 'estuvo '.($f ? 'vinculada' : 'vinculado').' con nuestra compañía desde el '.$this->fecha($d['fecha_ingreso']).' hasta el '.$this->fecha($d['fecha_retiro'])
+            : 'se encuentra '.($f ? 'vinculada' : 'vinculado').' con nuestra compañía desde el '.$this->fecha($d['fecha_ingreso']);
+        $cargo = $d['cargo'] !== '' ? ', desempeñando el cargo de **'.mb_strtoupper($d['cargo']).'**' : '';
+        $contrato = isset(self::TIPOS_CONTRATO[$d['tipo_contrato'] ?? '']) ? ', por medio de '.self::TIPOS_CONTRATO[$d['tipo_contrato']] : '';
+
+        $parrafos = [
+            'Que '.($f ? 'la señora' : 'el señor').' **'.mb_strtoupper($t['nombre']).'**, '.($f ? 'identificada' : 'identificado')
+            ." con {$docLargo} No. **".$this->documento($t['documento'])."**, {$vinculo}{$cargo}{$contrato}.",
+        ];
+
+        if ($d['incluir_jornada'] && $d['jornada'] !== '') {
+            $parrafos[] = 'Que '.($retirado ? 'cumplía' : 'cumple').' una jornada laboral de '.rtrim($d['jornada'], '. ').'.';
+        }
+
+        if ($d['incluir_salario'] && $d['salario'] > 0) {
+            $quien = $f ? 'la trabajadora' : 'el trabajador';
+            $texto = 'Que '.$quien.' '.($retirado ? 'devengaba' : 'devenga').' un salario básico mensual';
+            $equivale = $this->equivalenciaMinimo($d['salario'], (int) $d['anio']);
+            $texto .= $equivale ? " {$equivale}, correspondiente a la suma de " : ' de ';
+            $texto .= $this->pesosMcte($d['salario']);
+            if (($d['auxilio_transporte'] ?? 0) > 0) {
+                $texto .= ', más un auxilio de transporte mensual de '.$this->pesosMcte($d['auxilio_transporte'])
+                    .', de acuerdo con la normatividad vigente';
+            }
+            $parrafos[] = $texto.'.';
+        }
+
+        $fecha = Carbon::parse($d['fecha'])->locale('es');
+        $dia = (int) $fecha->day;
+        $expedicion = ($dia === 1 ? 'al primer (1) día' : 'a los '.$this->numero($dia).' días')
+            .' del mes de '.$fecha->translatedFormat('F').' de '.$fecha->year;
+
+        return [
+            'estilo' => 'certificacion',
+            'ciudad_fecha' => null,
+            'destinatario' => [],
+            'preambulo' => 'Quien suscribe, en nombre de **'.$empresa['nombre'].'**,',
+            'titulo' => 'CERTIFICA:',
+            'asunto' => null,
+            'saludo' => null,
+            'parrafos' => $parrafos,
+            'condiciones_intro' => null,
+            'condiciones' => [],
+            'cierre' => 'La presente certificación se expide a solicitud '.($f ? 'de la interesada' : 'del interesado')
+                .", en {$d['ciudad']}, {$expedicion}.",
+            'despedida' => 'Cordialmente,',
+            'firmante' => $this->firmante($d),
+        ];
+    }
+
+    /** Quien firma, como sale en la carta: sin su documento, con su celular. */
+    private function firmante(array $d): array
+    {
+        return [
+            'nombre' => $d['firmante']['nombre'],
+            'cargo' => $d['firmante']['cargo'],
+            'celular' => $this->celular($d['firmante']['celular'] ?? ''),
+            'empresa' => $d['empresa']['nombre'],
+        ];
+    }
+
+    /** "3001563615" → "300 156 3615"; lo que no sea un celular de 10 dígitos queda igual. */
+    private function celular(string $numero): string
+    {
+        $digitos = preg_replace('/\D/', '', $numero);
+
+        return strlen($digitos) === 10
+            ? substr($digitos, 0, 3).' '.substr($digitos, 3, 3).' '.substr($digitos, 6)
+            : trim($numero);
+    }
+
+    /** "UN MILLÓN … PESOS M/CTE ($1.750.905)" */
+    private function pesosMcte(int $valor): string
+    {
+        $letras = NumeroALetras::convertir($valor);
+        $de = str_ends_with($letras, 'MILLÓN') || str_ends_with($letras, 'MILLONES') ? ' DE' : '';
+
+        return $letras.$de.' PESOS M/CTE ($'.number_format($valor, 0, ',', '.').')';
+    }
+
+    /** "equivalente al salario mínimo…" — solo cierto con el mínimo del año en curso. */
+    private function equivalenciaMinimo(int $valor, int $anio): ?string
+    {
+        if ($anio !== (int) now()->year) {
+            return null;
+        }
+        $smmlv = (int) round(ConfiguracionBrynex::salarioMinimo());
+
+        return match ($valor) {
+            $smmlv => 'equivalente al salario mínimo legal mensual vigente',
+            (int) round($smmlv / 2) => 'equivalente a la mitad del salario mínimo legal mensual vigente',
+            default => null,
+        };
     }
 
     private function salario(int $valor, int $anio): string
@@ -436,16 +611,48 @@ class CartaLaboralService
 
     // ── Salidas ─────────────────────────────────────────────────────
 
-    /** Las tres imágenes de la carta, como ruta en disco o null si no existen. */
+    /**
+     * Las imágenes de la carta, como ruta en disco o null si no existen. La
+     * certificación lleva además el logo de fondo, como marca de agua.
+     */
     public function imagenes(array $d): array
     {
         $existe = fn (string $ruta) => file_exists($ruta) ? $ruta : null;
+        $logo = $existe(self::rutaLogo($d['empresa']['nit']));
 
         return [
-            'logo' => $existe(self::rutaLogo($d['empresa']['nit'])),
+            'logo' => $logo,
             'sello' => $existe(self::rutaSello($d['empresa']['nit'])),
             'firma' => $d['firmante']['documento'] ? $existe(self::rutaFirma($d['firmante']['documento'])) : null,
+            'marca' => $logo && $d['destino'] === 'certificacion' ? $this->marcaAgua($logo) : null,
         ];
+    }
+
+    /**
+     * El logo casi transparente, para ponerlo de fondo. Se hace la imagen en
+     * vez de usar opacidad porque el Word no la tiene. Queda en el temporal,
+     * con el mtime del logo en el nombre: si cambian el logo, se rehace.
+     */
+    private function marcaAgua(string $logo): ?string
+    {
+        $destino = sys_get_temp_dir().'/carta_marca_'.md5($logo.filemtime($logo)).'.png';
+        if (file_exists($destino)) {
+            return $destino;
+        }
+
+        $img = @imagecreatefrompng($logo);
+        if (! $img) {
+            return null;
+        }
+        imagepalettetotruecolor($img);
+        imagealphablending($img, false);
+        imagesavealpha($img, true);
+        // Suma transparencia a cada pixel: lo opaco queda al ~17 %, lo transparente sigue igual.
+        imagefilter($img, IMG_FILTER_COLORIZE, 0, 0, 0, 105);
+        imagepng($img, $destino, 6);
+        imagedestroy($img);
+
+        return $destino;
     }
 
     public function pdf(array $d): \Barryvdh\DomPDF\PDF
@@ -456,7 +663,7 @@ class CartaLaboralService
             $this->imagenes($d)
         );
 
-        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('pdf.carta_laboral', [
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView($d['destino'] === 'certificacion' ? 'pdf.carta_laboral_certificacion' : 'pdf.carta_laboral', [
             'c' => $this->contenido($d),
             'empresa' => $d['empresa'],
             'img' => $img,
@@ -486,45 +693,77 @@ class CartaLaboralService
         $c = $this->contenido($d);
         $img = $this->imagenes($d);
         $empresa = $d['empresa'];
+        $certificacion = $c['estilo'] === 'certificacion';
+        $azul = '1F3B64';
 
         $word = new PhpWord;
         $word->setDefaultFontName('Arial');
         $word->setDefaultFontSize(11);
 
         $seccion = $word->addSection([
-            'marginTop' => 1700, 'marginBottom' => 1400,
+            'marginTop' => $certificacion ? 2100 : 1700, 'marginBottom' => 1400,
             'marginLeft' => 1500, 'marginRight' => 1500,
             'headerHeight' => 500, 'footerHeight' => 500,
         ]);
 
-        // Membrete: logo a la izquierda, nombre y NIT a la derecha.
-        $tabla = $seccion->addHeader()->addTable(['width' => 100 * 50, 'unit' => 'pct']);
-        $fila = $tabla->addRow();
-        $celdaLogo = $fila->addCell(3500, ['valign' => 'center']);
-        if ($img['logo']) {
-            $celdaLogo->addImage($img['logo'], ['height' => 45]);
+        $encabezado = $seccion->addHeader();
+        if ($certificacion) {
+            // Membrete centrado: logo, nombre y NIT; el logo también de fondo.
+            if ($img['logo']) {
+                $encabezado->addImage($img['logo'], ['height' => 40, 'alignment' => Jc::CENTER]);
+            }
+            $encabezado->addText($empresa['nombre'], ['bold' => true, 'size' => 16, 'color' => $azul], ['alignment' => Jc::CENTER, 'spaceAfter' => 0]);
+            $encabezado->addText('NIT. '.$empresa['nit_formateado'], ['bold' => true, 'size' => 10.5], [
+                'alignment' => Jc::CENTER, 'spaceAfter' => 0,
+                'borderBottomSize' => 12, 'borderBottomColor' => $azul,
+            ]);
+            if ($img['marca']) {
+                [$ancho, $alto] = getimagesize($img['marca']);
+                $anchoMarca = 340;
+                $encabezado->addWatermark($img['marca'], [
+                    'width' => $anchoMarca, 'height' => (int) round($anchoMarca * $alto / max(1, $ancho)),
+                    'posHorizontal' => 'center', 'posHorizontalRel' => 'page',
+                    'posVertical' => 'center', 'posVerticalRel' => 'page',
+                ]);
+            }
+        } else {
+            // Membrete: logo a la izquierda, nombre y NIT a la derecha.
+            $tabla = $encabezado->addTable(['width' => 100 * 50, 'unit' => 'pct']);
+            $fila = $tabla->addRow();
+            $celdaLogo = $fila->addCell(3500, ['valign' => 'center']);
+            if ($img['logo']) {
+                $celdaLogo->addImage($img['logo'], ['height' => 45]);
+            }
+            $celdaNombre = $fila->addCell(5500, ['valign' => 'center']);
+            $celdaNombre->addText($empresa['nombre'], ['bold' => true, 'size' => 12], ['alignment' => Jc::END, 'spaceAfter' => 0]);
+            $celdaNombre->addText('NIT: '.$empresa['nit_formateado'], ['size' => 10], ['alignment' => Jc::END, 'spaceAfter' => 0]);
         }
-        $celdaNombre = $fila->addCell(5500, ['valign' => 'center']);
-        $celdaNombre->addText($empresa['nombre'], ['bold' => true, 'size' => 12], ['alignment' => Jc::END, 'spaceAfter' => 0]);
-        $celdaNombre->addText('NIT: '.$empresa['nit_formateado'], ['size' => 10], ['alignment' => Jc::END, 'spaceAfter' => 0]);
 
         $pie = $seccion->addFooter();
-        foreach ($this->lineasPie($empresa) as $linea) {
-            $pie->addText($linea, ['size' => 8.5, 'color' => '555555'], ['alignment' => Jc::CENTER, 'spaceAfter' => 0]);
+        foreach ($this->lineasPie($empresa) as $i => $linea) {
+            $pie->addText($linea, ['size' => 8.5, 'color' => '555555'], ['alignment' => Jc::CENTER, 'spaceAfter' => 0]
+                + ($certificacion && $i === 0 ? ['borderTopSize' => 6, 'borderTopColor' => '94A3B8'] : []));
         }
 
         $parrafo = ['spaceAfter' => 200, 'lineHeight' => 1.15, 'alignment' => Jc::BOTH];
         $sinEspacio = ['spaceAfter' => 0];
 
-        $seccion->addText($c['ciudad_fecha'], [], ['spaceAfter' => 360]);
+        if ($c['ciudad_fecha']) {
+            $seccion->addText($c['ciudad_fecha'], [], ['spaceAfter' => 360]);
+        }
 
         if ($c['destinatario']) {
             foreach ($c['destinatario'] as $i => $linea) {
                 $this->runs($seccion->addTextRun($i === count($c['destinatario']) - 1 ? ['spaceAfter' => 360] : $sinEspacio), $linea);
             }
         }
+        if ($c['preambulo']) {
+            $this->runs($seccion->addTextRun(['alignment' => Jc::CENTER, 'spaceBefore' => 360, 'spaceAfter' => 240]), $c['preambulo']);
+        }
         if ($c['titulo']) {
-            $seccion->addText($c['titulo'], ['bold' => true, 'size' => 12], ['alignment' => Jc::CENTER, 'spaceBefore' => 240, 'spaceAfter' => 480]);
+            $seccion->addText($c['titulo'], ['bold' => true, 'size' => $certificacion ? 15 : 12, 'color' => $certificacion ? $azul : null], [
+                'alignment' => Jc::CENTER, 'spaceBefore' => $certificacion ? 120 : 240, 'spaceAfter' => $certificacion ? 360 : 480,
+            ]);
         }
         if ($c['asunto']) {
             $this->runs($seccion->addTextRun(['spaceAfter' => 360]), $c['asunto']);
@@ -553,14 +792,9 @@ class CartaLaboralService
         } else {
             $celda->addTextBreak(3);
         }
-        $f = $c['firmante'];
-        $celda->addText('_______________________________', [], $sinEspacio);
-        $celda->addText($f['nombre'], ['bold' => true], $sinEspacio);
-        $celda->addText($f['tipo_doc'].' '.$f['documento_formateado'], [], $sinEspacio);
-        if ($f['cargo']) {
-            $celda->addText($f['cargo'], [], $sinEspacio);
+        foreach ($this->lineasFirma($c['firmante']) as [$linea, $negrilla]) {
+            $celda->addText($linea, $negrilla ? ['bold' => true] : [], $sinEspacio);
         }
-        $celda->addText($f['empresa'], [], $sinEspacio);
         $celdaSello = $fila->addCell(3800, ['valign' => 'center']);
         if ($img['sello']) {
             $celdaSello->addImage($img['sello'], ['height' => 75]);
@@ -570,6 +804,18 @@ class CartaLaboralService
         IOFactory::createWriter($word, 'Word2007')->save($ruta);
 
         return $ruta;
+    }
+
+    /** El bloque bajo la firma: [texto, negrilla]. El PDF y el Word lo pintan igual. */
+    public function lineasFirma(array $firmante): array
+    {
+        return array_values(array_filter([
+            ['_______________________________', false],
+            [$firmante['nombre'], true],
+            $firmante['cargo'] ? [mb_strtoupper($firmante['cargo']), false] : null,
+            $firmante['celular'] ? ['Cel. '.$firmante['celular'], false] : null,
+            [$firmante['empresa'], false],
+        ]));
     }
 
     /** Agrega a un TextRun el texto con sus tramos en negrilla. */
@@ -589,7 +835,8 @@ class CartaLaboralService
             $lineas[] = $empresa['direccion'];
         }
         $contacto = array_filter([
-            $empresa['telefono'] ? 'Tel. '.$empresa['telefono'] : null,
+            $empresa['telefono'] ? (preg_match('/^3\d{9}$/', preg_replace('/\D/', '', $empresa['telefono'])) ? 'Cel. ' : 'Tel. ')
+                .$this->celular($empresa['telefono']) : null,
             $empresa['correo'] ?: null,
         ]);
         if ($contacto) {

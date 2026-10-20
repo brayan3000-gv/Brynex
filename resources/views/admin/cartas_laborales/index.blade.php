@@ -106,7 +106,7 @@
                 <button type="button" class="cl-tab" :class="{sel: f.destino === 'certificacion'}" @click="f.destino = 'certificacion'; revisar()">📄 Certificación laboral</button>
             </div>
             <p class="cl-nota" style="margin:.6rem 0 0" x-show="f.destino === 'caja'">Va dirigida a la caja e incluye jornada y salario del año: es lo que piden para el subsidio familiar monetario.</p>
-            <p class="cl-nota" style="margin:.6rem 0 0" x-show="f.destino === 'certificacion'" x-cloak>«A quien interese». Escoge abajo si lleva jornada y salario.</p>
+            <p class="cl-nota" style="margin:.6rem 0 0" x-show="f.destino === 'certificacion'" x-cloak>«A quien interese»: membrete centrado, el logo de fondo y «CERTIFICA:». Escoge abajo si lleva jornada, salario y auxilio de transporte.</p>
         </div>
 
         <div class="cl-card" x-show="empresa">
@@ -149,6 +149,15 @@
                     </select>
                 </div>
                 <div class="cl-campo"><label>Cargo</label><input name="cargo" x-model="f.cargo"></div>
+                <div class="cl-campo" x-show="f.destino === 'certificacion'"><label>Tipo de contrato</label>
+                    <select name="tipo_contrato" x-model="f.tipo_contrato">
+                        <option value="indefinido">Término indefinido</option>
+                        <option value="fijo">Término fijo</option>
+                        <option value="obra">Obra o labor</option>
+                        <option value="aprendizaje">Aprendizaje</option>
+                        <option value="">— No mencionarlo —</option>
+                    </select>
+                </div>
                 <div class="cl-campo"><label>Fecha de ingreso</label><input type="date" name="fecha_ingreso" x-model="f.fecha_ingreso" required></div>
                 <div class="cl-campo"><label>Fecha de retiro (si ya salió)</label><input type="date" name="fecha_retiro" x-model="f.fecha_retiro"></div>
             </div>
@@ -164,6 +173,11 @@
             </div>
             <div class="cl-grid">
                 <div class="cl-campo"><label>Salario mensual ($)</label><input type="number" name="salario" x-model.number="f.salario" min="0" required></div>
+                <div class="cl-campo" x-show="f.destino === 'certificacion' && f.incluir_salario">
+                    <label>Auxilio de transporte ($)</label>
+                    <input type="number" name="auxilio_transporte" x-model.number="f.auxilio_transporte" min="0">
+                    <div class="cl-nota" style="margin-top:.2rem">En 0 no sale. Es de ley hasta 2 mínimos.</div>
+                </div>
                 <div class="cl-campo"><label>Año de las condiciones</label><input type="number" name="anio" x-model.number="f.anio" min="2000" max="2100" required></div>
                 <div class="cl-campo"><label>Días al mes</label><input type="number" name="dias_mes" x-model.number="f.dias_mes" min="1" max="30" @input="f.horas_mes = f.dias_mes >= 30 ? 210 : f.dias_mes * 7"></div>
                 <div class="cl-campo"><label>Horas al mes</label><input type="number" name="horas_mes" x-model.number="f.horas_mes" min="0" max="400"></div>
@@ -190,8 +204,8 @@
         <div class="cl-card">
             <h2>7. Quién firma</h2>
             <div class="cl-tabs" style="margin-bottom:.8rem">
-                <button type="button" class="cl-tab" :class="{sel: f.firmante_tipo === 'representante'}" @click="f.firmante_tipo = 'representante'; revisar()">👤 Representante legal</button>
-                <button type="button" class="cl-tab" :class="{sel: f.firmante_tipo === 'usuario'}" @click="f.firmante_tipo = 'usuario'; revisar()">🧑‍💼 Un usuario</button>
+                <button type="button" class="cl-tab" :class="{sel: f.firmante_tipo === 'representante'}" @click="f.firmante_tipo = 'representante'; f.firmante_celular = representante?.celular || ''; revisar()">👤 Representante legal</button>
+                <button type="button" class="cl-tab" :class="{sel: f.firmante_tipo === 'usuario'}" @click="f.firmante_tipo = 'usuario'; escogerUsuario(); revisar()">🧑‍💼 Un usuario</button>
             </div>
 
             <div x-show="f.firmante_tipo === 'representante'">
@@ -199,7 +213,7 @@
                     <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
                         <div>
                             <div style="font-weight:700" x-text="representante.nombre"></div>
-                            <div class="cl-nota" x-text="representante.tipo_doc + ' ' + representante.documento + ' · Representante legal'"></div>
+                            <div class="cl-nota">Representante legal</div>
                         </div>
                         <span class="cl-badge" :class="representante.tiene_firma ? 'cl-ok' : 'cl-gris'" x-text="representante.tiene_firma ? '✓ Firma guardada' : 'Sin firma: línea para firmar a mano'"></span>
                         <button type="button" class="cl-btn sec" @click="abrirFirma(representante.documento, representante.nombre)" x-text="representante.tiene_firma ? 'Cambiar firma' : '✍️ Subir o dibujar firma'"></button>
@@ -213,14 +227,23 @@
             <div x-show="f.firmante_tipo === 'usuario'" x-cloak>
                 <div class="cl-grid">
                     <div class="cl-campo"><label>Usuario</label>
-                        <select name="firmante_user_id" x-model.number="f.firmante_user_id" @change="f.firmante_cargo = usuarioSel()?.cargo || f.firmante_cargo">
+                        <select name="firmante_user_id" x-model.number="f.firmante_user_id" @change="escogerUsuario()">
                             <option value="">— Escoge —</option>
                             <template x-for="u in usuarios" :key="u.id">
-                                <option :value="u.id" x-text="u.nombre + ' · ' + u.cedula" :selected="u.id === f.firmante_user_id"></option>
+                                <option :value="u.id" x-text="u.nombre" :selected="u.id === f.firmante_user_id"></option>
                             </template>
                         </select>
                     </div>
-                    <div class="cl-campo"><label>Cargo con que firma</label><input name="firmante_cargo" x-model="f.firmante_cargo" placeholder="Ej. Coordinadora de talento humano"></div>
+                    <div class="cl-campo"><label>Cargo con que firma</label>
+                        <select x-model="f.cargo_opcion" @change="if (f.cargo_opcion !== 'otro') f.firmante_cargo = f.cargo_opcion; revisar()">
+                            <option value="">— Escoge —</option>
+                            <template x-for="c in cargos" :key="c">
+                                <option :value="c" x-text="c" :selected="c === f.cargo_opcion"></option>
+                            </template>
+                            <option value="otro">Otro…</option>
+                        </select>
+                    </div>
+                    <div class="cl-campo" x-show="f.cargo_opcion === 'otro'"><label>¿Cuál cargo?</label><input name="firmante_cargo" x-model="f.firmante_cargo" placeholder="Ej. Coordinadora de talento humano"></div>
                 </div>
                 <template x-if="usuarioSel()">
                     <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:.7rem">
@@ -229,6 +252,13 @@
                     </div>
                 </template>
             </div>
+        </div>
+
+        <div class="cl-card" style="margin-top:-.6rem">
+            <div class="cl-grid">
+                <div class="cl-campo"><label>Celular de quien firma</label><input name="firmante_celular" x-model.trim="f.firmante_celular" inputmode="tel" placeholder="Ej. 300 156 3615"></div>
+            </div>
+            <p class="cl-nota" style="margin:.4rem 0 0">Sale bajo la firma en lugar de la cédula, para que puedan verificar la carta.</p>
         </div>
 
         <div class="cl-error" x-show="error" x-text="error" x-cloak></div>
@@ -314,6 +344,7 @@ function cartaLaboral() {
         cliente: null, contratos: [],
         empresa: null, representante: null,
         usuarios: @json($usuarios),
+        cargos: @json($cargos),
         f: {},
         jornadaManual: false,
         avisos: [], error: '', mensaje: '',
@@ -324,6 +355,17 @@ function cartaLaboral() {
         pesos(v) { return Number(v || 0).toLocaleString('es-CO'); },
 
         usuarioSel() { return this.usuarios.find(u => u.id === this.f.firmante_user_id) || null; },
+
+        // Al escoger quien firma se traen el cargo y el celular de su última carta.
+        escogerUsuario() {
+            const u = this.usuarioSel();
+            if (!u) return;
+            if (u.cargo) {
+                this.f.firmante_cargo = u.cargo;
+                this.f.cargo_opcion = this.cargos.includes(u.cargo) ? u.cargo : 'otro';
+            }
+            this.f.firmante_celular = u.celular || '';
+        },
 
         async buscar() {
             this.buscando = true; this.listo = false; this.error = '';
@@ -351,10 +393,11 @@ function cartaLaboral() {
                     trabajador_nombre: p.trabajador_nombre, trabajador_tipo_doc: p.trabajador_tipo_doc,
                     trabajador_documento: p.trabajador_documento, trabajador_genero: p.trabajador_genero,
                     cargo: p.cargo, fecha_ingreso: p.fecha_ingreso, fecha_retiro: p.fecha_retiro || '',
-                    salario: p.salario, anio: p.anio, dias_mes: p.dias_mes, horas_mes: p.horas_mes, jornada: p.jornada,
+                    salario: p.salario, auxilio_transporte: p.auxilio_transporte, tipo_contrato: p.tipo_contrato, anio: p.anio, dias_mes: p.dias_mes, horas_mes: p.horas_mes, jornada: p.jornada,
                     incluir_jornada: false, incluir_salario: true,
                     caja_nombre: p.caja_nombre, ciudad: p.ciudad, fecha: p.fecha,
-                    firmante_tipo: 'representante', firmante_user_id: '', firmante_cargo: '',
+                    firmante_tipo: 'representante', firmante_user_id: '', firmante_cargo: '', cargo_opcion: '',
+                    firmante_celular: p.representante?.celular || '',
                     empresa_direccion: p.empresa?.direccion || '', empresa_telefono: p.empresa?.telefono || '', empresa_correo: p.empresa?.correo || '',
                 };
                 this.listo = true;

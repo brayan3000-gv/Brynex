@@ -39,9 +39,9 @@ class CartaLaboralController extends Controller
             ->limit(40)
             ->get();
 
-        // El cargo con que firmó cada usuario la última vez (pluck deja el último por llave).
-        $cargos = CartaLaboral::where('aliado_id', $aliadoId)->whereNotNull('firmante_user_id')
-            ->orderBy('id')->pluck('firmante_cargo', 'firmante_user_id');
+        // Cargo y celular con que firmó cada usuario la última vez (keyBy deja la última por llave).
+        $ultimas = CartaLaboral::where('aliado_id', $aliadoId)->whereNotNull('firmante_user_id')
+            ->orderBy('id')->get(['firmante_user_id', 'firmante_cargo', 'datos'])->keyBy('firmante_user_id');
 
         return view('admin.cartas_laborales.index', [
             'historial' => $historial,
@@ -50,8 +50,10 @@ class CartaLaboralController extends Controller
                 'nombre' => $u->nombre,
                 'cedula' => $u->cedula,
                 'tiene_firma' => $u->cedula && file_exists(CartaLaboralService::rutaFirma($u->cedula)),
-                'cargo' => $cargos[$u->id] ?? '',
+                'cargo' => $ultimas[$u->id]->firmante_cargo ?? '',
+                'celular' => ($ultimas[$u->id]->datos['firmante']['celular'] ?? '') ?: (string) $u->telefono,
             ])->values(),
+            'cargos' => CartaLaboralService::CARGOS_FIRMANTE,
             'cedulaInicial' => request('cedula'),
         ]);
     }
@@ -204,6 +206,8 @@ class CartaLaboralController extends Controller
             'fecha_ingreso' => 'required|date',
             'fecha_retiro' => 'nullable|date|after_or_equal:fecha_ingreso',
             'salario' => 'required|integer|min:0',
+            'auxilio_transporte' => 'nullable|integer|min:0',
+            'tipo_contrato' => 'nullable|in:indefinido,fijo,obra,aprendizaje',
             'incluir_salario' => 'nullable|boolean',
             'incluir_jornada' => 'nullable|boolean',
             'dias_mes' => 'nullable|integer|min:1|max:30',
@@ -216,13 +220,14 @@ class CartaLaboralController extends Controller
             'firmante_tipo' => 'required|in:representante,usuario',
             'firmante_user_id' => 'nullable|required_if:firmante_tipo,usuario|integer',
             'firmante_cargo' => 'nullable|required_if:firmante_tipo,usuario|string|max:120',
+            'firmante_celular' => 'nullable|string|max:30',
             'empresa_direccion' => 'nullable|string|max:200',
             'empresa_telefono' => 'nullable|string|max:80',
             'empresa_correo' => 'nullable|string|max:120',
         ], [
             'caja_nombre.required_if' => 'Escribe el nombre de la caja de compensación.',
             'firmante_user_id.required_if' => 'Escoge el usuario que firma.',
-            'firmante_cargo.required_if' => 'Escribe el cargo de quien firma.',
+            'firmante_cargo.required_if' => 'Escoge o escribe el cargo de quien firma.',
         ]);
     }
 }

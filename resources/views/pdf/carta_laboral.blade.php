@@ -108,11 +108,9 @@
             @else
                 <div class="espacio"></div>
             @endif
-            <p>_______________________________</p>
-            <p><strong>{{ $c['firmante']['nombre'] }}</strong></p>
-            <p>{{ $c['firmante']['tipo_doc'] }} {{ $c['firmante']['documento_formateado'] }}</p>
-            @if($c['firmante']['cargo'])<p>{{ $c['firmante']['cargo'] }}</p>@endif
-            <p>{{ $c['firmante']['empresa'] }}</p>
+            @foreach(app(\App\Services\CartaLaboralService::class)->lineasFirma($c['firmante']) as [$linea, $enNegrilla])
+                <p>@if($enNegrilla)<strong>{{ $linea }}</strong>@else{{ $linea }}@endif</p>
+            @endforeach
         </td>
         <td class="sello">
             @if($img['sello'])<img src="{{ $img['sello'] }}">@endif
