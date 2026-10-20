@@ -28,7 +28,7 @@
     .firma { width: 100%; border-collapse: collapse; margin-top: 4pt; }
     .firma td { vertical-align: bottom; padding: 0; }
     .firma .img-firma { height: 1.8cm; }
-    .firma .img-sello-firma { max-height: 2.8cm; max-width: 6cm; margin-bottom: -.35cm; }
+    .firma .img-sello-firma { max-height: 2.8cm; max-width: 6cm; margin-bottom: -.6cm; }
     .firma .espacio { height: 1.8cm; }
     .firma p { margin: 0; text-align: left; line-height: 1.3; }
     .firma .sello { text-align: center; vertical-align: middle; }

@@ -616,6 +616,7 @@ class CartaLaboralService
         $existe = fn (string $ruta) => file_exists($ruta) ? $ruta : null;
         $logo = $existe(self::rutaLogo($d['empresa']['nit']));
         $sello = $existe(self::rutaSello($d['empresa']['nit']));
+        $sello = $sello ? ($this->selloInclinado($sello) ?? $sello) : null;
 
         // Sellos que ya traen la firma: el sello va sobre la línea y no se repite al lado.
         if (! empty($d['sello_en_firma']) && $sello) {
@@ -627,11 +628,46 @@ class CartaLaboralService
 
         return [
             'logo' => $logo,
-            'sello' => $existe(self::rutaSello($d['empresa']['nit'])),
+            'sello' => $sello,
             'firma' => $d['firmante']['documento'] ? $existe(self::rutaFirma($d['firmante']['documento'])) : null,
             'firma_es_sello' => false,
             'marca' => $logo && $d['destino'] === 'certificacion' ? $this->marcaAgua($logo) : null,
         ];
+    }
+
+    /** Grados que se tuerce el sello, para que parezca puesto a mano. */
+    private const INCLINACION_SELLO = 6;
+
+    /**
+     * El sello levemente torcido, como cuando lo ponen con la mano. Se rota la
+     * imagen (y no con CSS) para que el PDF y el Word salgan iguales. Queda en
+     * el temporal con el mtime en el nombre: si cambian el sello, se rehace.
+     */
+    private function selloInclinado(string $sello): ?string
+    {
+        $destino = sys_get_temp_dir().'/carta_sello_'.md5($sello.filemtime($sello).self::INCLINACION_SELLO).'.png';
+        if (file_exists($destino)) {
+            return $destino;
+        }
+
+        $img = @imagecreatefrompng($sello);
+        if (! $img) {
+            return null;
+        }
+        imagepalettetotruecolor($img);
+        imagealphablending($img, false);
+        imagesavealpha($img, true);
+        $rotada = imagerotate($img, self::INCLINACION_SELLO, imagecolorallocatealpha($img, 0, 0, 0, 127));
+        imagedestroy($img);
+        if (! $rotada) {
+            return null;
+        }
+        imagealphablending($rotada, false);
+        imagesavealpha($rotada, true);
+        imagepng($rotada, $destino, 6);
+        imagedestroy($rotada);
+
+        return $destino;
     }
 
     /**
