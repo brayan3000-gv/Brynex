@@ -40,13 +40,13 @@ class GarvisFotoJob implements ShouldQueue
         return [10, 30];
     }
 
-    public function __construct(protected string $mediaId, protected ?string $mimeType = null, protected string $leyenda = '') {}
+    public function __construct(protected string $mediaId, protected ?string $mimeType = null, protected string $leyenda = '', protected string $canal = GarvisService::CANAL_BRYGAR) {}
 
     public function handle(GarvisService $garvis, WhatsappApiService $whatsappApi): void
     {
         $this->limpiarViejas();
 
-        $bajada = $whatsappApi->descargarMedia($this->mediaId, $garvis->config());
+        $bajada = $whatsappApi->descargarMedia($this->mediaId, $garvis->config($this->canal));
 
         if (! $bajada) {
             // Meta a veces tarda en servir el archivo; los reintentos lo cubren.
@@ -63,7 +63,7 @@ class GarvisFotoJob implements ShouldQueue
         // si APP_URL dice http y Apache redirige a https.
         $enlace = url(URL::temporarySignedRoute('garvis.foto', now()->addHours(self::VIGENCIA_HORAS), ['archivo' => $nombre], false));
 
-        $garvis->pasarAGarvis(trim('📱 🖼️ '.$this->leyenda)."\n\nFoto: ".$enlace);
+        $garvis->pasarAGarvis(trim('📱 🖼️ '.$this->leyenda)."\n\nFoto: ".$enlace, $this->canal);
     }
 
     /** Pasado un día nadie va a volver a mirarlas, y son fotos del celular de Brayan. */
@@ -82,6 +82,6 @@ class GarvisFotoJob implements ShouldQueue
     public function failed(\Throwable $e): void
     {
         Log::error('GARVIS: la foto no llegó', ['error' => $e->getMessage()]);
-        app(GarvisService::class)->responder('No pude bajar tu foto de WhatsApp. ¿Me la mandas otra vez?');
+        app(GarvisService::class)->responder('No pude bajar tu foto de WhatsApp. ¿Me la mandas otra vez?', $this->canal);
     }
 }

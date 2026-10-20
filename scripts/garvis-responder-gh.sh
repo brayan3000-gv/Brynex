@@ -4,7 +4,8 @@
 # por la entrada estándar y mandárselo a Brayan por WhatsApp con Brynex.
 #
 # El comando que pida el cliente llega en SSH_ORIGINAL_COMMAND y solo se mira la primera
-# palabra, contra una lista cerrada:
+# palabra, contra una lista cerrada (más una segunda, `gastos`, para contestar desde la
+# línea de gastos):
 #   responder  un texto (lo de siempre; también si no pide nada)
 #   imagen     una captura, JPEG o PNG
 #   voz        un texto corto que Gemini lee y sale como nota de voz
@@ -13,8 +14,17 @@
 #              una que exista. Solo nombres: ni saldos ni montos.
 set -euo pipefail
 
-modo="${SSH_ORIGINAL_COMMAND:-responder}"
-modo="${modo%% *}"
+pedido="${SSH_ORIGINAL_COMMAND:-responder}"
+modo="${pedido%% *}"
+
+# Una segunda palabra, y solo esta, cambia la línea por la que sale: `responder gastos`
+# contesta desde la línea de gastos y no desde la de Brygar. Cualquier otra cosa se niega.
+linea=()
+case "$pedido" in
+  "$modo") ;;
+  "$modo gastos") linea=(--gastos) ;;
+  *) echo "Pedido no permitido." >&2; exit 1 ;;
+esac
 
 cd /var/www/brynex
 
@@ -28,7 +38,7 @@ case "$modo" in
       exit 1
     fi
 
-    printf '%s' "$texto" | sudo -u www-data php artisan garvis:responder
+    printf '%s' "$texto" | sudo -u www-data php artisan garvis:responder "${linea[@]}"
     ;;
 
   voz)
@@ -39,7 +49,7 @@ case "$modo" in
       exit 1
     fi
 
-    printf '%s' "$texto" | sudo -u www-data php artisan garvis:voz
+    printf '%s' "$texto" | sudo -u www-data php artisan garvis:voz "${linea[@]}"
     ;;
 
   gasto)
@@ -74,7 +84,7 @@ case "$modo" in
     fi
 
     # Qué es de verdad el archivo lo decide el comando, mirando sus bytes.
-    sudo -u www-data php artisan garvis:imagen "garvis/$(basename "$archivo")"
+    sudo -u www-data php artisan garvis:imagen "garvis/$(basename "$archivo")" "${linea[@]}"
     ;;
 
   *)

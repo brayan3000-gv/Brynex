@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class GarvisImagen extends Command
 {
-    protected $signature = 'garvis:imagen {ruta : Ruta en el disco local, dentro de garvis/}';
+    protected $signature = 'garvis:imagen {ruta : Ruta en el disco local, dentro de garvis/} {--gastos : Desde la línea de gastos y no desde la de Brygar}';
 
     protected $description = 'Envía a Brayan por WhatsApp una captura de GARVIS (JPEG o PNG)';
 
@@ -47,7 +47,7 @@ class GarvisImagen extends Command
         Storage::disk('local')->move($ruta, $conNombre);
 
         try {
-            $enviada = $garvis->enviarImagen($conNombre, $mime);
+            $enviada = $garvis->enviarImagen($conNombre, $mime, $this->option('gastos') ? GarvisService::CANAL_GASTOS : GarvisService::CANAL_BRYGAR);
         } finally {
             // Ya está en el issue; aquí no tiene por qué quedarse.
             Storage::disk('local')->delete($conNombre);

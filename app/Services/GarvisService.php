@@ -19,10 +19,11 @@ use Illuminate\Support\Str;
 /**
  * GARVIS: el asistente de Brayan, que vive en el repo brayan3000-gv/garvis.
  *
- * Brayan le escribe al número de Brygar. Sus mensajes de texto, sus notas de voz
+ * Brayan le escribe al número de Brygar, o a la línea aparte de sus gastos. Sus mensajes de texto, sus notas de voz
  * (ya pasadas a texto, ver GarvisNotaDeVozJob) y sus fotos (GarvisFotoJob) no entran a las
  * conversaciones de Brynex: se vuelven un comentario en el issue del día del
- * repo, y un workflow de ese repo le contesta. La respuesta vuelve por
+ * repo, y un workflow de ese repo le contesta. Cada línea es un canal con su propio
+ * issue del día («WhatsApp …» o «Gastos …»), y la respuesta sale por la misma línea. La respuesta vuelve por
  * `php artisan garvis:responder`, que corre en este servidor.
  *
  * Solo se desvía con la firma de Meta verificada. El webhook de Brynex acepta
@@ -34,6 +35,12 @@ class GarvisService
 {
     /** Brygar: su número es el de los avisos de despliegue, al que Brayan ya escribe. */
     public const ALIADO_ID = 2;
+
+    /** El número de Brygar: todo lo que no es de gastos. Es también la etiqueta de su issue. */
+    public const CANAL_BRYGAR = 'whatsapp';
+
+    /** La línea aparte para los gastos personales de Brayan. */
+    public const CANAL_GASTOS = 'gastos';
 
     /** El mensaje de WhatsApp más largo que acepta Meta es 4096; se deja margen. */
     private const MAX_TROZO = 3500;
@@ -59,9 +66,9 @@ class GarvisService
             return false;
         }
 
-        // Solo lo que le escribe al número de Brygar: a los números propios de
-        // otros aliados les sigue escribiendo como cualquier cliente.
-        if ($phoneNumberId !== ($this->config()->credencialesEfectivas()['phone_number_id'] ?? null)) {
+        // Solo lo que le escribe al número de Brygar o a la línea de gastos: a los
+        // números propios de otros aliados les sigue escribiendo como cualquier cliente.
+        if (! $this->canalDe($phoneNumberId)) {
             return false;
         }
 
@@ -74,10 +81,25 @@ class GarvisService
         return true;
     }
 
+    /** Por cuál línea llegó: la de Brygar, la de gastos, o ninguna de GARVIS. */
+    public function canalDe(string $phoneNumberId): ?string
+    {
+        $gastos = (string) config('services.garvis.gastos_phone_number_id');
+        if ($gastos !== '' && $phoneNumberId === $gastos) {
+            return self::CANAL_GASTOS;
+        }
+
+        if ($phoneNumberId === ($this->config()->credencialesEfectivas()['phone_number_id'] ?? null)) {
+            return self::CANAL_BRYGAR;
+        }
+
+        return null;
+    }
+
     /**
      * Le pasa el mensaje a GARVIS. Nunca lanza: el webhook tiene que contestarle a Meta.
      */
-    public function recibir(array $msg): void
+    public function recibir(array $msg, string $canal = self::CANAL_BRYGAR): void
     {
         $waId = $msg['id'] ?? '';
         $tipo = $msg['type'] ?? 'text';
@@ -98,43 +120,43 @@ class GarvisService
         Cache::put('whatsapp_ventana:'.$this->numero(), now()->toIso8601String(), now()->addHours(24));
 
         try {
-            $this->whatsappApi->marcarLeidoYEscribiendo($waId, $this->config());
+            $this->whatsappApi->marcarLeidoYEscribiendo($waId, $this->config($canal));
         } catch (\Throwable $e) {
             // Los chulos azules son cortesía; no pueden impedir que llegue el mensaje.
         }
 
         // Bajar el audio o la foto tarda más de lo que Meta espera el 200: va en cola.
         if ($tipo === 'audio') {
-            GarvisNotaDeVozJob::dispatch($mediaId, $msg['audio']['mime_type'] ?? null);
+            GarvisNotaDeVozJob::dispatch($mediaId, $msg['audio']['mime_type'] ?? null, $canal);
 
             return;
         }
 
         if ($tipo === 'image') {
-            GarvisFotoJob::dispatch($mediaId, $msg['image']['mime_type'] ?? null, trim($msg['image']['caption'] ?? ''));
+            GarvisFotoJob::dispatch($mediaId, $msg['image']['mime_type'] ?? null, trim($msg['image']['caption'] ?? ''), $canal);
 
             return;
         }
 
-        $this->pasarAGarvis('📱 '.$texto);
+        $this->pasarAGarvis('📱 '.$texto, $canal);
     }
 
     /**
      * Deja el mensaje en el issue del día. Si GitHub no lo recibe, se lo dice a Brayan.
      */
-    public function pasarAGarvis(string $cuerpo): void
+    public function pasarAGarvis(string $cuerpo, string $canal = self::CANAL_BRYGAR): void
     {
-        if (! $this->publicarEnGithub($cuerpo)) {
-            $this->responder('No pude pasarle tu mensaje a GARVIS: GitHub no lo recibió. El detalle quedó en el log de Brynex.');
+        if (! $this->publicarEnGithub($cuerpo, $canal)) {
+            $this->responder('No pude pasarle tu mensaje a GARVIS: GitHub no lo recibió. El detalle quedó en el log de Brynex.', $canal);
         }
     }
 
     /**
      * Manda a Brayan el texto de GARVIS, partido si no cabe en un mensaje.
      */
-    public function responder(string $texto): bool
+    public function responder(string $texto, string $canal = self::CANAL_BRYGAR): bool
     {
-        $config = $this->config();
+        $config = $this->config($canal);
         $ok = true;
 
         foreach ($this->trozos($texto) as $trozo) {
@@ -153,9 +175,9 @@ class GarvisService
     /**
      * Manda a Brayan una captura que tomó GARVIS. La ruta es del disco local, dentro de garvis/.
      */
-    public function enviarImagen(string $ruta, string $mime): bool
+    public function enviarImagen(string $ruta, string $mime, string $canal = self::CANAL_BRYGAR): bool
     {
-        $envio = $this->whatsappApi->enviarMedia($this->numero(), 'image', $ruta, $mime, basename($ruta), $this->config());
+        $envio = $this->whatsappApi->enviarMedia($this->numero(), 'image', $ruta, $mime, basename($ruta), $this->config($canal));
 
         if (! ($envio['ok'] ?? false)) {
             Log::error('GARVIS: falló el envío de la captura por WhatsApp', ['error' => $envio['error'] ?? null]);
@@ -187,7 +209,7 @@ class GarvisService
      * piezas de publicidad) y FFmpeg lo pasa a ogg/opus, que es lo único que WhatsApp
      * muestra como nota de voz y no como archivo.
      */
-    public function enviarVoz(string $texto): bool
+    public function enviarVoz(string $texto, string $canal = self::CANAL_BRYGAR): bool
     {
         $apiKey = $this->llaveGemini();
         if (! $apiKey) {
@@ -226,7 +248,7 @@ class GarvisService
                 return false;
             }
 
-            $envio = $this->whatsappApi->enviarMedia($this->numero(), 'audio', $ogg, 'audio/ogg', basename($ogg), $this->config());
+            $envio = $this->whatsappApi->enviarMedia($this->numero(), 'audio', $ogg, 'audio/ogg', basename($ogg), $this->config($canal));
             if (! ($envio['ok'] ?? false)) {
                 Log::error('GARVIS: falló el envío de la nota de voz', ['error' => $envio['error'] ?? null]);
 
@@ -242,7 +264,7 @@ class GarvisService
     /**
      * Un issue por día (hora de Colombia): el primer mensaje lo abre, los demás lo comentan.
      */
-    private function publicarEnGithub(string $cuerpo): bool
+    private function publicarEnGithub(string $cuerpo, string $canal): bool
     {
         $repo = config('services.garvis.repo');
         $token = config('services.garvis.github_token');
@@ -254,7 +276,8 @@ class GarvisService
         }
 
         $hoy = now('America/Bogota')->format('Y-m-d');
-        $titulo = 'WhatsApp '.$hoy;
+        $titulo = ($canal === self::CANAL_GASTOS ? 'Gastos ' : 'WhatsApp ').$hoy;
+        $cache = 'garvis_issue:'.($canal === self::CANAL_GASTOS ? 'gastos:' : '').$hoy;
         $gh = Http::withToken($token)
             ->acceptJson()
             ->withHeaders(['X-GitHub-Api-Version' => '2022-11-28'])
@@ -262,12 +285,12 @@ class GarvisService
             ->baseUrl('https://api.github.com/repos/'.$repo);
 
         try {
-            $issue = Cache::get('garvis_issue:'.$hoy) ?? $this->buscarIssue($gh, $titulo);
+            $issue = Cache::get($cache) ?? $this->buscarIssue($gh, $titulo, $canal);
 
             if ($issue) {
                 $resp = $gh->post("/issues/{$issue}/comments", ['body' => $cuerpo]);
             } else {
-                $resp = $gh->post('/issues', ['title' => $titulo, 'body' => $cuerpo, 'labels' => ['whatsapp']]);
+                $resp = $gh->post('/issues', ['title' => $titulo, 'body' => $cuerpo, 'labels' => [$canal]]);
                 $issue = $resp->json('number');
             }
 
@@ -277,7 +300,7 @@ class GarvisService
                 return false;
             }
 
-            Cache::put('garvis_issue:'.$hoy, $issue, now()->addDays(2));
+            Cache::put($cache, $issue, now()->addDays(2));
 
             return true;
         } catch (\Throwable $e) {
@@ -288,9 +311,9 @@ class GarvisService
     }
 
     /** Si la caché se perdió, el issue del día se busca entre los abiertos. */
-    private function buscarIssue($gh, string $titulo): ?int
+    private function buscarIssue($gh, string $titulo, string $canal): ?int
     {
-        $abiertos = $gh->get('/issues', ['labels' => 'whatsapp', 'state' => 'open', 'per_page' => 20])->json() ?: [];
+        $abiertos = $gh->get('/issues', ['labels' => $canal, 'state' => 'open', 'per_page' => 20])->json() ?: [];
 
         foreach ($abiertos as $issue) {
             if (($issue['title'] ?? null) === $titulo) {
@@ -319,8 +342,15 @@ class GarvisService
         return $trozos;
     }
 
-    public function config(): WhatsappConfig
+    /** La cuenta de Brygar; para la línea de gastos, la misma cuenta hablando desde ese número. */
+    public function config(string $canal = self::CANAL_BRYGAR): WhatsappConfig
     {
-        return WhatsappConfig::paraAliado(self::ALIADO_ID);
+        $config = WhatsappConfig::paraAliado(self::ALIADO_ID);
+
+        if ($canal === self::CANAL_GASTOS) {
+            $config->phoneNumberIdForzado = (string) config('services.garvis.gastos_phone_number_id') ?: null;
+        }
+
+        return $config;
     }
 }
