@@ -415,7 +415,9 @@ function cartaLaboral() {
                     incluir_jornada: false, incluir_salario: true, incluir_comisiones: false, comisiones_valor: '',
                     caja_nombre: p.caja_nombre, ciudad: p.ciudad, fecha: p.fecha,
                     firmante_tipo: 'representante', firmante_user_id: '', firmante_cargo: '', cargo_opcion: '',
-                    firmante_celular: p.representante?.celular || '', sello_en_firma: false,
+                    firmante_celular: p.representante?.celular || '',
+                    // Los sellos de las empresas ya traen la firma: va sobre la línea salvo que lo desmarquen.
+                    sello_en_firma: !!p.empresa?.tiene_sello,
                     empresa_direccion: p.empresa?.direccion || '', empresa_telefono: p.empresa?.telefono || '', empresa_correo: p.empresa?.correo || '',
                 };
                 this.listo = true;

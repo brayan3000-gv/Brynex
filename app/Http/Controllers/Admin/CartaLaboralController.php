@@ -51,7 +51,8 @@ class CartaLaboralController extends Controller
                 'cedula' => $u->cedula,
                 'tiene_firma' => $u->cedula && file_exists(CartaLaboralService::rutaFirma($u->cedula)),
                 'cargo' => $ultimas[$u->id]->firmante_cargo ?? '',
-                'celular' => ($ultimas[$u->id]->datos['firmante']['celular'] ?? '') ?: (string) $u->telefono,
+                'celular' => ($ultimas[$u->id]->datos['firmante']['celular'] ?? '')
+                    ?: (CartaLaboralService::pareceCelular($u->telefono) ? (string) $u->telefono : ''),
             ])->values(),
             'cargos' => CartaLaboralService::CARGOS_FIRMANTE,
             'cedulaInicial' => request('cedula'),

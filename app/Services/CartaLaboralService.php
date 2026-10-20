@@ -196,7 +196,9 @@ class CartaLaboralService
             return $ultima->datos['firmante']['celular'];
         }
 
-        return (string) (\App\Models\Cliente::where('aliado_id', $aliadoId)->where('cedula', $rs->cedula_rep)->value('celular') ?? '');
+        $celular = (string) (\App\Models\Cliente::where('aliado_id', $aliadoId)->where('cedula', $rs->cedula_rep)->value('celular') ?? '');
+
+        return self::pareceCelular($celular) ? $celular : '';
     }
 
     /** Texto de la jornada a partir de días y horas al mes. */
@@ -553,6 +555,16 @@ class CartaLaboralService
             'celular' => $this->celular($d['firmante']['celular'] ?? ''),
             'empresa' => $d['empresa']['nombre'],
         ];
+    }
+
+    /**
+     * Si un número guardado parece un celular colombiano (10 dígitos que
+     * empiezan por 3). Para no llenar el celular de la carta con lo que no lo
+     * es: había usuarios con la cédula en el campo del teléfono.
+     */
+    public static function pareceCelular(?string $numero): bool
+    {
+        return (bool) preg_match('/^3\d{9}$/', preg_replace('/\D/', '', (string) $numero));
     }
 
     /** "3001563615" → "300 156 3615"; lo que no sea un celular de 10 dígitos queda igual. */
