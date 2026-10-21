@@ -408,6 +408,7 @@ class ConfiguracionAliadoController extends Controller
             'configs.*.mora_dia_habil_inicio' => 'nullable|integer|min:2|max:16',
             'configs.*.mora_minimo' => 'nullable|numeric|min:0',
             'configs.*.mora_segundo' => 'nullable|numeric|min:0',
+            'configs.*.dia_retiros_eps' => 'nullable|integer|min:1|max:31',
             'arl.*.porcentaje' => 'nullable|numeric|min:0|max:100',
             'tarifario.*.*.*.costo_afiliacion' => 'nullable|numeric|min:0',
             'tarifario.*.*.*.retiro' => 'nullable|numeric|min:0',
@@ -480,6 +481,9 @@ class ConfiguracionAliadoController extends Controller
                                                      ? (int) $data['mora_dia_habil_inicio'] : null,
                         'mora_minimo' => $data['mora_minimo'] ?? 2000,
                         'mora_segundo' => $data['mora_segundo'] ?? 5000,
+                        // Plantilla de cobro «aviso_retiro_eps»: cuánto falta para los retiros.
+                        'dia_retiros_eps' => (($data['dia_retiros_eps'] ?? null) !== '' && ($data['dia_retiros_eps'] ?? null) !== null)
+                                                     ? (int) $data['dia_retiros_eps'] : null,
                         // Un solo valor por aliado (solo tiene sentido en la fila global, pero
                         // guardarlo también en filas por plan no hace daño: nunca se leen de ahí).
                         'activo' => true,

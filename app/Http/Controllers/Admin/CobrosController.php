@@ -1562,7 +1562,10 @@ class CobrosController extends Controller
         $nombreAliado = $aliado ? $aliado->nombre : 'BryNex Global';
 
         // Parámetros de prueba
-        if ($plantilla->usaMoldeCorto()) {
+        $variablesCobro = new \App\Services\WhatsappVariablesCobro();
+        if (\App\Services\WhatsappVariablesCobro::aplica($plantilla)) {
+            $paramsPrueba = $variablesCobro->parametros($plantilla, $aliadoId, 'Juan Pérez (PRUEBA)', 150000);
+        } elseif ($plantilla->usaMoldeCorto()) {
             $paramsPrueba = $plantilla->cantidadVariables() === 3
                 ? ['Juan Pérez (PRUEBA)', $nombreAliado, '$150.000']
                 : ['Juan Pérez (PRUEBA)', $nombreAliado];
@@ -1714,7 +1717,9 @@ class CobrosController extends Controller
             $valorFormateado = '$' . number_format($valorCobro, 0, ',', '.');
 
             $cantVars = $plantilla->cantidadVariables();
-            if ($plantilla->usaMoldeCorto()) {
+            if (\App\Services\WhatsappVariablesCobro::aplica($plantilla)) {
+                $params = $variablesCobro->parametros($plantilla, $aliadoId, $nombreCliente, $valorCobro);
+            } elseif ($plantilla->usaMoldeCorto()) {
                 // Mismo molde que usa el envío real (WhatsappEnvioMasivoJob): si aquí se
                 // arman los cinco del recordatorio de cobro, la vista previa muestra un
                 // mensaje que no es el que va a salir.
@@ -1835,7 +1840,9 @@ class CobrosController extends Controller
         $plazoDias = $cfgAliado?->mora_dia_habil_inicio ? (string)$cfgAliado->mora_dia_habil_inicio : '10';
 
         $cantVars = $plantilla->cantidadVariables();
-        if ($plantilla->usaMoldeCorto()) {
+        if (\App\Services\WhatsappVariablesCobro::aplica($plantilla)) {
+            $params = (new \App\Services\WhatsappVariablesCobro())->parametros($plantilla, $aliadoId, 'Juan Pérez (PRUEBA)', 150000);
+        } elseif ($plantilla->usaMoldeCorto()) {
             $params = $cantVars === 3
                 ? ['Juan Pérez (PRUEBA)', $nombreAliado, '$150.000']
                 : ['Juan Pérez (PRUEBA)', $nombreAliado];
@@ -2642,6 +2649,8 @@ class CobrosController extends Controller
             ->filter(fn($e) => !isset($empresaIdsEnviadosSet[$e->id]) && !empty(($normalizarCelular($e->telefono) ?: $normalizarCelular($e->celular))))
             ->take(30);
 
+        $variablesCobro = new \App\Services\WhatsappVariablesCobro();
+
         // Día hábil configurado por el aliado: no depende de $e, se calcula una sola
         // vez fuera del loop en vez de repetir la misma consulta hasta 30 veces.
         $cfgAliado = DB::table('configuracion_aliado')
@@ -2660,7 +2669,9 @@ class CobrosController extends Controller
             $valorFormateado = '$' . number_format($valorCobro, 0, ',', '.');
 
             $cantVars = $plantilla->cantidadVariables();
-            if ($plantilla->usaMoldeCorto()) {
+            if (\App\Services\WhatsappVariablesCobro::aplica($plantilla)) {
+                $params = $variablesCobro->parametros($plantilla, $aliadoId, $nombreContacto, $valorCobro);
+            } elseif ($plantilla->usaMoldeCorto()) {
                 $params = ($cantVars === 3 && $incluirValor)
                     ? [$nombreContacto, $nombreAliadoEfectivo, $valorFormateado]
                     : [$nombreContacto, $nombreAliadoEfectivo];
@@ -2684,14 +2695,16 @@ class CobrosController extends Controller
         }
 
         if (empty($previsualizacionesReales)) {
-            $paramsPrueba = [
-                'Contacto Empresa (PRUEBA)',
-                $config->nombre_cuenta ?: $nombreAliado,
-                '10',
-                $cuentasText,
-                $config->numero_telefono ?: 'no tiene configurado',
-                '$500.000'
-            ];
+            $paramsPrueba = \App\Services\WhatsappVariablesCobro::aplica($plantilla)
+                ? $variablesCobro->parametros($plantilla, $aliadoId, 'Contacto Empresa (PRUEBA)', 500000)
+                : [
+                    'Contacto Empresa (PRUEBA)',
+                    $config->nombre_cuenta ?: $nombreAliado,
+                    '10',
+                    $cuentasText,
+                    $config->numero_telefono ?: 'no tiene configurado',
+                    '$500.000'
+                ];
             $cuerpoPrevisualizado = $plantilla->cuerpo;
             foreach ($paramsPrueba as $i => $val) {
                 $cuerpoPrevisualizado = str_replace('{{' . ($i + 1) . '}}', $val, $cuerpoPrevisualizado);

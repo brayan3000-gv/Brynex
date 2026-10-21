@@ -76,7 +76,7 @@
     $globalMoraCfg = $configs['global'] ?? null;
     $globalCfg = $configs['global'] ?? null;
   @endphp
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;">
     {{-- Campo 1: Día hábil de inicio --}}
     <div style="background:#fff;border-radius:9px;padding:0.85rem;border:1.5px solid #fde68a;">
       <div style="font-size:0.62rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.55rem;">🗓 Día Hábil de Inicio</div>
@@ -121,6 +121,22 @@
             name="configs[global][mora_segundo]"
             value="{{ $globalMoraCfg?->mora_segundo ?? 5000 }}"
             style="flex:1;padding:0.45rem 0.6rem;border:2px solid #fde68a;border-radius:7px;font-size:0.9rem;font-family:monospace;font-weight:700;color:#92400e;background:#fffbeb;text-align:right;">
+      </div>
+    </div>
+    {{-- Campo 4: Día de retiros de la EPS (plantilla de cobro «aviso_retiro_eps») --}}
+    <div style="background:#fff;border-radius:9px;padding:0.85rem;border:1.5px solid #fde68a;">
+      <div style="font-size:0.62rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.55rem;">🚨 Día de Retiros EPS</div>
+      <div style="font-size:0.72rem;color:#78350f;margin-bottom:0.5rem;line-height:1.4;">
+        Día del mes en que se retira de la EPS a quien no ha pagado.
+        <br><em>El aviso de cobro por WhatsApp dice cuánto falta: «Faltan solo 3 días para los retiros».</em>
+      </div>
+      <div style="display:flex;align-items:center;gap:0.35rem;">
+        <input type="number" step="1" min="1" max="31"
+            name="configs[global][dia_retiros_eps]"
+            value="{{ $globalMoraCfg?->dia_retiros_eps ?? '' }}"
+            placeholder="Ej: 25"
+            style="flex:1;padding:0.45rem 0.6rem;border:2px solid #fde68a;border-radius:7px;font-size:0.9rem;font-family:monospace;font-weight:700;color:#92400e;background:#fffbeb;">
+        <span style="color:#92400e;font-size:0.75rem;white-space:nowrap;">del mes</span>
       </div>
     </div>
   </div>

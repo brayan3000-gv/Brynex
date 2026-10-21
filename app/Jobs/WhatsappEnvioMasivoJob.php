@@ -10,6 +10,7 @@ use App\Models\{
 };
 use App\Services\Cumplimiento\VentanaContactoLey2300;
 use App\Services\WhatsappApiService;
+use App\Services\WhatsappVariablesCobro;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -31,6 +32,9 @@ class WhatsappEnvioMasivoJob implements ShouldQueue
 
     public int $tries   = 3;
     public int $timeout = 3600; // 1 hora máximo para lotes grandes
+
+    /** Cachea los datos del aliado entre destinatarios; se crea al procesar, no al despachar. */
+    private ?WhatsappVariablesCobro $variablesCobro = null;
 
     public function __construct(
         protected int   $envioId,
@@ -220,6 +224,25 @@ class WhatsappEnvioMasivoJob implements ShouldQueue
         // Si hay parámetros globales definidos por el usuario, usarlos directamente
         if (!empty($parametrosGlobales)) {
             return array_values($parametrosGlobales);
+        }
+
+        // Plantilla con variables con nombre (ej. aviso_retiro_eps): se llena desde su mapa
+        // con los datos del aliado que envía, no con los moldes por posición de abajo.
+        if (WhatsappVariablesCobro::aplica($plantilla)) {
+            $nombre = $detalle->nombre_destinatario;
+            if ($detalle->empresa_id) {
+                $nombre = \App\Models\Empresa::where('aliado_id', $detalle->envio->aliado_id)
+                    ->find($detalle->empresa_id)?->contacto ?: $nombre;
+            }
+
+            $this->variablesCobro ??= new WhatsappVariablesCobro();
+
+            return $this->variablesCobro->parametros(
+                $plantilla,
+                (int) $detalle->envio->aliado_id,
+                (string) $nombre,
+                $detalle->valor_cobro !== null ? (float) $detalle->valor_cobro : null
+            );
         }
 
         // Plantilla de UNA variable: es el nombre de quien recibe y nada más. Lo de abajo está
