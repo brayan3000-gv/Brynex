@@ -6,6 +6,7 @@ use App\Models\WhatsappConfig;
 use App\Models\WhatsappPlantilla;
 use GuzzleHttp\Client;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Crea en la cuenta de WhatsApp compartida de BryNex la plantilla de cobro
@@ -72,32 +73,55 @@ TXT;
 
         $enMeta = $this->buscarEnMeta($http, $creds);
 
-        if ($this->option('estado') || $enMeta) {
-            if (! $enMeta) {
-                $this->warn('No existe en Meta todavía.');
+        if ($this->option('estado') && ! $enMeta) {
+            $this->warn('No existe en Meta todavía.');
 
-                return self::SUCCESS;
-            }
-            $this->registrar($enMeta['id'], strtolower($enMeta['status']));
+            return self::SUCCESS;
+        }
+
+        if ($this->option('estado') || ($enMeta && self::tieneImagen($enMeta))) {
+            $this->registrar($enMeta['id'], strtolower($enMeta['status']), self::tieneImagen($enMeta));
             $this->info("Estado en Meta: {$enMeta['status']}");
 
             return self::SUCCESS;
         }
 
+        // Encabezado de imagen como las demás de cobro: al enviar se pone la imagen de
+        // cuentas de cada aliado (WhatsappConfig::cobro_header_imagen). Meta pide una de
+        // muestra subida por su API, no una URL.
+        $handle = $this->subirImagenEjemplo($http, $creds);
+        if (! $handle) {
+            $this->error('No se pudo subir la imagen de muestra a Meta.');
+
+            return self::FAILURE;
+        }
+
+        $componentes = [
+            ['type' => 'HEADER', 'format' => 'IMAGE', 'example' => ['header_handle' => [$handle]]],
+            [
+                'type' => 'BODY',
+                'text' => self::CUERPO,
+                'example' => ['body_text' => [['GRUPO FECOP', 'Melisa', '3 días', '$2.000', 'GRUPO FECOP']]],
+            ],
+        ];
+
         try {
-            $resp = $http->post(self::GRAPH."/{$creds['waba_id']}/message_templates", [
-                'headers' => ['Authorization' => "Bearer {$creds['access_token']}"],
-                'json' => [
-                    'name' => self::NOMBRE,
-                    'language' => 'es_ES',
-                    'category' => 'UTILITY',
-                    'components' => [[
-                        'type' => 'BODY',
-                        'text' => self::CUERPO,
-                        'example' => ['body_text' => [['GRUPO FECOP', 'Melisa', '3 días', '$2.000', 'GRUPO FECOP']]],
-                    ]],
-                ],
-            ]);
+            // La primera versión salió sin imagen (21-oct-2026): si ya existe se edita, y
+            // conserva el nombre. Meta la vuelve a revisar.
+            $resp = $enMeta
+                ? $http->post(self::GRAPH."/{$enMeta['id']}", [
+                    'headers' => ['Authorization' => "Bearer {$creds['access_token']}"],
+                    'json' => ['components' => $componentes],
+                ])
+                : $http->post(self::GRAPH."/{$creds['waba_id']}/message_templates", [
+                    'headers' => ['Authorization' => "Bearer {$creds['access_token']}"],
+                    'json' => [
+                        'name' => self::NOMBRE,
+                        'language' => 'es_ES',
+                        'category' => 'UTILITY',
+                        'components' => $componentes,
+                    ],
+                ]);
         } catch (\GuzzleHttp\Exception\RequestException $e) {
             $this->error('Meta rechazó la plantilla: '.($e->hasResponse() ? (string) $e->getResponse()->getBody() : $e->getMessage()));
 
@@ -105,18 +129,30 @@ TXT;
         }
 
         $data = json_decode((string) $resp->getBody(), true);
-        $this->registrar($data['id'] ?? null, strtolower($data['status'] ?? 'pending'));
-        $this->info('Creada: id '.($data['id'] ?? '?').' · estado '.($data['status'] ?? '?'));
+        $id = $enMeta['id'] ?? ($data['id'] ?? null);
+        $this->registrar($id, strtolower($data['status'] ?? 'pending'), true);
+        $this->info(($enMeta ? 'Editada' : 'Creada').': id '.($id ?? '?').' · estado '.($data['status'] ?? 'PENDING'));
         $this->line('Meta la revisa; consulta con --estado. Aprobada, sale en la lista de plantillas de Cobros.');
 
         return self::SUCCESS;
+    }
+
+    private static function tieneImagen(array $enMeta): bool
+    {
+        foreach ($enMeta['components'] ?? [] as $c) {
+            if (($c['type'] ?? '') === 'HEADER' && ($c['format'] ?? '') === 'IMAGE') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function buscarEnMeta(Client $http, array $creds): ?array
     {
         $resp = $http->get(self::GRAPH."/{$creds['waba_id']}/message_templates", [
             'headers' => ['Authorization' => "Bearer {$creds['access_token']}"],
-            'query' => ['name' => self::NOMBRE, 'fields' => 'id,name,status,language'],
+            'query' => ['name' => self::NOMBRE, 'fields' => 'id,name,status,language,components'],
         ]);
 
         foreach (json_decode((string) $resp->getBody(), true)['data'] ?? [] as $t) {
@@ -128,7 +164,60 @@ TXT;
         return null;
     }
 
-    private function registrar(?string $metaId, string $estado): void
+    /**
+     * Sube por la API de subida reanudable la imagen de cuentas de un aliado de la
+     * cuenta compartida (o el logo de BryNex si ninguno tiene) y devuelve el handle.
+     */
+    private function subirImagenEjemplo(Client $http, array $creds): ?string
+    {
+        $ruta = WhatsappConfig::where('usa_cuenta_brynex', true)
+            ->whereNotNull('cobro_header_imagen')
+            ->pluck('cobro_header_imagen')
+            ->map(fn ($p) => Storage::disk('public')->path($p))
+            ->first(fn ($p) => is_file($p)) ?? public_path('img/logo-brynex.png');
+
+        if (! is_file($ruta)) {
+            return null;
+        }
+
+        $token = $creds['access_token'];
+        $contenido = file_get_contents($ruta);
+
+        try {
+            $debug = json_decode((string) $http->get(self::GRAPH.'/debug_token', [
+                'query' => ['input_token' => $token, 'access_token' => $token],
+            ])->getBody(), true);
+            $appId = $debug['data']['app_id'] ?? null;
+            if (! $appId) {
+                return null;
+            }
+
+            $sesion = json_decode((string) $http->post(self::GRAPH."/{$appId}/uploads", [
+                'query' => [
+                    'file_name' => basename($ruta),
+                    'file_length' => strlen($contenido),
+                    'file_type' => mime_content_type($ruta) ?: 'image/png',
+                    'access_token' => $token,
+                ],
+            ])->getBody(), true);
+            if (empty($sesion['id'])) {
+                return null;
+            }
+
+            $subida = json_decode((string) $http->post(self::GRAPH.'/'.$sesion['id'], [
+                'headers' => ['Authorization' => "OAuth {$token}", 'file_offset' => '0'],
+                'body' => $contenido,
+            ])->getBody(), true);
+
+            return $subida['h'] ?? null;
+        } catch (\Throwable $e) {
+            $this->warn($e->getMessage());
+
+            return null;
+        }
+    }
+
+    private function registrar(?string $metaId, string $estado, bool $conImagen): void
     {
         WhatsappPlantilla::updateOrCreate(
             ['aliado_id' => self::ALIADO_BRYNEX, 'nombre' => self::NOMBRE],
@@ -139,7 +228,7 @@ TXT;
                 'estado' => $estado,
                 'meta_template_id' => $metaId,
                 'creado_en_meta' => true,
-                'header_tipo' => null,
+                'header_tipo' => $conImagen ? 'IMAGE' : null,
                 'cuerpo' => self::CUERPO,
                 'variables_mapa' => self::VARIABLES,
             ]
