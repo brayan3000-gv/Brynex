@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Storage;
 
 /**
  * Crea en la cuenta de WhatsApp compartida de BryNex la plantilla de cobro
- * «aviso_retiro_eps»: el aviso de que faltan pocos días para los retiros de la
+ * «aviso_retiro_eps_imagen»: el aviso de que faltan pocos días para los retiros de la
  * EPS. La pidió Grupo Fecop (21-oct-2026), pero sus variables son con nombre
  * (WhatsappVariablesCobro): cualquier aliado de la cuenta compartida la usa con
  * su nombre, su mora mínima y su día de retiros (Configuración → Mora).
@@ -24,9 +24,13 @@ class WhatsappPlantillaAvisoRetiro extends Command
     protected $signature = 'whatsapp:plantilla-aviso-retiro
                             {--estado : Solo consultar en Meta el estado de revisión y actualizarlo}';
 
-    protected $description = 'Crea (o consulta) en la cuenta compartida la plantilla de cobro «aviso_retiro_eps»';
+    protected $description = 'Crea (o consulta) en la cuenta compartida la plantilla de cobro «aviso_retiro_eps_imagen»';
 
-    public const NOMBRE = 'aviso_retiro_eps';
+    /**
+     * La primera, «aviso_retiro_eps», se creó sin encabezado y salía sin la imagen de
+     * cuentas (21-oct-2026). Se hizo esta nueva en vez de editarla; aquella quedó en Meta.
+     */
+    public const NOMBRE = 'aviso_retiro_eps_imagen';
 
     private const GRAPH = 'https://graph.facebook.com/v19.0';
 
@@ -106,8 +110,7 @@ TXT;
         ];
 
         try {
-            // La primera versión salió sin imagen (21-oct-2026): si ya existe se edita, y
-            // conserva el nombre. Meta la vuelve a revisar.
+            // Si ya existe sin imagen se edita, y conserva el nombre. Meta la vuelve a revisar.
             $resp = $enMeta
                 ? $http->post(self::GRAPH."/{$enMeta['id']}", [
                     'headers' => ['Authorization' => "Bearer {$creds['access_token']}"],
@@ -222,7 +225,7 @@ TXT;
         WhatsappPlantilla::updateOrCreate(
             ['aliado_id' => self::ALIADO_BRYNEX, 'nombre' => self::NOMBRE],
             [
-                'nombre_display' => 'Aviso retiro EPS (días, mora y aliado)',
+                'nombre_display' => 'Aviso retiro EPS con imagen (días, mora y aliado)',
                 'categoria' => 'UTILITY',
                 'idioma' => 'es_ES',
                 'estado' => $estado,
