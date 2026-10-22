@@ -287,18 +287,32 @@ class ColmenaApiService
      */
     public function certificadoAfiliacionDependiente(string $tipoDoc, string $documento, bool $conSalario = true): string
     {
-        $r = $this->post('/membership/special-certification/dependent-worker', [
-            ['numberIdentification' => $documento, 'typeIdentification' => $tipoDoc],
-        ], [
-            'quoteType' => '0',
-            'headquarterId' => '0',
-            'sampleSalary' => $conSalario ? '1' : '0',
-            'startDateCoverage' => '',
-            'endDateCoverage' => '',
-            'contractId' => $this->contrato(),
-            'reportSizeLimit' => '5000',
-            'reportType' => 'PDF',
-        ]);
+        // Colmena contesta 404 «No se encontraron datos para este reporte» a
+        // ratos, para trabajadores que sí tiene: el 22-oct-2026 fallaron 11 de 27
+        // recién afiliados, y al repetir unos pasaban y otros que ya habían
+        // pasado volvían a fallar. Se insiste unas veces antes de rendirse.
+        for ($intento = 1; ; $intento++) {
+            try {
+                $r = $this->post('/membership/special-certification/dependent-worker', [
+                    ['numberIdentification' => $documento, 'typeIdentification' => $tipoDoc],
+                ], [
+                    'quoteType' => '0',
+                    'headquarterId' => '0',
+                    'sampleSalary' => $conSalario ? '1' : '0',
+                    'startDateCoverage' => '',
+                    'endDateCoverage' => '',
+                    'contractId' => $this->contrato(),
+                    'reportSizeLimit' => '5000',
+                    'reportType' => 'PDF',
+                ]);
+                break;
+            } catch (RuntimeException $e) {
+                if ($intento >= 5 || ! str_contains($e->getMessage(), 'No se encontraron datos')) {
+                    throw $e;
+                }
+                sleep(3 * $intento);
+            }
+        }
 
         $pdf = is_array($r) ? base64_decode((string) ($r['bytes'] ?? ''), true) : false;
 

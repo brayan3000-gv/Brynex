@@ -26,9 +26,11 @@ const CHROME_CANDIDATOS = [
   '/usr/bin/chromium',
 ].filter(Boolean);
 
+// Directo a la Sucursal Virtual: www.arlsura.com/component/arl_login solo
+// redirigía allá y desde el 22-oct-2026 Imperva la bloquea (403) para netcup.
 const URL_LOGIN =
   'https://login.sura.com/sso/servicelogin.aspx' +
-  '?continueTo=https%3A%2F%2Fwww.arlsura.com%2Fcomponent%2Farl_login&service=arpsura';
+  '?continueTo=https%3A%2F%2Fsucursalempresas.suramericana.com&service=arpsura';
 
 // Cualquier acción del legacy sirve para que se cree la sesión de arpsura, que
 // es el dominio cuyas cookies necesitamos.

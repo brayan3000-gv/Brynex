@@ -12,9 +12,13 @@
  * la empresa en su propia pantalla.
  */
 
+// Va directo a la Sucursal Virtual. Antes pasaba por
+// www.arlsura.com/component/arl_login, que solo redirige allá, pero el 22-oct-2026
+// Imperva empezó a bloquear esa ruta (403) desde la IP de netcup y el login se
+// quedaba sin formulario: "Waiting for selector `#suraPassword` failed".
 const URL_LOGIN =
   'https://login.sura.com/sso/servicelogin.aspx' +
-  '?continueTo=https%3A%2F%2Fwww.arlsura.com%2Fcomponent%2Farl_login&service=arpsura';
+  '?continueTo=https%3A%2F%2Fsucursalempresas.suramericana.com&service=arpsura';
 
 const SEL_TIPO   = '#ctl00_ContentMain_suraType';
 const SEL_USER   = '#suraName';
