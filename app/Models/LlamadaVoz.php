@@ -21,6 +21,7 @@ class LlamadaVoz extends BaseModel
         'proximo_intento_en' => 'datetime',
         'terminada_en' => 'datetime',
         'aviso_en' => 'datetime',
+        'contestada_en' => 'datetime',
     ];
 
     /** Lo que se ve en Cobros por cada resultado del agente. */
@@ -39,11 +40,18 @@ class LlamadaVoz extends BaseModel
     /** Resultados que alguien del equipo tiene que atender. */
     public const PARA_EL_EQUIPO = ['YA_PAGO', 'NO_PUEDE', 'NO_CONTINUA', 'QUIERE_PERSONA'];
 
-    /** Alguien tiene que hacer algo: verificar un pago, llamar, mandar las cuentas. */
+    /**
+     * Alguien tiene que hacer algo: verificar un pago, llamar, mandar las
+     * cuentas, coordinar la visita o responder lo que el agente no supo.
+     */
     public function paraElEquipo(): bool
     {
+        $d = (array) ($this->datos ?? []);
+
         return in_array($this->resultado, self::PARA_EL_EQUIPO, true)
-            || ! empty(((array) ($this->datos ?? []))['pide_cuentas']);
+            || ! empty($d['pide_cuentas'])
+            || ! empty($d['pregunta'])
+            || ($d['medio_pago'] ?? null) === 'visita';
     }
 
     public function getEtiquetaAttribute(): string
@@ -56,6 +64,7 @@ class LlamadaVoz extends BaseModel
             $this->tipo === 'llamada.rechazada' => '🚫 No salió',
             $this->tipo === 'llamada.cancelada' => '🚫 Cancelada',
             $this->aviso_en === null => '⏳ En cola',
+            $this->contestada_en !== null => '📴 Contestó y colgó',
             default => '📵 No contestó',
         };
     }

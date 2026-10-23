@@ -66,6 +66,7 @@ abstract class VozPruebaBase extends TestCase
             $t->string('nombre')->nullable();
             $t->string('banco')->nullable();
             $t->string('numero_cuenta')->nullable();
+            $t->string('llave')->nullable();
             $t->boolean('activo')->default(true);
             $t->boolean('cobro')->default(true);
             $t->timestamps();
@@ -85,6 +86,7 @@ abstract class VozPruebaBase extends TestCase
             $t->timestamps();
         });
         (require base_path('database/migrations/2026_10_22_200000_create_llamadas_voz_table.php'))->up();
+        (require base_path('database/migrations/2026_10_22_230000_add_contestada_en_to_llamadas_voz_table.php'))->up();
     }
 
     protected function setUp(): void

@@ -161,6 +161,10 @@ class LlamadasCobroVoz
                 'numero' => self::diezDigitos(WhatsappApiService::normalizarNumero($celular)),
                 'nombre' => trim((string) ($c->cliente?->nombre_corto ?? '')) ?: 'Cliente',
                 'valor' => $valor,
+                // Para que el agente explique el valor si se lo preguntan.
+                'ss' => (float) ($c->v_ss ?? 0),
+                'admon' => max(0, (float) ($c->total_estimado ?? 0) - (float) ($c->v_ss ?? 0)),
+                'mora' => (float) ($c->mora_estimada ?? 0),
                 'vence' => $c->vence_cobro ?? self::vence($aliadoId, $c, $mes, $anio),
             ];
         }
@@ -229,6 +233,10 @@ class LlamadasCobroVoz
                         ? "su seguridad social de {$mesNombre}"
                         : "la seguridad social de {$mesNombre} de las {$personas} personas que tiene afiliadas",
                     'personas' => $personas,
+                    'desglose' => self::desglose($g),
+                    // A quien paga por varios: quiénes son y cuánto es cada uno.
+                    'detalle' => $personas === 1 ? 'solo usted' : implode('; ', array_map(
+                        fn ($f) => $f['nombre'].' '.self::pesos($f['valor']), $g)),
                     'vence' => $vence ? 'el '.$vence->copy()->locale('es')->isoFormat('dddd D [de] MMMM') : 'en estos días',
                     'ya_vencio' => $vence !== null && $vence->lt($hoy),
                 ],
@@ -252,6 +260,8 @@ class LlamadasCobroVoz
                 'variables' => [
                     'organizacion' => self::nombreAliado($aliadoId),
                     'formas_pago' => self::formasPago($aliadoId),
+                    'llave_pago' => self::llavePago($aliadoId),
+                    'telefono_aliado' => self::telefonoAliado($aliadoId),
                 ],
             ],
             'llamadas' => $llamadas,
@@ -280,9 +290,16 @@ class LlamadasCobroVoz
                         ->orWhere(fn ($q2) => $q2->where('created_at', '>=', $ahora->copy()->subDays(self::DIAS_ENTRE_LLAMADAS))
                             ->where(fn ($q3) => $q3->whereNull('tipo')->orWhere('tipo', '!=', 'llamada.rechazada')));
                 })
-                ->get(['numero', 'resultado', 'fecha_promesa', 'created_at']);
+                ->get(['numero', 'resultado', 'fecha_promesa', 'contestada_en', 'created_at']);
 
             foreach ($filas as $f) {
+                // «Llamar después», un recado o no contestar no cierran nada:
+                // se puede volver a llamar al día siguiente (un contacto al día).
+                $suave = in_array($f->resultado, ['LLAMAR_DESPUES', 'RECADO'], true)
+                    || ($f->resultado === null && $f->contestada_en === null);
+                if ($suave && $f->fecha_promesa === null && $f->created_at->lt($ahora->copy()->startOfDay())) {
+                    continue;
+                }
                 $motivo = match (true) {
                     $f->resultado === 'NO_CONTACTAR' => 'no_contactar',
                     $f->resultado === 'NUMERO_EQUIVOCADO' => 'numero_equivocado',
@@ -342,17 +359,84 @@ class LlamadasCobroVoz
         return "{$letras}{$de} pesos";
     }
 
+    /** Siglas de más de tres letras que se dicen letra por letra. */
+    private const SIGLAS = ['BBVA', 'LTDA'];
+
+    /**
+     * Un nombre escrito todo en mayúsculas, como se dice: «BRYGAR» → «Brygar»,
+     * «LUIS LOPEZ ALIANZA» → «Luis Lopez Alianza». La voz deletrea las
+     * mayúsculas. Las siglas (SAS, SS, BBVA) se quedan.
+     */
+    public static function paraDecir(?string $texto): string
+    {
+        $t = trim(preg_replace('/\s+/u', ' ', (string) $texto));
+        if ($t === '' || mb_strtoupper($t) !== $t || ! preg_match('/\p{L}{4,}/u', $t)) {
+            return $t;
+        }
+
+        return implode(' ', array_map(
+            fn ($w) => mb_strlen($w) <= 3 || in_array($w, self::SIGLAS, true) ? $w : mb_convert_case(mb_strtolower($w), MB_CASE_TITLE),
+            explode(' ', $t)
+        ));
+    }
+
+    private static function pesos(float $valor): string
+    {
+        return '$'.number_format($valor, 0, ',', '.');
+    }
+
+    /** «seguridad social $95.000, administración $23.000 y mora $2.000». */
+    private static function desglose(array $filas): string
+    {
+        $partes = array_filter([
+            'seguridad social' => array_sum(array_column($filas, 'ss')),
+            'administración' => array_sum(array_column($filas, 'admon')),
+            'mora' => array_sum(array_column($filas, 'mora')),
+        ], fn ($v) => $v > 0);
+        if (! $partes) {
+            return 'sin desglose';
+        }
+        $textos = array_map(fn ($k, $v) => $k.' '.self::pesos($v), array_keys($partes), $partes);
+        $ultimo = array_pop($textos);
+
+        return $textos ? implode(', ', $textos)." y {$ultimo}" : $ultimo;
+    }
+
     private static function nombreAliado(int $aliadoId): string
     {
         $config = WhatsappConfig::where('aliado_id', $aliadoId)->first();
 
-        return $config?->nombre_cuenta ?: (Aliado::find($aliadoId)?->nombre ?? 'BryNex');
+        return self::paraDecir($config?->nombre_cuenta ?: (Aliado::find($aliadoId)?->nombre ?? 'BryNex'));
+    }
+
+    /** La llave Bre-B para dictarla («no hay» si el aliado no tiene): el número de cuenta va por WhatsApp. */
+    private static function llavePago(int $aliadoId): string
+    {
+        $cuenta = BancoCuenta::paraCobro($aliadoId)->first(fn ($c) => trim((string) $c->llave) !== '');
+        if (! $cuenta) {
+            return 'no hay';
+        }
+        $titular = self::paraDecir($cuenta->nombre) ?: self::nombreAliado($aliadoId);
+
+        return 'llave Bre-B '.trim($cuenta->llave).' ('.self::paraDecir($cuenta->banco).", a nombre de {$titular})";
+    }
+
+    /** El WhatsApp del aliado, para que el cliente verifique quién lo llama. */
+    private static function telefonoAliado(int $aliadoId): string
+    {
+        $numero = WhatsappConfig::where('aliado_id', $aliadoId)->value('numero_telefono');
+        $d = self::diezDigitos((string) $numero);
+
+        return strlen($d) === 10 ? substr($d, 0, 3).' '.substr($d, 3, 3).' '.substr($d, 6) : 'no hay';
     }
 
     /** «transferencia o consignación (Bancolombia o Nequi), o en efectivo». */
     private static function formasPago(int $aliadoId): string
     {
-        $bancos = BancoCuenta::paraCobro($aliadoId)->pluck('banco')->filter()->unique()->values()->all();
+        // «Bancolombia» y «BANCOLOMBIA» son el mismo banco.
+        $bancos = BancoCuenta::paraCobro($aliadoId)->pluck('banco')
+            ->map(fn ($b) => self::paraDecir($b))->filter()
+            ->unique(fn ($b) => mb_strtolower($b))->values()->all();
         if (! $bancos) {
             return 'transferencia, consignación o en efectivo';
         }
@@ -521,6 +605,7 @@ class LlamadasCobroVoz
             'costo_cop' => isset($a['costo_cop']) ? (float) $a['costo_cop'] : null,
             'proximo_intento_en' => self::fecha($a['proximo_intento_en'] ?? null),
             'terminada_en' => self::fecha($a['terminada_en'] ?? null),
+            'contestada_en' => self::fecha($a['contestada_en'] ?? null),
             'aviso_en' => now(),
         ];
 
@@ -552,10 +637,11 @@ class LlamadasCobroVoz
             return;
         }
 
-        $resultado = match ($f->resultado) {
-            'PROMESA_DE_PAGO' => 'promesa_pago',
-            'NUMERO_EQUIVOCADO' => 'numero_errado',
-            null => 'no_contesta',
+        $resultado = match (true) {
+            $f->resultado === 'PROMESA_DE_PAGO' => 'promesa_pago',
+            $f->resultado === 'NUMERO_EQUIVOCADO' => 'numero_errado',
+            // Contestó y colgó antes de que el agente anotara algo: no es «no contesta».
+            $f->resultado === null && $f->contestada_en === null => 'no_contesta',
             default => 'otro',
         };
         $observacion = self::observacion($f);
@@ -580,7 +666,10 @@ class LlamadasCobroVoz
     public static function observacion(LlamadaVoz $f): string
     {
         $d = (array) ($f->datos ?? []);
-        $partes = [$f->resultado ? (LlamadaVoz::RESULTADOS[$f->resultado] ?? $f->resultado) : '📵 No contestó'];
+        $partes = [$f->etiqueta];
+        if ($f->resultado === 'YA_PAGO' && ! empty($d['fecha_pago'])) {
+            $partes[] = 'dice que pagó el '.$d['fecha_pago'];
+        }
         if ($f->resultado === 'PROMESA_DE_PAGO') {
             $partes[] = 'paga '.($f->fecha_promesa ? $f->fecha_promesa->format('d/m/Y') : ($d['fecha_pago'] ?? 'sin fecha'))
                 .(isset($d['monto']) && is_numeric($d['monto']) ? ' $'.number_format((float) $d['monto'], 0, ',', '.') : '');
@@ -593,6 +682,12 @@ class LlamadasCobroVoz
         }
         if (! empty($d['pide_cuentas'])) {
             $partes[] = 'pide las cuentas por WhatsApp';
+        }
+        if (($d['medio_pago'] ?? null) === 'visita') {
+            $partes[] = 'hay que coordinar la visita';
+        }
+        if (! empty($d['pregunta'])) {
+            $partes[] = 'preguntó: '.$d['pregunta'];
         }
         if ($f->intento > 1) {
             $partes[] = "intento {$f->intento}";

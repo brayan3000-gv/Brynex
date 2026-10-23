@@ -18,11 +18,14 @@ class LlamadasCobroVozTest extends VozPruebaBase
     {
         parent::setUp();
         DB::table('banco_cuentas')->insert([
-            ['aliado_id' => self::ALIADO, 'banco' => 'Bancolombia', 'activo' => true, 'cobro' => true],
-            ['aliado_id' => self::ALIADO, 'banco' => 'Nequi', 'activo' => true, 'cobro' => true],
-            ['aliado_id' => self::ALIADO, 'banco' => 'Davivienda', 'activo' => true, 'cobro' => false],
-            ['aliado_id' => 9, 'banco' => 'BBVA', 'activo' => true, 'cobro' => true],
+            ['aliado_id' => self::ALIADO, 'banco' => 'Bancolombia', 'activo' => true, 'cobro' => true, 'nombre' => 'BRYGAR SAS', 'llave' => null],
+            // La misma, escrita en mayúsculas: no se repite.
+            ['aliado_id' => self::ALIADO, 'banco' => 'BANCOLOMBIA', 'activo' => true, 'cobro' => true, 'nombre' => 'BRYGAR SAS', 'llave' => null],
+            ['aliado_id' => self::ALIADO, 'banco' => 'NEQUI', 'activo' => true, 'cobro' => true, 'nombre' => 'BRAYAN GARCIA', 'llave' => '3001112233'],
+            ['aliado_id' => self::ALIADO, 'banco' => 'Davivienda', 'activo' => true, 'cobro' => false, 'nombre' => null, 'llave' => '@otra'],
+            ['aliado_id' => 9, 'banco' => 'BBVA', 'activo' => true, 'cobro' => true, 'nombre' => null, 'llave' => null],
         ]);
+        DB::table('whatsapp_configuracion_aliado')->insert(['aliado_id' => self::ALIADO, 'nombre_cuenta' => 'BRYGAR', 'numero_telefono' => '573157776936']);
     }
 
     /** Una fila como las de CobrosController::obtenerDatosCobros(). */
@@ -37,6 +40,7 @@ class LlamadasCobroVozTest extends VozPruebaBase
             'es_afil' => false,
             'afil_atrasada' => null,
             'total_estimado' => 118000,
+            'v_ss' => 90000,
             'mora_estimada' => 2000,
             'cliente' => (object) ['celular' => $celular, 'nombre_corto' => "Cliente {$id}"],
             'vence_cobro' => Carbon::parse('2026-10-23'),
@@ -74,7 +78,7 @@ class LlamadasCobroVozTest extends VozPruebaBase
     {
         $lote = $this->lote([
             $this->fila(1, '3001234567', ['fact_id' => 900]),
-            $this->fila(2, '573001234567', ['vence_cobro' => Carbon::parse('2026-10-20'), 'total_estimado' => 80000, 'mora_estimada' => 0]),
+            $this->fila(2, '573001234567', ['vence_cobro' => Carbon::parse('2026-10-20'), 'total_estimado' => 80000, 'v_ss' => 60000, 'mora_estimada' => 0]),
             $this->fila(3, '3159876543', ['total_estimado' => 1000000, 'mora_estimada' => 0, 'vence_cobro' => Carbon::parse('2026-10-28')]),
         ]);
 
@@ -83,8 +87,11 @@ class LlamadasCobroVozTest extends VozPruebaBase
             'agente' => 'cobro-seguridad-social',
             'aviso_url' => 'https://brynex.test/avisos/voz/token-de-prueba',
             'variables' => [
+                // «BRYGAR» en la cuenta de WhatsApp: la voz lo deletrearía.
                 'organizacion' => 'Brygar',
                 'formas_pago' => 'transferencia o consignación (Bancolombia o Nequi), o en efectivo',
+                'llave_pago' => 'llave Bre-B 3001112233 (Nequi, a nombre de Brayan Garcia)',
+                'telefono_aliado' => '315 777 6936',
             ],
         ], $lote['comunes']);
         $this->assertCount(2, $lote['llamadas']);
@@ -99,6 +106,8 @@ class LlamadasCobroVozTest extends VozPruebaBase
             'valor' => 200000,
             'concepto' => 'la seguridad social de octubre de las 2 personas que tiene afiliadas',
             'personas' => 2,
+            'desglose' => 'seguridad social $150.000, administración $48.000 y mora $2.000',
+            'detalle' => 'Cliente 1 $120.000; Cliente 2 $80.000',
             // Manda el contrato que vence primero, y ese ya venció.
             'vence' => 'el martes 20 de octubre',
             'ya_vencio' => true,
@@ -107,6 +116,8 @@ class LlamadasCobroVozTest extends VozPruebaBase
         $this->assertSame('2026-10-23T19:00:00-05:00', $martha['responder_antes']);
 
         $this->assertSame('su seguridad social de octubre', $otro['variables']['concepto']);
+        $this->assertSame('solo usted', $otro['variables']['detalle']);
+        $this->assertSame('seguridad social $90.000 y administración $910.000', $otro['variables']['desglose']);
         $this->assertSame('un millón de pesos', $otro['variables']['monto']);
         $this->assertSame('el miércoles 28 de octubre', $otro['variables']['vence']);
         $this->assertFalse($otro['variables']['ya_vencio']);
@@ -127,10 +138,16 @@ class LlamadasCobroVozTest extends VozPruebaBase
         LlamadaVoz::create($base + ['avappi_id' => 'a1', 'numero' => '3000000001', 'resultado' => 'NO_CONTACTAR', 'created_at' => now()->subMonths(2)]);
         LlamadaVoz::create($base + ['avappi_id' => 'a2', 'numero' => '3000000002', 'resultado' => 'NUMERO_EQUIVOCADO', 'created_at' => now()->subMonth()]);
         LlamadaVoz::create($base + ['avappi_id' => 'a3', 'numero' => '3000000003', 'resultado' => 'PROMESA_DE_PAGO', 'fecha_promesa' => '2026-10-25', 'created_at' => now()->subDays(5)]);
-        LlamadaVoz::create($base + ['avappi_id' => 'a4', 'numero' => '3000000004', 'created_at' => now()->subDay()]);
+        LlamadaVoz::create($base + ['avappi_id' => 'a4', 'numero' => '3000000004', 'resultado' => 'NO_PUEDE', 'created_at' => now()->subDay()]);
         // Promesa vencida, llamada vieja y la que Avappi rechazó ayer: esos sí se llaman.
         LlamadaVoz::create($base + ['avappi_id' => 'a5', 'numero' => '3000000005', 'resultado' => 'PROMESA_DE_PAGO', 'fecha_promesa' => '2026-10-15', 'created_at' => now()->subDays(10)]);
         LlamadaVoz::create($base + ['avappi_id' => 'a6', 'numero' => '3000000006', 'tipo' => 'llamada.rechazada', 'created_at' => now()->subDay()]);
+        // «Llamar después» o sin contestar ayer: hoy sí. Hoy mismo: no.
+        LlamadaVoz::create($base + ['avappi_id' => 'a9', 'numero' => '3000000009', 'resultado' => 'LLAMAR_DESPUES', 'created_at' => now()->subDay()]);
+        LlamadaVoz::create($base + ['avappi_id' => 'b0', 'numero' => '3000000010', 'created_at' => now()->subDay()]);
+        LlamadaVoz::create($base + ['avappi_id' => 'b1', 'numero' => '3000000011', 'resultado' => 'LLAMAR_DESPUES', 'created_at' => now()->subHour()]);
+        // Contestó y colgó ayer: espera los 3 días.
+        LlamadaVoz::create($base + ['avappi_id' => 'b2', 'numero' => '3000000012', 'contestada_en' => now()->subDay(), 'created_at' => now()->subDay()]);
         // «No me llamen» de otro aliado no cuenta aquí (Avappi igual lo rechaza).
         DB::table('aliados')->insert(['id' => 9, 'nombre' => 'Otro']);
         LlamadaVoz::create(['aliado_id' => 9, 'numero' => '3000000007', 'resultado' => 'NO_CONTACTAR'] + $base + ['avappi_id' => 'a7']);
@@ -138,15 +155,15 @@ class LlamadasCobroVozTest extends VozPruebaBase
         DB::table('bitacora_cobros')->insert(['aliado_id' => self::ALIADO, 'contrato_id' => 8, 'usuario_id' => 1, 'fecha_llamada' => now()->subHour(), 'resultado' => 'whatsapp']);
 
         $filas = [];
-        foreach (range(1, 8) as $i) {
-            $filas[] = $this->fila($i, '300000000'.$i);
+        foreach (range(1, 12) as $i) {
+            $filas[] = $this->fila($i, sprintf('30000000%02d', $i));
         }
         $lote = $this->lote($filas);
 
-        $this->assertSame(['3000000005', '3000000006', '3000000007'], array_column($lote['llamadas'], 'numero'));
+        $this->assertSame(['3000000005', '3000000006', '3000000007', '3000000009', '3000000010'], array_column($lote['llamadas'], 'numero'));
         $this->assertSame([
-            'no_contactar' => 1, 'numero_equivocado' => 1, 'promesa' => 1, 'llamado_hace_poco' => 1, 'whatsapp_hoy' => 1,
-        ], $lote['omitidos'] + []);
+            'no_contactar' => 1, 'numero_equivocado' => 1, 'promesa' => 1, 'llamado_hace_poco' => 3, 'whatsapp_hoy' => 1,
+        ], $lote['omitidos']);
     }
 
     public function test_responder_antes_salta_domingo_y_festivo_y_no_pasa_de_7_dias(): void
@@ -157,6 +174,29 @@ class LlamadasCobroVozTest extends VozPruebaBase
 
         $hoy = Carbon::parse('2026-10-22 10:00:00', 'America/Bogota');
         $this->assertSame('2026-10-29 09:59', LlamadasCobroVoz::responderAntes(Carbon::parse('2026-11-12'), $hoy)->format('Y-m-d H:i'));
+    }
+
+    public function test_los_nombres_en_mayusculas_se_dicen_como_palabras(): void
+    {
+        $this->assertSame('Brygar', LlamadasCobroVoz::paraDecir('BRYGAR'));
+        $this->assertSame('Luis Lopez Alianza', LlamadasCobroVoz::paraDecir('LUIS  LOPEZ ALIANZA'));
+        $this->assertSame('Lesmar Comercializadora SAS', LlamadasCobroVoz::paraDecir('LESMAR COMERCIALIZADORA SAS'));
+        // Lo que ya viene bien escrito no se toca.
+        $this->assertSame('GiMave Integral', LlamadasCobroVoz::paraDecir('GiMave Integral'));
+        $this->assertSame('SS Faga', LlamadasCobroVoz::paraDecir('SS Faga'));
+        $this->assertSame('SS', LlamadasCobroVoz::paraDecir('SS'));
+    }
+
+    public function test_aliado_sin_llave_ni_whatsapp(): void
+    {
+        DB::table('aliados')->insert(['id' => 9, 'nombre' => 'SS Faga', 'activo' => true]);
+        $base = LlamadasCobroVoz::desdeCobros(9, [$this->fila(1, '3001234567')], 10, 2026);
+        $lote = LlamadasCobroVoz::armar(9, $base['filas'], 10, 2026);
+
+        $this->assertSame('SS Faga', $lote['comunes']['variables']['organizacion']);
+        $this->assertSame('transferencia o consignación (BBVA), o en efectivo', $lote['comunes']['variables']['formas_pago']);
+        $this->assertSame('no hay', $lote['comunes']['variables']['llave_pago']);
+        $this->assertSame('no hay', $lote['comunes']['variables']['telefono_aliado']);
     }
 
     public function test_pesos_en_letras(): void

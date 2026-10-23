@@ -202,6 +202,37 @@ class AvisoVozTest extends VozPruebaBase
         $this->assertSame('2026-10-30', LlamadaVoz::first()->fecha_promesa->toDateString());
     }
 
+    public function test_contesto_y_colgo_sin_resultado_no_es_no_contesta(): void
+    {
+        $this->enviar($this->aviso(['resultado' => null, 'datos' => null, 'resumen' => null, 'contestada_en' => '2026-10-22T15:00:05Z']))->assertOk();
+
+        $b = DB::table('bitacora_cobros')->first();
+        $this->assertSame('otro', $b->resultado);
+        $this->assertStringContainsString('Contestó y colgó', $b->observacion);
+        $this->assertNotNull(LlamadaVoz::first()->contestada_en);
+    }
+
+    public function test_pregunta_sin_responder_y_visita_quedan_para_el_equipo(): void
+    {
+        $datos = ['fecha_pago' => '2026-10-30', 'monto' => 240000, 'medio_pago' => 'visita', 'pregunta' => '¿sigo activa en la EPS?'];
+        $this->enviar($this->aviso(['datos' => $datos]))->assertOk();
+
+        $b = DB::table('bitacora_cobros')->first();
+        $this->assertStringStartsWith('⚠️ Para el equipo.', $b->observacion);
+        $this->assertStringContainsString('hay que coordinar la visita', $b->observacion);
+        $this->assertStringContainsString('preguntó: ¿sigo activa en la EPS?', $b->observacion);
+    }
+
+    public function test_ya_pago_anota_cuando_y_por_donde(): void
+    {
+        $this->enviar($this->aviso(['resultado' => 'YA_PAGO', 'datos' => ['fecha_pago' => '2026-10-21', 'medio_pago' => 'transferencia']]))->assertOk();
+
+        $obs = DB::table('bitacora_cobros')->value('observacion');
+        $this->assertStringContainsString('dice que pagó el 2026-10-21', $obs);
+        $this->assertStringContainsString('por transferencia', $obs);
+        $this->assertNull(LlamadaVoz::first()->fecha_promesa);
+    }
+
     public function test_numero_equivocado_queda_como_numero_errado(): void
     {
         $this->enviar($this->aviso(['resultado' => 'NUMERO_EQUIVOCADO', 'datos' => null]))->assertOk();
