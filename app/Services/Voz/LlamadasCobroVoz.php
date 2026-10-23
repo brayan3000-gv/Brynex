@@ -161,9 +161,7 @@ class LlamadasCobroVoz
                 'numero' => self::diezDigitos(WhatsappApiService::normalizarNumero($celular)),
                 'nombre' => trim((string) ($c->cliente?->nombre_corto ?? '')) ?: 'Cliente',
                 'valor' => $valor,
-                // Para que el agente explique el valor si se lo preguntan.
-                'ss' => (float) ($c->v_ss ?? 0),
-                'admon' => max(0, (float) ($c->total_estimado ?? 0) - (float) ($c->v_ss ?? 0)),
+                // Del valor solo se habla de la mora (nunca de la administración).
                 'mora' => (float) ($c->mora_estimada ?? 0),
                 'vence' => $c->vence_cobro ?? self::vence($aliadoId, $c, $mes, $anio),
             ];
@@ -233,7 +231,7 @@ class LlamadasCobroVoz
                         ? "su seguridad social de {$mesNombre}"
                         : "la seguridad social de {$mesNombre} de las {$personas} personas que tiene afiliadas",
                     'personas' => $personas,
-                    'desglose' => self::desglose($g),
+                    'mora' => ($mora = array_sum(array_column($g, 'mora'))) > 0 ? self::pesos($mora) : 'no tiene',
                     // A quien paga por varios: quiénes son y cuánto es cada uno.
                     'detalle' => $personas === 1 ? 'solo usted' : implode('; ', array_map(
                         fn ($f) => $f['nombre'].' '.self::pesos($f['valor']), $g)),
@@ -261,8 +259,9 @@ class LlamadasCobroVoz
                     'organizacion' => self::nombreAliado($aliadoId),
                     'formas_pago' => self::formasPago($aliadoId),
                     'llave_pago' => self::llavePago($aliadoId),
+                    'mora_tramos' => self::moraTramos($aliadoId),
                     'telefono_aliado' => self::telefonoAliado($aliadoId),
-                ],
+                ] + self::textosAliado($aliadoId),
             ],
             'llamadas' => $llamadas,
             'series' => $series,
@@ -385,21 +384,21 @@ class LlamadasCobroVoz
         return '$'.number_format($valor, 0, ',', '.');
     }
 
-    /** «seguridad social $95.000, administración $23.000 y mora $2.000». */
-    private static function desglose(array $filas): string
+    /** Las respuestas que cambian por aliado (servicios, retiro): las comunes y encima las suyas. */
+    public static function textosAliado(int $aliadoId): array
     {
-        $partes = array_filter([
-            'seguridad social' => array_sum(array_column($filas, 'ss')),
-            'administración' => array_sum(array_column($filas, 'admon')),
-            'mora' => array_sum(array_column($filas, 'mora')),
-        ], fn ($v) => $v > 0);
-        if (! $partes) {
-            return 'sin desglose';
-        }
-        $textos = array_map(fn ($k, $v) => $k.' '.self::pesos($v), array_keys($partes), $partes);
-        $ultimo = array_pop($textos);
+        $propios = (array) (config('services.avappi_voz.textos_por_aliado', [])[$aliadoId] ?? []);
 
-        return $textos ? implode(', ', $textos)." y {$ultimo}" : $ultimo;
+        return array_map(fn ($t) => (string) $t, array_merge((array) config('services.avappi_voz.textos', []), $propios));
+    }
+
+    /** Lo que puede valer la mora en ese aliado: «$2.000 o $5.000». */
+    private static function moraTramos(int $aliadoId): string
+    {
+        $t = MoraClienteService::tramosAliado($aliadoId);
+        $valores = array_values(array_unique(array_filter([(int) $t['mora_minimo'], (int) $t['mora_segundo']])));
+
+        return $valores ? implode(' o ', array_map(fn ($v) => self::pesos($v), $valores)) : 'no tiene';
     }
 
     private static function nombreAliado(int $aliadoId): string

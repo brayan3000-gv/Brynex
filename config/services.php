@@ -208,6 +208,17 @@ return [
         'aliados' => array_values(array_filter(array_map('intval', explode(',', (string) env('AVAPPI_VOZ_ALIADOS', '2'))))),
         // Lo que cobra Avappi por minuto con IA, para el estimado del botón.
         'costo_minuto' => (int) env('AVAPPI_VOZ_COSTO_MINUTO', 99),
+        // Lo que el agente responde y que puede cambiar de un aliado a otro.
+        // `textos` vale para todos; `textos_por_aliado` (aliado_id => [...])
+        // cambia solo los que se pongan. El nombre, el WhatsApp, la llave, los
+        // bancos y la mora salen solos de los datos de cada aliado.
+        'textos' => [
+            // «¿Para qué le pago a ustedes?»
+            'servicios' => 'le ayuda con los pagos de la planilla, las incapacidades y los trámites',
+            // «Me retiro a mitad de mes, ¿pago el mes completo?»
+            'retiro' => 'la seguridad social es proporcional a los días y la afiliación es fija',
+        ],
+        'textos_por_aliado' => [],
     ],
 
 ];

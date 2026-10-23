@@ -71,6 +71,14 @@ abstract class VozPruebaBase extends TestCase
             $t->boolean('cobro')->default(true);
             $t->timestamps();
         });
+        Schema::create('configuracion_aliado', function (Blueprint $t) {
+            $t->id();
+            $t->unsignedBigInteger('aliado_id');
+            $t->unsignedBigInteger('plan_id')->nullable();
+            $t->unsignedTinyInteger('mora_dia_habil_inicio')->nullable();
+            $t->decimal('mora_minimo', 10, 0)->nullable();
+            $t->decimal('mora_segundo', 10, 0)->nullable();
+        });
         // Como en SQL Server: usuario obligatorio y solo estos resultados.
         Schema::create('bitacora_cobros', function (Blueprint $t) {
             $t->id();

@@ -40,7 +40,6 @@ class LlamadasCobroVozTest extends VozPruebaBase
             'es_afil' => false,
             'afil_atrasada' => null,
             'total_estimado' => 118000,
-            'v_ss' => 90000,
             'mora_estimada' => 2000,
             'cliente' => (object) ['celular' => $celular, 'nombre_corto' => "Cliente {$id}"],
             'vence_cobro' => Carbon::parse('2026-10-23'),
@@ -78,7 +77,7 @@ class LlamadasCobroVozTest extends VozPruebaBase
     {
         $lote = $this->lote([
             $this->fila(1, '3001234567', ['fact_id' => 900]),
-            $this->fila(2, '573001234567', ['vence_cobro' => Carbon::parse('2026-10-20'), 'total_estimado' => 80000, 'v_ss' => 60000, 'mora_estimada' => 0]),
+            $this->fila(2, '573001234567', ['vence_cobro' => Carbon::parse('2026-10-20'), 'total_estimado' => 80000, 'mora_estimada' => 0]),
             $this->fila(3, '3159876543', ['total_estimado' => 1000000, 'mora_estimada' => 0, 'vence_cobro' => Carbon::parse('2026-10-28')]),
         ]);
 
@@ -91,7 +90,10 @@ class LlamadasCobroVozTest extends VozPruebaBase
                 'organizacion' => 'Brygar',
                 'formas_pago' => 'transferencia o consignación (Bancolombia o Nequi), o en efectivo',
                 'llave_pago' => 'llave Bre-B 3001112233 (Nequi, a nombre de Brayan Garcia)',
+                'mora_tramos' => '$2.000 o $5.000',
                 'telefono_aliado' => '315 777 6936',
+                'servicios' => 'le ayuda con los pagos de la planilla, las incapacidades y los trámites',
+                'retiro' => 'la seguridad social es proporcional a los días y la afiliación es fija',
             ],
         ], $lote['comunes']);
         $this->assertCount(2, $lote['llamadas']);
@@ -106,7 +108,8 @@ class LlamadasCobroVozTest extends VozPruebaBase
             'valor' => 200000,
             'concepto' => 'la seguridad social de octubre de las 2 personas que tiene afiliadas',
             'personas' => 2,
-            'desglose' => 'seguridad social $150.000, administración $48.000 y mora $2.000',
+            // Del valor solo se habla de la mora, nunca de la administración.
+            'mora' => '$2.000',
             'detalle' => 'Cliente 1 $120.000; Cliente 2 $80.000',
             // Manda el contrato que vence primero, y ese ya venció.
             'vence' => 'el martes 20 de octubre',
@@ -117,7 +120,7 @@ class LlamadasCobroVozTest extends VozPruebaBase
 
         $this->assertSame('su seguridad social de octubre', $otro['variables']['concepto']);
         $this->assertSame('solo usted', $otro['variables']['detalle']);
-        $this->assertSame('seguridad social $90.000 y administración $910.000', $otro['variables']['desglose']);
+        $this->assertSame('no tiene', $otro['variables']['mora']);
         $this->assertSame('un millón de pesos', $otro['variables']['monto']);
         $this->assertSame('el miércoles 28 de octubre', $otro['variables']['vence']);
         $this->assertFalse($otro['variables']['ya_vencio']);
@@ -197,6 +200,18 @@ class LlamadasCobroVozTest extends VozPruebaBase
         $this->assertSame('transferencia o consignación (BBVA), o en efectivo', $lote['comunes']['variables']['formas_pago']);
         $this->assertSame('no hay', $lote['comunes']['variables']['llave_pago']);
         $this->assertSame('no hay', $lote['comunes']['variables']['telefono_aliado']);
+        // Sin configuración de mora, los tramos por defecto.
+        $this->assertSame('$2.000 o $5.000', $lote['comunes']['variables']['mora_tramos']);
+    }
+
+    public function test_cada_aliado_puede_cambiar_sus_textos(): void
+    {
+        config(['services.avappi_voz.textos_por_aliado' => [9 => ['servicios' => 'le maneja la planilla y la afiliación']]]);
+
+        $this->assertSame('le maneja la planilla y la afiliación', LlamadasCobroVoz::textosAliado(9)['servicios']);
+        // Lo que no cambió sigue con el texto común.
+        $this->assertSame('la seguridad social es proporcional a los días y la afiliación es fija', LlamadasCobroVoz::textosAliado(9)['retiro']);
+        $this->assertSame('le ayuda con los pagos de la planilla, las incapacidades y los trámites', LlamadasCobroVoz::textosAliado(2)['servicios']);
     }
 
     public function test_pesos_en_letras(): void
