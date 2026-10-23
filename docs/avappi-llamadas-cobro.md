@@ -83,9 +83,9 @@ el total. Solo **individuales sin pagar** del filtro. No se llama a:
   o vence hoy, hasta las 7 p. m. del siguiente día que no sea domingo ni festivo. Nunca más de 7 días.
 - `referencia` = llave de idempotencia: pulsar el botón dos veces el mismo día no repite llamadas.
 
-## 4. El agente `cobro-seguridad-social` (se crea en Avappi)
+## 4. El agente `cobro-seguridad-social` (creado en Avappi el 22-oct-2026, versión 2)
 
-Parte de la plantilla `recordar-cuota`, con los cambios que pidió Brayan: «seguridad social» en vez de «cuota»,
+Avappi dice los booleanos como «sí»/«no» (por eso la tarea no habla de true). Parte de la plantilla `recordar-cuota`, con los cambios que pidió Brayan: «seguridad social» en vez de «cuota»,
 «venció» si ya pasó, cómo va a pagar, fecha probable y si va a seguir con el plan.
 
 **Tono:** respetuoso y claro, nunca informal ni presionante.
@@ -95,13 +95,13 @@ Parte de la plantilla `recordar-cuota`, con los cambios que pidió Brayan: «seg
 ```
 TU TAREA: recordarle a {{nombre}} el pago de {{concepto}} y saber cuándo y cómo lo va a pagar.
 - Valor: {{monto}}
-- Fecha límite: {{vence}} (ya_vencio = {{ya_vencio}})
+- Fecha límite: {{vence}} (ya venció: {{ya_vencio}})
 - Formas de pago: {{formas_pago}}
 
 CÓMO VA:
 1. Confirma que habla con {{nombre}}. SOLO si es el titular, sigue.
 2. Dile que lo llamas de {{organizacion}} para recordarle el pago de {{concepto}}, por {{monto}}.
-   Si ya_vencio es true di «que venció {{vence}}»; si no, «que vence {{vence}}».
+   Si ya venció («sí» arriba) di «que venció {{vence}}»; si no, «que vence {{vence}}».
 3. Pregunta qué día cree que lo puede pagar. Si da una fecha, repítela con el valor para confirmarla.
 4. Pregunta cómo lo va a pagar ({{formas_pago}}).
 5. Si ya pagó, agradece y anota YA_PAGO.
@@ -175,7 +175,7 @@ Respuestas: 404 token malo, 401 firma mala o vieja, 422 sin id, 200 `procesado` 
 
 ## 7. Para ponerlo en marcha
 
-1. Crear el agente `cobro-seguridad-social` en https://avappi.avapp.com.co/admin/voz/agentes (sección 4).
+1. ~~Crear el agente~~ hecho (id 1, org 19); se ajusta en https://avappi.avapp.com.co/admin/voz/agentes. Reglas de `brynex` con `--intentos 3`.
 2. Desplegar BryNex (corre la migración `llamadas_voz`, que solo crea una tabla).
 3. En el servidor, `php artisan voz:aviso-url` → la URL de los avisos.
 4. En Avappi: `node src/voz/admin.js reglas --org brynex --aviso-url <esa URL>`. Imprime **una sola vez** el
