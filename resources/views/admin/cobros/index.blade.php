@@ -460,6 +460,13 @@ $sortClassC = function ($col, $cs, $cd) {
            title="Enviar cobros por WhatsApp">
             💬 WhatsApp
         </button>
+        @if(\App\Services\Voz\LlamadasCobroVoz::habilitado((int) session('aliado_id_activo')))
+        <button type="button" onclick="abrirModalVoz()"
+           style="background:#7c3aed;color:#fff;font-size:.8rem;font-weight:700;padding:.3rem .7rem;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;"
+           title="Llamar con el agente de IA a los clientes sin pagar de este filtro">
+            📞 Llamar con IA
+        </button>
+        @endif
     </div>
 </div>
 </form>
@@ -2117,4 +2124,125 @@ async function confirmarEnvioMasivoWa() {
         </div>
     </div>
 </div>
+@if(\App\Services\Voz\LlamadasCobroVoz::habilitado((int) session('aliado_id_activo')))
+{{-- Modal Llamadas con IA (Avappi Voz) --}}
+<div id="modalVoz" class="modal-bg">
+    <div class="modal-box wide" style="max-width:860px;border-radius:20px;">
+        <div class="modal-title" style="border-bottom:1px solid #f1f5f9;padding-bottom:.8rem;margin-bottom:1rem;">
+            <span style="font-weight:800;font-size:1.1rem;color:#0f172a;">📞 Llamadas con IA</span>
+            <button type="button" class="modal-close" onclick="cerrarModal('modalVoz')">&times;</button>
+        </div>
+        <div style="display:inline-flex;gap:.4rem;margin-bottom:1rem;background:#f1f5f9;padding:.3rem;border-radius:50px;">
+            <button type="button" id="vozTabLlamar" onclick="vozTab('llamar')" style="border:none;border-radius:50px;padding:.4rem 1.1rem;font-size:.8rem;font-weight:700;cursor:pointer;">Llamar</button>
+            <button type="button" id="vozTabResultados" onclick="vozTab('resultados')" style="border:none;border-radius:50px;padding:.4rem 1.1rem;font-size:.8rem;font-weight:700;cursor:pointer;">Resultados (7 días)</button>
+        </div>
+        <div id="vozPanelLlamar">
+            <div id="vozCargando" style="text-align:center;padding:2rem;color:#64748b;">Calculando a quién llamar…</div>
+            <div id="vozContenido" style="display:none;"></div>
+        </div>
+        <div id="vozPanelResultados" style="display:none;max-height:65vh;overflow-y:auto;"></div>
+    </div>
+</div>
+@push('scripts')
+<script>
+(() => {
+    const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const pesos = (v) => '$' + Number(v || 0).toLocaleString('es-CO');
+    let vozLlamadas = 0;
+
+    window.vozTab = function (tab) {
+        const llamar = tab === 'llamar';
+        document.getElementById('vozPanelLlamar').style.display = llamar ? 'block' : 'none';
+        document.getElementById('vozPanelResultados').style.display = llamar ? 'none' : 'block';
+        document.getElementById('vozTabLlamar').style.background = llamar ? '#7c3aed' : 'transparent';
+        document.getElementById('vozTabLlamar').style.color = llamar ? '#fff' : '#475569';
+        document.getElementById('vozTabResultados').style.background = llamar ? 'transparent' : '#7c3aed';
+        document.getElementById('vozTabResultados').style.color = llamar ? '#475569' : '#fff';
+        if (!llamar) vozResultados();
+    };
+
+    window.abrirModalVoz = async function () {
+        const cargando = document.getElementById('vozCargando');
+        const contenido = document.getElementById('vozContenido');
+        cargando.style.display = 'block';
+        contenido.style.display = 'none';
+        document.getElementById('modalVoz').classList.add('open');
+        vozTab('llamar');
+        try {
+            const r = await fetch(`{{ route('admin.cobros.voz.previsualizar') }}?${new URLSearchParams(window.location.search)}`, { headers: { 'Accept': 'application/json' } });
+            const d = await r.json();
+            if (!d.ok) { cerrarModal('modalVoz'); mostrarToast('⚠️ ' + d.mensaje, 'error'); return; }
+            vozLlamadas = d.llamadas;
+            const omitidos = d.omitidos.map(o => `<li>${o.cantidad} — ${esc(o.motivo)}</li>`).join('');
+            const filas = d.muestra.map(m => `<tr>
+                <td style="padding:.3rem .5rem;">${esc(m.nombre)}</td>
+                <td style="padding:.3rem .5rem;font-family:monospace;">${esc(m.numero)}</td>
+                <td style="padding:.3rem .5rem;text-align:right;">${pesos(m.valor)}</td>
+                <td style="padding:.3rem .5rem;color:#64748b;">${esc(m.concepto)}, ${esc(m.vence)}</td></tr>`).join('');
+            contenido.innerHTML = `
+                ${d.configurado ? '' : `<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:.6rem .8rem;border-radius:8px;margin-bottom:.8rem;font-size:.85rem;">
+                    ⚠️ Falta configurar Avappi Voz en el servidor (clave o secreto de los avisos). Se puede ver la lista, pero no llamar.</div>`}
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.8rem;">
+                    <div style="background:#f5f3ff;border-radius:10px;padding:.6rem 1rem;"><div style="font-size:1.4rem;font-weight:800;color:#6d28d9;">${d.llamadas}</div><div style="font-size:.75rem;color:#64748b;">llamadas (${d.contratos} contratos)</div></div>
+                    <div style="background:#f8fafc;border-radius:10px;padding:.6rem 1rem;"><div style="font-size:1.4rem;font-weight:800;color:#0f172a;">≈ ${pesos(d.costo_estimado)}</div><div style="font-size:.75rem;color:#64748b;">costo estimado (1,5 min c/u)</div></div>
+                </div>
+                <p style="font-size:.82rem;color:#475569;margin:.2rem 0 .6rem;">El agente llama en nombre de <strong>${esc(d.organizacion)}</strong>, solo en el horario de la Ley 2300, y reintenta las que no contestan. Lo que diga cada cliente queda en su bitácora de cobros.</p>
+                ${omitidos ? `<details style="font-size:.8rem;color:#64748b;margin-bottom:.6rem;"><summary>No se llaman</summary><ul style="margin:.3rem 0 0 1rem;">${omitidos}</ul></details>` : ''}
+                <div style="max-height:40vh;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;">
+                    <table style="width:100%;font-size:.8rem;border-collapse:collapse;">${filas || '<tr><td style="padding:1rem;text-align:center;color:#94a3b8;">No hay a quién llamar con este filtro.</td></tr>'}</table>
+                </div>
+                <div style="text-align:right;margin-top:1rem;">
+                    <button type="button" id="btnVozLlamar" onclick="confirmarVoz()" ${d.llamadas && d.configurado ? '' : 'disabled'}
+                        style="background:#7c3aed;color:#fff;font-weight:700;padding:.55rem 1.2rem;border-radius:8px;border:none;cursor:pointer;${d.llamadas && d.configurado ? '' : 'opacity:.5;cursor:not-allowed;'}">📞 Llamar a ${d.llamadas}</button>
+                </div>`;
+            cargando.style.display = 'none';
+            contenido.style.display = 'block';
+        } catch (e) {
+            cerrarModal('modalVoz');
+            mostrarToast('❌ No se pudo calcular la lista: ' + e.message, 'error');
+        }
+    };
+
+    window.confirmarVoz = async function () {
+        if (!vozLlamadas) return;
+        if (!confirm(`¿Llamar con IA a ${vozLlamadas} clientes? Las llamadas tienen costo.`)) return;
+        const btn = document.getElementById('btnVozLlamar');
+        btn.disabled = true; btn.textContent = 'Mandando a Avappi…';
+        try {
+            const r = await fetch(`{{ route('admin.cobros.voz.llamar') }}?${new URLSearchParams(window.location.search)}`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF, 'Accept': 'application/json' }
+            });
+            const d = await r.json();
+            if (!d.ok) throw new Error(d.mensaje || 'Avappi no recibió las llamadas');
+            mostrarToast('✅ ' + d.mensaje, 'success');
+            vozTab('resultados');
+        } catch (e) {
+            mostrarToast('❌ ' + e.message, 'error');
+            btn.disabled = false; btn.textContent = `📞 Llamar a ${vozLlamadas}`;
+        }
+    };
+
+    async function vozResultados() {
+        const panel = document.getElementById('vozPanelResultados');
+        panel.innerHTML = '<div style="text-align:center;padding:2rem;color:#64748b;">Cargando…</div>';
+        try {
+            const r = await fetch(`{{ route('admin.cobros.voz.historial') }}`, { headers: { 'Accept': 'application/json' } });
+            const d = await r.json();
+            if (!d.ok) throw new Error(d.mensaje);
+            if (!d.llamadas.length) { panel.innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;">Todavía no hay llamadas.</div>'; return; }
+            panel.innerHTML = `<table style="width:100%;font-size:.8rem;border-collapse:collapse;">
+                <tr style="background:#f8fafc;text-align:left;"><th style="padding:.4rem;">Cliente</th><th style="padding:.4rem;">Resultado</th><th style="padding:.4rem;">Lo que dijo</th></tr>
+                ${d.llamadas.map(l => `<tr style="border-top:1px solid #f1f5f9;${l.para_el_equipo ? 'background:#fffbeb;' : ''}">
+                    <td style="padding:.4rem;vertical-align:top;"><strong>${esc(l.nombre)}</strong><br><span style="color:#64748b;font-family:monospace;">${esc(l.numero)}</span><br><span style="color:#94a3b8;">${esc(l.fecha)} · ${pesos(l.valor)}</span></td>
+                    <td style="padding:.4rem;vertical-align:top;white-space:nowrap;">${esc(l.etiqueta)}${l.promesa ? `<br><span style="color:#16a34a;">paga ${esc(l.promesa)}</span>` : ''}${l.intento > 1 ? `<br><span style="color:#94a3b8;">intento ${l.intento}</span>` : ''}${l.proximo ? `<br><span style="color:#94a3b8;">reintenta ${esc(l.proximo)}</span>` : ''}</td>
+                    <td style="padding:.4rem;vertical-align:top;color:#334155;">${esc(l.resumen || l.causa || '')}</td></tr>`).join('')}
+            </table>`;
+        } catch (e) {
+            panel.innerHTML = `<div style="padding:1rem;color:#991b1b;">No se pudieron cargar: ${esc(e.message)}</div>`;
+        }
+    }
+})();
+</script>
+@endpush
+@endif
 @endsection

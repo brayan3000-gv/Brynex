@@ -192,4 +192,22 @@ return [
         'modelo_transcribir' => env('GEMINI_MODELO_TRANSCRIBIR', 'gemini-3.1-flash-lite'),
     ],
 
+    // Avappi Voz: llamadas con agente de IA para recordar el pago de la
+    // seguridad social (ver App\Services\Voz\LlamadasCobroVoz). La clave es la
+    // de la organización «brynex» con permiso «llamar»; el secreto comprueba la
+    // firma de cada aviso (X-Avappi-Firma) y lo genera Avappi con
+    // `admin.js reglas --org brynex`. El token de la ruta del aviso, si no se
+    // pone, sale del APP_KEY (php artisan voz:aviso-url lo muestra).
+    'avappi_voz' => [
+        'url' => env('AVAPPI_VOZ_URL', 'https://avappi.avapp.com.co'),
+        'key' => env('AVAPPI_VOZ_KEY'),
+        'secreto' => env('AVAPPI_VOZ_SECRETO'),
+        'token_aviso' => env('AVAPPI_VOZ_TOKEN_AVISO'),
+        'agente' => env('AVAPPI_VOZ_AGENTE', 'cobro-seguridad-social'),
+        // Aliados con el botón «Llamar con IA» en Cobros. Arranca solo Brygar.
+        'aliados' => array_values(array_filter(array_map('intval', explode(',', (string) env('AVAPPI_VOZ_ALIADOS', '2'))))),
+        // Lo que cobra Avappi por minuto con IA, para el estimado del botón.
+        'costo_minuto' => (int) env('AVAPPI_VOZ_COSTO_MINUTO', 99),
+    ],
+
 ];

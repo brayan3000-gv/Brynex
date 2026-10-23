@@ -148,6 +148,13 @@ Route::get('/wa/{publicacion}', [\App\Http\Controllers\Publico\WhatsappRedirectC
 Route::get('/whatsapp/webhook', [\App\Http\Controllers\WhatsappWebhookController::class, 'verify'])->name('whatsapp.webhook.verify');
 Route::post('/whatsapp/webhook', [\App\Http\Controllers\WhatsappWebhookController::class, 'receive'])->name('whatsapp.webhook.receive');
 
+// ─── Avisos de Avappi Voz (llamadas con IA de Cobros) ───────────────────────
+// No requiere auth — Avappi llama directamente. Seguridad: token de la ruta y
+// firma X-Avappi-Firma en el controller (ver LlamadasCobroVoz).
+Route::post('/avisos/voz/{token}', \App\Http\Controllers\AvisoVozController::class)
+    ->middleware('throttle:120,1')
+    ->name('avisos.voz');
+
 // ─── GARVIS: fotos que Brayan le manda por WhatsApp ─────────────────────────
 // Sin auth: las baja el workflow de GARVIS en GitHub. Las protege el enlace firmado,
 // que vence en pocas horas (ver GarvisFotoJob).
@@ -712,6 +719,10 @@ Route::middleware('auth')->group(function () {
             Route::post('/whatsapp/{loteId}/reintentar', [$cb, 'reintentarLoteWhatsApp'])->name('whatsapp.reintentar');
             Route::post('/{contratoId}/llamada', [$cb, 'registrarLlamada'])->name('llamada.store');
             Route::get('/{contratoId}/llamadas', [$cb, 'historialLlamadas'])->name('llamadas');
+            // Llamadas con IA (Avappi Voz)
+            Route::get('/voz/previsualizar', [$cb, 'previsualizarVoz'])->name('voz.previsualizar');
+            Route::post('/voz/llamar', [$cb, 'llamarVoz'])->name('voz.llamar');
+            Route::get('/voz/historial', [$cb, 'historialVoz'])->name('voz.historial');
             // Empresas
             Route::get('/empresas', [$cb, 'empresas'])->name('empresas');
             Route::get('/empresas/whatsapp/previsualizar', [$cb, 'previsualizarWhatsAppEmpresas'])->name('empresas.whatsapp.previsualizar');

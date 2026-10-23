@@ -7,6 +7,7 @@ use App\Models\{Contrato, Factura, BitacoraCobro, ConfiguracionBrynex, ArlTarifa
 use App\Models\{WhatsappConfig, WhatsappEnvioMasivo, WhatsappEnvioMasivoDetalle, WhatsappMensaje};
 use App\Services\AfiliacionPendienteService;
 use App\Services\MoraClienteService;
+use App\Services\Voz\LlamadasCobroVoz;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\{Auth, DB, Log};
@@ -1146,6 +1147,79 @@ class CobrosController extends Controller
             ]);
 
         return response()->json(['ok' => true, 'llamadas' => $llamadas]);
+    }
+
+    // ─── Llamadas con IA (Avappi Voz) ────────────────────────────────
+    // Del mismo filtro de la vista sale una llamada por celular, solo a los
+    // individuales sin pagar. Ver App\Services\Voz\LlamadasCobroVoz.
+
+    private function loteVoz(Request $request): array
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $data = $this->obtenerDatosCobros($request);
+        $base = LlamadasCobroVoz::desdeCobros($aliadoId, $data['contratos'], $data['mes'], $data['anio']);
+
+        return [$aliadoId, $data['mes'], $data['anio'],
+            LlamadasCobroVoz::armar($aliadoId, $base['filas'], $data['mes'], $data['anio'], $base['omitidos'])];
+    }
+
+    public function previsualizarVoz(Request $request)
+    {
+        if (! LlamadasCobroVoz::habilitado((int) session('aliado_id_activo'))) {
+            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para este aliado.'], 403);
+        }
+        [, , , $lote] = $this->loteVoz($request);
+
+        $omitidos = [];
+        foreach ($lote['omitidos'] as $motivo => $n) {
+            $omitidos[] = ['motivo' => LlamadasCobroVoz::MOTIVOS[$motivo] ?? $motivo, 'cantidad' => $n];
+        }
+
+        return response()->json([
+            'ok' => true,
+            'configurado' => LlamadasCobroVoz::configurado(),
+            'llamadas' => count($lote['llamadas']),
+            'contratos' => array_sum(array_map(fn ($s) => count($s['contrato_ids']), $lote['series'])),
+            'costo_estimado' => $lote['costo_estimado'],
+            'organizacion' => $lote['comunes']['variables']['organizacion'],
+            'omitidos' => $omitidos,
+            'muestra' => array_map(fn ($l) => [
+                'nombre' => $l['variables']['nombre'],
+                'numero' => $l['numero'],
+                'valor' => $l['variables']['valor'],
+                'concepto' => $l['variables']['concepto'],
+                'vence' => ($l['variables']['ya_vencio'] ? 'venció ' : 'vence ').$l['variables']['vence'],
+            ], array_slice($lote['llamadas'], 0, 300)),
+        ]);
+    }
+
+    public function llamarVoz(Request $request)
+    {
+        if (! LlamadasCobroVoz::habilitado((int) session('aliado_id_activo'))) {
+            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para este aliado.'], 403);
+        }
+        [$aliadoId, $mes, $anio, $lote] = $this->loteVoz($request);
+        $r = LlamadasCobroVoz::llamar($aliadoId, $lote, $mes, $anio, Auth::id());
+
+        if (isset($r['error']) && $r['en_cola'] === 0 && $r['repetidas'] === 0) {
+            return response()->json(['ok' => false, 'mensaje' => $r['error']] + $r, 422);
+        }
+        $mensaje = "{$r['en_cola']} llamadas quedaron en cola";
+        if ($r['repetidas']) $mensaje .= " ({$r['repetidas']} ya estaban en cola de hoy)";
+        if ($r['no_salieron']) $mensaje .= '; '.count($r['no_salieron']).' no salieron';
+        if (isset($r['error'])) $mensaje .= '. '.$r['error'];
+
+        return response()->json(['ok' => true, 'mensaje' => $mensaje.'.'] + $r);
+    }
+
+    public function historialVoz()
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        if (! LlamadasCobroVoz::habilitado($aliadoId)) {
+            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para este aliado.'], 403);
+        }
+
+        return response()->json(['ok' => true, 'llamadas' => LlamadasCobroVoz::historial($aliadoId)]);
     }
 
     // ─── Vista EMPRESAS ──────────────────────────────────────────────

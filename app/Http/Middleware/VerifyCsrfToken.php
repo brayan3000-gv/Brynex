@@ -14,5 +14,6 @@ class VerifyCsrfToken extends Middleware
     protected $except = [
         'whatsapp/webhook',
         'whatsapp/webhook/*',
+        'avisos/voz/*',   // Avappi Voz: token de la ruta y firma del aviso
     ];
 }
