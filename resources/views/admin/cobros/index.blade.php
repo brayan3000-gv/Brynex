@@ -460,7 +460,7 @@ $sortClassC = function ($col, $cs, $cd) {
            title="Enviar cobros por WhatsApp">
             💬 WhatsApp
         </button>
-        @if(\App\Services\Voz\LlamadasCobroVoz::habilitado((int) session('aliado_id_activo')))
+        @if(\App\Services\Voz\LlamadasCobroVoz::puedeLlamar(auth()->user(), (int) session('aliado_id_activo')))
         <button type="button" onclick="abrirModalVoz()"
            style="background:#7c3aed;color:#fff;font-size:.8rem;font-weight:700;padding:.3rem .7rem;border-radius:6px;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:.3rem;"
            title="Llamar con el agente de IA a los clientes sin pagar de este filtro">
@@ -2124,7 +2124,7 @@ async function confirmarEnvioMasivoWa() {
         </div>
     </div>
 </div>
-@if(\App\Services\Voz\LlamadasCobroVoz::habilitado((int) session('aliado_id_activo')))
+@if(\App\Services\Voz\LlamadasCobroVoz::puedeLlamar(auth()->user(), (int) session('aliado_id_activo')))
 {{-- Modal Llamadas con IA (Avappi Voz) --}}
 <div id="modalVoz" class="modal-bg">
     <div class="modal-box wide" style="max-width:860px;border-radius:20px;">

@@ -251,4 +251,23 @@ class LlamadasCobroVozTest extends VozPruebaBase
         $this->assertFalse(LlamadasCobroVoz::habilitado(1));
         $this->assertFalse(LlamadasCobroVoz::habilitado(null));
     }
+
+    public function test_solo_el_superadmin_de_brynex_puede_llamar(): void
+    {
+        $usuario = fn (bool $brynex, bool $superadmin) => new class($brynex, $superadmin)
+        {
+            public function __construct(public bool $es_brynex, private bool $superadmin) {}
+
+            public function hasRole(string $rol): bool
+            {
+                return $rol === 'superadmin' && $this->superadmin;
+            }
+        };
+
+        $this->assertTrue(LlamadasCobroVoz::puedeLlamar($usuario(true, true), 2));
+        $this->assertFalse(LlamadasCobroVoz::puedeLlamar($usuario(true, true), 1), 'aliado sin habilitar');
+        $this->assertFalse(LlamadasCobroVoz::puedeLlamar($usuario(true, false), 2), 'de BryNex pero no superadmin');
+        $this->assertFalse(LlamadasCobroVoz::puedeLlamar($usuario(false, true), 2), 'superadmin de un aliado');
+        $this->assertFalse(LlamadasCobroVoz::puedeLlamar(null, 2));
+    }
 }

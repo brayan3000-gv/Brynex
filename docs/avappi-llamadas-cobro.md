@@ -15,7 +15,8 @@ Lo que diga queda en la **bitácora de cobros** de cada contrato, igual que las 
 ## 2. Cómo funciona
 
 1. En **Cobros** (`/admin/cobros`), con el filtro que se quiera, se pulsa **«📞 Llamar con IA»**. El botón solo
-   aparece en los aliados de `AVAPPI_VOZ_ALIADOS` (por defecto `2`, Brygar).
+   aparece en los aliados de `AVAPPI_VOZ_ALIADOS` (por defecto `2`, Brygar) y, por ahora, solo para el
+   superadmin de BryNex (`LlamadasCobroVoz::puedeLlamar`).
 2. La ventana muestra a cuántos se va a llamar, el costo estimado (1,5 min × $99) y por qué se deja por fuera a
    los demás. Al confirmar, BryNex manda el lote a `POST /api/voz/lotes`.
 3. Avappi llama con el agente `cobro-seguridad-social`, solo en el horario de las reglas de la organización

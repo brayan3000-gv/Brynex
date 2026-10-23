@@ -1165,8 +1165,8 @@ class CobrosController extends Controller
 
     public function previsualizarVoz(Request $request)
     {
-        if (! LlamadasCobroVoz::habilitado((int) session('aliado_id_activo'))) {
-            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para este aliado.'], 403);
+        if (! LlamadasCobroVoz::puedeLlamar(Auth::user(), (int) session('aliado_id_activo'))) {
+            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para ti en este aliado.'], 403);
         }
         [, , , $lote] = $this->loteVoz($request);
 
@@ -1195,8 +1195,8 @@ class CobrosController extends Controller
 
     public function llamarVoz(Request $request)
     {
-        if (! LlamadasCobroVoz::habilitado((int) session('aliado_id_activo'))) {
-            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para este aliado.'], 403);
+        if (! LlamadasCobroVoz::puedeLlamar(Auth::user(), (int) session('aliado_id_activo'))) {
+            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para ti en este aliado.'], 403);
         }
         [$aliadoId, $mes, $anio, $lote] = $this->loteVoz($request);
         $r = LlamadasCobroVoz::llamar($aliadoId, $lote, $mes, $anio, Auth::id());
@@ -1215,8 +1215,8 @@ class CobrosController extends Controller
     public function historialVoz()
     {
         $aliadoId = (int) session('aliado_id_activo');
-        if (! LlamadasCobroVoz::habilitado($aliadoId)) {
-            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para este aliado.'], 403);
+        if (! LlamadasCobroVoz::puedeLlamar(Auth::user(), $aliadoId)) {
+            return response()->json(['ok' => false, 'mensaje' => 'Las llamadas con IA no están habilitadas para ti en este aliado.'], 403);
         }
 
         return response()->json(['ok' => true, 'llamadas' => LlamadasCobroVoz::historial($aliadoId)]);

@@ -70,6 +70,19 @@ class LlamadasCobroVoz
         return $aliadoId !== null && in_array($aliadoId, (array) config('services.avappi_voz.aliados', []), true);
     }
 
+    /**
+     * Quién ve el botón y puede llamar: por ahora solo el superadmin de BryNex
+     * (lo pidió Brayan al desplegar, 22-oct-2026), y solo en los aliados
+     * habilitados.
+     */
+    public static function puedeLlamar($usuario, ?int $aliadoId): bool
+    {
+        return self::habilitado($aliadoId)
+            && $usuario !== null
+            && $usuario->es_brynex
+            && $usuario->hasRole('superadmin');
+    }
+
     /** Token de la ruta del aviso: el del .env o, si no hay, uno fijo derivado del APP_KEY. */
     public static function tokenAviso(): string
     {
