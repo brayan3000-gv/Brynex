@@ -91,14 +91,6 @@ class PlanillaVigilarSubtipo4 extends Command
             foreach ($this->sondear($t, $mes, $anio) as $cedula => $errores) {
                 $paso = ! in_array(self::REGLA_UGPP, $errores, true);
 
-                Log::info('vigia-subtipo4', [
-                    'rs' => $t->razon_social_id,
-                    'n_plano' => $t->n_plano,
-                    'cedula' => $cedula,
-                    'paso' => $paso,
-                    'errores' => $errores,
-                ]);
-
                 $this->line(sprintf(
                     '%s  rs %-5s n_plano %-3s CC %-12s → %s',
                     now()->format('d-m H:i'), $t->razon_social_id, $t->n_plano, $cedula,
@@ -113,10 +105,6 @@ class PlanillaVigilarSubtipo4 extends Command
 
         foreach ($this->sondearSueltas($mes, $anio) as $cedula => $errores) {
             $paso = ! in_array(self::REGLA_UGPP, $errores, true);
-
-            Log::info('vigia-subtipo4', [
-                'suelta' => true, 'cedula' => $cedula, 'paso' => $paso, 'errores' => $errores,
-            ]);
 
             $this->line(sprintf('%s  suelta            CC %-12s → %s',
                 now()->format('d-m H:i'), $cedula,
