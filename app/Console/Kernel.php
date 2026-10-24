@@ -193,6 +193,19 @@ class Kernel extends ConsoleKernel
         // Cómo salió la agenda de anoche. Los treinta comandos escriben su propio
         // log y nadie los abre: sin esto, uno que empiece a fallar de madrugada
         // puede pasar semanas así. Solo avisa cuando hay algo que contar.
+        // Sondea si el operador volvió a dejar pasar el subtipo de cotizante
+        // 03/04 (ver PlanillaVigilarSubtipo4). Cada media hora porque la
+        // hipótesis es que la validación de la UGPP se apaga por ventanas: con
+        // una corrida diaria no se vería. No liquida nada — el archivo lleva
+        // freno —, y el aviso por WhatsApp sale una vez cada 6 h.
+        $schedule->command('planilla:vigilar-subtipo4')
+            ->everyThirtyMinutes()
+            ->between('5:00', '23:00')
+            ->timezone('America/Bogota')
+            ->name('vigia-subtipo4')
+            ->withoutOverlapping(25)
+            ->appendOutputTo(storage_path('logs/vigia-subtipo4.log'));
+
         $schedule->command('corridas:resumen --horas=12')
             ->dailyAt('07:30')
             ->timezone('America/Bogota')
