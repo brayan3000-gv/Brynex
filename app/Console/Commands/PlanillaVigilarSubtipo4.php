@@ -225,7 +225,7 @@ class PlanillaVigilarSubtipo4 extends Command
         );
 
         if (! ($r['success'] ?? false)) {
-            $this->warn('Operador no respondió: '.substr($r['message'] ?? '', 0, 120));
+            $this->warn('Operador no respondió: '.substr($r['message'] ?? '(sin mensaje)', 0, 140));
 
             return [];
         }
@@ -371,11 +371,25 @@ class PlanillaVigilarSubtipo4 extends Command
             $l = substr_replace($l, ' ', 148, 1);              // sin VAC-LR
             $l = substr_replace($l, ' ', 30, 1);               // sin marca de exterior
 
-            $r = $api->liquidarPlanilla($nit, implode("\r\n", [$cabecera, $l, $freno]),
-                $base['filename'], ['tipoArchivo' => 'I']);
+            // Un reintento reautenticando: el operador admite una sola sesión
+            // por usuario y dos sondeos seguidos a veces se pisan. Sin esto, la
+            // corrida automática reportaba «sigue bloqueado» cuando en realidad
+            // nunca llegó a preguntar — que es peor que no sondear.
+            $r = null;
+            for ($i = 0; $i < 2; $i++) {
+                $r = $api->liquidarPlanilla($nit, implode("\r\n", [$cabecera, $l, $freno]),
+                    $base['filename'], ['tipoArchivo' => 'I']);
+
+                if ($r['success'] ?? false) {
+                    break;
+                }
+
+                $api->autenticar(true);
+                usleep(1500000);
+            }
 
             if (! ($r['success'] ?? false)) {
-                $this->warn("CC {$ced}: el operador no respondió.");
+                $this->warn("CC {$ced}: el operador no respondió — ".substr($r['message'] ?? '(sin mensaje)', 0, 140));
 
                 continue;
             }
