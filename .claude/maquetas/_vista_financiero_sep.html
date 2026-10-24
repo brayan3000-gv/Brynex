@@ -1,0 +1,2837 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BryNex — Estado Financiero</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <meta name="csrf-token" content="">
+    
+    
+    <style>
+        [x-cloak] { display: none !important; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --azul-oscuro: #0a1628;
+            --azul-medio:  #0d2550;
+            --azul-vivo:   #1e40af;
+            --azul-btn:    #2563eb;
+            --acento:      #3b82f6;
+            --texto:       #e2e8f0;
+            --fondo:       #f0f4f8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--fondo);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Barra superior aliado (solo BryNex) ───────────────────────── */
+        .bar-brynex {
+            background: linear-gradient(90deg, #0a1628, #0d2550);
+            padding: 0.35rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .bar-brynex span {
+            color: rgba(255,255,255,0.6);
+            font-size: 0.72rem;
+        }
+
+        .bar-brynex .aliado-actual {
+            color: #93c5fd;
+            font-weight: 600;
+            font-size: 0.75rem;
+        }
+
+        .btn-cambiar {
+            background: rgba(59,130,246,0.2);
+            border: 1px solid rgba(59,130,246,0.4);
+            color: #93c5fd;
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.2rem 0.65rem;
+            border-radius: 999px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+
+        .btn-cambiar:hover { background: rgba(59,130,246,0.35); }
+
+        /* ── Header principal ───────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, var(--azul-oscuro) 0%, var(--azul-medio) 60%, var(--azul-vivo) 100%);
+            padding: 0.65rem 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.35);
+        }
+
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-logo img.logo-aliado {
+            height: 44px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.08);
+            padding: 2px;
+        }
+
+        .header-aliado-info h2 {
+            color: #fff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .header-aliado-info small {
+            color: rgba(255,255,255,0.5);
+            font-size: 0.72rem;
+        }
+
+        .header-user {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }
+
+        /* ── Dropdown de usuario ────────────────────────────────────────── */
+        .user-dropdown {
+            position: relative;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .user-dropdown-trigger {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.35rem 0.65rem;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
+            transition: background 0.15s, border-color 0.15s;
+        }
+
+        .user-dropdown-trigger:hover,
+        .user-dropdown.open .user-dropdown-trigger {
+            background: rgba(59,130,246,0.15);
+            border-color: rgba(59,130,246,0.35);
+        }
+
+        .user-info {
+            text-align: right;
+        }
+
+        .user-info .nombre {
+            color: #fff;
+            font-size: 0.82rem;
+            font-weight: 500;
+        }
+
+        .user-info .rol {
+            color: rgba(255,255,255,0.45);
+            font-size: 0.68rem;
+            text-transform: capitalize;
+        }
+
+        .user-arrow {
+            font-size: 0.55rem;
+            color: rgba(255,255,255,0.4);
+            transition: transform 0.2s;
+        }
+
+        .user-dropdown.open .user-arrow {
+            transform: rotate(180deg);
+            color: #93c5fd;
+        }
+
+        /* Panel desplegable de usuario */
+        .user-dropdown-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            min-width: 200px;
+            background: linear-gradient(135deg, #0d2550 0%, #0a1628 100%);
+            border: 1px solid rgba(59,130,246,0.25);
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+            padding: 0.4rem;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px);
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            pointer-events: none;
+        }
+
+        .user-dropdown.open .user-dropdown-panel {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+            pointer-events: all;
+        }
+
+        /* Flecha decorativa del panel de usuario */
+        .user-dropdown-panel::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            right: 18px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 6px solid rgba(59,130,246,0.25);
+        }
+
+        .user-dropdown-panel::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            right: 19px;
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 5px solid #0d2550;
+        }
+
+        /* Ítem del panel de usuario */
+        .user-panel-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.65rem;
+            border-radius: 7px;
+            text-decoration: none;
+            color: rgba(255,255,255,0.75);
+            font-size: 0.78rem;
+            font-weight: 500;
+            transition: background 0.12s, color 0.12s;
+            white-space: nowrap;
+            width: 100%;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .user-panel-item:hover {
+            background: rgba(59,130,246,0.2);
+            color: #93c5fd;
+        }
+
+        .user-panel-item.danger {
+            color: #fca5a5;
+        }
+
+        .user-panel-item.danger:hover {
+            background: rgba(239,68,68,0.2);
+            color: #fca5a5;
+        }
+
+        .user-panel-item .upi {
+            width: 22px;
+            height: 22px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .user-panel-sep {
+            height: 1px;
+            background: rgba(255,255,255,0.07);
+            margin: 0.3rem 0;
+        }
+
+        .user-panel-header {
+            padding: 0.3rem 0.65rem 0.25rem;
+            font-size: 0.7rem;
+            color: rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .user-panel-header strong {
+            color: #93c5fd;
+            font-size: 0.78rem;
+        }
+
+        /* Mantener btn-salir para compatibilidad si existe en otra parte */
+        .btn-salir {
+            display: none;
+        }
+
+        /* ── Menú de iconos (integrado en header) ────────────────────────── */
+        .menu-iconos {
+            background: transparent;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.1rem;
+            flex: 1;
+            justify-content: center;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+
+        .menu-iconos::-webkit-scrollbar { display: none; }
+
+        .menu-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.18rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s, transform 0.15s;
+            min-width: 58px;
+            border: 1px solid transparent;
+        }
+
+        .menu-item:hover {
+            background: rgba(59,130,246,0.15);
+            border-color: rgba(59,130,246,0.25);
+            transform: translateY(-1px);
+        }
+
+        .menu-item.activo {
+            background: rgba(59,130,246,0.2);
+            border-color: rgba(59,130,246,0.4);
+        }
+
+        .menu-item .icono {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            background: rgba(255,255,255,0.06);
+        }
+
+        .menu-item .label {
+            color: rgba(255,255,255,0.75);
+            font-size: 0.62rem;
+            font-weight: 500;
+            text-align: center;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        .menu-item:hover .label,
+        .menu-item.activo .label {
+            color: #93c5fd;
+        }
+
+        .menu-sep {
+            width: 1px;
+            height: 36px;
+            background: rgba(255,255,255,0.08);
+            margin: 0 0.25rem;
+            flex-shrink: 0;
+        }
+
+        /* ── Dropdown de menú ───────────────────────────────────────────── */
+        .menu-dropdown {
+            position: relative;
+        }
+
+        .menu-dropdown-trigger {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.18rem;
+            padding: 0.3rem 0.7rem;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s, transform 0.15s;
+            min-width: 60px;
+            border: 1px solid transparent;
+            background: none;
+            outline: none;
+            user-select: none;
+        }
+
+        .menu-dropdown-trigger:hover,
+        .menu-dropdown:hover .menu-dropdown-trigger {
+            background: rgba(59,130,246,0.15);
+            border-color: rgba(59,130,246,0.25);
+            transform: translateY(-1px);
+        }
+
+        .menu-dropdown-trigger.activo,
+        .menu-dropdown:hover .menu-dropdown-trigger.activo {
+            background: rgba(59,130,246,0.2);
+            border-color: rgba(59,130,246,0.4);
+        }
+
+        .menu-dropdown-trigger .icono {
+            width: 28px;
+            height: 28px;
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            background: rgba(255,255,255,0.06);
+        }
+
+        .menu-dropdown-trigger .label {
+            color: rgba(255,255,255,0.75);
+            font-size: 0.62rem;
+            font-weight: 500;
+            text-align: center;
+            letter-spacing: 0.02em;
+            white-space: nowrap;
+        }
+
+        .menu-dropdown:hover .menu-dropdown-trigger .label {
+            color: #93c5fd;
+        }
+
+        /* Icono de flecha pequeña */
+        .menu-dropdown-trigger .arrow {
+            font-size: 0.48rem;
+            color: rgba(255,255,255,0.4);
+            margin-top: -2px;
+        }
+
+        .menu-dropdown:hover .menu-dropdown-trigger .arrow {
+            color: #93c5fd;
+        }
+
+        /* Panel desplegable */
+        .menu-dropdown-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            min-width: 180px;
+            background: linear-gradient(135deg, #0d2550 0%, #0a1628 100%);
+            border: 1px solid rgba(59,130,246,0.25);
+            border-radius: 10px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+            padding: 0.4rem;
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateX(-50%) translateY(-6px);
+            transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+            pointer-events: none;
+        }
+
+        .menu-dropdown:hover .menu-dropdown-panel {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(0);
+            pointer-events: all;
+        }
+
+        /* Flecha decorativa del panel */
+        .menu-dropdown-panel::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-bottom: 6px solid rgba(59,130,246,0.25);
+        }
+
+        .menu-dropdown-panel::after {
+            content: '';
+            position: absolute;
+            top: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-bottom: 5px solid #0d2550;
+        }
+
+        /* Cabecera del panel (título del grupo) */
+        .panel-header {
+            padding: 0.3rem 0.5rem 0.2rem;
+            font-size: 0.58rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.35);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+            margin-bottom: 0.2rem;
+        }
+
+        /* Separador dentro del panel */
+        .panel-sep {
+            height: 1px;
+            background: rgba(255,255,255,0.07);
+            margin: 0.3rem 0;
+        }
+
+        /* Ítem del panel */
+        .panel-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.65rem;
+            border-radius: 7px;
+            text-decoration: none;
+            color: rgba(255,255,255,0.75);
+            font-size: 0.78rem;
+            font-weight: 500;
+            transition: background 0.12s, color 0.12s;
+            white-space: nowrap;
+        }
+
+        .panel-item:hover {
+            background: rgba(59,130,246,0.2);
+            color: #93c5fd;
+        }
+
+        .panel-item.activo {
+            background: rgba(59,130,246,0.25);
+            color: #93c5fd;
+        }
+
+        .panel-item .pi {
+            width: 22px;
+            height: 22px;
+            border-radius: 5px;
+            background: rgba(255,255,255,0.06);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        /* Colores especiales para el dropdown BryNex */
+        .menu-dropdown.brynex .menu-dropdown-trigger .icono {
+            background: rgba(29,78,216,0.3);
+        }
+
+        .menu-dropdown.brynex .menu-dropdown-panel {
+            background: linear-gradient(135deg, #1e3a8a 0%, #0a1628 100%);
+            border-color: rgba(99,179,237,0.3);
+        }
+
+        .menu-dropdown.brynex .panel-item:hover {
+            background: rgba(99,179,237,0.2);
+            color: #bfdbfe;
+        }
+
+        .menu-dropdown.brynex .menu-dropdown-panel::before {
+            border-bottom-color: rgba(99,179,237,0.3);
+        }
+
+        .menu-dropdown.brynex .menu-dropdown-panel::after {
+            border-bottom-color: #1e3a8a;
+        }
+
+        /* ── Contenido ──────────────────────────────────────────────────── */
+        .contenido {
+            flex: 1;
+            padding: 1.5rem;
+        }
+
+        /* ── Flash messages ─────────────────────────────────────────────── */
+        .flash {
+            padding: 0.65rem 1rem;
+            border-radius: 8px;
+            font-size: 0.83rem;
+            margin-bottom: 1rem;
+        }
+
+        .flash.success {
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.3);
+            color: #065f46;
+        }
+
+        .flash.warning {
+            background: rgba(245,158,11,0.12);
+            border: 1px solid rgba(245,158,11,0.4);
+            color: #92400e;
+            font-weight: 600;
+        }
+
+        /* ── Botón hamburguesa (solo visible en móvil) ────────────────────── */
+        .btn-hamburguesa {
+            display: none;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #fff;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.15rem;
+            line-height: 1;
+            transition: background 0.15s, border-color 0.15s;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .btn-hamburguesa:hover { background: rgba(59,130,246,0.25); border-color: rgba(59,130,246,0.4); }
+
+        /* ── Overlay oscuro del drawer ──────────────────────────────────────── */
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            z-index: 1000;
+            backdrop-filter: blur(2px);
+            -webkit-backdrop-filter: blur(2px);
+        }
+        .mobile-overlay.open { display: block; }
+
+        /* ── Drawer lateral ─────────────────────────────────────────────────── */
+        .mobile-drawer {
+            position: fixed;
+            top: 0;
+            left: -100%;
+            width: min(290px, 88vw);
+            height: 100%;
+            background: linear-gradient(160deg, #0a1628 0%, #0d2550 100%);
+            z-index: 1001;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 4px 0 32px rgba(0,0,0,0.6);
+            transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(59,130,246,0.3) transparent;
+        }
+        .mobile-drawer.open { left: 0; }
+
+        /* Cabecera del drawer */
+        .drawer-header {
+            padding: 1rem 1.1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.2);
+            flex-shrink: 0;
+        }
+        .drawer-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+        }
+        .drawer-title {
+            color: #fff;
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
+        .drawer-empresa {
+            color: rgba(255,255,255,0.45);
+            font-size: 0.7rem;
+        }
+        .drawer-close {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: rgba(255,255,255,0.5);
+            font-size: 1rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            transition: color 0.15s, background 0.15s;
+            line-height: 1;
+        }
+        .drawer-close:hover { color: #fff; background: rgba(255,255,255,0.12); }
+
+        /* Secciones del drawer */
+        .drawer-section {
+            padding: 0.4rem 0.65rem;
+        }
+        .drawer-section-label {
+            font-size: 0.6rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255,255,255,0.3);
+            padding: 0.6rem 0.5rem 0.2rem;
+        }
+        .drawer-sep {
+            height: 1px;
+            background: rgba(255,255,255,0.07);
+            margin: 0.2rem 0.65rem;
+        }
+
+        /* Ítems de navegación del drawer */
+        .drawer-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.6rem 0.75rem;
+            border-radius: 8px;
+            text-decoration: none;
+            color: rgba(255,255,255,0.72);
+            font-size: 0.84rem;
+            font-weight: 500;
+            transition: background 0.12s, color 0.12s;
+            margin-bottom: 0.05rem;
+            width: 100%;
+            background: none;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            box-sizing: border-box;
+            border-left: 3px solid transparent;
+        }
+        .drawer-item:hover {
+            background: rgba(59,130,246,0.15);
+            color: #93c5fd;
+        }
+        .drawer-item.activo {
+            background: rgba(59,130,246,0.18);
+            color: #93c5fd;
+            border-left-color: #3b82f6;
+        }
+        .drawer-item.danger { color: rgba(252,165,165,0.8); }
+        .drawer-item.danger:hover { background: rgba(239,68,68,0.12); color: #fca5a5; }
+        .di-icon {
+            font-size: 1rem;
+            width: 26px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        /* Footer del drawer */
+        .drawer-footer {
+            margin-top: auto;
+            padding: 0.65rem;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            flex-shrink: 0;
+        }
+        .drawer-user-card {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.55rem 0.75rem;
+            margin-bottom: 0.4rem;
+            background: rgba(255,255,255,0.04);
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.07);
+        }
+        .drawer-user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #2563eb, #1e40af);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 0.85rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .du-nombre { color: #fff; font-size: 0.82rem; font-weight: 600; }
+        .du-rol { color: rgba(255,255,255,0.4); font-size: 0.68rem; text-transform: capitalize; }
+
+        /* ── Responsive ─────────────────────────────────────────────────── */
+        @media (max-width: 768px) {
+            .user-info { display: none; }
+            .menu-iconos { display: none !important; }
+            .btn-hamburguesa { display: flex; }
+            .header { padding: 0.55rem 0.9rem; gap: 0.5rem; }
+            .header-aliado-info h2 { font-size: 0.82rem; }
+            .header-aliado-info small { display: none; }
+            .header-logo { gap: 0.5rem; }
+            .header-logo img.logo-aliado { height: 36px; }
+            .contenido { padding: 0.9rem 0.7rem; }
+        }
+        @media (max-width: 480px) {
+            .header { padding: 0.5rem 0.65rem; }
+            .header-logo img.logo-aliado { height: 32px; }
+            .contenido { padding: 0.75rem 0.5rem; }
+        }
+    </style>
+    <style>
+.fin-kpi{background:#fff;border-radius:14px;padding:1.1rem .8rem;box-shadow:0 1px 8px rgba(0,0,0,.06);border-left:4px solid var(--c);}
+.fin-kpi .val{font-size:1.2rem;font-weight:800;color:var(--c);line-height:1.1;white-space:nowrap;}
+.fin-kpi .lab{font-size:.8rem;font-weight:600;color:#334155;margin-top:.3rem;}
+.fin-kpi .sub{font-size:.72rem;color:#94a3b8;margin-top:.15rem;}
+.dia-row{display:grid;grid-template-columns:50px 1fr 1fr 1fr 1fr 1fr;gap:.5rem;padding:.5rem .75rem;border-bottom:1px solid #f1f5f9;font-size:.8rem;align-items:center;cursor:pointer;transition:background .12s;}
+.dia-row:hover{background:#f8fafc;}
+.dia-row.dia-head{background:#f8fafc;border-bottom:2px solid #e2e8f0;font-size:.7rem;text-transform:uppercase;color:#64748b;font-weight:700;cursor:default;}
+.bank-card{
+    background:#fff;
+    border-radius:14px;
+    padding:1.1rem 1.2rem 1rem;
+    box-shadow:0 2px 10px rgba(0,0,0,.07);
+    border-top:4px solid #3b82f6;
+    cursor:pointer;
+    transition:all .2s;
+    display:flex;
+    flex-direction:column;
+    min-height:168px;
+}
+.bank-card:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.12);}
+.audit-row{cursor:pointer;transition:background .12s;}
+.audit-row:hover{background:#faf5ff !important;}
+.audit-row .audit-hint{font-size:.68rem;color:#a78bfa;margin-top:.15rem;}
+</style>
+</head>
+<body>
+
+    
+
+    
+        <header class="header">
+        <a href="https://brynex.co/dashboard" class="header-logo" style="text-decoration:none;cursor:pointer;">
+                            <img class="logo-aliado" src="https://brynex.co/storage/logos/v46mV1V7OsOlLnxkRaw9relOTlsVxutZoF2e11Fi.png" alt="BRYGAR">
+                        <div class="header-aliado-info">
+                <h2>BRYGAR</h2>
+                                    <small>Tu seguridad social.</small>                            </div>
+        </a>
+
+        
+        <nav class="menu-iconos">
+            <a href="https://brynex.co/dashboard" class="menu-item ">
+                <div class="icono">🏠</div>
+                <div class="label">Inicio</div>
+            </a>
+
+                        <a href="https://brynex.co/admin/clientes" class="menu-item ">
+                <div class="icono">👥</div>
+                <div class="label">Clientes</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/facturacion" class="menu-item ">
+                <div class="icono">🏢</div>
+                <div class="label">Empresas</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/afiliaciones" class="menu-item ">
+                <div class="icono">🤝</div>
+                <div class="label">Afiliaciones</div>
+            </a>
+            
+
+
+                        <a href="https://brynex.co/admin/planos" class="menu-item ">
+                <div class="icono">📄</div>
+                <div class="label">Planos SS</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/cobros" class="menu-item ">
+                <div class="icono">💰</div>
+                <div class="label">Cobros</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/prestamos" class="menu-item ">
+                <div class="icono">📋</div>
+                <div class="label">Préstamos</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/tareas" class="menu-item " style="position:relative">
+                <div class="icono" style="position:relative">
+                    📌
+                    
+                    <span id="portal-badge" title="Solicitudes nuevas de empresas" style="display:none;position:absolute;top:-5px;right:-5px;background:#2563eb;color:#fff;font-size:.55rem;font-weight:700;padding:.08rem .35rem;border-radius:999px;min-width:16px;text-align:center"></span>
+                </div>
+                <div class="label">Tareas</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/incapacidades" class="menu-item ">
+                <div class="icono">🏥</div>
+                <div class="label">Incapacidades</div>
+            </a>
+            
+                        <a href="https://brynex.co/admin/whatsapp/chat"
+               class="menu-item "
+               style="position:relative" title="WhatsApp Chat">
+                <div class="icono" style="position:relative">
+                    💬
+                    <span id="wa-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;font-size:.55rem;font-weight:700;padding:.08rem .35rem;border-radius:999px;min-width:16px;text-align:center"></span>
+                </div>
+                <div class="label">WhatsApp</div>
+            </a>
+            
+                        <div class="menu-sep"></div>
+
+            <a href="https://brynex.co/cuadre-diario"
+               class="menu-item ">
+                <div class="icono">🧾</div>
+                <div class="label">Cuadre Caja</div>
+            </a>
+            
+                        <div class="menu-sep"></div>
+            <a href="https://brynex.co/admin/informes"
+               class="menu-item ">
+                <div class="icono">📊</div>
+                <div class="label">Informes</div>
+            </a>
+            
+
+
+            
+
+            
+            
+                        <div class="menu-sep"></div>
+            <div class="menu-dropdown">
+                
+                                <a href="https://brynex.co/admin/configuracion" class="menu-dropdown-trigger ">
+                    <div class="icono">⚙️</div>
+                    <div class="label">Admin</div>
+                </a>
+                <div class="menu-dropdown-panel">
+                    <div class="panel-header">Administración</div>
+
+                                        <a href="https://brynex.co/admin/asesores" class="panel-item ">
+                        <div class="pi">🤝</div> Asesores
+                    </a>
+                                                            <a href="https://brynex.co/admin/bitacora" class="panel-item ">
+                        <div class="pi">👁️</div> Auditoría
+                    </a>
+                                        
+                                        <a href="https://brynex.co/admin/configuracion/razones-sociales" class="panel-item ">
+                        <div class="pi">🏭</div> Razones sociales
+                    </a>
+                    
+                                        <div class="panel-sep"></div>
+                    
+                                        <a href="https://brynex.co/admin/usuarios" class="panel-item ">
+                        <div class="pi">👥</div> Usuarios
+                    </a>
+                                        
+                                        <a href="https://brynex.co/admin/configuracion" class="panel-item ">
+                        <div class="pi">⚙️</div> Configuración
+                    </a>
+                                                            <a href="https://brynex.co/admin/configuracion/parametros" class="panel-item ">
+                        <div class="pi">💲</div> Parámetros / Precios
+                    </a>
+                                                            <div class="panel-sep"></div>
+                    <a href="https://brynex.co/admin/traslados-rs" class="panel-item ">
+                        <div class="pi">🔄</div> Traslado de RS
+                    </a>
+                                    </div>
+            </div>
+            
+            
+                                        
+            
+                                        
+            
+            
+            
+                        <div class="menu-sep"></div>
+            <div class="menu-dropdown brynex">
+                <a href="https://brynex.co/brynex" class="menu-dropdown-trigger ">
+                    <div class="icono">🔵</div>
+                    <div class="label">BryNex</div>
+                </a>
+                <div class="menu-dropdown-panel">
+                    <div class="panel-header">BryNex Global</div>
+
+                    <a href="https://brynex.co/brynex" class="panel-item ">
+                        <div class="pi">🔵</div> Hub BryNex
+                    </a>
+                    <a href="https://brynex.co/admin/aliados" class="panel-item ">
+                        <div class="pi">🏢</div> Aliados
+                    </a>
+                    <a href="https://brynex.co/brynex/accesos" class="panel-item ">
+                        <div class="pi">🔐</div> Accesos de Usuarios
+                    </a>
+                                        <a href="https://brynex.co/brynex/razones-sociales" class="panel-item ">
+                        <div class="pi">🏛️</div> Razones Sociales
+                    </a>
+                                                            <a href="https://brynex.co/brynex/consulta-dian" class="panel-item ">
+                        <div class="pi">🔎</div> Consulta DIAN
+                    </a>
+                    
+                    <div class="panel-sep"></div>
+                    <div class="panel-header" style="margin-top:0.2rem">Operaciones</div>
+
+                    <a href="https://brynex.co/admin/usuarios" class="panel-item ">
+                        <div class="pi">👥</div> Usuarios
+                    </a>
+                    <a href="https://brynex.co/admin/bitacora" class="panel-item ">
+                        <div class="pi">👁️</div> Auditoría
+                    </a>
+                    <a href="https://brynex.co/brynex/backups" class="panel-item ">
+                        <div class="pi">💾</div> Copias de Seguridad
+                    </a>
+
+                                        <div class="panel-sep"></div>
+                    <a href="https://brynex.co/finanzas" class="panel-item " style="background: rgba(168, 85, 247, 0.08); border-left: 3px solid #a855f7;">
+                        <div class="pi">💰</div> Finanzas Personales
+                    </a>
+                                    </div>
+            </div>
+                    </nav>
+
+        <div class="header-user">
+            
+            <div class="user-dropdown" id="userDropdown">
+                <div class="user-dropdown-trigger" onclick="toggleUserDropdown()">
+                    <div class="user-info">
+                        <div class="nombre">Brayan Garcia</div>
+                        <div class="rol">superadmin</div>
+                    </div>
+                    <span class="user-arrow">▼</span>
+                </div>
+                <div class="user-dropdown-panel">
+                    <div class="user-panel-header">
+                        👤 <strong>Brayan Garcia</strong>
+                    </div>
+                    <div class="user-panel-sep"></div>
+
+                                        <a href="https://brynex.co/seleccionar-aliado" class="user-panel-item">
+                        <span class="upi">⇄</span> Cambiar aliado
+                    </a>
+                    <div class="user-panel-sep"></div>
+                    
+                    <button type="button" class="user-panel-item danger" onclick="cerrarSesion()">
+                        <span class="upi">⏻</span> Salir del sistema
+                    </button>
+                </div>
+            </div>
+
+            
+            <button class="btn-hamburguesa" id="btnHamburguesa" onclick="abrirDrawer()" aria-label="Abrir menú">
+                ☰
+            </button>
+        </div>
+    </header>
+    
+    
+    
+    
+        <div class="mobile-overlay" id="mobileOverlay" onclick="cerrarDrawer()"></div>
+
+    <nav class="mobile-drawer" id="mobileDrawer" aria-label="Menú de navegación">
+
+        
+        <div class="drawer-header">
+            <div class="drawer-header-left">
+                <div>
+                    <div class="drawer-title">BRYGAR</div>
+                    <div class="drawer-empresa">Panel de gestión</div>
+                </div>
+            </div>
+            <button class="drawer-close" onclick="cerrarDrawer()" aria-label="Cerrar menú">✕</button>
+        </div>
+
+        
+        <div class="drawer-section">
+            <div class="drawer-section-label">Navegación</div>
+
+            <a href="https://brynex.co/dashboard" class="drawer-item ">
+                <span class="di-icon">🏠</span> Inicio
+            </a>
+            <a href="https://brynex.co/admin/clientes" class="drawer-item ">
+                <span class="di-icon">👥</span> Clientes
+            </a>
+            <a href="https://brynex.co/admin/facturacion" class="drawer-item ">
+                <span class="di-icon">🏢</span> Empresas
+            </a>
+                        <a href="https://brynex.co/admin/afiliaciones" class="drawer-item ">
+                <span class="di-icon">🤝</span> Afiliaciones
+            </a>
+                                    <a href="https://brynex.co/admin/planos" class="drawer-item ">
+                <span class="di-icon">📄</span> Planos SS
+            </a>
+                                    <a href="https://brynex.co/admin/cobros" class="drawer-item ">
+                <span class="di-icon">💰</span> Cobros
+            </a>
+                                    <a href="https://brynex.co/admin/prestamos" class="drawer-item ">
+                <span class="di-icon">📋</span> Préstamos
+            </a>
+                        <a href="https://brynex.co/admin/tareas" class="drawer-item ">
+                <span class="di-icon">📌</span> Tareas
+            </a>
+            <a href="https://brynex.co/admin/incapacidades" class="drawer-item ">
+                <span class="di-icon">🏥</span> Incapacidades
+            </a>
+                        <a href="https://brynex.co/admin/whatsapp/chat" class="drawer-item ">
+                <span class="di-icon">💬</span> WhatsApp
+            </a>
+                                    <a href="https://brynex.co/admin/cartas-laborales" class="drawer-item ">
+                <span class="di-icon">📝</span> Cartas laborales
+            </a>
+                    </div>
+
+        
+                <div class="drawer-sep"></div>
+        <div class="drawer-section">
+            <div class="drawer-section-label">Financiero</div>
+                        <a href="https://brynex.co/cuadre-diario" class="drawer-item ">
+                <span class="di-icon">🧾</span> Cuadre Caja
+            </a>
+                                    <a href="https://brynex.co/admin/cotizaciones" class="drawer-item ">
+                <span class="di-icon">💼</span> Cotizaciones
+            </a>
+                    </div>
+        
+        
+                <div class="drawer-sep"></div>
+        <div class="drawer-section">
+            <div class="drawer-section-label">Reportes</div>
+                        <a href="https://brynex.co/admin/informes" class="drawer-item ">
+                <span class="di-icon">📊</span> Informes
+            </a>
+                                    <a href="https://brynex.co/admin/informes/comisiones" class="drawer-item ">
+                <span class="di-icon">💼</span> Comisiones
+            </a>
+                    </div>
+        
+        
+                <div class="drawer-sep"></div>
+        <div class="drawer-section">
+            <div class="drawer-section-label">Administración</div>
+                        <a href="https://brynex.co/admin/asesores" class="drawer-item ">
+                <span class="di-icon">🤝</span> Asesores
+            </a>
+                                    <a href="https://brynex.co/admin/usuarios" class="drawer-item ">
+                <span class="di-icon">👥</span> Usuarios
+            </a>
+                                    <a href="https://brynex.co/admin/configuracion" class="drawer-item ">
+                <span class="di-icon">⚙️</span> Configuración
+            </a>
+                                    <a href="https://brynex.co/admin/bitacora" class="drawer-item ">
+                <span class="di-icon">👁️</span> Auditoría
+            </a>
+                                    <a href="https://brynex.co/admin/configuracion/razones-sociales" class="drawer-item ">
+                <span class="di-icon">🏭</span> Razones sociales
+            </a>
+                                    <a href="https://brynex.co/admin/traslados-rs" class="drawer-item ">
+                <span class="di-icon">🔄</span> Traslados RS
+            </a>
+                    </div>
+        
+                <div class="drawer-sep"></div>
+        <div class="drawer-section">
+            <div class="drawer-section-label">BryNex Global</div>
+            <a href="https://brynex.co/brynex" class="drawer-item ">
+                <span class="di-icon">🔵</span> Hub BryNex
+            </a>
+            <a href="https://brynex.co/admin/aliados" class="drawer-item ">
+                <span class="di-icon">🏢</span> Aliados
+            </a>
+            <a href="https://brynex.co/brynex/accesos" class="drawer-item ">
+                <span class="di-icon">🔐</span> Accesos de Usuarios
+            </a>
+            <a href="https://brynex.co/brynex/backups" class="drawer-item ">
+                <span class="di-icon">💾</span> Copias de Seguridad
+            </a>
+        </div>
+        
+        
+        <div class="drawer-footer">
+            <div class="drawer-user-card">
+                <div class="drawer-user-avatar">
+                    B
+                </div>
+                <div>
+                    <div class="du-nombre">Brayan Garcia</div>
+                    <div class="du-rol">superadmin</div>
+                </div>
+            </div>
+                        <a href="https://brynex.co/seleccionar-aliado" class="drawer-item">
+                <span class="di-icon">⇄</span> Cambiar aliado
+            </a>
+                        <div class="drawer-sep" style="margin: 0.4rem 0"></div>
+            <button type="button" class="drawer-item danger" onclick="cerrarSesion()">
+                <span class="di-icon">⏻</span> Salir del sistema
+            </button>
+        </div>
+
+    </nav>
+    
+
+    
+    <main class="contenido" style="">
+                
+        <div style="max-width:1200px;margin:0 auto;">
+
+    
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap;">
+        <a href="https://brynex.co/admin/informes" style="color:#64748b;font-size:.82rem;text-decoration:none;">← Informes</a>
+        <h1 style="font-size:1.2rem;font-weight:700;color:#0d2550;flex:1;">💰 Estado Financiero — Septiembre 2026</h1>
+        <form method="GET" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+            <select name="mes" onchange="this.form.submit()" style="padding:.4rem .65rem;border:1px solid #e2e8f0;border-radius:8px;font-size:.82rem;">
+                   <option value="1" >Enero</option>  <option value="2" >Febrero</option>  <option value="3" >Marzo</option>  <option value="4" >Abril</option>  <option value="5" >Mayo</option>  <option value="6" >Junio</option>  <option value="7" >Julio</option>  <option value="8" >Agosto</option>  <option value="9" selected>Septiembre</option>  <option value="10" >Octubre</option>  <option value="11" >Noviembre</option>  <option value="12" >Diciembre</option>             </select>
+            <select name="anio" onchange="this.form.submit()" style="padding:.4rem .65rem;border:1px solid #e2e8f0;border-radius:8px;font-size:.82rem;">
+                <option value="2023" >2023</option><option value="2024" >2024</option><option value="2025" >2025</option><option value="2026" selected>2026</option>            </select>
+            <a href="?mes=9&anio=2026&excel=1" style="background:#16a34a;color:#fff;border-radius:8px;padding:.4rem .9rem;font-size:.78rem;font-weight:600;text-decoration:none;">📥 Excel</a>
+            <a href="https://brynex.co/admin/informes/gastos?mes=9&amp;anio=2026" style="background:#7c3aed;color:#fff;border-radius:8px;padding:.4rem .9rem;font-size:.78rem;font-weight:600;text-decoration:none;">💸 Ver Gastos</a>
+        </form>
+    </div>
+
+        
+    
+    <style>
+.cm-wrap{margin-bottom:1.5rem}
+.cm-hero{background:linear-gradient(90deg,#0a1628,#0d2550 55%,#1e40af);border-radius:14px;padding:1rem 1.3rem;color:#fff;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.cm-hero h2{margin:0;font-size:1.05rem;font-weight:800}
+.cm-hero p{margin:.15rem 0 0;color:#93c5fd;font-size:.76rem}
+.cm-chip{margin-left:auto;font-size:.7rem;font-weight:700;padding:.3rem .7rem;border-radius:999px}
+.cm-sec{font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:#94a3b8;margin:1.1rem 0 .5rem}
+.cm-sec span{text-transform:none;letter-spacing:0;font-weight:600;color:#64748b}
+.cm-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.cm-card{background:#fff;border-radius:14px;border:1px solid #e2e8f0;overflow-x:auto}
+.cm-head{padding:.6rem .9rem;display:flex;align-items:center;gap:.5rem;border-bottom:1px solid #f1f5f9;font-size:.84rem;font-weight:700}
+.cm-head span{margin-left:auto;font-size:.68rem;color:#64748b;font-weight:500}
+.cm-fila{display:flex;align-items:center;gap:.6rem;padding:.45rem .9rem;border-bottom:1px solid #f8fafc;font-size:.78rem}
+.cm-fila .s{font-size:.66rem;color:#94a3b8}
+.cm-fila .v{margin-left:auto;font-weight:700;font-family:monospace;white-space:nowrap}
+.cm-total{display:flex;align-items:center;padding:.6rem .9rem;background:#f8fafc;font-weight:800;font-size:.82rem}
+.cm-total .v{margin-left:auto;font-family:monospace}
+.cm-util{background:linear-gradient(135deg,#065f46,#059669);color:#fff;border-radius:14px;padding:.85rem 1.1rem;display:flex;align-items:center;gap:1rem;margin-top:.9rem;flex-wrap:wrap}
+.cm-util.neg{background:linear-gradient(135deg,#7f1d1d,#dc2626)}
+.cm-util .l{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;opacity:.8;font-weight:700}
+.cm-util .n{font-size:1.5rem;font-weight:800;font-family:monospace}
+.cm-tbl{width:100%;border-collapse:collapse;font-size:.76rem}
+.cm-tbl th{text-align:left;font-size:.6rem;text-transform:uppercase;letter-spacing:.05em;color:#94a3b8;padding:.5rem .7rem;border-bottom:1px solid #e2e8f0;background:#fafbfc}
+.cm-tbl td{padding:.45rem .7rem;border-bottom:1px solid #f1f5f9;vertical-align:top}
+.cm-tbl .n{text-align:right;font-family:monospace;white-space:nowrap}
+.cm-etq{font-size:.6rem;font-weight:700;border-radius:4px;padding:.03rem .3rem}
+.cm-eq{display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;padding:.9rem;text-align:center}
+.cm-eq .l{font-size:.6rem;color:#64748b;text-transform:uppercase;font-weight:700}
+.cm-eq .n{font-size:1rem;font-weight:800;font-family:monospace}
+.cm-eq .op{font-size:1.1rem;color:#94a3b8;font-weight:800}
+.cm-res{padding:.65rem .9rem;font-size:.8rem;font-weight:700}
+.cm-btn{border:0;border-radius:8px;padding:.45rem .85rem;font-size:.74rem;font-weight:700;cursor:pointer}
+.cm-in{width:130px;border:1px dashed #93c5fd;border-radius:6px;padding:.25rem .4rem;font-size:.74rem;text-align:right;background:#f8fbff;font-family:monospace}
+@media(max-width:800px){.cm-grid{grid-template-columns:1fr}}
+</style>
+
+<div class="cm-wrap">
+    <div class="cm-hero">
+        <div>
+            <h2>📘 Cierre del mes · Septiembre 2026</h2>
+            <p>
+                 el mes terminó y todavía no tiene foto
+                            </p>
+        </div>
+        <span class="cm-chip" style="background:#fee2e2;color:#991b1b">
+            ⚠️ Sin foto
+        </span>
+                <form method="POST" action="https://brynex.co/admin/informes/financiero/cierre/foto" style="margin:0"
+              onsubmit="return true">
+            <input type="hidden" name="_token" value="" autocomplete="off">            <input type="hidden" name="mes" value="9"><input type="hidden" name="anio" value="2026">
+                        <button class="cm-btn" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3)">
+                📸 Guardar foto
+            </button>
+        </form>
+            </div>
+
+    
+    
+    
+    <div class="cm-sec">📈 1 · Cómo le fue al mes <span>— lo que es de la empresa; no pasa al mes siguiente</span></div>
+    <div class="cm-grid">
+        <div class="cm-card">
+            <div class="cm-head" style="background:#f0fdf4">Ingresos <span>por mes en que se pagó</span></div>
+                            <div class="cm-fila"><div>Administración</div><div class="v">$15.209.800</div></div>                            <div class="cm-fila"><div>Afiliaciones (queda a la empresa)</div><div class="v">$7.771.400</div></div>                                                                                    <div class="cm-fila"><div>Administración de incapacidades</div><div class="v">$1.627.821</div></div>                                                    <div class="cm-total">Total ingresos<div class="v">$24.609.021</div></div>
+        </div>
+        <div class="cm-card">
+            <div class="cm-head" style="background:#fef2f2">Egresos <span>por mes al que corresponde</span></div>
+                            <div class="cm-fila"><div>Gastos operativos</div><div class="v" style="">$11.015.026</div></div>
+                            <div class="cm-fila"><div>Comisiones pagadas</div><div class="v" style="color:#94a3b8">$0</div></div>
+                        <div class="cm-total">Total egresos<div class="v">$11.015.026</div></div>
+        </div>
+    </div>
+    <div class="cm-util ">
+        <div><div class="l">Utilidad de Septiembre</div><div class="n">$13.593.995</div></div>
+        <div style="margin-left:auto;font-size:.74rem;opacity:.9;text-align:right;line-height:1.5">
+            Retiros del dueño en el mes: $0<br>
+            Queda en la empresa: <b>$13.593.995</b>
+        </div>
+    </div>
+
+    
+    <div class="cm-sec">↪️ 2 · Plata que pasa a Octubre <span>— entró pero no es de la empresa todavía</span></div>
+        <div class="cm-grid">
+        <div class="cm-card">
+            <div class="cm-head" style="background:#eef2ff">Pasa a Octubre <span>al 30/09/2026</span></div>
+                                            <div class="cm-fila"><div>Seguridad social por pagar<div class="s">cobrada para planillas que aún no se pagan</div></div><div class="v" style="">$8.012.600</div></div>
+                                                            <div class="cm-fila"><div>Anticipos sin aplicar<div class="s">pagaron por adelantado; todavía no hay factura</div></div><div class="v" style="">$21.272.700</div></div>
+                                                            <div class="cm-fila"><div>Reserva de retiros<div class="s">apartada de las afiliaciones para pagar retiros</div></div><div class="v" style="">$230.489</div></div>
+                                                            <div class="cm-fila"><div>Comisiones de asesores por pagar<div class="s">se pagan cuando las piden</div></div><div class="v" style="">$67.200</div></div>
+                                                            <div class="cm-fila"><div>Saldo de incapacidades<div class="s">plata de los afiliados que entró y no se ha liquidado</div></div><div class="v" style="">$5.658.200</div></div>
+                                                            <div class="cm-fila"><div>Saldos a favor de clientes<div class="s">pagaron de más; pasa hasta que se aplique</div></div><div class="v" style="">$647.600</div></div>
+                                                            <div class="cm-fila"><div>Pendiente a tus cuentas personales<div class="s">el negocio pagó con tu plata: transfiere para dejarlas en 0</div></div><div class="v" style="">$25.321.807</div></div>
+                                        <div class="cm-total">Total que pasa<div class="v">$61.210.596</div></div>
+        </div>
+        <div class="cm-card">
+            <div class="cm-head" style="background:#faf5ff">📋 3 · Por cobrar <span>ya contó como ingreso</span></div>
+                            <div class="cm-fila"><div>Cartera de clientes<div class="s">préstamos y facturas que quedaron debiendo; cuando paguen solo baja esta cifra</div></div><div class="v">$15.620.147</div></div>
+                        <div class="cm-total">Total por cobrar<div class="v">$15.620.147</div></div>
+        </div>
+    </div>
+
+    
+    <div class="cm-sec">🏦 4 · Dónde está la plata al 30/09/2026 <span>— cada cuenta arranca con lo verificado al cierre anterior y suma solo lo del mes</span></div>
+        <form method="POST" action="https://brynex.co/admin/informes/financiero/cierre/saldos" class="cm-card">
+        <input type="hidden" name="_token" value="" autocomplete="off">        <input type="hidden" name="mes" value="9"><input type="hidden" name="anio" value="2026">
+                <table class="cm-tbl" >
+            <thead><tr><th>Cuenta</th><th class="n">Arrancó</th><th class="n">Entró</th><th class="n">Salió</th><th class="n">Según BryNex</th><th class="n">Saldo real</th><th class="n">Diferencia</th></tr></thead>
+            <tbody>
+                                            <tr>
+                    <td><b>Bancolombia Brayan Garcia</b>
+                        <span class="cm-etq" style="background:#ede9fe;color:#5b21b6">personal</span>                        <div style="font-size:.64rem;color:#7c3aed">en negativo: va arriba como pendiente a la cuenta</div>                    </td>
+                    <td class="n">$0<div><span class="cm-etq" title="cuenta personal: solo se lleva lo del negocio en el mes" style="background:#ede9fe;color:#5b21b6">0 cada mes</span></div></td>
+                    <td class="n" style="color:#15803d">$12.952.900</td>
+                    <td class="n" style="color:#b91c1c">$38.274.707</td>
+                    <td class="n" style="font-weight:700;">$0</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[137]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>BBVA Center Cit</b>
+                        <span class="cm-etq" style="background:#dcfce7;color:#166534">razón social</span>                                            </td>
+                    <td class="n">$0<div><span class="cm-etq" title="cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades" style="background:#e0f2fe;color:#075985">viene del mes anterior</span></div></td>
+                    <td class="n" style="color:#15803d">$1.532.300</td>
+                    <td class="n" style="color:#b91c1c">—</td>
+                    <td class="n" style="font-weight:700;">$1.532.300</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[139]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>DAVIPLATA Daviplata</b>
+                        <span class="cm-etq" style="background:#ede9fe;color:#5b21b6">personal</span>                                            </td>
+                    <td class="n">$0<div><span class="cm-etq" title="cuenta personal: solo se lleva lo del negocio en el mes" style="background:#ede9fe;color:#5b21b6">0 cada mes</span></div></td>
+                    <td class="n" style="color:#15803d">$230.000</td>
+                    <td class="n" style="color:#b91c1c">—</td>
+                    <td class="n" style="font-weight:700;">$230.000</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[140]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>NEQUI Brayan Garcia</b>
+                        <span class="cm-etq" style="background:#ede9fe;color:#5b21b6">personal</span>                                            </td>
+                    <td class="n">$0<div><span class="cm-etq" title="cuenta personal: solo se lleva lo del negocio en el mes" style="background:#ede9fe;color:#5b21b6">0 cada mes</span></div></td>
+                    <td class="n" style="color:#15803d">$6.904.600</td>
+                    <td class="n" style="color:#b91c1c">$1.426.401</td>
+                    <td class="n" style="font-weight:700;">$5.478.199</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[141]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Bancolombia CONSTRUTECH BYG SAS</b>
+                        <span class="cm-etq" style="background:#dcfce7;color:#166534">razón social</span>                                            </td>
+                    <td class="n">$1.750.906<div><span class="cm-etq" title="cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades" style="background:#e0f2fe;color:#075985">viene del mes anterior</span></div></td>
+                    <td class="n" style="color:#15803d">—</td>
+                    <td class="n" style="color:#b91c1c">—</td>
+                    <td class="n" style="font-weight:700;">$1.750.906</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[144]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Bancolombia BRYGAR SAS</b>
+                        <span class="cm-etq" style="background:#dbeafe;color:#1e40af">cobro</span>                                            </td>
+                    <td class="n">$0<div><span class="cm-etq" title="no se anotó el saldo real del cierre anterior: el mes arranca en 0" style="background:#fef3c7;color:#92400e">0 · sin verificar</span></div></td>
+                    <td class="n" style="color:#15803d">$80.148.900</td>
+                    <td class="n" style="color:#b91c1c">$79.684.333</td>
+                    <td class="n" style="font-weight:700;">$464.567</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[145]" value="1240162" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#dc2626;font-weight:700">$775.595</td>
+                </tr>
+                                            <tr>
+                    <td><b>Bancolombia Elites Creaciones SAS</b>
+                        <span class="cm-etq" style="background:#dcfce7;color:#166534">razón social</span>                                            </td>
+                    <td class="n">$116.727<div><span class="cm-etq" title="cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades" style="background:#e0f2fe;color:#075985">viene del mes anterior</span></div></td>
+                    <td class="n" style="color:#15803d">$1.692.543</td>
+                    <td class="n" style="color:#b91c1c">$1.692.543</td>
+                    <td class="n" style="font-weight:700;">$116.727</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[206]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Bancolombia WORK AT HOME</b>
+                        <span class="cm-etq" style="background:#dcfce7;color:#166534">razón social</span>                                            </td>
+                    <td class="n">$229.439<div><span class="cm-etq" title="cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades" style="background:#e0f2fe;color:#075985">viene del mes anterior</span></div></td>
+                    <td class="n" style="color:#15803d">$12.256.337</td>
+                    <td class="n" style="color:#b91c1c">$11.671.955</td>
+                    <td class="n" style="font-weight:700;">$813.821</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[207]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Bancolombia CONSTRUCTORA ELITEX</b>
+                        <span class="cm-etq" style="background:#dcfce7;color:#166534">razón social</span>                                            </td>
+                    <td class="n">$291.818<div><span class="cm-etq" title="cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades" style="background:#e0f2fe;color:#075985">viene del mes anterior</span></div></td>
+                    <td class="n" style="color:#15803d">—</td>
+                    <td class="n" style="color:#b91c1c">$291.818</td>
+                    <td class="n" style="font-weight:700;">$0</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[227]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Bancolombia GLOBAL BYG SAS</b>
+                        <span class="cm-etq" style="background:#dcfce7;color:#166534">razón social</span>                                            </td>
+                    <td class="n">$583.635<div><span class="cm-etq" title="cuenta de razón social: sigue con su saldo hasta que se paguen las incapacidades" style="background:#e0f2fe;color:#075985">viene del mes anterior</span></div></td>
+                    <td class="n" style="color:#15803d">$1.575.815</td>
+                    <td class="n" style="color:#b91c1c">$1.345.629</td>
+                    <td class="n" style="font-weight:700;">$813.821</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="bancos[228]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                        <tr style="background:#fafbfc"><td colspan="4"><b>Total bancos</b> <span style="font-size:.66rem;color:#94a3b8">(lo real donde se anotó)</span></td>
+                <td class="n" colspan="2"><b>$11.975.936</b></td><td></td></tr>
+            </tbody>
+        </table>
+                <table class="cm-tbl"  style="border-top:1px solid #e2e8f0" >
+            <thead><tr><th>Efectivo · quién lo tiene</th><th class="n">Arrancó</th><th class="n">Entró</th><th class="n">Salió</th><th class="n">Según BryNex</th><th class="n">Contado</th><th class="n">Diferencia</th></tr></thead>
+            <tbody>
+                                            <tr>
+                    <td><b>Brayan Garcia</b>
+                                                                    </td>
+                    <td class="n">$0<div><span class="cm-etq" title="no se anotó el saldo real del cierre anterior: el mes arranca en 0" style="background:#fef3c7;color:#92400e">0 · sin verificar</span></div></td>
+                    <td class="n" style="color:#15803d">$13.772.600</td>
+                    <td class="n" style="color:#b91c1c">$15.500.000</td>
+                    <td class="n" style="font-weight:700;color:#dc2626">−$1.727.400</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="efectivo[2]" value="8022080" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#dc2626;font-weight:700">$9.749.480</td>
+                </tr>
+                                            <tr>
+                    <td><b>Angela Ortiz</b>
+                                                                    </td>
+                    <td class="n">$0<div><span class="cm-etq" title="no se anotó el saldo real del cierre anterior: el mes arranca en 0" style="background:#fef3c7;color:#92400e">0 · sin verificar</span></div></td>
+                    <td class="n" style="color:#15803d">$29.567.300</td>
+                    <td class="n" style="color:#b91c1c">—</td>
+                    <td class="n" style="font-weight:700;">$29.567.300</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="efectivo[3]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Daniela Ariza</b>
+                                                                    </td>
+                    <td class="n">$0<div><span class="cm-etq" title="no se anotó el saldo real del cierre anterior: el mes arranca en 0" style="background:#fef3c7;color:#92400e">0 · sin verificar</span></div></td>
+                    <td class="n" style="color:#15803d">$283.200</td>
+                    <td class="n" style="color:#b91c1c">—</td>
+                    <td class="n" style="font-weight:700;">$283.200</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="efectivo[14]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                                            <tr>
+                    <td><b>Daniela Gomez</b>
+                                                                    </td>
+                    <td class="n">$0<div><span class="cm-etq" title="no se anotó el saldo real del cierre anterior: el mes arranca en 0" style="background:#fef3c7;color:#92400e">0 · sin verificar</span></div></td>
+                    <td class="n" style="color:#15803d">$3.093.254</td>
+                    <td class="n" style="color:#b91c1c">—</td>
+                    <td class="n" style="font-weight:700;">$3.093.254</td>
+                    <td class="n">
+                                                <input class="cm-in" type="number" step="1" name="efectivo[7]" value="" placeholder="—">
+                                            </td>
+                    <td class="n" style="color:#94a3b8">—</td>
+                </tr>
+                        <tr style="background:#fafbfc"><td colspan="4"><b>Total efectivo</b> <span style="font-size:.66rem;color:#94a3b8">(lo real donde se anotó)</span></td>
+                <td class="n" colspan="2"><b>$40.965.834</b></td><td></td></tr>
+            </tbody>
+        </table>
+                        <details id="cm-reales" style="padding:.6rem .9rem;border-top:1px solid #f1f5f9" >
+            <summary style="font-size:.74rem;color:#1e40af;cursor:pointer;font-weight:700">Guardar los saldos reales del cierre</summary>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;margin-top:.5rem;flex-wrap:wrap">
+                <span style="font-size:.7rem;color:#64748b">Saldo del extracto de cada cuenta y lo contado de cada persona al 30/09/2026. Con esto arranca Octubre; lo que dejes vacío arranca en 0 «sin verificar» (las de razón social siguen con su saldo).
+                     Últimos guardados: 19/10/2026 13:18.</span>
+                <button class="cm-btn" style="background:#1e40af;color:#fff">Guardar saldos reales</button>
+            </div>
+        </details>
+            </form>
+
+    
+    <div class="cm-sec">✅ 5 · ¿Cuadra? <span>— lo real contra BryNex, solo de este mes</span></div>
+    <div class="cm-card" style="border-width:2px">
+                <div class="cm-res" style="background:#fef2f2;color:#991b1b">
+            ❌ Diferencia del mes $10.525.075: hay más plata de la que se registró.
+            <span style="font-weight:500">Mira la columna «Diferencia»: es lo que no se registró este mes en esa cuenta o con esa persona — consignaciones en otra cuenta, cobros del banco, gastos o retiros sin anotar, o algo en tránsito al cierre.
+             Faltan 12 por verificar.</span>
+        </div>
+            </div>
+</div>
+
+    
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.5rem;">
+        <div class="fin-kpi" style="--c:#2563eb;">
+            <div class="val">$ 24.609.021</div>
+            <div class="lab">Ingresos Totales</div>
+            <div class="sub">Cobrado en Septiembre (base caja)</div>
+        </div>
+        <div class="fin-kpi" style="--c:#ef4444;cursor:pointer;transition:box-shadow .2s,transform .15s;"
+             onclick="abrirGastosDetalle()"
+             onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 8px 24px rgba(239,68,68,.18)'"
+             onmouseout="this.style.transform='';this.style.boxShadow=''"
+             title="Clic para ver detalle de gastos operativos">
+            <div class="val">$ 11.015.026</div>
+            <div class="lab">Gastos Operativos <span style="font-size:.65rem;opacity:.6;">🔍</span></div>
+            <div class="sub">Ver gastos</div>
+        </div>
+        <div class="fin-kpi" style="--c:#10b981;">
+            <div class="val">$ 13.593.995</div>
+            <div class="lab">Utilidad Neta</div>
+            <div class="sub">Ingresos − Egresos</div>
+        </div>
+        <div class="fin-kpi" style="--c:#8b5cf6;">
+            <div class="val">$ 8.012.600</div>
+            <div class="lab">Saldo SS Terceros</div>
+            <div class="sub">SS para siguiente mes</div>
+        </div>
+        
+        <div class="fin-kpi" style="--c:#f59e0b; cursor:pointer;" onclick="window.location='https://brynex.co/admin/informes/comisiones'" title="Ver módulo Comisiones Asesores">
+            <div class="val">$ 67.200</div>
+            <div class="lab">💼 Comisión Asesores</div>
+            <div class="sub">(desde mayo 2026)</div>
+        </div>
+        
+        <div class="fin-kpi" style="--c:#0d9488; cursor:pointer;" onclick="abrirModalRecuperacionPrestamos()" title="Clic para ver detalle de recuperación de préstamos de meses anteriores">
+            <div class="val">$ 5.089.100</div>
+            <div class="lab">💸 Recuperación Préstamos</div>
+            <div class="sub">Abonos meses anteriores</div>
+        </div>
+    </div>
+
+    
+    
+    <style>
+    .fc-card          { background:#fff;border-radius:16px;box-shadow:0 2px 16px rgba(0,0,0,.08);overflow:hidden;display:flex;flex-direction:column;transition:box-shadow .2s,transform .15s; }
+    .fc-card:hover    { box-shadow:0 8px 32px rgba(0,0,0,.13);transform:translateY(-2px); }
+    .fc-header        { padding:.85rem 1.15rem; }
+    .fc-label         { font-size:.58rem;font-weight:700;text-transform:uppercase;color:rgba(255,255,255,.55);letter-spacing:.09em; }
+    .fc-title         { font-size:1rem;font-weight:800;color:#fff;margin-top:.2rem; }
+    .fc-body          { padding:.9rem 1.1rem;flex:1;display:flex;flex-direction:column; }
+    .fc-section-label { font-size:.57rem;font-weight:700;text-transform:uppercase;color:#94a3b8;letter-spacing:.07em;margin:.55rem 0 .4rem; }
+    .fc-row           { display:flex;justify-content:space-between;align-items:center;padding:.28rem .35rem .28rem .15rem;border-radius:6px;transition:background .12s; }
+    .fc-row:hover     { background:#f8fafc; }
+    .fc-row-label     { display:flex;align-items:center;gap:.5rem;font-size:.77rem;color:#475569; }
+    .fc-dot           { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
+    .fc-row-val       { font-size:.79rem;font-weight:700;font-family:monospace; }
+    .fc-row-zero      { font-size:.79rem;font-weight:400;font-family:monospace;color:#cbd5e1; }
+    .fc-divider       { border:none;border-top:1px dashed #e2e8f0;margin:.55rem 0; }
+    .fc-subtotal      { display:flex;justify-content:space-between;align-items:center;padding:.32rem .45rem;background:#f1f5f9;border-radius:8px;margin:.1rem 0 .2rem; }
+    .fc-subtotal-l    { font-size:.77rem;font-weight:700;color:#334155; }
+    .fc-subtotal-v    { font-size:.84rem;font-weight:800;font-family:monospace; }
+    .fc-footer        { padding:.9rem 1.15rem;display:flex;justify-content:space-between;align-items:center;margin-top:auto;gap:.5rem; }
+    .fc-footer > div:first-child { flex-grow:1;flex-shrink:1;min-width:0; }
+    .fc-footer-l      { font-size:.67rem;font-weight:700;text-transform:uppercase;color:rgba(255,255,255,.7);letter-spacing:.06em; }
+    .fc-footer-sub    { font-size:.59rem;color:rgba(255,255,255,.45);margin-top:.1rem;line-height:1.2; }
+    .fc-footer-v      { font-size:1.18rem;font-weight:900;color:#fff;font-family:monospace;white-space:nowrap;flex-shrink:0;text-align:right; }
+    .fc-note          { display:flex;justify-content:space-between;align-items:center;padding:.18rem .35rem;opacity:.6; }
+    .fc-note span     { font-size:.68rem;color:#94a3b8;font-style:italic; }
+    .fc-btn-ss        { background:rgba(20,184,166,.1);border:1px solid rgba(20,184,166,.3);border-radius:7px;padding:.28rem .65rem;font-size:.67rem;font-weight:700;color:#0f766e;cursor:pointer;transition:background .15s; }
+    .fc-btn-ss:hover  { background:rgba(20,184,166,.22); }
+    .fc-btn-hdr       { background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:.18rem .55rem;font-size:.62rem;font-weight:700;color:#fff;cursor:pointer;transition:background .15s;white-space:nowrap; }
+    .fc-btn-hdr:hover { background:rgba(255,255,255,.28); }
+    </style>
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem;margin-bottom:1.5rem;align-items:stretch;">
+
+        
+        <div class="fc-card">
+            <div class="fc-header" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+                <div class="fc-label">Canal 1</div>
+                <div class="fc-title">💼 Administración</div>
+            </div>
+            <div class="fc-body">
+                <div class="fc-section-label">Ingresos cobrados</div>
+
+                
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#3b82f6;"></span>Administración</div>
+                                            <span class="fc-row-val" style="color:#3b82f6;">$ 15.195.100</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#0ea5e9;"></span>Seguro</div>
+                                            <span class="fc-row-val" style="color:#0ea5e9;">$ 11.400</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#06b6d4;"></span>Mensajería</div>
+                                            <span class="fc-row-zero">—</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#8b5cf6;"></span>IVA</div>
+                                            <span class="fc-row-zero">—</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#a78bfa;"></span>Otros admon</div>
+                                            <span class="fc-row-val" style="color:#a78bfa;">$ 3.300</span>
+                                    </div>
+                
+ 
+                                <div class="fc-row" title="Ganancia de administración generada en pagos de incapacidades">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#f97316;"></span>💊 Admon Incapacidades</div>
+                    <span class="fc-row-val" style="color:#f97316;">$ 1.627.821</span>
+                </div>
+                                                                <div class="fc-note" title="Comisión ganada por asesores en planillas — no pagada aún">
+                    <span>↳ Comisión asesor <em>(ganada, pendiente)</em></span>
+                    <span style="font-family:monospace;color:#f59e0b;">$ 49.000</span>
+                </div>
+                            </div>
+            <div class="fc-footer" style="background:linear-gradient(135deg,#1e3a8a,#2563eb);">
+                <div>
+                    <div class="fc-footer-l">Total Administración</div>
+                    <div class="fc-footer-sub">admon + seguro + iva + otros + trámites + comisiones + excedentes</div>
+                </div>
+                <div class="fc-footer-v">$ 16.837.621</div>
+            </div>
+        </div>
+
+        
+        <div class="fc-card">
+            <div class="fc-header" style="background:linear-gradient(135deg,#5b21b6,#7c3aed);">
+                <div class="fc-label">Canal 2</div>
+                <div class="fc-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>🔖 Afiliaciones</span>
+                    <a href="https://brynex.co/admin/informes/comisiones/afiliaciones?mes=9&amp;anio=2026"
+                       class="fc-btn-hdr" style="text-decoration:none;">
+                        📋 Ver desglose
+                    </a>
+                </div>
+            </div>
+            <div class="fc-body">
+
+                <div class="fc-section-label">Distribución del ingreso</div>
+
+                
+                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#3b82f6;"></span><span style="color:#94a3b8;font-size:.7rem;">→</span> Admon</div>
+                     <span class="fc-row-zero">—</span>                </div>
+
+                
+                <div class="fc-row" style="" title="Comisión distribuida al asesor por esta afiliación">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#f59e0b;"></span><span style="color:#94a3b8;font-size:.7rem;">→</span> Comisión asesor</div>
+                                            <span class="fc-row-val" style="color:#f59e0b;">$ 159.000</span>
+                                    </div>
+
+                
+                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#c2410c;"></span><span style="color:#94a3b8;font-size:.7rem;">→</span> Retiro</div>
+                                            <span class="fc-row-val" style="color:#c2410c;">$ 637.300</span>
+                                    </div>
+
+                
+                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#16a34a;"></span><span style="color:#94a3b8;font-size:.7rem;">→</span> Utilidad</div>
+                                            <span class="fc-row-val" style="color:#16a34a;">$ 7.771.400</span>
+                                    </div>
+
+                
+                <div class="fc-row" title="Comisión distribuida al encargado por esta afiliación">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#8b5cf6;"></span><span style="color:#94a3b8;font-size:.7rem;">→</span> Comisión encargado</div>
+                     <span class="fc-row-zero">—</span>                </div>
+
+                                <div class="fc-row" style="opacity:.45;">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#94a3b8;"></span><span style="color:#94a3b8;font-size:.7rem;">→</span> Sin distribuir</div>
+                                            <span class="fc-row-zero">—</span>
+                                    </div>
+
+                
+                <div class="fc-row" style="border-top:1px dashed #dddfeb; margin-top:8px; padding-top:8px; font-weight:bold;">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#5b21b6;"></span>Total Distribución (Bruto)</div>
+                    <span class="fc-row-val" style="color:#5b21b6;">$ 8.567.700</span>
+                </div>
+            </div>
+            <div class="fc-footer" style="background:linear-gradient(135deg,#5b21b6,#7c3aed);">
+                <div>
+                    <div class="fc-footer-l">Total Afiliaciones (Neto)</div>
+                    <div class="fc-footer-sub">admon + utilidad (sin comisión ni retiro)</div>
+                </div>
+                <div class="fc-footer-v">$ 7.771.400</div>
+            </div>
+        </div>
+
+        
+        <div class="fc-card">
+            <div class="fc-header" style="background:linear-gradient(135deg,#0f766e,#0d9488);">
+                <div class="fc-label">Canal 3</div>
+                <div class="fc-title" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>🏥 Seguridad Social</span>
+                    <button class="fc-btn-hdr" onclick="abrirConciliacionSS()">🔍 Conciliar SS</button>
+                </div>
+            </div>
+            <div class="fc-body">
+                <div class="fc-section-label">Detalle Recaudo SS</div>
+
+                
+                                <div class="fc-row" title="Saldo SS que quedó del mes anterior">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#14b8a6;"></span>Saldo SS Anterior</div>
+                    <span class="fc-row-val" style="color:#14b8a6;">$ 3.813.300</span>
+                </div>
+                
+                
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#0ea5e9;"></span>EPS</div>
+                                            <span class="fc-row-val" style="color:#0ea5e9;">$ 31.537.300</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#10b981;"></span>Pensión AFP</div>
+                                            <span class="fc-row-val" style="color:#10b981;">$ 62.934.500</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#8b5cf6;"></span>ARL</div>
+                                            <span class="fc-row-val" style="color:#8b5cf6;">$ 6.640.700</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#f59e0b;"></span>Caja Comp.</div>
+                                            <span class="fc-row-val" style="color:#f59e0b;">$ 5.336.200</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#64748b;"></span>Otros</div>
+                                            <span class="fc-row-val" style="color:#64748b;">$ 652.974</span>
+                                    </div>
+                
+                
+                <div class="fc-row" style="" title="Mora SS recogida en facturas pagadas este mes">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#f43f5e;"></span>Mora Recogido</div>
+                                            <span class="fc-row-val" style="color:#f43f5e;">$ 319.454</span>
+                                    </div>
+
+                <div style="margin-top:auto;"></div>
+            </div>
+            <div class="fc-footer" style="background:linear-gradient(135deg,#0f766e,#0d9488);">
+                <div>
+                    <div class="fc-footer-l">Total SS + Mora</div>
+                    <div class="fc-footer-sub">recaudado en el mes</div>
+                </div>
+                <div class="fc-footer-v">$ 111.234.428</div>
+            </div>
+        </div>
+
+        
+                        <div class="fc-card">
+            <div class="fc-header" style="background:linear-gradient(135deg,#78350f,#d97706);">
+                <div class="fc-label">Canal 5</div>
+                <div class="fc-title">🏥 Incapacidades</div>
+            </div>
+            <div class="fc-body">
+
+                
+                                <div class="fc-section-label">Saldo arrastrado</div>
+                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#f59e0b;"></span>Saldo mes anterior</div>
+                    <span class="fc-row-val" style="color:#f59e0b;">$ 3.728.381</span>
+                </div>
+                
+                
+                <div class="fc-section-label">Entradas incapacidad</div>
+                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#16a34a;"></span>Entradas incapacidad</div>
+                                            <span class="fc-row-val" style="color:#16a34a;">$ 19.668.491</span>
+                                    </div>
+
+                
+                <div class="fc-section-label">Egresos del mes</div>
+                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#dc2626;"></span>Pago al afiliado (neto)</div>
+                                            <span class="fc-row-val" style="color:#dc2626;">$ 16.039.898</span>
+                                    </div>
+                                <div class="fc-row">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#f43f5e;"></span>4x1000</div>
+                    <span class="fc-row-val" style="color:#f43f5e;">$ 70.953</span>
+                </div>
+                                
+                
+                                <div class="fc-row" title="Esta ganancia se transfiere automáticamente al Canal 1" style="border-top:1px dashed #e2e8f0;margin-top:.35rem;padding-top:.35rem;">
+                    <div class="fc-row-label"><span class="fc-dot" style="background:#2563eb;"></span>
+                        <span style="font-size:.68rem;">💼 Ganancia Admon <span style="color:#94a3b8;">→ Canal 1</span></span>
+                    </div>
+                    <span class="fc-row-val" style="color:#2563eb;">$ 1.627.821</span>
+                </div>
+                
+                
+                                <div style="border-top:1px dashed #e2e8f0;margin-top:.35rem;padding-top:.35rem;" title="Órdenes de descuento de la ARL: se descuentan del aporte a la ARL en las próximas planillas">
+                    <div class="fc-row-label" style="margin-bottom:.2rem;"><span class="fc-dot" style="background:#d97706;"></span>
+                        <span style="font-size:.68rem;font-weight:700;">📋 ODI por descontar en planilla</span>
+                    </div>
+                                        <div class="fc-row" style="padding-left:.9rem;">
+                        <span style="font-size:.64rem;color:#64748b;">WORK AT HOME BYG SAS (4)</span>
+                        <span class="fc-row-val" style="color:#d97706;">$ 2.230.824</span>
+                    </div>
+                                        <div class="fc-row" style="padding-left:.9rem;">
+                        <span style="font-size:.64rem;color:#64748b;">MEGATRANSPORTES BYG SAS (1)</span>
+                        <span class="fc-row-val" style="color:#d97706;">$ 1.750.000</span>
+                    </div>
+                                    </div>
+                
+                <div style="margin-top:auto;"></div>
+            </div>
+
+            
+            <div style="padding:.85rem 1.15rem;background:#f0fdf4;border-top:2px solid #16a34a;border-radius:0 0 16px 16px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-size:.64rem;font-weight:700;text-transform:uppercase;color:#16a34a;letter-spacing:.06em;">
+                        Saldo Disponible
+                    </div>
+                    <div style="font-size:.58rem;color:#64748b;margin-top:.1rem;">
+                        Pendiente de pagar al afiliado
+                    </div>
+                </div>
+                <div style="font-size:1.18rem;font-weight:900;color:#16a34a;font-family:monospace;">
+                    +$ 5.658.200
+                </div>
+            </div>
+        </div>
+
+        
+        <div class="fc-card" style="grid-column: span 2; display: flex; flex-direction: column;">
+            <div class="fc-header" style="background:linear-gradient(135deg,#475569,#334155);">
+                <div class="fc-label">Pendientes por cuadrar</div>
+                <div class="fc-title">📋 Detalle de Incapacidades (Canal 5)</div>
+            </div>
+            <div class="fc-body" style="padding: 0; overflow-y: auto; max-height: 298px; flex: 1;">
+                                    <table style="width:100%; border-collapse:collapse; text-align:left; font-size:.78rem;">
+                        <thead>
+                            <tr style="background:#f8fafc; border-bottom:2px solid #e2e8f0; color:#475569; font-weight:700; text-transform:uppercase; font-size:.65rem; letter-spacing:0.5px; position: sticky; top: 0; z-index: 10;">
+                                <th style="padding:.65rem .85rem;">Incapacidad / Cliente</th>
+                                <th style="padding:.65rem .85rem; text-align:center;">Estado</th>
+                                <th style="padding:.65rem .85rem; text-align:right;">Total Recibido EPS</th>
+                                <th style="padding:.65rem .85rem; text-align:right;">Total Pagos/Desc.</th>
+                                <th style="padding:.65rem .85rem; text-align:right;">Saldo Canal 5</th>
+                                <th style="padding:.65rem .85rem; text-align:center;">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody style="color:#334155;">
+                                                                                            <tr style="border-bottom:1px solid #f1f5f9; cursor: pointer; transition: background-color 0.15s;" 
+                                    onmouseover="this.style.backgroundColor='#f8fafc'" 
+                                    onmouseout="this.style.backgroundColor=''"
+                                    onclick="window.open('https://brynex.co/admin/incapacidades?abrir_incId=339', '_blank')">
+                                    <td style="padding:.65rem .85rem;">
+                                        <div style="font-weight:700; color:#1e293b;">Jefferson Andres Fernandez Mosquera</div>
+                                        <div style="font-size:.65rem; color:#64748b; margin-top:.1rem;">
+                                            C.C. 1112467494 · <b>#339</b>
+                                        </div>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center; white-space:nowrap;">
+                                        <span style="display:inline-block; font-size:.65rem; font-weight:700; padding:.15rem .45rem; border-radius:6px; background:#d1fae5;color:#065f46;">
+                                            ✅ Cierre Exitoso
+                                        </span>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#16a34a; white-space:nowrap;">
+                                        —
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#2563eb; white-space:nowrap;">
+                                        $ 1.750.905
+                                                                            </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:700; color:#dc2626; white-space:nowrap;">
+                                        $ -1.750.905
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center;" onclick="event.stopPropagation();">
+                                        <a href="https://brynex.co/admin/incapacidades?abrir_incId=339" target="_blank" class="btn btn-info btn-sm" style="font-size:.65rem; padding:.2rem .4rem; line-height:1; display:inline-block; border-radius:4px; text-decoration:none; background:#0ea5e9; color:#fff; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                            👁 Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                                                                                            <tr style="border-bottom:1px solid #f1f5f9; cursor: pointer; transition: background-color 0.15s;" 
+                                    onmouseover="this.style.backgroundColor='#f8fafc'" 
+                                    onmouseout="this.style.backgroundColor=''"
+                                    onclick="window.open('https://brynex.co/admin/incapacidades?abrir_incId=458', '_blank')">
+                                    <td style="padding:.65rem .85rem;">
+                                        <div style="font-weight:700; color:#1e293b;">Jefferson Andres Fernandez Mosquera</div>
+                                        <div style="font-size:.65rem; color:#64748b; margin-top:.1rem;">
+                                            C.C. 1112467494 · <b>#458</b>
+                                        </div>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center; white-space:nowrap;">
+                                        <span style="display:inline-block; font-size:.65rem; font-weight:700; padding:.15rem .45rem; border-radius:6px; background:#d1fae5;color:#065f46;">
+                                            ✅ Cierre Exitoso
+                                        </span>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#16a34a; white-space:nowrap;">
+                                        $ 1.750.000
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#2563eb; white-space:nowrap;">
+                                        $ 1.743.000
+                                                                            </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:700; color:#16a34a; white-space:nowrap;">
+                                        +$ 7.000
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center;" onclick="event.stopPropagation();">
+                                        <a href="https://brynex.co/admin/incapacidades?abrir_incId=458" target="_blank" class="btn btn-info btn-sm" style="font-size:.65rem; padding:.2rem .4rem; line-height:1; display:inline-block; border-radius:4px; text-decoration:none; background:#0ea5e9; color:#fff; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                            👁 Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                                                                                            <tr style="border-bottom:1px solid #f1f5f9; cursor: pointer; transition: background-color 0.15s;" 
+                                    onmouseover="this.style.backgroundColor='#f8fafc'" 
+                                    onmouseout="this.style.backgroundColor=''"
+                                    onclick="window.open('https://brynex.co/admin/incapacidades?abrir_incId=4575', '_blank')">
+                                    <td style="padding:.65rem .85rem;">
+                                        <div style="font-weight:700; color:#1e293b;">Geimar David Hurtado Sinisterra</div>
+                                        <div style="font-size:.65rem; color:#64748b; margin-top:.1rem;">
+                                            C.C. 1144201931 · <b>#4575</b>
+                                        </div>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center; white-space:nowrap;">
+                                        <span style="display:inline-block; font-size:.65rem; font-weight:700; padding:.15rem .45rem; border-radius:6px; background:#e0f2fe;color:#0369a1;">
+                                            🏢 Pag. Razón Social
+                                        </span>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#16a34a; white-space:nowrap;">
+                                        $ 210.985
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#2563eb; white-space:nowrap;">
+                                        —
+                                                                            </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:700; color:#16a34a; white-space:nowrap;">
+                                        +$ 210.985
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center;" onclick="event.stopPropagation();">
+                                        <a href="https://brynex.co/admin/incapacidades?abrir_incId=4575" target="_blank" class="btn btn-info btn-sm" style="font-size:.65rem; padding:.2rem .4rem; line-height:1; display:inline-block; border-radius:4px; text-decoration:none; background:#0ea5e9; color:#fff; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                            👁 Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                                                                                            <tr style="border-bottom:1px solid #f1f5f9; cursor: pointer; transition: background-color 0.15s;" 
+                                    onmouseover="this.style.backgroundColor='#f8fafc'" 
+                                    onmouseout="this.style.backgroundColor=''"
+                                    onclick="window.open('https://brynex.co/admin/incapacidades?abrir_incId=4581', '_blank')">
+                                    <td style="padding:.65rem .85rem;">
+                                        <div style="font-weight:700; color:#1e293b;">Jefferson Andres Fernandez Mosquera</div>
+                                        <div style="font-size:.65rem; color:#64748b; margin-top:.1rem;">
+                                            C.C. 1112467494 · <b>#4581</b>
+                                        </div>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center; white-space:nowrap;">
+                                        <span style="display:inline-block; font-size:.65rem; font-weight:700; padding:.15rem .45rem; border-radius:6px; background:#d1fae5;color:#065f46;">
+                                            ✅ Cierre Exitoso
+                                        </span>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#16a34a; white-space:nowrap;">
+                                        $ 758.719
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#2563eb; white-space:nowrap;">
+                                        $ 755.684
+                                                                            </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:700; color:#16a34a; white-space:nowrap;">
+                                        +$ 3.035
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center;" onclick="event.stopPropagation();">
+                                        <a href="https://brynex.co/admin/incapacidades?abrir_incId=4581" target="_blank" class="btn btn-info btn-sm" style="font-size:.65rem; padding:.2rem .4rem; line-height:1; display:inline-block; border-radius:4px; text-decoration:none; background:#0ea5e9; color:#fff; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                            👁 Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                                                                                            <tr style="border-bottom:1px solid #f1f5f9; cursor: pointer; transition: background-color 0.15s;" 
+                                    onmouseover="this.style.backgroundColor='#f8fafc'" 
+                                    onmouseout="this.style.backgroundColor=''"
+                                    onclick="window.open('https://brynex.co/admin/incapacidades?abrir_incId=4610', '_blank')">
+                                    <td style="padding:.65rem .85rem;">
+                                        <div style="font-weight:700; color:#1e293b;">Jefferson Andres Fernandez Mosquera</div>
+                                        <div style="font-size:.65rem; color:#64748b; margin-top:.1rem;">
+                                            C.C. 1112467494 · <b>#4610</b>
+                                        </div>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center; white-space:nowrap;">
+                                        <span style="display:inline-block; font-size:.65rem; font-weight:700; padding:.15rem .45rem; border-radius:6px; background:#d1fae5;color:#065f46;">
+                                            ✅ Cierre Exitoso
+                                        </span>
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#16a34a; white-space:nowrap;">
+                                        $ 1.750.905
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:600; color:#2563eb; white-space:nowrap;">
+                                        $ 1.743.901
+                                                                            </td>
+                                    <td style="padding:.65rem .85rem; text-align:right; font-family:monospace; font-weight:700; color:#16a34a; white-space:nowrap;">
+                                        +$ 7.004
+                                    </td>
+                                    <td style="padding:.65rem .85rem; text-align:center;" onclick="event.stopPropagation();">
+                                        <a href="https://brynex.co/admin/incapacidades?abrir_incId=4610" target="_blank" class="btn btn-info btn-sm" style="font-size:.65rem; padding:.2rem .4rem; line-height:1; display:inline-block; border-radius:4px; text-decoration:none; background:#0ea5e9; color:#fff; border:none; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
+                                            👁 Abrir
+                                        </a>
+                                    </td>
+                                </tr>
+                                                    </tbody>
+                    </table>
+                            </div>
+        </div>
+        
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+        <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
+            <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:.85rem;">Tendencia 6 Meses</div>
+            <canvas id="chartTendencia" height="180"></canvas>
+        </div>
+        <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
+            <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:.85rem;">Mes Actual vs Anterior</div>
+            <canvas id="chartComparacion" height="180"></canvas>
+        </div>
+    </div>
+
+    
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:1.25rem;margin-bottom:1.5rem;">
+        <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);display:flex;flex-direction:column;">
+            <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:.85rem;">Distribución Ingresos</div>
+            <canvas id="chartDona" height="140"></canvas>
+
+        </div>
+
+        
+        <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;" title="Los saldos de cada cuenta están arriba, en «Dónde está la plata»">🏦 Movimientos del mes por cuenta <span style="text-transform:none;font-weight:500">— lo que entró y salió en Septiembre</span></div>
+                <div style="font-size:.72rem;background:#f8fafc;border:1px solid #e2e8f0;padding:.22rem .65rem;border-radius:6px;color:#475569;font-weight:600;">
+                    Arrastre Mes Anterior (Bancos + Efectivo): <span style="font-family:monospace;color:#0f172a;font-weight:700;">$ 5.948.794</span>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;">
+
+                
+                                                                <div class="bank-card" onclick="verMovimientosBanco(137,'Brayan Garcia')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Brayan Garcia">Brayan Garcia</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                             >
+                            Neto Septiembre
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#dc2626;line-height:1.1;">
+                            $ -25.321.807
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 12.952.900</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 821.500</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 12.131.400</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 38.274.707</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 37.165.801</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 1.108.906</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ -25.321.807</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                                                <div class="bank-card" onclick="verMovimientosBanco(139,'Center Cit')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">BBVA</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Center Cit">Center Cit</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                              title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" >
+                            Saldo cuenta razón social
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 1.532.300
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 1.532.300</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 1.532.300</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 1.532.300</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                <div class="bank-card" onclick="verMovimientosBanco(140,'Daviplata')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">DAVIPLATA</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Daviplata">Daviplata</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                             >
+                            Neto Septiembre
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 230.000
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 230.000</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 230.000</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 230.000</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                <div class="bank-card" onclick="verMovimientosBanco(141,'Brayan Garcia')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">NEQUI</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Brayan Garcia">Brayan Garcia</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                             >
+                            Neto Septiembre
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 5.478.199
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 6.904.600</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 5.361.900</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 1.542.700</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 1.426.401</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 1.426.401</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 5.478.199</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                                                <div class="bank-card" onclick="verMovimientosBanco(144,'CONSTRUTECH BYG SAS')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="CONSTRUTECH BYG SAS">CONSTRUTECH BYG SAS</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                              title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" >
+                            Saldo cuenta razón social
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 1.750.906
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 1.750.906</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                <div class="bank-card" onclick="verMovimientosBanco(145,'BRYGAR SAS')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="BRYGAR SAS">BRYGAR SAS</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                             >
+                            Neto Septiembre
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 464.567
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 80.148.900</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 79.420.100</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 728.800</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 79.684.333</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 68.987.216</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 10.697.117</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 464.567</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                                                <div class="bank-card" onclick="verMovimientosBanco(206,'Elites Creaciones SAS')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Elites Creaciones SAS">Elites Creaciones SAS</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                              title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" >
+                            Saldo cuenta razón social
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 116.727
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 1.692.543</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 1.692.543</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 1.692.543</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 1.692.543</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 116.727</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                <div class="bank-card" onclick="verMovimientosBanco(207,'WORK AT HOME')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="WORK AT HOME">WORK AT HOME</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                              title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" >
+                            Saldo cuenta razón social
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 813.821
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 12.256.337</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 12.256.337</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 11.671.955</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 11.671.955</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 813.821</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                <div class="bank-card" onclick="verMovimientosBanco(227,'CONSTRUCTORA ELITEX')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="CONSTRUCTORA ELITEX">CONSTRUCTORA ELITEX</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                              title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" >
+                            Saldo cuenta razón social
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            $ 0
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 291.818</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 291.818</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 0</span>
+                        </div>
+                    </div>
+                </div>
+                                                                                <div class="bank-card" onclick="verMovimientosBanco(228,'GLOBAL BYG SAS')" title="Clic para ver movimientos del mes">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">Bancolombia</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="GLOBAL BYG SAS">GLOBAL BYG SAS</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
+                              title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" >
+                            Saldo cuenta razón social
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 813.821
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 1.575.815</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Consignaciones</span>
+                            <span style="font-family:monospace;">$ 1.575.815</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 1.345.629</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Planillas (SS)</span>
+                            <span style="font-family:monospace;">$ 0</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Transferencias</span>
+                            <span style="font-family:monospace;">$ 1.345.629</span>
+                        </div>
+
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 813.821</span>
+                        </div>
+                    </div>
+                </div>
+                                                                
+                
+                                <div class="bank-card" onclick="verMovimientosEfectivo()" title="Clic para ver facturas en efectivo y desglose por asesor" style="border-top-color:#16a34a;">
+                    
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">💵 Caja</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Efectivo</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">Neto Septiembre</div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#16a34a;line-height:1.1;">
+                            +$ 31.216.354
+                        </div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">$ 46.716.354</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Facturas</span>
+                            <span style="font-family:monospace;">$ 11.174.000</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Anticipos</span>
+                            <span style="font-family:monospace;">$ 32.449.100</span>
+                        </div>
+                                                <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;" title="OPI de la ARL cobradas en efectivo">
+                            <span>└ OPI incapacidades</span>
+                            <span style="font-family:monospace;">$ 3.093.254</span>
+                        </div>
+                        
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
+                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">$ 15.500.000</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
+                            <span>└ Gastos</span>
+                            <span style="font-family:monospace;">$ 3.500.000</span>
+                        </div>
+                        
+                        
+                                                <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#d97706;" title="Efectivo consignado en cuentas de banco este mes">
+                            <span>⇄ Consignado</span>
+                            <span style="font-family:monospace;font-weight:700;">$ 12.000.000</span>
+                        </div>
+                        
+                        
+                        
+                        
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Saldo al 30/09/26</span>
+                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">$ 31.216.354</span>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div class="bank-card" onclick="verPrestamos()" title="Clic para ver detalle de préstamos" style="border-top-color:#7c3aed; display:flex; flex-direction:column; min-height:165px;">
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">💳 Cartera</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Préstamos</div>
+
+                    
+                    <div style="margin-top:.55rem;">
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">Neto Septiembre</div>
+                        <div style="font-size:1.3rem;font-weight:900;color:#dc2626;line-height:1.1;" id="kpi-prestamos-pendiente">—</div>
+                    </div>
+
+                    
+                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.25rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.62rem;color:#475569;font-weight:700;text-transform:uppercase;">PRESTADO</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#4f46e5;font-family:monospace;" id="kpi-prestamos-total">—</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.62rem;color:#475569;font-weight:700;text-transform:uppercase;">ABONADO</span>
+                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;" id="kpi-prestamos-abonado">—</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:.4rem;padding-top:.4rem;border-top:1px dashed #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
+                        <a href="https://brynex.co/admin/prestamos" target="_blank"
+                           style="font-size:.65rem;color:#7c3aed;font-weight:700;text-decoration:none;"
+                           onclick="event.stopPropagation()">→ Ver módulo</a>
+                        <span style="font-size:.6rem;color:#94a3b8;" id="kpi-prestamos-cant">0</span>
+                    </div>
+                </div>
+
+                
+                <div class="bank-card" onclick="window.location='https://brynex.co/admin/anticipos/informe'" title="Ver informe de anticipos" style="border-top-color:#d97706;">
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">🟡 Anticipos</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Disponibles</div>
+
+                    <div style="margin-top:.6rem;">
+                        <div style="font-size:1.25rem;font-weight:900;color:#d97706;line-height:1.1;">$ 11.856.397</div>
+                        <div style="font-size:.62rem;color:#94a3b8;margin-top:.15rem;">Sin aplicar a factura</div>
+                    </div>
+
+                    <div style="margin-top:auto;padding-top:.65rem;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:.28rem;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.65rem;color:#64748b;font-weight:600;">Anticipos activos</span>
+                            <span style="font-size:.72rem;font-weight:700;color:#d97706;font-family:monospace;">73</span>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.1rem;">
+                            <span style="font-size:.6rem;color:#94a3b8;">Disponibles + Parciales</span>
+                            <span style="font-size:.68rem;color:#d97706;font-weight:700;">ver detalle →</span>
+                        </div>
+                    </div>
+                </div>
+
+                
+                
+
+            </div>
+        </div>
+    </div>
+
+    
+    
+    
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:1.25rem;margin-bottom:1.5rem;">
+
+        
+        <div style="background:#fff;border-radius:14px;box-shadow:0 1px 8px rgba(0,0,0,.06);overflow:hidden;display:flex;flex-direction:column;">
+
+            
+            <div style="background:linear-gradient(135deg,#0f766e,#0d9488);padding:.8rem 1.1rem;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-size:.6rem;font-weight:700;text-transform:uppercase;color:rgba(255,255,255,.55);letter-spacing:.08em;">Canal 4</div>
+                    <div style="font-size:.95rem;font-weight:800;color:#fff;margin-top:.15rem;">🏥 Seguridad Social</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:.62rem;color:rgba(255,255,255,.6);">Septiembre 2026</div>
+                    <div style="font-size:1rem;font-weight:900;color:#fff;">$ 111.234.428</div>
+                </div>
+            </div>
+
+            
+            
+            <div style="padding: 1.1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                
+                
+                <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                    
+                    
+                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem;">
+                        <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                            <span style="font-size: .9rem;">📦</span> Ss mes Agosto
+                        </span>
+                        <span style="font-family: monospace; font-weight: 700; color: #0369a1;">
+                            $ 3.813.300
+                        </span>
+                    </div>
+                                        
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem;">
+                        <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                            <span style="font-size: .9rem;">📥</span> Ss recaudo Septiembre
+                        </span>
+                        <span style="font-family: monospace; font-weight: 700; color: #0f766e;">
+                            $ 98.870.174
+                        </span>
+                    </div>
+                    
+                    
+                                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem;">
+                        <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                            <span style="font-size: .9rem;">📈</span> Mora Septiembre
+                        </span>
+                        <span style="font-family: monospace; font-weight: 700; color: #d97706;">
+                            $ 319.454
+                        </span>
+                    </div>
+                    
+
+
+
+                    
+                    <div style="display: flex; justify-content: flex-end; align-items: center; font-size: .78rem; border-top: 1px solid #e2e8f0; margin-top: .1rem; padding-top: .15rem; font-weight: 700; font-family: monospace; color: #334155;">
+                        $ 103.221.828
+                    </div>
+
+                    
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem; margin-top: .15rem;">
+                        <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                            <span style="font-size: .9rem;">📥</span> Gastos planilla Septiembre
+                        </span>
+                        <span style="font-family: monospace; font-weight: 700; color: #dc2626;">
+                            − $ 107.022.007
+                        </span>
+                    </div>
+
+ 
+                </div>
+
+                <div style="margin-top: .15rem; border-top: 1px solid #f1f5f9; padding-top: .15rem;"></div>
+
+                
+                <div>
+                    <div style="font-size: .82rem; font-weight: 800; color: #c2410c; margin-bottom: .4rem; display: flex; align-items: center; gap: .35rem;">
+                        🛑 Retiros seguridad social
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                        
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem;">
+                            <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                                <span style="font-size: .9rem;">⚖️</span> Retiros consolidado
+                            </span>
+                            <span style="font-family: monospace; font-weight: 700; color: #475569;">
+                                $ 150.600
+                            </span>
+                        </div>
+
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem;">
+                            <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                                <span style="font-size: .9rem;">📑</span> Retiros de afiliaciones
+                            </span>
+                            <span style="font-family: monospace; font-weight: 700; color: #0284c7;">
+                                $ 637.300
+                            </span>
+                        </div>
+ 
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem;">
+                            <span style="color: #475569; display: flex; align-items: center; gap: .35rem;">
+                                <span style="font-size: .9rem;">🛑</span> Gastos en retiros del mes
+                            </span>
+                            <span style="font-family: monospace; font-weight: 700; color: #dc2626;">
+                                − $ 557.411
+                            </span>
+                        </div>
+ 
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem; border-top: 1px dashed #ffedd5; margin-top: .15rem; padding-top: .25rem; font-weight: 800;">
+                            <span style="color: #c2410c;">Total o déficit retiros</span>
+                            <span style="font-family: monospace; color: #16a34a;">
+                                +$ 230.489
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: .78rem; border-top: 2px solid #0f766e; margin-top: .2rem; padding-top: .3rem; font-weight: 800;">
+                    <span style="color: #0f766e;">Saldo planillas</span>
+                    <span style="font-family: monospace; font-size: .88rem; color: #dc2626;">
+                        $ -3.569.690
+                    </span>
+                </div>
+
+            </div>
+ 
+            
+            <div style="padding:.75rem 1.1rem;background:#f0fdf4;border-top:2px solid #bbf7d0;margin-top:auto;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div style="font-size:.8rem;font-weight:800;color:#334155;">saldo próximo mes</div>
+                    <div style="font-size:1.05rem;font-weight:900;color:#16a34a;font-family:monospace;">$ 8.012.600</div>
+                </div>
+            </div>
+
+        </div>
+
+
+
+        
+        <div style="background:#fff;border-radius:14px;box-shadow:0 1px 8px rgba(0,0,0,.06);overflow:hidden;">
+            <div style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);padding:.85rem 1.25rem;display:flex;align-items:center;gap:.75rem;">
+                <span style="font-size:1.2rem;">💸</span>
+                <div>
+                    <div style="text-align:center;color:#94a3b8;font-size:.8rem;padding:2rem">… (sigue el detalle de seguridad social, incapacidades y el desglose diario, que no cambian)</div></div></div></body></html>

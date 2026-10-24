@@ -223,6 +223,15 @@ class ProspectoAliadoService
         $nota = $humanos > 0
             ? ' Una persona del equipo ya le escribió; si quedó de contactarlo y no se concretó, discúlpate en media línea y dale ahora tú la información concreta.'
             : '';
+        // Quien vuelve días después no recuerda qué le dijimos: el 18-oct-2026 uno de 80 volvió a
+        // los 11 días y recibió «ya te respondimos arriba» y un menú de opciones.
+        $ordenados = $mensajes->values();
+        if ($ordenados->count() >= 2) {
+            $dias = (int) $ordenados[$ordenados->count() - 2]->created_at->diffInDays($ordenados->last()->created_at);
+            if ($dias >= 3) {
+                $nota .= " Volvió después de {$dias} días: salúdalo de nuevo en media línea, recuérdale en una frase lo que ya hablaron con sus cifras, reenvíale el enlace de la calculadora y, si no respondió a la reunión, ofrécela una vez. Nunca digas «ya te respondimos arriba».";
+            }
+        }
 
         return $cabecera."\nÚltimos mensajes (del más viejo al más nuevo):\n".implode("\n", $lineas).$nota;
     }

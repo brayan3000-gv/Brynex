@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Centro de Informes · Propuestas</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --azul-oscuro: #0a1628; --azul-medio: #0d2550; --azul-vivo: #1e40af; --azul-btn: #2563eb; --acento: #3b82f6;
+    --fondo: #f0f4f8; --borde: #e2e8f0; --gris: #64748b; --gris-claro: #94a3b8; --texto: #1e293b;
+    --verde: #059669; --rojo: #dc2626; --ambar: #d97706;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, sans-serif; background: var(--fondo); color: var(--texto); }
+
+/* ── Barra superior de la maqueta (no es parte de la propuesta) ── */
+.selector { position: sticky; top: 0; z-index: 50; background: #fff; border-bottom: 1px solid var(--borde); padding: .75rem 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.selector b { font-size: .8rem; color: var(--gris); margin-right: .5rem; }
+.selector button { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 999px; padding: .4rem 1rem; font: 700 .8rem Inter, sans-serif; cursor: pointer; }
+.selector button.on { background: var(--azul-btn); border-color: var(--azul-btn); color: #fff; }
+.nota { max-width: 1200px; margin: 1rem auto 0; padding: .75rem 1rem; background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px; font-size: .8rem; color: #92400e; }
+.vista { display: none; max-width: 1200px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+.vista.on { display: block; }
+
+/* ── Piezas comunes ── */
+h2.seccion { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--gris-claro); margin: 1.5rem 0 .75rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 1rem; }
+.card { background: #fff; border-radius: 14px; padding: 1.15rem 1rem; box-shadow: 0 1px 6px rgba(0,0,0,.06); border: 2px solid transparent; display: flex; flex-direction: column; gap: .45rem; text-decoration: none; color: inherit; transition: all .18s; }
+.card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.1); }
+.card .ico { font-size: 1.5rem; }
+.card .val { font-size: 1.4rem; font-weight: 800; line-height: 1; white-space: nowrap; }
+.card .lbl { font-size: .8rem; font-weight: 700; }
+.card .desc { font-size: .72rem; color: var(--gris-claro); }
+.delta { white-space: nowrap; font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; gap: .25rem; padding: .12rem .45rem; border-radius: 999px; width: fit-content; }
+.delta.sube { background: #d1fae5; color: var(--verde); }
+.delta.baja { background: #fee2e2; color: var(--rojo); }
+.delta.igual { background: #f1f5f9; color: var(--gris); }
+.ejemplo { font-size: .6rem; font-weight: 700; color: #b45309; background: #fef3c7; border-radius: 4px; padding: .05rem .3rem; margin-left: .25rem; vertical-align: middle; }
+.banner { display: flex; align-items: center; gap: 1.25rem; border-radius: 14px; padding: 1.4rem 1.6rem; color: #fff; margin-top: 1rem; text-decoration: none; }
+.banner .t { font-weight: 700; } .banner .s { font-size: .8rem; opacity: .75; margin-top: .2rem; }
+.listados { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; background: #fff; border-radius: 14px; padding: 1rem 1.25rem; box-shadow: 0 1px 6px rgba(0,0,0,.06); margin-top: 1.5rem; }
+.listados select, .hero select { padding: .45rem .6rem; border: 1px solid #cbd5e1; border-radius: 8px; font: .85rem Inter, sans-serif; }
+.btn-verde { background: #15803d; color: #fff; border: none; border-radius: 8px; padding: .5rem 1rem; font: 600 .85rem Inter, sans-serif; }
+.cambio { outline: 3px dashed #f59e0b; outline-offset: 3px; position: relative; }
+.cambio::after { content: attr(data-cambio); position: absolute; top: -11px; right: 10px; background: #f59e0b; color: #fff; font-size: .62rem; font-weight: 800; padding: .1rem .45rem; border-radius: 999px; white-space: nowrap; }
+
+/* ── Opción 2: franja de atención ── */
+.atencion { background: #fff; border-radius: 14px; border: 1px solid #fecaca; box-shadow: 0 1px 6px rgba(0,0,0,.06); overflow: hidden; margin-bottom: 1.5rem; }
+.atencion-head { background: linear-gradient(90deg, #7f1d1d, #b91c1c); color: #fff; padding: .7rem 1.2rem; font-weight: 800; font-size: .9rem; display: flex; align-items: center; gap: .6rem; }
+.atencion-head span { font-weight: 500; font-size: .75rem; opacity: .85; }
+.alertas { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.alerta { padding: 1rem 1.2rem; border-right: 1px solid #f1f5f9; display: flex; gap: .8rem; align-items: center; text-decoration: none; color: inherit; }
+.alerta:hover { background: #fef2f2; }
+.alerta .n { font-size: 1.6rem; font-weight: 800; color: var(--rojo); min-width: 2.6rem; text-align: center; }
+.alerta .n.ambar { color: var(--ambar); }
+.alerta .t { font-size: .82rem; font-weight: 700; }
+.alerta .s { font-size: .7rem; color: var(--gris-claro); margin-top: .1rem; }
+.alerta .ir { margin-left: auto; color: var(--acento); font-weight: 800; }
+.al-dia { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; border-radius: 12px; padding: .7rem 1rem; font-size: .8rem; font-weight: 600; margin-top: .75rem; }
+
+/* ── Opción 3: rediseño ── */
+.hero { background: linear-gradient(90deg, var(--azul-oscuro), var(--azul-medio) 55%, var(--azul-vivo)); border-radius: 14px; padding: 1.4rem 1.75rem; color: #fff; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.hero h1 { margin: 0; font-size: 1.35rem; font-weight: 800; }
+.hero p { margin: .2rem 0 0; color: #93c5fd; font-size: .82rem; }
+.hero .mes { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+.hero .mes label { font-size: .75rem; color: #93c5fd; font-weight: 600; }
+.bloques { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1.25rem; }
+.bloque { background: #fff; border-radius: 14px; border: 1px solid var(--borde); overflow: hidden; }
+.bloque-head { padding: .75rem 1rem; border-bottom: 3px solid var(--acento); background: #eff6ff; display: flex; align-items: center; gap: .5rem; }
+.bloque-head b { color: var(--azul-medio); font-size: .9rem; } .bloque-head span { font-size: .72rem; color: var(--gris); margin-left: auto; }
+.fila { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-bottom: 1px solid #f1f5f9; text-decoration: none; color: inherit; }
+.fila:hover { background: #f8fbff; }
+.fila .ico { font-size: 1.25rem; width: 1.8rem; text-align: center; }
+.fila .t { font-size: .82rem; font-weight: 700; } .fila .s { font-size: .7rem; color: var(--gris-claro); }
+.fila .v { margin-left: auto; text-align: right; }
+.fila .v b { font-size: 1.1rem; font-weight: 800; color: var(--azul-medio); display: block; }
+.fin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 1rem; }
+.fin { background: #fff; border-radius: 12px; border: 1px solid var(--borde); padding: 1rem; display: flex; gap: .75rem; align-items: center; text-decoration: none; color: inherit; border-left: 4px solid var(--acento); }
+.fin:hover { border-color: var(--acento); box-shadow: 0 4px 18px rgba(59,130,246,.12); }
+.fin .ico { font-size: 1.5rem; } .fin .t { font-size: .85rem; font-weight: 700; } .fin .s { font-size: .7rem; color: var(--gris-claro); margin-top: .1rem; }
+.fin .monto { font-size: .95rem; font-weight: 800; color: var(--azul-vivo); margin-top: .25rem; }
+
+@media (max-width: 900px) { .bloques { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="selector">
+    <b>Ver:</b>
+    <button data-v="actual" class="on">Hoy (actual)</button>
+    <button data-v="op1">1 · Números que cuadran</button>
+    <button data-v="op2">2 · Requiere atención</button>
+    <button data-v="op3">3 · Rediseño BryNex</button>
+</div>
+<div class="nota">Maqueta con las cifras de GiMave de hoy. Lo marcado <span class="ejemplo">EJEMPLO</span> no está medido todavía: es solo para ver cómo se vería. Lo enmarcado en naranja es lo que cambia.</div>
+
+<!-- ═══════════════════ ACTUAL ═══════════════════ -->
+<section class="vista on" id="actual">
+    <h1 style="font-size:1.4rem;color:var(--azul-medio);margin:.5rem 0 0;">📊 Centro de Informes</h1>
+    <p style="color:var(--gris);font-size:.85rem;margin:.25rem 0 0;">Resumen ejecutivo · octubre de 2026</p>
+    <h2 class="seccion">Operaciones</h2>
+    <div class="grid">
+        <a class="card"><div class="ico">👥</div><div class="val" style="color:#3b82f6">1259 / 1305</div><div class="lbl">Clientes Activos</div><div class="desc">Clientes únicos / Contratos</div></a>
+        <a class="card"><div class="ico">🏢</div><div class="val" style="color:#06b6d4">24</div><div class="lbl">Por Razón Social</div><div class="desc">RS activas</div></a>
+        <a class="card"><div class="ico">📥</div><div class="val" style="color:#8b5cf6">105 + 12</div><div class="lbl">Afiliaciones del Mes</div><div class="desc">Nuevos + Reingresos</div></a>
+        <a class="card"><div class="ico">🏭</div><div class="val" style="color:#0ea5e9">456</div><div class="lbl">Empresas Clientes</div><div class="desc">Empresas registradas</div></a>
+        <a class="card"><div class="ico">🏥</div><div class="val" style="color:#10b981">EPS/AFP/ARL</div><div class="lbl">Por Entidades</div><div class="desc">Ver distribución</div></a>
+        <a class="card"><div class="ico">🚪</div><div class="val" style="color:#f59e0b">44 / 58</div><div class="lbl">Retirados del Mes</div><div class="desc">Sin renovar / Total</div></a>
+        <a class="card"><div class="ico">🏨</div><div class="val" style="color:#ef4444">450</div><div class="lbl">Incapacidades</div><div class="desc">Casos activos</div></a>
+        <a class="card"><div class="ico">📌</div><div class="val" style="color:#f97316">111</div><div class="lbl">Tareas</div><div class="desc">Tareas activas</div></a>
+        <a class="card"><div class="ico">✅</div><div class="val" style="color:#ef4444">53 tandas</div><div class="lbl">Cierre de Operación</div><div class="desc">506 sin facturar · 52 afiliaciones</div></a>
+    </div>
+    <div class="listados"><div style="font-size:1.5rem">📑</div><div style="flex:1;min-width:220px"><b style="font-size:.9rem">Listados del mes</b><div style="font-size:.74rem;color:var(--gris-claro)">Activos al cierre · Pagos · Retiros · Afiliaciones</div></div><select><option>Septiembre</option></select><select><option>2026</option></select><button class="btn-verde">⬇ Exportar Excel</button></div>
+    <h2 class="seccion">Financiero</h2>
+    <a class="banner" style="background:linear-gradient(135deg,#0d2550,#1e40af)"><div style="font-size:2.3rem">💰</div><div><div class="t">Estado Financiero</div><div class="s">Ingresos · Egresos · Utilidad · Bancos</div></div></a>
+    <a class="banner" style="background:linear-gradient(135deg,#0369a1,#075985)"><div style="font-size:2.3rem">🏦</div><div><div class="t">Conciliación de Bancos</div><div class="s">Movimientos del mes por cuenta · Confirmar consignaciones</div></div></a>
+    <a class="banner" style="background:linear-gradient(135deg,#0f766e,#115e59)"><div style="font-size:2.3rem">🧾</div><div><div class="t">Extracto del banco</div><div class="s">Lo que entró y nadie registró · Cruce automático</div></div></a>
+    <a class="banner" style="background:linear-gradient(135deg,#7c3aed,#5b21b6)"><div style="font-size:2.3rem">📋</div><div><div class="t">Distribución de Afiliaciones</div><div class="s">Repartir el valor de cada afiliación entre los asesores</div></div></a>
+    <h2 class="seccion">Historial Informes</h2>
+    <a class="banner" style="background:linear-gradient(135deg,#0d9488,#0f766e);margin-top:0"><div style="font-size:2.3rem">📈</div><div><div class="t">Reporte de Ingresos y Retiros</div><div class="s">Administración y afiliaciones históricas por mes · 6 meses de tendencia</div></div></a>
+</section>
+
+<!-- ═══════════════════ OPCIÓN 1 ═══════════════════ -->
+<section class="vista" id="op1">
+    <h1 style="font-size:1.4rem;color:var(--azul-medio);margin:.5rem 0 0;">📊 Centro de Informes</h1>
+    <p style="color:var(--gris);font-size:.85rem;margin:.25rem 0 0;">Resumen ejecutivo · octubre de 2026 · <b style="color:var(--ambar)">mes en curso, cifras a la fecha (15 de octubre)</b></p>
+    <h2 class="seccion">Operaciones</h2>
+    <div class="grid">
+        <a class="card cambio" data-cambio="vs. mes anterior"><div class="ico">👥</div><div class="val" style="color:#3b82f6">1.259 / 1.305</div><div class="lbl">Clientes Activos</div><div class="desc">Clientes únicos / Contratos</div><span class="delta sube">▲ 32 vs. sep</span><span class="ejemplo" style="margin:0;width:fit-content">EJEMPLO</span></a>
+        <a class="card"><div class="ico">🏢</div><div class="val" style="color:#06b6d4">24</div><div class="lbl">Por Razón Social</div><div class="desc">RS activas</div><span class="delta igual">● igual que sep</span></a>
+        <a class="card cambio" data-cambio="misma regla del consolidado"><div class="ico">📥</div><div class="val" style="color:#8b5cf6">102 + 11</div><div class="lbl">Afiliaciones del Mes</div><div class="desc">Nuevas + Reingresos · a la fecha</div><span class="delta baja">▼ 86 vs. sep (199)</span></a>
+        <a class="card cambio" data-cambio="con activos, no registradas"><div class="ico">🏭</div><div class="val" style="color:#0ea5e9">204</div><div class="lbl">Empresas Clientes</div><div class="desc">Con contratos activos · de 456</div><span class="delta sube">▲ +289 en 6 meses</span></a>
+        <a class="card"><div class="ico">🏥</div><div class="val" style="color:#10b981">EPS/AFP/ARL</div><div class="lbl">Por Entidades</div><div class="desc">Ver distribución</div></a>
+        <a class="card cambio" data-cambio="vs. mes anterior"><div class="ico">🚪</div><div class="val" style="color:#f59e0b">44 / 58</div><div class="lbl">Retirados del Mes</div><div class="desc">Sin renovar / Total · a la fecha</div><span class="delta sube">▼ 12 menos que sep</span><span class="ejemplo" style="margin:0;width:fit-content">EJEMPLO</span></a>
+        <a class="card"><div class="ico">🏨</div><div class="val" style="color:#ef4444">450</div><div class="lbl">Incapacidades</div><div class="desc">Casos activos</div><span class="delta baja">▲ 12 en 30 días</span><span class="ejemplo" style="margin:0;width:fit-content">EJEMPLO</span></a>
+        <a class="card"><div class="ico">📌</div><div class="val" style="color:#f97316">111</div><div class="lbl">Tareas</div><div class="desc">Tareas activas</div><span class="delta sube">▼ 9 en 30 días</span><span class="ejemplo" style="margin:0;width:fit-content">EJEMPLO</span></a>
+        <a class="card"><div class="ico">✅</div><div class="val" style="color:#ef4444">53 tandas</div><div class="lbl">Cierre de Operación</div><div class="desc">506 sin facturar · 52 afiliaciones</div></a>
+    </div>
+    <p style="font-size:.78rem;color:var(--gris);margin-top:1rem;line-height:1.5">Afiliaciones del Mes pasa de <b>105 + 12</b> a <b>102 + 11</b>: usaría la misma regla del consolidado mensual (reingreso = otro contrato retirado este mes o el anterior, sin correcciones) y dejaría fuera los contratos sin ficha de cliente. Así la tarjeta, el consolidado y el Excel dan siempre el mismo número.</p>
+    <p style="font-size:.78rem;color:var(--gris);margin:.25rem 0 0;">El resto de la página (listados, financiero, historial) queda igual.</p>
+</section>
+
+<!-- ═══════════════════ OPCIÓN 2 ═══════════════════ -->
+<section class="vista" id="op2">
+    <h1 style="font-size:1.4rem;color:var(--azul-medio);margin:.5rem 0 0;">📊 Centro de Informes</h1>
+    <p style="color:var(--gris);font-size:.85rem;margin:.25rem 0 1.25rem;">Resumen ejecutivo · octubre de 2026</p>
+
+    <div class="atencion cambio" data-cambio="nuevo">
+        <div class="atencion-head">⚠️ Requiere atención <span>· cada número abre la lista ya filtrada</span></div>
+        <div class="alertas">
+            <a class="alerta"><div class="n">23</div><div><div class="t">Tareas vencidas <span class="ejemplo">EJEMPLO</span></div><div class="s">Pasaron su fecha límite</div></div><div class="ir">→</div></a>
+            <a class="alerta"><div class="n">38</div><div><div class="t">Incapacidades sin gestión <span class="ejemplo">EJEMPLO</span></div><div class="s">Más de 7 días sin moverse</div></div><div class="ir">→</div></a>
+            <a class="alerta"><div class="n">506</div><div><div class="t">Sin facturar del cierre</div><div class="s">53 tandas · 52 afiliaciones</div></div><div class="ir">→</div></a>
+            <a class="alerta"><div class="n ambar">7</div><div><div class="t">Retiros sin planilla <span class="ejemplo">EJEMPLO</span></div><div class="s">Marcados pero no reportados</div></div><div class="ir">→</div></a>
+        </div>
+    </div>
+    <div class="al-dia">Así se vería cuando no hay nada pendiente → ✅ Todo al día: sin tareas vencidas, incapacidades al día y el cierre facturado.</div>
+
+    <h2 class="seccion">Operaciones</h2>
+    <div class="grid">
+        <a class="card"><div class="ico">👥</div><div class="val" style="color:#3b82f6">1259 / 1305</div><div class="lbl">Clientes Activos</div><div class="desc">Clientes únicos / Contratos</div></a>
+        <a class="card"><div class="ico">🏢</div><div class="val" style="color:#06b6d4">24</div><div class="lbl">Por Razón Social</div><div class="desc">RS activas</div></a>
+        <a class="card"><div class="ico">📥</div><div class="val" style="color:#8b5cf6">105 + 12</div><div class="lbl">Afiliaciones del Mes</div><div class="desc">Nuevos + Reingresos</div></a>
+        <a class="card"><div class="ico">🏭</div><div class="val" style="color:#0ea5e9">456</div><div class="lbl">Empresas Clientes</div><div class="desc">Empresas registradas</div></a>
+        <a class="card"><div class="ico">🏥</div><div class="val" style="color:#10b981">EPS/AFP/ARL</div><div class="lbl">Por Entidades</div><div class="desc">Ver distribución</div></a>
+        <a class="card"><div class="ico">🚪</div><div class="val" style="color:#f59e0b">44 / 58</div><div class="lbl">Retirados del Mes</div><div class="desc">Sin renovar / Total</div></a>
+        <a class="card"><div class="ico">🏨</div><div class="val" style="color:#ef4444">450</div><div class="lbl">Incapacidades</div><div class="desc">Casos activos</div></a>
+        <a class="card"><div class="ico">📌</div><div class="val" style="color:#f97316">111</div><div class="lbl">Tareas</div><div class="desc">Tareas activas</div></a>
+    </div>
+    <p style="font-size:.78rem;color:var(--gris);margin-top:1rem;">La tarjeta de Cierre de Operación sube a la franja (es lo más urgente). El resto de la página queda igual.</p>
+</section>
+
+<!-- ═══════════════════ OPCIÓN 3 ═══════════════════ -->
+<section class="vista" id="op3">
+    <div class="hero cambio" data-cambio="encabezado BryNex + selector de mes">
+        <div>
+            <h1>📊 Centro de Informes</h1>
+            <p>Resumen ejecutivo de GiMave Integral</p>
+        </div>
+        <div class="mes">
+            <label>Mes</label>
+            <select><option>Octubre (en curso)</option><option>Septiembre</option><option>Agosto</option></select>
+            <select><option>2026</option></select>
+        </div>
+    </div>
+
+    <div class="bloques">
+        <div class="bloque">
+            <div class="bloque-head">🟢 <b>Hoy</b><span>foto actual</span></div>
+            <a class="fila"><div class="ico">👥</div><div><div class="t">Clientes activos</div><div class="s">Únicos / contratos</div></div><div class="v"><b>1.259</b><span class="s">1.305 contratos</span></div></a>
+            <a class="fila"><div class="ico">🏭</div><div><div class="t">Empresas clientes</div><div class="s">Con contratos activos</div></div><div class="v"><b>204</b><span class="s">de 456</span></div></a>
+            <a class="fila"><div class="ico">🏢</div><div><div class="t">Razones sociales</div><div class="s">Activas</div></div><div class="v"><b>24</b></div></a>
+            <a class="fila"><div class="ico">🏥</div><div><div class="t">Por entidades</div><div class="s">EPS · AFP · ARL · Caja</div></div><div class="v"><b style="font-size:.85rem">Ver →</b></div></a>
+        </div>
+        <div class="bloque">
+            <div class="bloque-head">📅 <b>Este mes</b><span>octubre · a la fecha</span></div>
+            <a class="fila"><div class="ico">📥</div><div><div class="t">Afiliaciones</div><div class="s">Nuevas + reingresos</div></div><div class="v"><b>102 + 11</b></div></a>
+            <a class="fila"><div class="ico">🚪</div><div><div class="t">Retirados</div><div class="s">Sin renovar / total</div></div><div class="v"><b>44 / 58</b></div></a>
+            <a class="fila"><div class="ico">📈</div><div><div class="t">Ingresos y retiros</div><div class="s">Consolidado · 6 meses</div></div><div class="v"><b style="font-size:.85rem">Ver →</b></div></a>
+            <a class="fila"><div class="ico">📑</div><div><div class="t">Listados del mes</div><div class="s">Activos · pagos · retiros · afiliaciones</div></div><div class="v"><b style="font-size:.85rem;color:#15803d">⬇ Excel</b></div></a>
+        </div>
+        <div class="bloque">
+            <div class="bloque-head">🛠️ <b>Gestión</b><span>pendientes</span></div>
+            <a class="fila"><div class="ico">🏨</div><div><div class="t">Incapacidades</div><div class="s">Casos activos</div></div><div class="v"><b style="color:#dc2626">450</b></div></a>
+            <a class="fila"><div class="ico">📌</div><div><div class="t">Tareas</div><div class="s">Activas</div></div><div class="v"><b style="color:#ea580c">111</b></div></a>
+            <a class="fila"><div class="ico">✅</div><div><div class="t">Cierre de operación</div><div class="s">506 sin facturar · 52 afiliaciones</div></div><div class="v"><b style="color:#dc2626">53</b><span class="s">tandas</span></div></a>
+        </div>
+    </div>
+
+    <h2 class="seccion">Financiero</h2>
+    <div class="fin-grid cambio" data-cambio="5 banners → tarjetas iguales">
+        <a class="fin"><div class="ico">💰</div><div><div class="t">Estado Financiero</div><div class="s">Ingresos · egresos · utilidad</div><div class="monto">$ 48.250.000 <span class="ejemplo">EJEMPLO</span></div></div></a>
+        <a class="fin"><div class="ico">🏦</div><div><div class="t">Conciliación de Bancos</div><div class="s">Confirmar consignaciones</div></div></a>
+        <a class="fin"><div class="ico">🧾</div><div><div class="t">Extracto del banco</div><div class="s">Cruce automático</div></div></a>
+        <a class="fin"><div class="ico">📋</div><div><div class="t">Distribución de Afiliaciones</div><div class="s">Comisiones del mes</div></div></a>
+    </div>
+</section>
+
+<script>
+document.querySelectorAll('.selector button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.selector button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.vista').forEach(v => v.classList.toggle('on', v.id === b.dataset.v));
+    window.scrollTo({ top: 0 });
+}));
+</script>
+</body>
+</html>

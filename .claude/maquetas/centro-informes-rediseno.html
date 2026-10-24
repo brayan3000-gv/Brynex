@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Centro de Informes · Rediseño</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --azul-oscuro: #0a1628; --azul-medio: #0d2550; --azul-vivo: #1e40af; --azul-btn: #2563eb; --acento: #3b82f6;
+    --fondo: #f0f4f8; --borde: #e2e8f0; --gris: #64748b; --gris-claro: #94a3b8; --texto: #1e293b;
+    --verde: #059669; --rojo: #dc2626; --ambar: #d97706;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, sans-serif; background: var(--fondo); color: var(--texto); }
+a { color: inherit; text-decoration: none; }
+
+.selector { position: sticky; top: 0; z-index: 50; background: #fff; border-bottom: 1px solid var(--borde); padding: .75rem 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.selector b { font-size: .8rem; color: var(--gris); margin-right: .5rem; }
+.selector button { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 999px; padding: .4rem 1rem; font: 700 .8rem Inter, sans-serif; cursor: pointer; }
+.selector button.on { background: var(--azul-btn); border-color: var(--azul-btn); color: #fff; }
+.idea { max-width: 1200px; margin: 1rem auto 0; padding: .7rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: .8rem; color: var(--azul-vivo); line-height: 1.5; }
+.vista { display: none; max-width: 1200px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+.vista.on { display: block; }
+
+/* comunes */
+.hero { background: linear-gradient(90deg, var(--azul-oscuro), var(--azul-medio) 55%, var(--azul-vivo)); border-radius: 14px; padding: 1.3rem 1.6rem; color: #fff; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.hero h1 { margin: 0; font-size: 1.3rem; font-weight: 800; }
+.hero p { margin: .2rem 0 0; color: #93c5fd; font-size: .8rem; }
+.hero .mes { margin-left: auto; display: flex; gap: .5rem; align-items: center; }
+.hero .mes label { font-size: .72rem; color: #93c5fd; font-weight: 600; }
+.hero select { padding: .4rem .55rem; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.1); color: #fff; border-radius: 8px; font: .8rem Inter, sans-serif; }
+.hero select option { color: #000; }
+.delta { font-size: .68rem; font-weight: 700; padding: .1rem .45rem; border-radius: 999px; white-space: nowrap; display: inline-block; }
+.delta.sube { background: #d1fae5; color: var(--verde); } .delta.baja { background: #fee2e2; color: var(--rojo); } .delta.ref { background: #f1f5f9; color: var(--gris); }
+.alertas { background: #fff; border-radius: 14px; border: 1px solid #fecaca; overflow: hidden; margin-top: 1rem; display: flex; align-items: stretch; flex-wrap: wrap; }
+.alertas .tit { background: linear-gradient(90deg, #7f1d1d, #b91c1c); color: #fff; font-weight: 800; font-size: .82rem; padding: .8rem 1.1rem; display: flex; align-items: center; }
+.alerta { flex: 1; min-width: 210px; display: flex; gap: .7rem; align-items: center; padding: .7rem 1.1rem; border-left: 1px solid #f1f5f9; }
+.alerta:hover { background: #fef2f2; }
+.alerta .n { font-size: 1.35rem; font-weight: 800; color: var(--rojo); }
+.alerta .t { font-size: .78rem; font-weight: 700; } .alerta .s { font-size: .68rem; color: var(--gris-claro); }
+.alerta .ir { margin-left: auto; color: var(--acento); font-weight: 800; }
+h2.sec { font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--gris-claro); margin: 1.5rem 0 .7rem; }
+
+/* ── A: Bloques ── */
+.bloques { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; }
+.bloque { background: #fff; border-radius: 14px; border: 1px solid var(--borde); overflow: hidden; }
+.bloque-head { padding: .75rem 1rem; background: #eff6ff; border-bottom: 3px solid var(--acento); display: flex; gap: .5rem; align-items: center; }
+.bloque-head b { color: var(--azul-medio); font-size: .9rem; } .bloque-head span { margin-left: auto; font-size: .7rem; color: var(--gris); }
+.fila { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; border-bottom: 1px solid #f1f5f9; }
+.fila:last-child { border-bottom: none; }
+.fila:hover { background: #f8fbff; }
+.fila .ico { font-size: 1.2rem; width: 1.7rem; text-align: center; }
+.fila .t { font-size: .82rem; font-weight: 700; } .fila .s { font-size: .68rem; color: var(--gris-claro); margin-top: .1rem; }
+.fila .v { margin-left: auto; text-align: right; }
+.fila .v b { display: block; font-size: 1.1rem; font-weight: 800; color: var(--azul-medio); }
+.fin-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.fin { background: #fff; border-radius: 12px; border: 1px solid var(--borde); border-left: 4px solid var(--acento); padding: .9rem 1rem; display: flex; gap: .7rem; align-items: center; }
+.fin:hover { box-shadow: 0 4px 18px rgba(59,130,246,.12); border-color: var(--acento); }
+.fin .ico { font-size: 1.4rem; } .fin .t { font-size: .82rem; font-weight: 700; } .fin .s { font-size: .68rem; color: var(--gris-claro); margin-top: .1rem; }
+.fin .monto { font-weight: 800; color: var(--azul-vivo); font-size: .92rem; margin-top: .2rem; }
+
+/* ── B: Panel ejecutivo ── */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-top: 1rem; }
+.kpi { background: #fff; border-radius: 14px; border: 1px solid var(--borde); padding: 1rem 1.15rem; }
+.kpi .l { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gris); }
+.kpi .n { font-size: 2rem; font-weight: 800; color: var(--azul-medio); margin: .3rem 0 .35rem; line-height: 1; }
+.kpi .n small { font-size: .95rem; color: var(--gris-claro); font-weight: 700; }
+.panel2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 1rem; margin-top: 1rem; }
+.caja { background: #fff; border-radius: 14px; border: 1px solid var(--borde); padding: 1rem 1.15rem; }
+.caja h3 { margin: 0 0 .8rem; font-size: .88rem; color: var(--azul-medio); display: flex; align-items: center; gap: .5rem; }
+.caja h3 span { margin-left: auto; font-size: .7rem; color: var(--gris); font-weight: 600; }
+.barras { display: grid; grid-template-columns: repeat(6, 1fr); gap: .8rem; align-items: end; height: 170px; padding-top: .5rem; }
+.col { display: flex; flex-direction: column; align-items: center; gap: .3rem; height: 100%; justify-content: flex-end; }
+.par { display: flex; gap: 4px; align-items: flex-end; height: 120px; }
+.par i { width: 16px; border-radius: 4px 4px 0 0; display: block; }
+.par .ing { background: var(--azul-btn); } .par .ret { background: #f59e0b; }
+.col .m { font-size: .68rem; font-weight: 700; color: var(--gris); }
+.col .b { font-size: .7rem; font-weight: 800; }
+.leyenda { display: flex; gap: 1rem; font-size: .7rem; color: var(--gris); margin-top: .6rem; }
+.leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: .3rem; vertical-align: middle; }
+.gestion-item { display: flex; align-items: center; gap: .7rem; padding: .65rem 0; border-bottom: 1px solid #f1f5f9; }
+.gestion-item:last-child { border-bottom: none; }
+.gestion-item .n { margin-left: auto; font-weight: 800; font-size: 1.1rem; }
+.lanzador { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: .6rem; }
+.lz { background: #fff; border: 1px solid var(--borde); border-radius: 10px; padding: .65rem .75rem; display: flex; gap: .55rem; align-items: center; font-size: .78rem; font-weight: 600; }
+.lz:hover { border-color: var(--acento); color: var(--azul-vivo); }
+.lz span { font-size: 1.05rem; }
+
+/* ── C: Pestañas ── */
+.tabs { display: flex; gap: .3rem; margin-top: 1rem; border-bottom: 2px solid #dbeafe; }
+.tab { padding: .7rem 1.2rem; font-size: .85rem; font-weight: 700; color: var(--gris); border-radius: 10px 10px 0 0; cursor: pointer; border: 1px solid transparent; border-bottom: none; position: relative; top: 2px; background: transparent; font-family: inherit; }
+.tab.on { background: #fff; color: var(--azul-vivo); border-color: #dbeafe; border-bottom: 2px solid #fff; }
+.tab .cnt { background: #fee2e2; color: var(--rojo); border-radius: 999px; padding: .05rem .4rem; font-size: .65rem; margin-left: .3rem; }
+.tab-panel { display: none; background: #fff; border: 1px solid #dbeafe; border-top: none; border-radius: 0 0 14px 14px; padding: 1.2rem; }
+.tab-panel.on { display: block; }
+.resumen-linea { display: flex; gap: 2rem; flex-wrap: wrap; padding: .9rem 1.1rem; background: #fff; border: 1px solid var(--borde); border-radius: 12px; margin-top: 1rem; }
+.resumen-linea div { font-size: .72rem; color: var(--gris); font-weight: 600; }
+.resumen-linea b { display: block; font-size: 1.25rem; color: var(--azul-medio); font-weight: 800; }
+.tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: .9rem; }
+.tj { border: 1px solid var(--borde); border-radius: 12px; padding: 1rem; display: flex; gap: .8rem; align-items: flex-start; }
+.tj:hover { border-color: var(--acento); box-shadow: 0 4px 18px rgba(59,130,246,.12); transform: translateY(-2px); transition: all .15s; }
+.tj .ico { font-size: 1.5rem; } .tj .t { font-weight: 700; font-size: .88rem; } .tj .s { font-size: .72rem; color: var(--gris-claro); margin-top: .15rem; }
+.tj .v { font-size: 1.35rem; font-weight: 800; color: var(--azul-medio); margin-top: .35rem; }
+
+@media (max-width: 900px) {
+    .bloques, .panel2 { grid-template-columns: 1fr; }
+    .kpis, .fin-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="selector">
+    <b>Rediseño:</b>
+    <button data-v="a" class="on">A · Bloques por uso</button>
+    <button data-v="b">B · Panel ejecutivo</button>
+    <button data-v="c">C · Pestañas</button>
+</div>
+
+<!-- ═══════════════════ A ═══════════════════ -->
+<section class="vista on" id="a">
+    <div class="idea"><b>Idea:</b> todo en una pantalla, ordenado por para qué se usa. Cada informe es una fila con su número a la derecha. La más parecida a hoy, pero en la mitad del espacio.</div>
+    <div style="height:1rem"></div>
+    <div class="hero">
+        <div><h1>📊 Centro de Informes</h1><p>GiMave Integral · octubre de 2026 en curso, cifras al 15</p></div>
+        <div class="mes"><label>Mes</label><select><option>Octubre</option><option>Septiembre</option></select><select><option>2026</option></select></div>
+    </div>
+    <div class="alertas">
+        <div class="tit">⚠️ Requiere atención</div>
+        <a class="alerta"><div class="n">16</div><div><div class="t">Tareas vencidas</div><div class="s">Pasaron su fecha límite</div></div><div class="ir">→</div></a>
+        <a class="alerta"><div class="n">448</div><div><div class="t">Incapacidades sin gestión</div><div class="s">Más de 7 días sin moverse</div></div><div class="ir">→</div></a>
+    </div>
+    <div class="bloques">
+        <div class="bloque">
+            <div class="bloque-head">🟢 <b>Hoy</b><span>foto actual</span></div>
+            <a class="fila"><div class="ico">👥</div><div><div class="t">Clientes activos</div><div class="s">Únicos / contratos</div></div><div class="v"><b>1.257</b><span class="delta sube">▲ +110 vs. cierre sep</span></div></a>
+            <a class="fila"><div class="ico">🏭</div><div><div class="t">Empresas clientes</div><div class="s">Con contratos activos · de 456</div></div><div class="v"><b>204</b></div></a>
+            <a class="fila"><div class="ico">🏢</div><div><div class="t">Razones sociales</div><div class="s">Activas</div></div><div class="v"><b>24</b></div></a>
+            <a class="fila"><div class="ico">🏥</div><div><div class="t">Por entidades</div><div class="s">EPS · AFP · ARL · Caja</div></div><div class="v"><b style="font-size:.82rem;color:var(--acento)">Ver →</b></div></a>
+        </div>
+        <div class="bloque">
+            <div class="bloque-head">📅 <b>Este mes</b><span>octubre · al 15</span></div>
+            <a class="fila"><div class="ico">📥</div><div><div class="t">Afiliaciones</div><div class="s">Nuevas + reingresos</div></div><div class="v"><b>105 + 13</b><span class="delta sube">▲ +16 vs. 1–15 sep</span></div></a>
+            <a class="fila"><div class="ico">🚪</div><div><div class="t">Retirados</div><div class="s">Sin renovar / total</div></div><div class="v"><b>44 / 59</b><span class="delta ref">sep completo: 176</span></div></a>
+            <a class="fila"><div class="ico">📈</div><div><div class="t">Ingresos y retiros</div><div class="s">Consolidado · 6 meses</div></div><div class="v"><b style="font-size:.82rem;color:var(--acento)">Ver →</b></div></a>
+            <a class="fila"><div class="ico">📑</div><div><div class="t">Listados del mes</div><div class="s">Activos · pagos · retiros · afiliaciones</div></div><div class="v"><b style="font-size:.82rem;color:#15803d">⬇ Excel</b></div></a>
+        </div>
+        <div class="bloque">
+            <div class="bloque-head">🛠️ <b>Gestión</b><span>pendientes</span></div>
+            <a class="fila"><div class="ico">🏨</div><div><div class="t">Incapacidades</div><div class="s">Casos activos</div></div><div class="v"><b style="color:var(--rojo)">450</b></div></a>
+            <a class="fila"><div class="ico">📌</div><div><div class="t">Tareas</div><div class="s">Activas</div></div><div class="v"><b style="color:#ea580c">111</b></div></a>
+            <a class="fila"><div class="ico">✅</div><div><div class="t">Cierre de operación</div><div class="s">503 sin facturar · 53 afiliaciones · se advierte desde el 25</div></div><div class="v"><b style="color:var(--gris)">54</b><span class="s">tandas</span></div></a>
+        </div>
+    </div>
+    <h2 class="sec">Financiero</h2>
+    <div class="fin-grid">
+        <a class="fin"><div class="ico">💰</div><div><div class="t">Estado financiero</div><div class="s">Ingresos · egresos · utilidad</div><div class="monto">$ 41.186.942</div></div></a>
+        <a class="fin" style="border-left-color:#0369a1"><div class="ico">🏦</div><div><div class="t">Conciliación de bancos</div><div class="s">Confirmar consignaciones</div></div></a>
+        <a class="fin" style="border-left-color:#0f766e"><div class="ico">🧾</div><div><div class="t">Extracto del banco</div><div class="s">Cruce automático</div></div></a>
+        <a class="fin" style="border-left-color:#7c3aed"><div class="ico">📋</div><div><div class="t">Distribución de afiliaciones</div><div class="s">Comisiones del mes</div></div></a>
+    </div>
+</section>
+
+<!-- ═══════════════════ B ═══════════════════ -->
+<section class="vista" id="b">
+    <div class="idea"><b>Idea:</b> un tablero para entender el negocio de un vistazo: 4 números grandes, la gráfica de los últimos 6 meses y lo pendiente al lado. Los informes pasan abajo a un "lanzador" de accesos rápidos.</div>
+    <div style="height:1rem"></div>
+    <div class="hero">
+        <div><h1>📊 Centro de Informes</h1><p>GiMave Integral · octubre de 2026 en curso, cifras al 15</p></div>
+        <div class="mes"><label>Mes</label><select><option>Octubre</option><option>Septiembre</option></select><select><option>2026</option></select></div>
+    </div>
+    <div class="kpis">
+        <a class="kpi"><div class="l">👥 Clientes activos</div><div class="n">1.257 <small>/ 1.303</small></div><span class="delta sube">▲ +110 vs. cierre sep</span></a>
+        <a class="kpi"><div class="l">📥 Afiliaciones del mes</div><div class="n">118 <small>105 + 13</small></div><span class="delta sube">▲ +16 vs. 1–15 sep</span></a>
+        <a class="kpi"><div class="l">🚪 Retirados del mes</div><div class="n">59 <small>44 sin renovar</small></div><span class="delta ref">sep completo: 176</span></a>
+        <a class="kpi"><div class="l">🏭 Empresas con activos</div><div class="n">204 <small>de 456</small></div><span class="delta sube">▲ 90 crecieron en 6 meses</span></a>
+    </div>
+    <div class="panel2">
+        <div class="caja">
+            <h3>📈 Ingresos y retiros · últimos 6 meses <span>balance del semestre ▲ +289</span></h3>
+            <div class="barras" id="barras"></div>
+            <div class="leyenda"><span><i style="background:var(--azul-btn)"></i>Ingresos</span><span><i style="background:#f59e0b"></i>Retiros</span><span>octubre va a la fecha</span></div>
+        </div>
+        <div class="caja">
+            <h3>🛠️ Gestión pendiente</h3>
+            <a class="gestion-item"><span>⏰</span><div><div style="font-size:.82rem;font-weight:700">Tareas vencidas</div><div style="font-size:.68rem;color:var(--gris-claro)">de 111 activas</div></div><span class="n" style="color:var(--rojo)">16</span></a>
+            <a class="gestion-item"><span>🏨</span><div><div style="font-size:.82rem;font-weight:700">Incapacidades sin gestión +7d</div><div style="font-size:.68rem;color:var(--gris-claro)">de 450 activas</div></div><span class="n" style="color:var(--rojo)">448</span></a>
+            <a class="gestion-item"><span>✅</span><div><div style="font-size:.82rem;font-weight:700">Cierre de operación</div><div style="font-size:.68rem;color:var(--gris-claro)">503 sin facturar · se advierte desde el 25</div></div><span class="n" style="color:var(--gris)">54</span></a>
+            <a class="gestion-item"><span>📑</span><div><div style="font-size:.82rem;font-weight:700">Listados de septiembre</div><div style="font-size:.68rem;color:var(--gris-claro)">Excel de 4 hojas</div></div><span class="n" style="color:#15803d;font-size:.85rem">⬇ Excel</span></a>
+        </div>
+    </div>
+    <h2 class="sec">Informes</h2>
+    <div class="lanzador">
+        <a class="lz"><span>👥</span>Clientes activos</a>
+        <a class="lz"><span>🏢</span>Por razón social</a>
+        <a class="lz"><span>🏭</span>Empresas clientes</a>
+        <a class="lz"><span>🏥</span>Por entidades</a>
+        <a class="lz"><span>📥</span>Afiliaciones y retiros</a>
+        <a class="lz"><span>🚪</span>Retirados del mes</a>
+        <a class="lz"><span>📈</span>Consolidado mensual</a>
+        <a class="lz"><span>🏨</span>Incapacidades</a>
+        <a class="lz"><span>📌</span>Tareas</a>
+        <a class="lz"><span>💰</span>Estado financiero</a>
+        <a class="lz"><span>🏦</span>Conciliación bancos</a>
+        <a class="lz"><span>🧾</span>Extracto del banco</a>
+        <a class="lz"><span>📋</span>Distribución afiliaciones</a>
+    </div>
+</section>
+
+<!-- ═══════════════════ C ═══════════════════ -->
+<section class="vista" id="c">
+    <div class="idea"><b>Idea:</b> una línea de resumen arriba y los informes separados en pestañas. Cada quien ve solo lo suyo (el contable va directo a Financiero), y la pestaña con pendientes muestra el número en rojo.</div>
+    <div style="height:1rem"></div>
+    <div class="hero">
+        <div><h1>📊 Centro de Informes</h1><p>GiMave Integral · octubre de 2026 en curso, cifras al 15</p></div>
+        <div class="mes"><label>Mes</label><select><option>Octubre</option><option>Septiembre</option></select><select><option>2026</option></select></div>
+    </div>
+    <div class="resumen-linea">
+        <div>Clientes activos<b>1.257</b><span class="delta sube">▲ +110</span></div>
+        <div>Afiliaciones del mes<b>105 + 13</b><span class="delta sube">▲ +16</span></div>
+        <div>Retirados del mes<b>44 / 59</b><span class="delta ref">sep: 176</span></div>
+        <div>Empresas con activos<b>204</b><span class="delta ref">de 456</span></div>
+        <div>Ingresos del mes<b>$ 41,2 M</b><span class="delta ref">financiero</span></div>
+    </div>
+    <div class="tabs">
+        <button class="tab on" data-t="t-op">📋 Operación</button>
+        <button class="tab" data-t="t-ge">🛠️ Gestión <span class="cnt">2</span></button>
+        <button class="tab" data-t="t-fi">💰 Financiero</button>
+        <button class="tab" data-t="t-hi">📈 Historial</button>
+    </div>
+    <div class="tab-panel on" id="t-op">
+        <div class="tarjetas">
+            <a class="tj"><div class="ico">👥</div><div><div class="t">Clientes activos</div><div class="s">Únicos / contratos</div><div class="v">1.257 / 1.303</div></div></a>
+            <a class="tj"><div class="ico">📥</div><div><div class="t">Afiliaciones del mes</div><div class="s">Nuevas + reingresos</div><div class="v">105 + 13</div></div></a>
+            <a class="tj"><div class="ico">🚪</div><div><div class="t">Retirados del mes</div><div class="s">Sin renovar / total</div><div class="v">44 / 59</div></div></a>
+            <a class="tj"><div class="ico">🏭</div><div><div class="t">Empresas clientes</div><div class="s">Con contratos activos</div><div class="v">204</div></div></a>
+            <a class="tj"><div class="ico">🏢</div><div><div class="t">Por razón social</div><div class="s">Activas</div><div class="v">24</div></div></a>
+            <a class="tj"><div class="ico">🏥</div><div><div class="t">Por entidades</div><div class="s">EPS · AFP · ARL · Caja</div><div class="v" style="font-size:.9rem;color:var(--acento)">Ver distribución →</div></div></a>
+            <a class="tj" style="border-color:#bbf7d0;background:#f0fdf4"><div class="ico">📑</div><div><div class="t">Listados del mes</div><div class="s">Activos · pagos · retiros · afiliaciones</div><div class="v" style="font-size:.9rem;color:#15803d">⬇ Exportar Excel</div></div></a>
+        </div>
+    </div>
+    <div class="tab-panel" id="t-ge">
+        <div class="tarjetas">
+            <a class="tj" style="border-color:#fecaca"><div class="ico">⏰</div><div><div class="t">Tareas vencidas</div><div class="s">de 111 activas</div><div class="v" style="color:var(--rojo)">16</div></div></a>
+            <a class="tj" style="border-color:#fecaca"><div class="ico">🏨</div><div><div class="t">Incapacidades sin gestión +7d</div><div class="s">de 450 activas</div><div class="v" style="color:var(--rojo)">448</div></div></a>
+            <a class="tj"><div class="ico">✅</div><div><div class="t">Cierre de operación</div><div class="s">503 sin facturar · 53 afiliaciones</div><div class="v">54 tandas</div></div></a>
+            <a class="tj"><div class="ico">📌</div><div><div class="t">Tareas</div><div class="s">Activas por tipo y encargado</div><div class="v">111</div></div></a>
+            <a class="tj"><div class="ico">🏨</div><div><div class="t">Incapacidades</div><div class="s">Por tipo, estado y entidad</div><div class="v">450</div></div></a>
+        </div>
+    </div>
+    <div class="tab-panel" id="t-fi">
+        <div class="tarjetas">
+            <a class="tj"><div class="ico">💰</div><div><div class="t">Estado financiero</div><div class="s">Ingresos · egresos · utilidad · bancos</div><div class="v">$ 41.186.942</div></div></a>
+            <a class="tj"><div class="ico">🏦</div><div><div class="t">Conciliación de bancos</div><div class="s">Movimientos por cuenta · confirmar consignaciones</div></div></a>
+            <a class="tj"><div class="ico">🧾</div><div><div class="t">Extracto del banco</div><div class="s">Lo que entró y nadie registró · cruce automático</div></div></a>
+            <a class="tj"><div class="ico">📋</div><div><div class="t">Distribución de afiliaciones</div><div class="s">Comisiones de los asesores</div></div></a>
+        </div>
+    </div>
+    <div class="tab-panel" id="t-hi">
+        <div class="tarjetas">
+            <a class="tj"><div class="ico">📈</div><div><div class="t">Consolidado mensual</div><div class="s">Ingresos y retiros · 6 meses de tendencia</div></div></a>
+            <a class="tj"><div class="ico">📥</div><div><div class="t">Afiliaciones y retiros por motivo</div><div class="s">Por qué entran y por qué salen</div></div></a>
+        </div>
+    </div>
+</section>
+
+<script>
+// Barras del panel B (cifras reales del semestre de GiMave)
+const meses = [['May',128,80],['Jun',136,141],['Jul',137,116],['Ago',133,148],['Sep',199,68],['Oct',117,8]];
+const max = Math.max(...meses.flatMap(m => [m[1], m[2]]));
+document.getElementById('barras').innerHTML = meses.map(([m, i, r]) => {
+    const b = i - r;
+    return `<div class="col"><div class="b" style="color:${b >= 0 ? 'var(--verde)' : 'var(--rojo)'}">${b >= 0 ? '▲ +' : '▼ '}${b}</div>
+        <div class="par"><i class="ing" style="height:${i / max * 120}px" title="${i} ingresos"></i><i class="ret" style="height:${r / max * 120}px" title="${r} retiros"></i></div>
+        <div class="m">${m}</div></div>`;
+}).join('');
+
+document.querySelectorAll('.selector button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.selector button').forEach(x => x.classList.toggle('on', x === b));
+    document.querySelectorAll('.vista').forEach(v => v.classList.toggle('on', v.id === b.dataset.v));
+    window.scrollTo({ top: 0 });
+}));
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('on', p.id === t.dataset.t));
+}));
+</script>
+</body>
+</html>

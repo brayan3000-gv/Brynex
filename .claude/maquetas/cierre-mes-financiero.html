@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cierre del mes · Maqueta</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --azul-oscuro: #0a1628; --azul-medio: #0d2550; --azul-vivo: #1e40af; --azul-btn: #2563eb; --acento: #3b82f6;
+    --fondo: #f0f4f8; --borde: #e2e8f0; --gris: #64748b; --gris-claro: #94a3b8; --texto: #1e293b;
+    --verde: #059669; --rojo: #dc2626; --ambar: #d97706; --morado: #7c3aed;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, sans-serif; background: var(--fondo); color: var(--texto); }
+.selector { position: sticky; top: 0; z-index: 50; background: #fff; border-bottom: 1px solid var(--borde); padding: .75rem 1rem; display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.selector b { font-size: .8rem; color: var(--gris); margin-right: .5rem; }
+.selector button { border: 1px solid #cbd5e1; background: #fff; color: #475569; border-radius: 999px; padding: .4rem 1rem; font: 700 .8rem Inter, sans-serif; cursor: pointer; }
+.selector button.on { background: var(--azul-btn); border-color: var(--azul-btn); color: #fff; }
+.idea { max-width: 1200px; margin: 1rem auto 0; padding: .7rem 1rem; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: .8rem; color: var(--azul-vivo); line-height: 1.5; }
+.vista { display: none; max-width: 1200px; margin: 0 auto; padding: 1rem 1rem 3rem; }
+.vista.on { display: block; }
+.ej { display: inline-block; font-size: .58rem; font-weight: 800; color: #9a3412; background: #ffedd5; border: 1px solid #fdba74; border-radius: 4px; padding: 0 .3rem; margin-left: .35rem; vertical-align: middle; letter-spacing: .03em; }
+
+.hero { background: linear-gradient(90deg, var(--azul-oscuro), var(--azul-medio) 55%, var(--azul-vivo)); border-radius: 14px; padding: 1.2rem 1.5rem; color: #fff; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.hero h1 { margin: 0; font-size: 1.25rem; font-weight: 800; }
+.hero p { margin: .2rem 0 0; color: #93c5fd; font-size: .8rem; }
+.chip { margin-left: auto; font-size: .72rem; font-weight: 700; padding: .35rem .75rem; border-radius: 999px; }
+.chip.cerrado { background: #d1fae5; color: #065f46; } .chip.curso { background: #fef3c7; color: #92400e; }
+
+.aviso { margin-top: 1rem; background: #fff7ed; border: 2px solid #fb923c; border-radius: 12px; padding: .85rem 1.1rem; display: flex; gap: .9rem; align-items: center; flex-wrap: wrap; }
+.aviso .t { font-weight: 800; color: #9a3412; font-size: .88rem; }
+.aviso .s { font-size: .74rem; color: #9a3412; margin-top: .15rem; }
+.aviso button { margin-left: auto; background: #ea580c; color: #fff; border: 0; border-radius: 8px; padding: .55rem 1rem; font: 800 .8rem Inter, sans-serif; }
+
+h2.sec { font-size: .74rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; color: var(--gris-claro); margin: 1.6rem 0 .6rem; display: flex; align-items: center; gap: .5rem; }
+h2.sec span { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--gris); }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.card { background: #fff; border-radius: 14px; border: 1px solid var(--borde); overflow-x: auto; }
+.card-head { padding: .7rem 1rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid #f1f5f9; }
+.card-head b { font-size: .88rem; } .card-head span { margin-left: auto; font-size: .7rem; color: var(--gris); }
+.fila { display: flex; align-items: center; gap: .6rem; padding: .55rem 1rem; border-bottom: 1px solid #f8fafc; font-size: .8rem; }
+.fila:last-child { border-bottom: 0; }
+.fila .s { font-size: .68rem; color: var(--gris-claro); margin-top: .05rem; }
+.fila .v { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.total { display: flex; align-items: center; padding: .7rem 1rem; background: #f8fafc; font-weight: 800; font-size: .85rem; }
+.total .v { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.utilidad { background: linear-gradient(135deg, #065f46, #059669); color: #fff; border-radius: 14px; padding: 1rem 1.2rem; display: flex; align-items: center; gap: 1rem; margin-top: 1rem; }
+.utilidad .l { font-size: .74rem; text-transform: uppercase; letter-spacing: .07em; opacity: .8; font-weight: 700; }
+.utilidad .n { font-size: 1.7rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.utilidad .s { margin-left: auto; font-size: .74rem; opacity: .85; text-align: right; line-height: 1.5; }
+
+.llego { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; border-radius: 10px; padding: .55rem .9rem; font-size: .78rem; margin-bottom: .7rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.llego b { font-variant-numeric: tabular-nums; }
+
+table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+th { text-align: left; font-size: .64rem; text-transform: uppercase; letter-spacing: .05em; color: var(--gris-claro); font-weight: 700; padding: .55rem .8rem; border-bottom: 1px solid var(--borde); background: #fafbfc; }
+td { padding: .55rem .8rem; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+td .s { font-size: .66rem; color: var(--gris-claro); }
+.neg { color: var(--rojo); } .pos { color: var(--verde); } .gris { color: var(--gris-claro); }
+.etq { font-size: .62rem; font-weight: 700; border-radius: 4px; padding: .05rem .35rem; }
+.etq.conf { background: #dcfce7; color: #166534; } .etq.sin { background: #fef3c7; color: #92400e; } .etq.pers { background: #ede9fe; color: #5b21b6; }
+input.real { width: 120px; border: 1px dashed #93c5fd; border-radius: 6px; padding: .25rem .4rem; font: 600 .76rem Inter, sans-serif; text-align: right; background: #f8fbff; }
+
+.cuadra { background: #fff; border-radius: 14px; border: 2px solid var(--borde); overflow: hidden; margin-top: 1rem; }
+.cuadra .eq { display: grid; grid-template-columns: repeat(5, auto); align-items: center; justify-content: center; gap: .6rem 1.1rem; padding: 1rem; font-variant-numeric: tabular-nums; }
+.cuadra .eq div { text-align: center; } .cuadra .eq .l { font-size: .64rem; color: var(--gris); text-transform: uppercase; font-weight: 700; letter-spacing: .04em; }
+.cuadra .eq .n { font-size: 1.05rem; font-weight: 800; } .cuadra .eq .op { font-size: 1.2rem; color: var(--gris-claro); font-weight: 800; }
+.cuadra .res { padding: .75rem 1rem; font-size: .82rem; font-weight: 700; display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.cuadra .res.mal { background: #fef2f2; color: #991b1b; } .cuadra .res.bien { background: #ecfdf5; color: #065f46; }
+.cuadra ul { margin: 0; padding: .2rem 1rem .9rem 2.2rem; font-size: .74rem; color: #7f1d1d; line-height: 1.6; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } .cuadra .eq { grid-template-columns: 1fr; } .hero .chip { margin-left: 0; } }
+</style>
+</head>
+<body>
+
+<div class="selector">
+    <b>Ver:</b>
+    <button class="on" onclick="ver('sep', this)">Septiembre · cerrado</button>
+    <button onclick="ver('oct', this)">Octubre · en curso</button>
+</div>
+
+<div class="idea">
+    <b>Idea:</b> el informe deja de mezclar «lo que se movió en el mes» con «lo que hay en las cuentas». Arriba, cómo le fue al mes
+    (la utilidad). Después, la plata que no es de la empresa todavía y pasa al mes siguiente, y lo que falta por cobrar. Abajo,
+    dónde está la plata: el <b>saldo</b> de cada cuenta al cierre, con lo que el aliado anota de verdad al lado. La última tarjeta
+    dice si todo cuadra. Cifras reales de BRYGAR; lo marcado <span class="ej">EJEMPLO</span> todavía no se puede medir.
+</div>
+
+<!-- ═══════════════════════ SEPTIEMBRE ═══════════════════════ -->
+<div class="vista on" id="v-sep">
+    <div class="hero">
+        <div>
+            <h1>💰 Cierre del mes · Septiembre 2026</h1>
+            <p>BRYGAR · la foto se guardó sola el 1 de octubre</p>
+        </div>
+        <span class="chip cerrado">✅ Mes cerrado · 1-oct</span>
+    </div>
+
+    <div class="aviso">
+        <div>
+            <div class="t">⚠️ FALTA ANOTAR EL CIERRE DE SEPTIEMBRE</div>
+            <div class="s">Escribe cuánto hay de verdad en cada cuenta y en efectivo al 30 de septiembre. Mientras no lo hagas, esas casillas quedan en 0 y el cuadre no se puede confirmar.</div>
+        </div>
+        <button>Anotar saldos reales</button>
+    </div>
+
+    <h2 class="sec">📈 1 · Cómo le fue al mes <span>— lo que es de la empresa; no pasa al mes siguiente</span></h2>
+    <div class="grid2">
+        <div class="card">
+            <div class="card-head" style="background:#f0fdf4"><b>Ingresos</b><span>por mes en que se pagó</span></div>
+            <div class="fila"><div>Administración<div class="s">planillas: admon, seguro, IVA, mensajería</div></div><div class="v">$15.209.800</div></div>
+            <div class="fila"><div>Afiliaciones<div class="s">lo que queda a la empresa (sin asesor, retiro ni encargado)</div></div><div class="v">$7.771.400</div></div>
+            <div class="fila"><div>Administración de incapacidades</div><div class="v">$1.627.821</div></div>
+            <div class="fila"><div>Trámites</div><div class="v gris">$0</div></div>
+            <div class="fila"><div>Excedente de planilla<div class="s">cobrado de más en SS en planillas ya pagadas</div></div><div class="v gris">$0</div></div>
+            <div class="total">Total ingresos<div class="v">$24.609.021</div></div>
+        </div>
+        <div class="card">
+            <div class="card-head" style="background:#fef2f2"><b>Egresos</b><span>por mes al que corresponde</span></div>
+            <div class="fila"><div>Gastos operativos<div class="s">arriendo, servicios, nómina, cámara de comercio…</div></div><div class="v">$11.015.026</div></div>
+            <div class="fila"><div>Comisiones pagadas</div><div class="v gris">$0</div></div>
+            <div class="total">Total egresos<div class="v">$11.015.026</div></div>
+        </div>
+    </div>
+    <div class="utilidad">
+        <div><div class="l">Utilidad de septiembre</div><div class="n">$13.593.995</div></div>
+        <div class="s">Retiros del dueño en el mes: $0<br>Utilidad que queda en la empresa: <b>$13.593.995</b></div>
+    </div>
+
+    <h2 class="sec">↪️ 2 · Plata que pasa a octubre <span>— entró pero no es de la empresa todavía</span></h2>
+    <div class="grid2">
+        <div class="card">
+            <div class="card-head" style="background:#eef2ff"><b>Pasa a octubre</b><span>al 30 de septiembre</span></div>
+            <div class="fila"><div>🏥 Seguridad social por pagar<div class="s">cobrada en septiembre para planillas de octubre</div></div><div class="v">$8.012.600</div></div>
+            <div class="fila"><div>💰 Anticipos sin aplicar<div class="s">SAMASU, MAQUITEXTIL… pagaron en septiembre lo de octubre</div></div><div class="v">$21.272.700</div></div>
+            <div class="fila"><div>🚪 Reserva de retiros</div><div class="v">$230.489</div></div>
+            <div class="fila"><div>🤝 Comisiones de asesores por pagar<div class="s">se pagan cuando las piden</div></div><div class="v">$67.200</div></div>
+            <div class="fila"><div>💊 Saldo de incapacidades<div class="s">plata de los afiliados que entró y no se ha liquidado</div></div><div class="v">$5.658.200</div></div>
+            <div class="fila"><div>🧾 Saldos a favor de clientes<span class="ej">EJEMPLO</span><div class="s">pagaron de más; pasa hasta que se aplique</div></div><div class="v">$1.200.000</div></div>
+            <div class="total">Total que pasa a octubre<div class="v">$36.441.189</div></div>
+        </div>
+        <div class="card">
+            <div class="card-head" style="background:#faf5ff"><b>📋 3 · Por cobrar</b><span>ya contó como ingreso</span></div>
+            <div class="fila"><div>Cartera de préstamos<span class="ej">EJEMPLO</span><div class="s">la admon contó en el mes del préstamo; cuando paguen solo baja esta cifra</div></div><div class="v">$15.272.847</div></div>
+            <div class="total">Total por cobrar<div class="v">$15.272.847</div></div>
+            <div class="card-head" style="background:#fdf4ff;border-top:1px solid #f1f5f9"><b>💳 Tu cuenta personal</b><span>Bancolombia «Brayan Garcia»</span></div>
+            <div class="fila"><div>Pendiente a la cuenta<div class="s">pagaste planillas de Brygar con esa cuenta: Brygar te debe. Transfiere para dejarla en 0.</div></div><div class="v neg">$41.029.433</div></div>
+        </div>
+    </div>
+
+    <h2 class="sec">🏦 4 · Dónde está la plata al 30 de septiembre <span>— saldos, no lo que se movió en el mes</span></h2>
+    <div class="card">
+        <table>
+            <thead><tr>
+                <th>Cuenta</th>
+                <th class="n">Saldo según BryNex</th>
+                <th class="n">Saldo real (lo anotas tú)</th>
+                <th class="n">Diferencia</th>
+                <th class="n">En el mes</th>
+            </tr></thead>
+            <tbody>
+                <tr><td><b>Bancolombia BRYGAR SAS</b> <span class="etq sin">ninguna consignación confirmada</span><div class="s">cuenta de cobro · extracto cargado hasta el 31-jul</div></td>
+                    <td class="n neg">−$11.707.901</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n"><div class="s">entró $80.148.900<br>salió $83.183.433</div></td></tr>
+                <tr><td><b>Nequi Brayan Garcia</b> <span class="etq pers">personal</span></td>
+                    <td class="n">$15.473.499</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n"><div class="s">entró $6.904.600<br>salió $1.426.401</div></td></tr>
+                <tr><td><b>BBVA Center Cit</b></td>
+                    <td class="n">$1.532.300</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n"><div class="s">entró $1.532.300</div></td></tr>
+                <tr><td><b>CONSTRUTECH BYG SAS</b> <span class="etq conf">razón social</span></td>
+                    <td class="n">$1.750.906</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n gris">sin movimiento</td></tr>
+                <tr><td><b>BBVA Brayan Garcia</b> <span class="etq pers">personal</span></td>
+                    <td class="n">$1.368.200</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n gris">sin movimiento</td></tr>
+                <tr><td><b>WORK AT HOME · GLOBAL BYG · Elites</b> <span class="etq conf">razón social</span><div class="s">incapacidades: entran y salen al afiliado</div></td>
+                    <td class="n">$1.744.369</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n"><div class="s">3 cuentas</div></td></tr>
+                <tr><td><b>Daviplata</b> <span class="etq pers">personal</span></td>
+                    <td class="n">$690.000</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td>
+                    <td class="n"><div class="s">entró $230.000</div></td></tr>
+                <tr style="background:#fafbfc"><td><b>Total bancos (sin tu Bancolombia personal)</b><div class="s">esa cuenta va arriba como «pendiente a la cuenta»</div></td>
+                    <td class="n"><b>$10.851.373</b></td><td class="n gris">—</td><td class="n gris">—</td><td></td></tr>
+            </tbody>
+        </table>
+    </div>
+    <div class="card" style="margin-top:1rem">
+        <table>
+            <thead><tr><th>Efectivo · quién lo tiene</th><th class="n">Según BryNex</th><th class="n">Contado</th><th class="n">Diferencia</th></tr></thead>
+            <tbody>
+                <tr><td><b>Brayan Garcia</b><div class="s">de lo que contaste el 1-oct</div></td><td class="n">$8.022.080</td><td class="n">$8.022.080</td><td class="n pos">$0</td></tr>
+                <tr><td><b>Angela Ortiz</b></td><td class="n gris">sin saldo inicial</td><td class="n"><input class="real" placeholder="$0"></td><td class="n gris">—</td></tr>
+                <tr><td><b>Jenny Quintero</b></td><td class="n">$0</td><td class="n">$0</td><td class="n pos">$0</td></tr>
+                <tr style="background:#fff7ed"><td colspan="4" class="s" style="color:#9a3412">El informe de hoy dice <b>$68.102.069</b> en efectivo al 30-sep: es la plata que el sistema daba por recibida sin que nadie la contara. Con la caja por persona se reemplaza por lo contado.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="sec">✅ 5 · ¿Cuadra?</h2>
+    <div class="cuadra">
+        <div class="eq">
+            <div><div class="l">Dónde está la plata</div><div class="n">$18.873.453</div><div class="s">bancos + efectivo</div></div>
+            <div class="op">=</div>
+            <div><div class="l">Utilidad que no has sacado</div><div class="n">$13.593.995</div><div class="s">solo septiembre<span class="ej">EJEMPLO</span></div></div>
+            <div class="op">+</div>
+            <div><div class="l">Pasa a octubre − por cobrar + pendiente a tu cuenta</div><div class="n">$62.197.775</div></div>
+        </div>
+        <div class="res mal">❌ Diferencia de arranque: −$56.918.317 · solo la primera vez se guarda como «ajuste de apertura»; desde octubre debe dar $0</div>
+        <ul>
+            <li>Faltan los extractos de agosto y septiembre: ninguna consignación está confirmada.</li>
+            <li>Faltan $9,1M de abonos consignados viejos (el comando de los abonos).</li>
+            <li>No sabemos la utilidad de julio y agosto que quedó sin sacar, ni cuánto sacaste antes de que existiera el retiro del dueño.</li>
+            <li>El efectivo de Angela todavía no está contado.</li>
+        </ul>
+    </div>
+</div>
+
+<!-- ═══════════════════════ OCTUBRE ═══════════════════════ -->
+<div class="vista" id="v-oct">
+    <div class="hero">
+        <div>
+            <h1>💰 Cierre del mes · Octubre 2026</h1>
+            <p>BRYGAR · en curso, cifras al 17 de octubre</p>
+        </div>
+        <span class="chip curso">🕐 En curso · se cierra solo el 1-nov</span>
+    </div>
+
+    <div class="aviso" style="background:#fffbeb;border-color:#fbbf24">
+        <div>
+            <div class="t" style="color:#92400e">⚠️ EN 3 DÍAS CIERRA OCTUBRE<span class="ej">EJEMPLO</span></div>
+            <div class="s" style="color:#92400e">El 28, el 31 y el 1 de noviembre llega este aviso por WhatsApp al administrador del aliado.</div>
+        </div>
+    </div>
+
+    <h2 class="sec">📈 1 · Cómo va el mes</h2>
+    <div class="grid2">
+        <div class="card">
+            <div class="card-head" style="background:#f0fdf4"><b>Ingresos</b><span>a la fecha</span></div>
+            <div class="fila"><div>Administración</div><div class="v">$13.314.300</div></div>
+            <div class="fila"><div>Afiliaciones (queda a la empresa)</div><div class="v">$4.092.700</div></div>
+            <div class="fila"><div>Otros descuentos de incapacidades</div><div class="v">$670.027</div></div>
+            <div class="total">Total ingresos<div class="v">$18.077.027</div></div>
+        </div>
+        <div class="card">
+            <div class="card-head" style="background:#fef2f2"><b>Egresos</b><span>a la fecha</span></div>
+            <div class="fila"><div>Gastos operativos</div><div class="v">$5.362.772</div></div>
+            <div class="total">Total egresos<div class="v">$5.362.772</div></div>
+        </div>
+    </div>
+    <div class="utilidad">
+        <div><div class="l">Utilidad a la fecha</div><div class="n">$12.714.255</div></div>
+        <div class="s">Retiros del dueño: $0</div>
+    </div>
+
+    <h2 class="sec">↪️ 2 · Plata de terceros</h2>
+    <div class="llego">↩️ <span>Llegó de septiembre:</span> <b>$36.441.189</b> <span class="s">— SS $8.012.600 · anticipos $21.272.700 · incapacidades $5.658.200 · otros $1.497.689</span></div>
+    <div class="grid2">
+        <div class="card">
+            <div class="card-head" style="background:#eef2ff"><b>Pasaría a noviembre si cerrara hoy</b><span class="ej">EJEMPLO</span></div>
+            <div class="fila"><div>🏥 Seguridad social por pagar</div><div class="v">$1.040.900</div></div>
+            <div class="fila"><div>💰 Anticipos sin aplicar</div><div class="v">$11.856.397</div></div>
+            <div class="fila"><div>💊 Saldo de incapacidades</div><div class="v neg">−$1.522.716</div></div>
+            <div class="fila"><div>🤝 Comisiones de asesores por pagar</div><div class="v">$67.200</div></div>
+            <div class="total">Total<div class="v">$11.441.781</div></div>
+        </div>
+        <div class="card">
+            <div class="card-head" style="background:#faf5ff"><b>📋 3 · Por cobrar</b></div>
+            <div class="fila"><div>Cartera de préstamos<span class="ej">EJEMPLO</span><div class="s">en octubre se cobraron $10.717.136 de préstamos viejos: bajan la cartera, no son ingreso de octubre</div></div><div class="v">$12.500.000</div></div>
+        </div>
+    </div>
+
+    <h2 class="sec">✅ 5 · ¿Cuadra?</h2>
+    <div class="cuadra">
+        <div class="res bien">✅ Así se vería cuando cuadra: dónde está la plata = utilidad sin sacar + lo que pasa − lo que falta por cobrar. Diferencia $0.<span class="ej">EJEMPLO</span></div>
+    </div>
+</div>
+
+<script>
+function ver(id, btn) {
+    document.querySelectorAll('.vista').forEach(v => v.classList.remove('on'));
+    document.getElementById('v-' + id).classList.add('on');
+    document.querySelectorAll('.selector button').forEach(b => b.classList.remove('on'));
+    btn.classList.add('on');
+}
+</script>
+</body>
+</html>
