@@ -91,7 +91,7 @@ class PlanillaVigilarSubtipo4 extends Command
             foreach ($this->sondear($t, $mes, $anio) as $cedula => $errores) {
                 $paso = ! in_array(self::REGLA_UGPP, $errores, true);
 
-                Log::channel('single')->info('vigia-subtipo4', [
+                Log::info('vigia-subtipo4', [
                     'rs' => $t->razon_social_id,
                     'n_plano' => $t->n_plano,
                     'cedula' => $cedula,
@@ -100,8 +100,8 @@ class PlanillaVigilarSubtipo4 extends Command
                 ]);
 
                 $this->line(sprintf(
-                    '  rs %-5s n_plano %-3s CC %-12s → %s',
-                    $t->razon_social_id, $t->n_plano, $cedula,
+                    '%s  rs %-5s n_plano %-3s CC %-12s → %s',
+                    now()->format('d-m H:i'), $t->razon_social_id, $t->n_plano, $cedula,
                     $errores ? implode(' ', $errores) : 'LIMPIO'
                 ));
 
@@ -114,11 +114,12 @@ class PlanillaVigilarSubtipo4 extends Command
         foreach ($this->sondearSueltas($mes, $anio) as $cedula => $errores) {
             $paso = ! in_array(self::REGLA_UGPP, $errores, true);
 
-            Log::channel('single')->info('vigia-subtipo4', [
+            Log::info('vigia-subtipo4', [
                 'suelta' => true, 'cedula' => $cedula, 'paso' => $paso, 'errores' => $errores,
             ]);
 
-            $this->line(sprintf('  suelta      CC %-12s → %s', $cedula,
+            $this->line(sprintf('%s  suelta            CC %-12s → %s',
+                now()->format('d-m H:i'), $cedula,
                 $errores ? implode(' ', $errores) : 'LIMPIO'));
 
             if ($paso) {
