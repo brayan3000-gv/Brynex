@@ -486,6 +486,18 @@ try {
     return resultados;
   };
 
+  // Catálogo de cargos del portal, para llenar `eps_ocupaciones`. Solo lee: un
+  // filtro por palabra, porque el portal busca por texto.
+  if (modo === 'cargos') {
+    paso = 'cargos';
+    const cargos = {};
+    for (const filtro of entrada.filtros || ['']) {
+      const r = await api('GET', 'ReInsertRegister/loadPositionTypes?filtro=' + encodeURIComponent(filtro));
+      (Array.isArray(r.json) ? r.json : []).forEach(c => { cargos[String(c.ocpCodigo)] = c.ocpDescripcion; });
+    }
+    salir({ ok: true, modo, total: Object.keys(cargos).length, cargos });
+  }
+
   if (modo === 'novedades') {
     paso = 'novedades';
     const docs = entrada.documentos || [];
