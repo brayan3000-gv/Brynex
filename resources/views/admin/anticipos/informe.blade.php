@@ -415,7 +415,7 @@
                         </a>
 
                         {{-- Anular (solo si puede anularse) --}}
-                        @if(!$esAnulado && $ant->puedeAnularse())
+                        @if(!$esAnulado && $ant->puedeAnularse() && auth()->user()->can('anticipos.anular'))
                             <button type="button"
                                 class="btn-act btn-anular"
                                 onclick="abrirModalAnular({{ $ant->id }}, '${{ number_format($ant->valor, 0, ',', '.') }}')"

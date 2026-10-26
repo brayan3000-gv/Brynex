@@ -165,6 +165,9 @@ class ModulosPermisosSeeder extends Seeder
             ['anticipos', 'Anticipos', 'financiero', '💵', 'admin.anticipos.index', [
                 'ver' => ['Ver anticipos',             ['A', 'C', 'U']],
                 'gestionar' => ['Registrar y aplicar',       ['A', 'U']],
+                // Deshace plata recibida: no la trae el rol usuario (antes era un
+                // hasRole admin|superadmin en AnticipoController).
+                'anular' => ['Anular y devolver anticipos', ['A']],
             ]],
             ['prestamos', 'Préstamos / cartera', 'financiero', '🏦', 'admin.prestamos.index', [
                 'ver' => ['Ver préstamos',             ['A', 'C', 'U']],

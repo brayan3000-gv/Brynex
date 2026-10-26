@@ -22,10 +22,15 @@ class GastoAdminController extends Controller
         }
     }
 
-    private function checkSuperAdmin(): void
+    /**
+     * Registrar, editar, borrar y adjuntar soportes: `gastos.gestionar` (admin, y a
+     * quien se le otorgue a mano). Antes pedía el rol superadmin, así que el
+     * permiso que trae el admin no servía de nada.
+     */
+    private function checkGestionar(): void
     {
-        if (!Auth::user()->hasRole('superadmin')) {
-            abort(403, 'Solo el superadmin puede realizar esta acción.');
+        if (! Auth::user()->can('gastos.gestionar')) {
+            abort(403, 'No tienes permiso para «Registrar gastos (Gastos administrativos)».');
         }
     }
 
@@ -101,7 +106,7 @@ class GastoAdminController extends Controller
 
         $bancos      = BancoCuenta::paraFacturacion($aid);
         $usuarios    = User::where('aliado_id', $aid)->where('activo', true)->orderBy('nombre')->get(['id','nombre']);
-        $esSuperAdmin = Auth::user()->hasRole('superadmin');
+        $puedeGestionar = Auth::user()->can('gastos.gestionar');
         $tiposGasto   = collect(Gasto::TIPOS)
                             ->filter(fn($l,$k) => $k !== 'pago_planilla');
         $tiposGrupos  = Gasto::TIPOS_GRUPOS;
@@ -113,14 +118,14 @@ class GastoAdminController extends Controller
         return view('admin.informes.gastos', compact(
             'mes','anio','tab','generales','planillas',
             'totalGeneral','totalPlanilla',
-            'bancos','usuarios','esSuperAdmin','tiposGasto','tiposGrupos','tiposNomina','mesesNombres'
+            'bancos','usuarios','puedeGestionar','tiposGasto','tiposGrupos','tiposNomina','mesesNombres'
         ));
     }
 
     // ── Crear gasto ───────────────────────────────────────────────────
     public function store(Request $request)
     {
-        $this->checkSuperAdmin();
+        $this->checkGestionar();
         $aid = $this->aliadoId();
         $usuarioId = Auth::id();
 
@@ -208,7 +213,7 @@ class GastoAdminController extends Controller
     // ── Actualizar gasto ──────────────────────────────────────────────
     public function update(Request $request, int $id)
     {
-        $this->checkSuperAdmin();
+        $this->checkGestionar();
         $aid   = $this->aliadoId();
         $gasto = Gasto::where('aliado_id', $aid)->findOrFail($id);
 
@@ -260,7 +265,7 @@ class GastoAdminController extends Controller
     // para confirmarlo en un modal antes de borrar.
     public function impactoPlanilla(int $id)
     {
-        $this->checkSuperAdmin();
+        $this->checkGestionar();
         $aid   = $this->aliadoId();
         $gasto = Gasto::where('aliado_id', $aid)->findOrFail($id);
 
@@ -301,7 +306,7 @@ class GastoAdminController extends Controller
     // ── Eliminar gasto ────────────────────────────────────────────────
     public function destroy(int $id)
     {
-        $this->checkSuperAdmin();
+        $this->checkGestionar();
         $aid   = $this->aliadoId();
         $gasto = Gasto::where('aliado_id', $aid)->findOrFail($id);
 
@@ -338,7 +343,7 @@ class GastoAdminController extends Controller
     // ── Subir imagen individual ───────────────────────────────────────
     public function imagen(Request $request, int $id)
     {
-        $this->checkSuperAdmin();
+        $this->checkGestionar();
         $aid   = $this->aliadoId();
         $gasto = Gasto::where('aliado_id', $aid)->findOrFail($id);
 

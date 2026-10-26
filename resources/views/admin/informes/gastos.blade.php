@@ -72,7 +72,7 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
     </div>
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
         <a href="{{ route('admin.informes.financiero', ['mes'=>$mes,'anio'=>$anio]) }}" class="btn btn-ghost btn-sm">← Financiero</a>
-        @if($esSuperAdmin)
+        @if($puedeGestionar)
         <button class="btn btn-primary" onclick="abrirModalNuevo()">➕ Nuevo Gasto</button>
         @endif
     </div>
@@ -135,7 +135,7 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
                     <th>Usuario</th>
                     <th style="text-align:right">Valor</th>
                     <th>Soporte</th>
-                    @if($esSuperAdmin)<th>Acciones</th>@endif
+                    @if($puedeGestionar)<th>Acciones</th>@endif
                 </tr>
             </thead>
             <tbody>
@@ -175,14 +175,14 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
                     @if($g->imagen_path)
                         <button class="btn btn-ghost btn-sm" onclick="verImagen('{{ Storage::url($g->imagen_path) }}')">🖼️</button>
                     @else
-                        @if($esSuperAdmin)
+                        @if($puedeGestionar)
                         <button class="btn btn-ghost btn-sm" onclick="abrirSubirImagen({{ $g->id }})">📎</button>
                         @else
                         —
                         @endif
                     @endif
                 </td>
-                @if($esSuperAdmin)
+                @if($puedeGestionar)
                 <td>
                     <div style="display:flex;gap:.3rem">
                         <button class="btn btn-warning btn-sm" onclick="abrirModalEditar({{ json_encode($g) }})">✏️</button>
@@ -229,7 +229,7 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
                     <th>Usuario</th>
                     <th style="text-align:right">Valor</th>
                     <th>Soporte</th>
-                    @if($esSuperAdmin)<th>Acciones</th>@endif
+                    @if($puedeGestionar)<th>Acciones</th>@endif
                 </tr>
             </thead>
             <tbody>
@@ -249,10 +249,10 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
                     @if($g->imagen_path)
                         <button class="btn btn-ghost btn-sm" onclick="verImagen('{{ Storage::url($g->imagen_path) }}')">🖼️</button>
                     @else
-                        @if($esSuperAdmin)<button class="btn btn-ghost btn-sm" onclick="abrirSubirImagen({{ $g->id }})">📎</button>@else —@endif
+                        @if($puedeGestionar)<button class="btn btn-ghost btn-sm" onclick="abrirSubirImagen({{ $g->id }})">📎</button>@else —@endif
                     @endif
                 </td>
-                @if($esSuperAdmin)
+                @if($puedeGestionar)
                 <td>
                     <div style="display:flex;gap:.3rem">
                         <button class="btn btn-warning btn-sm" onclick="abrirModalEditar({{ json_encode($g) }})">✏️</button>
@@ -274,7 +274,7 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
 </div>
 
 {{-- ── MODAL NUEVO GASTO (partial compartido) ──────────────────── --}}
-@if($esSuperAdmin)
+@if($puedeGestionar)
 @include('admin.partials.modal_gasto', [
     'formAction'  => route('admin.informes.gastos.store'),
     'bancos'      => $bancos,
@@ -301,7 +301,7 @@ td{padding:.55rem .8rem;color:#334155;vertical-align:middle}
 @endif
 
 {{-- Modal confirmar eliminación de un pago de planilla --}}
-@if($esSuperAdmin)
+@if($puedeGestionar)
 <div class="modal-overlay" id="modalEliminarPlanilla">
 <div class="modal" style="max-width:560px">
     <h3>🗑️ Eliminar pago de planilla</h3>

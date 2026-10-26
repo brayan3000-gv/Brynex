@@ -33,7 +33,9 @@ class ContratoController extends Controller
 
     public function __construct()
     {
-        $this->middleware(['auth', 'role:superadmin|admin|usuario']);
+        // Quién entra lo decide el `permiso:` de cada ruta (routes/web.php). El
+        // `role:` que había aquí bloqueaba antes, aunque el permiso estuviera otorgado.
+        $this->middleware('auth');
     }
 
     // ─── Listado de contratos del aliado activo ───────────────────────

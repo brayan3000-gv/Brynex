@@ -121,8 +121,8 @@ Originales, capítulos, completos y el comercial quedan en `~/Movies/Brynex-vide
   caché (`~/Movies/Brynex-videos/voz-cache`) va por texto: cambiar una frase
   gasta una voz.
 - **Roles.** Lo que dice el manual de quién puede qué sale de `roles.mjs`
-  (entrando con cada cuenta), no del seeder: varios controladores exigen un rol
-  fijo además del permiso (ver «Hallazgos»).
+  (entrando con cada cuenta), no del seeder: así salieron los permisos que no
+  cuadraban (ver «Hallazgos»).
 
 ## Qué afirma el comercial (y su respaldo)
 
@@ -138,16 +138,21 @@ Originales, capítulos, completos y el comercial quedan en `~/Movies/Brynex-vide
 | Cobro en visita, préstamos, anticipos, portal de empresas, página con cotizador, WhatsApp con IA | sus módulos (`/visita`, `/admin/prestamos`, `/portal`, `/aliado/{slug}`, `AsistenteIaService`) |
 | **No se menciona**: factura electrónica por API de Dataico | bloqueada por Dataico (401 de numeración) |
 
-## Hallazgos de la app (reportados, sin tocar)
+## Hallazgos de la app (corregidos el 26-oct-2026)
 
-Al entrar con cada rol (24-oct-2026):
+Al entrar con cada rol (24-oct-2026) salieron estos; se corrigieron el 26-oct y se
+volvió a pasar `roles.mjs` (`~/Movies/Brynex-videos/roles-despues.md`):
 
-- `ContratoController`, `AsesorController`: `role:superadmin|admin|usuario` en el
-  constructor → contable y asesor tienen `contratos.ver` pero reciben 403.
-- `PublicidadController`, `PaginaAliadoAdminController`, `RedesSocialesController`,
-  `TrasladoRazonSocialController`: `role:superadmin|admin` → el rol usuario tiene
-  sus permisos de ver, pero recibe 403.
-- `AnticipoController::informe`: `hasRole(admin|superadmin)`.
-- `GastoAdminController::store`: «Solo el superadmin», aunque el admin trae `gastos.gestionar`.
-- `admin.razones.cargos.store` (`routes/web.php`): escritura sin ningún permiso, solo `auth`.
-- El inicio muestra «Planos SS» al rol usuario, que no tiene `planos.ver`.
+- `ContratoController`, `AsesorController`, `PublicidadController`,
+  `PaginaAliadoAdminController`, `RedesSocialesController`,
+  `TrasladoRazonSocialController`: tenían un `role:` en el constructor que
+  bloqueaba aunque el permiso estuviera otorgado. Ahora decide el `permiso:` de
+  cada ruta (contable y asesor entran a contratos; usuario a publicidad, redes y página).
+- `AnticipoController`: el informe pide solo `anticipos.ver`; anular y devolver
+  piden el permiso nuevo `anticipos.anular` (admin, y a mano a quien se le dé).
+- `GastoAdminController`: registrar gastos pide `gastos.gestionar` (el admin ya
+  lo traía), no ser superadmin.
+- Cargos de la razón social: leer pide `contratos.ver`, crear pide
+  `razones_sociales.gestionar`, y los dos responden 404 si la razón social es de otro aliado.
+- Inicio y menú del celular: cada tarjeta y cada ítem sale solo con su permiso
+  (antes el usuario veía «Planos SS» y terminaba en un 403).

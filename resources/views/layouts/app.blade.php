@@ -1131,12 +1131,16 @@
             <a href="{{ route('dashboard') }}" class="drawer-item {{ request()->routeIs('dashboard') ? 'activo' : '' }}">
                 <span class="di-icon">🏠</span> Inicio
             </a>
+            @can('clientes.ver')
             <a href="{{ route('admin.clientes.index') }}" class="drawer-item {{ request()->routeIs('admin.clientes*') ? 'activo' : '' }}">
                 <span class="di-icon">👥</span> Clientes
             </a>
+            @endcan
+            @can('facturacion.ver')
             <a href="{{ route('admin.facturacion.index') }}" class="drawer-item {{ request()->routeIs('admin.facturacion*') ? 'activo' : '' }}">
                 <span class="di-icon">🏢</span> Empresas
             </a>
+            @endcan
             @can('afiliaciones.ver')
             <a href="{{ route('admin.afiliaciones.index') }}" class="drawer-item {{ request()->routeIs('admin.afiliaciones*') ? 'activo' : '' }}">
                 <span class="di-icon">🤝</span> Afiliaciones
@@ -1157,12 +1161,16 @@
                 <span class="di-icon">📋</span> Préstamos
             </a>
             @endcan
+            @can('tareas.ver')
             <a href="{{ route('admin.tareas.index') }}" class="drawer-item {{ request()->routeIs('admin.tareas*') ? 'activo' : '' }}">
                 <span class="di-icon">📌</span> Tareas
             </a>
+            @endcan
+            @can('incapacidades.ver')
             <a href="{{ route('admin.incapacidades.index') }}" class="drawer-item {{ request()->routeIs('admin.incapacidades*') ? 'activo' : '' }}">
                 <span class="di-icon">🏥</span> Incapacidades
             </a>
+            @endcan
             @can('whatsapp.ver')
             <a href="{{ route('admin.whatsapp.chat.index') }}" class="drawer-item {{ request()->routeIs('admin.whatsapp*') ? 'activo' : '' }}">
                 <span class="di-icon">💬</span> WhatsApp

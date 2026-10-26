@@ -471,9 +471,12 @@ Route::middleware('auth')->group(function () {
 
         // Catálogo de cargos por razón social: alimenta el selector del contrato,
         // y de ahí sale el nivel de riesgo con el que se elige el centro de ARL.
+        // Leerlo es parte de hacer un contrato; agregar un cargo es tocar la razón social.
         $rsc = \App\Http\Controllers\Admin\RazonSocialCargoController::class;
-        Route::get('razones-sociales/{razonSocial}/cargos', [$rsc, 'index'])->name('razones.cargos.index');
-        Route::post('razones-sociales/{razonSocial}/cargos', [$rsc, 'store'])->name('razones.cargos.store');
+        Route::get('razones-sociales/{razonSocial}/cargos', [$rsc, 'index'])->name('razones.cargos.index')
+            ->middleware('permiso:contratos.ver');
+        Route::post('razones-sociales/{razonSocial}/cargos', [$rsc, 'store'])->name('razones.cargos.store')
+            ->middleware('permiso:razones_sociales.gestionar');
 
         // Credenciales del portal de ARL Sura — mismo permiso restringido que las
         // de operadores: con esto se afilia gente a una ARL, no lo hereda un rol.

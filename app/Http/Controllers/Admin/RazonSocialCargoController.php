@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\RazonSocial;
 use App\Models\RazonSocialCargo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -24,6 +25,8 @@ class RazonSocialCargoController extends Controller
     /** Cargos activos de una razón social, para el datalist del contrato. */
     public function index(Request $request, int $razonSocialId)
     {
+        $this->razonSocialDelAliado($razonSocialId);
+
         // Los del catálogo común y los propios de esta razón social.
         $cargos = RazonSocialCargo::visiblesPara($razonSocialId)
             ->activos()
@@ -34,6 +37,8 @@ class RazonSocialCargoController extends Controller
 
     public function store(Request $request, int $razonSocialId)
     {
+        $this->razonSocialDelAliado($razonSocialId);
+
         $datos = $request->validate([
             'cargo'        => 'required|string|max:150',
             'nivel_riesgo' => 'required|integer|min:1|max:5',
@@ -54,6 +59,18 @@ class RazonSocialCargoController extends Controller
         );
 
         return response()->json(['ok' => true, 'cargo' => $cargo]);
+    }
+
+    /**
+     * La razón social tiene que ser del aliado activo: el id viene en la URL y,
+     * sin esto, cualquiera con sesión leía o le agregaba cargos a la de otro aliado.
+     */
+    private function razonSocialDelAliado(int $razonSocialId): void
+    {
+        abort_unless(
+            RazonSocial::where('id', $razonSocialId)->where('aliado_id', $this->aliado())->exists(),
+            404
+        );
     }
 
     private function aliado(): int

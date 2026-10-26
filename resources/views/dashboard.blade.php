@@ -61,17 +61,17 @@
     <div class="dash-modulos" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:1rem;">
         @php
             $modulos = [
-                ['icono'=>'👥', 'nombre'=>'Clientes',      'color'=>'#3b82f6', 'url'=>route('admin.clientes.index')],
-                ['icono'=>'🏢', 'nombre'=>'Empresas',      'color'=>'#06b6d4', 'url'=>route('admin.facturacion.index')],
-                ['icono'=>'🤝', 'nombre'=>'Afiliaciones',  'color'=>'#8b5cf6', 'url'=>route('admin.afiliaciones.index')],
-                ['icono'=>'🛡️', 'nombre'=>'Gestión ARL',  'color'=>'#f97316', 'url'=>route('admin.gestion-arl.index')],
-                ['icono'=>'📋', 'nombre'=>'Contratos',     'color'=>'#0ea5e9', 'url'=>route('admin.contratos.index')],
-                ['icono'=>'📄', 'nombre'=>'Planos SS',     'color'=>'#a855f7', 'url'=>route('admin.planos.index')],
-                ['icono'=>'💰', 'nombre'=>'Cobros',        'color'=>'#10b981', 'url'=>route('admin.cobros.index')],
-                ['icono'=>'📌', 'nombre'=>'Tareas',        'color'=>'#f59e0b', 'url'=>route('admin.tareas.index')],
-                ['icono'=>'🏥', 'nombre'=>'Incapacidades', 'color'=>'#ef4444', 'url'=>route('admin.incapacidades.index')],
-                ['icono'=>'🧾', 'nombre'=>'Cuadre Caja',  'color'=>'#14b8a6', 'url'=>route('admin.cuadre-diario.index')],
-                ['icono'=>'💬', 'nombre'=>'Cotizaciones', 'color'=>'#ec4899', 'url'=>route('admin.cotizaciones.index')],
+                ['icono'=>'👥', 'nombre'=>'Clientes',      'color'=>'#3b82f6', 'url'=>route('admin.clientes.index'),      'permiso'=>'clientes.ver'],
+                ['icono'=>'🏢', 'nombre'=>'Empresas',      'color'=>'#06b6d4', 'url'=>route('admin.facturacion.index'),   'permiso'=>'facturacion.ver'],
+                ['icono'=>'🤝', 'nombre'=>'Afiliaciones',  'color'=>'#8b5cf6', 'url'=>route('admin.afiliaciones.index'),  'permiso'=>'afiliaciones.ver'],
+                ['icono'=>'🛡️', 'nombre'=>'Gestión ARL',  'color'=>'#f97316', 'url'=>route('admin.gestion-arl.index'),   'permiso'=>'gestion_arl.ver'],
+                ['icono'=>'📋', 'nombre'=>'Contratos',     'color'=>'#0ea5e9', 'url'=>route('admin.contratos.index'),     'permiso'=>'contratos.ver'],
+                ['icono'=>'📄', 'nombre'=>'Planos SS',     'color'=>'#a855f7', 'url'=>route('admin.planos.index'),        'permiso'=>'planos.ver'],
+                ['icono'=>'💰', 'nombre'=>'Cobros',        'color'=>'#10b981', 'url'=>route('admin.cobros.index'),        'permiso'=>'cobros.ver'],
+                ['icono'=>'📌', 'nombre'=>'Tareas',        'color'=>'#f59e0b', 'url'=>route('admin.tareas.index'),        'permiso'=>'tareas.ver'],
+                ['icono'=>'🏥', 'nombre'=>'Incapacidades', 'color'=>'#ef4444', 'url'=>route('admin.incapacidades.index'), 'permiso'=>'incapacidades.ver'],
+                ['icono'=>'🧾', 'nombre'=>'Cuadre Caja',  'color'=>'#14b8a6', 'url'=>route('admin.cuadre-diario.index'), 'permiso'=>'cuadre_diario.ver'],
+                ['icono'=>'💬', 'nombre'=>'Cotizaciones', 'color'=>'#ec4899', 'url'=>route('admin.cotizaciones.index'),  'permiso'=>'cotizaciones.ver'],
             ];
             // Cobro en visita: cobrar puesto por puesto desde el celular.
             if(auth()->user()?->can('facturacion.generar')){
@@ -100,6 +100,8 @@
                 }
             }
 
+            // Cada tarjeta fija trae su permiso: sin él, el clic terminaba en un 403.
+            $modulos = array_filter($modulos, fn ($m) => empty($m['permiso']) || auth()->user()?->can($m['permiso']));
         @endphp
 
         @foreach ($modulos as $mod)

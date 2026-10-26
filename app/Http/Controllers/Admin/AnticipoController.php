@@ -222,8 +222,9 @@ class AnticipoController extends Controller
     {
         $aliadoId = session('aliado_id_activo');
 
-        if (!Auth::user()->hasRole(['admin', 'superadmin'])) {
-            return response()->json(['ok' => false, 'mensaje' => 'Sin permiso.'], 403);
+        // `anticipos.anular`: lo trae el admin y se otorga a mano (antes, rol admin o superadmin).
+        if (! Auth::user()->can('anticipos.anular')) {
+            return response()->json(['ok' => false, 'mensaje' => 'No tienes permiso para «Anular y devolver anticipos (Anticipos)».'], 403);
         }
 
         $anticipo = Anticipo::where('aliado_id', $aliadoId)
@@ -248,8 +249,9 @@ class AnticipoController extends Controller
     {
         $aliadoId = session('aliado_id_activo');
 
-        if (!Auth::user()->hasRole(['admin', 'superadmin'])) {
-            return response()->json(['ok' => false, 'mensaje' => 'Sin permiso.'], 403);
+        // `anticipos.anular`: lo trae el admin y se otorga a mano (antes, rol admin o superadmin).
+        if (! Auth::user()->can('anticipos.anular')) {
+            return response()->json(['ok' => false, 'mensaje' => 'No tienes permiso para «Anular y devolver anticipos (Anticipos)».'], 403);
         }
 
         $request->validate([
@@ -328,9 +330,8 @@ class AnticipoController extends Controller
     {
         $aliadoId = session('aliado_id_activo');
 
-        if (!Auth::user()->hasRole(['admin', 'superadmin'])) {
-            abort(403);
-        }
+        // Lo ve quien tiene `anticipos.ver` (lo exige la ruta). Antes pedía rol admin
+        // o superadmin, y el enlace del Cuadre de caja le daba 403 al resto.
 
         $desde  = $request->input('desde', now()->startOfMonth()->toDateString());
         $hasta  = $request->input('hasta', now()->toDateString());
