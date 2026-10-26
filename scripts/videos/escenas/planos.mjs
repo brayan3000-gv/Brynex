@@ -32,7 +32,6 @@ export default async function (e) {
   await e.resaltar(e.page.getByText('Descargar Txt para todos los operadores', { exact: false }).first(), 2600, 8).catch(() => {})
   await e.dice('Con Enlace y Simple, además, Brynex liquida la planilla por API, sin subir archivos. Esta demo no tiene conexión con el operador.', 6200)
   await e.page.keyboard.press('Escape')
-  await e.clic('.modal-close:visible', { espera: 600 }).catch(() => {})
   e.finTarea()
 
   e.tarea('planos-pago', 'Confirmar el pago de la planilla', { tema: 'Planos SS', buscar: 'confirmar pago planilla número operador valor banco soporte' })

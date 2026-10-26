@@ -38,7 +38,7 @@ export default async function (e) {
   e.tarea('informes-comisiones', 'Las comisiones de los asesores', { tema: 'Informes', buscar: 'comisiones asesores pagar distribución afiliaciones' })
   await e.ir('/admin/informes/comisiones', { esperar: 1300 })
   await e.dice('En Comisiones, lo que le toca a cada asesor por sus afiliaciones y su administración.', 4000)
-  await e.clic({ texto: 'Andrés Felipe Molina' }, { espera: 1800 }).catch(() => {})
+  await e.clic('a:has-text("Andrés Felipe Molina")', { espera: 1800 }).catch(() => {})
   await e.dice('El contable ve y descarga todo en Excel, pero no puede cambiar nada.', 3600)
   e.finTarea()
 }

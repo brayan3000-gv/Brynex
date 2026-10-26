@@ -143,7 +143,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`  ${d}: ${dur(cap).toFixed(1)} s, ${l.tareas.length} tareas`)
     for (const t of l.tareas) {
       const nombre = `${t.id}-${l.formato}`
-      const desde = Math.max(0, t.desde - 0.2), hasta = Math.min(dur(cap), t.hasta + 0.3)
+      // El comercial se ve entero en la página (con su portada y su saludo).
+      const entero = t.id === 'comercial'
+      const desde = entero ? 0 : Math.max(0, t.desde - 0.2), hasta = entero ? dur(cap) : Math.min(dur(cap), t.hasta + 0.3)
       cortar(cap, desde, hasta, join(salida, 'clips', `${nombre}.mp4`))
       cortar(cap, desde, hasta, join(salida, 'web/clips', `${nombre}.mp4`), { liviano: true, ancho: l.ancho, alto: l.alto })
       manual.push({ id: t.id, titulo: t.titulo, rol: l.rol, escena: l.nombre, formato: l.formato, segundos: +(hasta - desde).toFixed(1),

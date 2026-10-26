@@ -323,8 +323,9 @@ export async function grabar({ nombre, formato, rol, escena, salida }) {
     /** Recuadro que resalta un elemento, con el resto en penumbra. */
     async resaltar(objetivo, ms = 1900, margen = 6) {
       const l = loc(page, objetivo)
-      await l.scrollIntoViewIfNeeded().catch(() => {})
-      const b = await l.boundingBox()
+      await l.scrollIntoViewIfNeeded({ timeout: 3000 }).catch(() => {})
+      // Si no está a la vista no se espera 20 s: la toma quedaría quieta.
+      const b = await l.boundingBox({ timeout: 3000 }).catch(() => null)
       if (!b) return
       estado.foco = { x: b.x - margen, y: b.y - margen, w: b.width + 2 * margen, h: b.height + 2 * margen }
       await pintar(); await page.waitForTimeout(ms)

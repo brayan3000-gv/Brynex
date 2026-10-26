@@ -84,10 +84,8 @@ export default async function (e) {
   await e.clic('#chkAll', { espera: 400 })
   await e.clic('#btnFacturarSel', { espera: 2000 })
   await e.page.keyboard.press('Escape')
-  await e.ir('/cuadre-diario', { esperar: 900 })
-  // La caja de Daniela (la que cobró hoy), no la de la jefa, que recibe las entregas de cada día.
-  await e.elegir('select[name=usuario_id]', { label: 'Daniela Restrepo Gómez' }).catch(() => {})
-  await e.listo()
+  // La caja de Daniela (usuario 3, la que cobró hoy), no la de la jefa, que recibe las entregas de cada día.
+  await e.ir('/cuadre-diario?usuario_id=3', { esperar: 900 })
   await e.dice('Y la caja del día se arma sola: lo facturado, el efectivo y lo consignado, por canal.', 4000)
 
   // ── Cobro y relación con el cliente ──

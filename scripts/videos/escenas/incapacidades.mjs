@@ -43,6 +43,7 @@ export default async function (e) {
   await e.clic({ texto: 'Gestiones (', exacto: false }, { espera: 1500 })
   await e.dice('Cada llamada, correo o radicado en el portal queda anotado, y mueve el estado: radicada, en liquidación, pagada.', 5200)
   await e.esperar(1200)
+  await e.clic('button.tab-btn:has-text("Datos")', { espera: 900 }).catch(() => {})
   await e.dice('Si el médico la extiende, se agrega la prórroga y queda unida a la original.')
   await e.resaltar(e.page.getByRole('button', { name: /Agregar Prórroga/ }).first(), 2400, 6).catch(() => {})
   e.finTarea()

@@ -37,7 +37,6 @@ export default async function (e) {
   await e.dice('Brynex arma los datos del trabajador y la radica sin entrar al portal; luego trae el certificado.', 4800)
   await e.dice('En esta demo no hay conexión con la ARL: pide la clave del portal, y hasta aquí llega.', 4600)
   await e.page.keyboard.press('Escape')
-  await e.clic('.modal-close:visible, button:has-text("✕"):visible', { espera: 600 }).catch(() => {})
   e.finTarea()
 
   e.tarea('gestion-arl', 'El semáforo de Gestión ARL', { tema: 'Afiliaciones', buscar: 'gestión arl semáforo vigencia renovar facturar retirar certificado carné' })
