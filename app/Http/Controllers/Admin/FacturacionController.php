@@ -1650,13 +1650,22 @@ class FacturacionController extends Controller
                     $facturaRetiroOrigen->delete(); // SoftDeletes → deleted_at
 
                     // Actualizar el plano de retiro: ahora apunta a la factura real
-                    Plano::where('factura_id', $facturaRetiroOrigen->id)
+                    $planosMovidos = Plano::where('factura_id', $facturaRetiroOrigen->id)
                         ->whereNull('deleted_at')
                         ->update([
                             'factura_id' => $facturaReal->id,
                             'numero_factura' => $batchNumeroFactura,
                             'n_plano' => $nPlanoRetiro,
                         ]);
+                    // Sin plano el retiro queda cobrado y nadie lo paga: no aparece en Planos.
+                    if ($planosMovidos === 0) {
+                        \Illuminate\Support\Facades\Log::warning('Retiro cobrado en lote sin plano que mover', [
+                            'aliado_id' => $aliadoId,
+                            'factura_real_id' => $facturaReal->id,
+                            'factura_origen_id' => $facturaRetiroOrigen->id,
+                            'contrato_id' => $contrato->id,
+                        ]);
+                    }
 
                     // Bitácora
                     Bitacora::registrar(
@@ -3366,6 +3375,24 @@ class FacturacionController extends Controller
 
             // Restaurar el plano asociado si existe
             Plano::onlyTrashed()->where('factura_id', $factura->id)->restore();
+
+            // Retiro cobrado en lote: al anularlo, su plano volvió a la factura 0 de origen
+            // y esa factura se reactivó. Restaurarlo deshace eso: el plano regresa y la
+            // factura 0 vuelve a quedar anulada como "cobrada", o quedarían las dos vivas.
+            if ($factura->factura_retiro_origen_id) {
+                $origen = Factura::where('aliado_id', $aliadoId)->find($factura->factura_retiro_origen_id);
+                if ($origen) {
+                    Plano::where('factura_id', $origen->id)->update([
+                        'factura_id' => $factura->id,
+                        'numero_factura' => $factura->numero_factura,
+                        'n_plano' => $factura->n_plano,
+                    ]);
+                    $origen->motivo_anulacion = "Cobrado en factura #{$factura->numero_factura}";
+                    $origen->anulado_por = $user->id;
+                    $origen->save();
+                    $origen->delete();
+                }
+            }
 
             Bitacora::registrar(
                 accion: 'updated',
