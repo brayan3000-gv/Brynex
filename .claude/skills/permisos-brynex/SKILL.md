@@ -143,6 +143,13 @@ constructor (sep-2026): cada ruta trae su permiso. Si ves otro controlador con
 un `role:` en el constructor, sospecha lo mismo: un permiso otorgado a mano no
 sirve de nada si el rol lo bloquea antes.
 
+El 26-oct-2026 se quitaron por lo mismo los de `ContratoController`,
+`AsesorController`, `PublicidadController`, `PaginaAliadoAdminController`,
+`RedesSocialesController` y `TrasladoRazonSocialController`, y salió
+`anticipos.anular` (anular y devolver anticipos; solo admin, asignable) en vez
+del `hasRole(admin|superadmin)` de `AnticipoController`. Queda `AlidoController`
+con `role:superadmin`, que es de BryNex y está bien.
+
 ### Reglas que no caben en una ruta
 
 Tres casos dependen del registro, no de la URL, y viven en el controlador:
