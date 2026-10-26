@@ -23,15 +23,17 @@ return new class extends Migration
 
     public function up(): void
     {
+        // PHP vuelve entera la llave '230901', y comparar `codigo` (nvarchar) con
+        // un entero hace que SQL Server convierta la columna y reviente en 'N/A'.
         foreach (self::CODIGOS as $pila => [$codigo, $dni]) {
-            DB::table('pensiones')->where('codigo', $pila)->whereNull('codigo_sura')
+            DB::table('pensiones')->where('codigo', (string) $pila)->whereNull('codigo_sura')
                 ->update(['codigo_sura' => $codigo, 'dni_sura' => $dni]);
         }
     }
 
     public function down(): void
     {
-        DB::table('pensiones')->whereIn('codigo', array_keys(self::CODIGOS))
+        DB::table('pensiones')->whereIn('codigo', array_map('strval', array_keys(self::CODIGOS)))
             ->update(['codigo_sura' => null, 'dni_sura' => null]);
     }
 };
