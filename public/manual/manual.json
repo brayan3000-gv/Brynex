@@ -1,0 +1,1055 @@
+[
+ {
+  "id": "caja-dia",
+  "titulo": "La caja del día",
+  "rol": "USUARIO",
+  "escena": "caja",
+  "formato": "escritorio",
+  "segundos": 17.7,
+  "tema": "Caja",
+  "pasos": [
+   "La caja del día suma lo que cobraste hoy: lo facturado, el efectivo que tienes y lo consignado en cuentas.",
+   "Debajo, cada peso repartido por canal: administración, afiliaciones y seguridad social."
+  ],
+  "buscar": "cuadre diario caja del día efectivo consignado facturado canal administración seguridad social",
+  "archivo": "clips/caja-dia-escritorio.mp4",
+  "kb": 853
+ },
+ {
+  "id": "caja-gasto",
+  "titulo": "Registrar un gasto",
+  "rol": "USUARIO",
+  "escena": "caja",
+  "formato": "escritorio",
+  "segundos": 17.6,
+  "tema": "Caja",
+  "pasos": [
+   "Si sale plata de la caja, se registra el gasto: el tipo, a quién se pagó y cuánto."
+  ],
+  "buscar": "registrar gasto caja papelería arriendo transporte efectivo recibo",
+  "archivo": "clips/caja-gasto-escritorio.mp4",
+  "kb": 488
+ },
+ {
+  "id": "caja-entregar",
+  "titulo": "Entregar la plata al cierre",
+  "rol": "USUARIO",
+  "escena": "caja",
+  "formato": "escritorio",
+  "segundos": 20.7,
+  "tema": "Caja",
+  "pasos": [
+   "Al cierre, el efectivo se le entrega a quien responde por él, y queda el registro de quién a quién.",
+   "Y en Facturas del día está el detalle de cada cobro, para cuadrar con el recibo."
+  ],
+  "buscar": "entregar plata cierre caja efectivo jefe responsable movimiento",
+  "archivo": "clips/caja-entregar-escritorio.mp4",
+  "kb": 599
+ },
+ {
+  "id": "clientes-buscar",
+  "titulo": "Buscar un cliente",
+  "rol": "USUARIO",
+  "escena": "clientes",
+  "formato": "escritorio",
+  "segundos": 15.9,
+  "tema": "Clientes",
+  "pasos": [
+   "En Clientes está toda la base de personas del aliado. Se busca por cédula, nombre o celular.",
+   "Cada fila dice la empresa, el estado y desde cuándo está vigente."
+  ],
+  "buscar": "buscar cliente cédula nombre celular listado base de datos",
+  "archivo": "clips/clientes-buscar-escritorio.mp4",
+  "kb": 460
+ },
+ {
+  "id": "clientes-crear",
+  "titulo": "Crear un cliente con su cédula",
+  "rol": "USUARIO",
+  "escena": "clientes",
+  "formato": "escritorio",
+  "segundos": 40.3,
+  "tema": "Clientes",
+  "pasos": [
+   "Para crear a alguien, se empieza por la cédula.",
+   "Brynex revisa si ya existe y consulta el registro oficial de salud y pensión.",
+   "Esta es una persona real, que nos autorizó a mostrarla: llegan su nombre, su EPS, su fondo de pensión y el régimen.",
+   "Si es la persona, se crea con esos datos ya puestos. No hay que digitarlos.",
+   "Solo falta completar el celular y el correo, y guardar."
+  ],
+  "buscar": "nuevo cliente crear registrar cédula ruaf bdua registro oficial eps pensión",
+  "archivo": "clips/clientes-crear-escritorio.mp4",
+  "kb": 1128
+ },
+ {
+  "id": "clientes-ficha",
+  "titulo": "La ficha del cliente",
+  "rol": "USUARIO",
+  "escena": "clientes",
+  "formato": "escritorio",
+  "segundos": 15.8,
+  "tema": "Clientes",
+  "pasos": [
+   "La ficha reúne los datos personales, el contacto y la seguridad social.",
+   "A un lado, los accesos a beneficiarios, incapacidades, historial, documentos y claves; y abajo, sus contratos."
+  ],
+  "buscar": "ficha cliente perfil datos personales eps pensión contratos resumen",
+  "archivo": "clips/clientes-ficha-escritorio.mp4",
+  "kb": 599
+ },
+ {
+  "id": "clientes-beneficiarios",
+  "titulo": "Agregar beneficiarios",
+  "rol": "USUARIO",
+  "escena": "clientes",
+  "formato": "escritorio",
+  "segundos": 13.1,
+  "tema": "Clientes",
+  "pasos": [
+   "Los beneficiarios, como los hijos o el cónyuge, se ven y se agregan desde la ficha."
+  ],
+  "buscar": "beneficiarios hijos cónyuge familia eps incluir parentesco",
+  "archivo": "clips/clientes-beneficiarios-escritorio.mp4",
+  "kb": 434
+ },
+ {
+  "id": "clientes-documentos",
+  "titulo": "Documentos y claves de la persona",
+  "rol": "USUARIO",
+  "escena": "clientes",
+  "formato": "escritorio",
+  "segundos": 16.9,
+  "tema": "Clientes",
+  "pasos": [
+   "En Documentos se guardan la cédula, los formularios y los soportes de la persona.",
+   "Y en Claves, los usuarios de los portales de su EPS o su caja, a la mano del equipo."
+  ],
+  "buscar": "documentos cédula formularios soportes claves portales eps caja contraseña",
+  "archivo": "clips/clientes-documentos-escritorio.mp4",
+  "kb": 575
+ },
+ {
+  "id": "cobros-cartera",
+  "titulo": "Ver quién debe el mes",
+  "rol": "USUARIO",
+  "escena": "cobros",
+  "formato": "escritorio",
+  "segundos": 15.3,
+  "tema": "Cobros",
+  "pasos": [
+   "Cobros muestra quién no ha pagado el mes: cuánto debe, cuánta mora lleva y si ya se le llamó.",
+   "Desde cada fila se registra la llamada o se le factura ahí mismo."
+  ],
+  "buscar": "cobros cartera mora pendientes deben mes semáforo gestión llamar",
+  "archivo": "clips/cobros-cartera-escritorio.mp4",
+  "kb": 556
+ },
+ {
+  "id": "cobros-empresas",
+  "titulo": "La cartera de empresas",
+  "rol": "USUARIO",
+  "escena": "cobros",
+  "formato": "escritorio",
+  "segundos": 7.8,
+  "tema": "Cobros",
+  "pasos": [
+   "En Empresas, las que no han pagado el mes, con su total y su encargado."
+  ],
+  "buscar": "cobros empresas cartera pendientes empresa mes",
+  "archivo": "clips/cobros-empresas-escritorio.mp4",
+  "kb": 244
+ },
+ {
+  "id": "prestamos-abonar",
+  "titulo": "Préstamos: registrar un abono",
+  "rol": "USUARIO",
+  "escena": "cobros",
+  "formato": "escritorio",
+  "segundos": 16,
+  "tema": "Cobros",
+  "pasos": [
+   "Cuando se le fía el mes a alguien, queda en Préstamos, y se va abonando.",
+   "Se escribe el abono y queda en su historia, con su recibo."
+  ],
+  "buscar": "préstamos fiado cartera abono abonar deuda cliente",
+  "archivo": "clips/prestamos-abonar-escritorio.mp4",
+  "kb": 458
+ },
+ {
+  "id": "comercial",
+  "titulo": "Brynex en dos minutos",
+  "rol": "SUPERADMIN",
+  "escena": "comercial",
+  "formato": "escritorio",
+  "segundos": 136.4,
+  "tema": "Conoce Brynex",
+  "pasos": [
+   "¡Hola! Soy Avi, y te presento Brynex.",
+   "Afiliar en cada portal, digitar datos, pagar planillas, cuadrar la caja y perseguir incapacidades: todos los días, a mano.",
+   "Con Brynex, escribes una cédula y consulta el registro oficial: nombre, EPS y fondo de pensión, sin digitar nada.",
+   "El contrato calcula cada aporte y el total del mes al instante, con las tarifas del aliado.",
+   "La ARL se afilia por API con Sura y Colmena, y las novedades en los portales de las EPS y las cajas se automatizan.",
+   "Desde cada radicado, un clic: Brynex arma los datos del trabajador y lo afilia. Esta demo no tiene conexión con la ARL.",
+   "La planilla PILA se liquida por API con Enlace y Simple; para los demás operadores, el plano sale listo.",
+   "Cada mes, la planilla de cada razón social ya viene armada, con sus novedades.",
+   "Brynex valida antes de pagar: la cédula, las reglas PILA, el salario mínimo, el riesgo y cada peso de la caja.",
+   "Facturar el mes de una empresa es marcar y cobrar.",
+   "Y la caja del día se arma sola: lo facturado, el efectivo y lo consignado, por canal.",
+   "Se cobra en la calle desde el celular, cada empresa consulta su portal, y por WhatsApp un asistente de IA atiende a los clientes.",
+   "Brynex: todo tu aliado en un solo lugar. ¿Lo vemos juntos?"
+  ],
+  "buscar": "comercial presentación bondades afiliaciones automáticas api validaciones",
+  "archivo": "clips/comercial-escritorio.mp4",
+  "kb": 4807
+ },
+ {
+  "id": "contratos-crear",
+  "titulo": "Crear un contrato",
+  "rol": "USUARIO",
+  "escena": "contratos",
+  "formato": "escritorio",
+  "segundos": 65.3,
+  "tema": "Contratos",
+  "pasos": [
+   "El contrato se crea desde la ficha de la persona, con Nuevo contrato.",
+   "Primero la razón social. Luego la modalidad: dependiente, independiente, tiempo parcial, y las demás.",
+   "Después el plan, que dice qué cubre: salud, riesgos laborales, pensión y caja.",
+   "Las entidades: EPS, fondo de pensión, la ARL con su nivel de riesgo y la caja de compensación.",
+   "Con el salario, la cotización de la derecha calcula cada aporte y el total del mes, al instante.",
+   "Las tarifas de administración y afiliación salen solas de la configuración del aliado.",
+   "Al crearlo, Brynex deja listos los radicados de afiliación ante cada entidad."
+  ],
+  "buscar": "nuevo contrato afiliar crear modalidad plan dependiente independiente eps arl pensión caja salario",
+  "archivo": "clips/contratos-crear-escritorio.mp4",
+  "kb": 1747
+ },
+ {
+  "id": "contratos-lista",
+  "titulo": "Ver todos los contratos",
+  "rol": "USUARIO",
+  "escena": "contratos",
+  "formato": "escritorio",
+  "segundos": 13.4,
+  "tema": "Contratos",
+  "pasos": [
+   "En Contratos están todos, con filtros por estado, razón social y modalidad."
+  ],
+  "buscar": "contratos lista filtros vigentes retirados razón social modalidad",
+  "archivo": "clips/contratos-lista-escritorio.mp4",
+  "kb": 532
+ },
+ {
+  "id": "contratos-retiro",
+  "titulo": "Marcar el retiro de un contrato",
+  "rol": "USUARIO",
+  "escena": "contratos",
+  "formato": "escritorio",
+  "segundos": 18.4,
+  "tema": "Contratos",
+  "pasos": [
+   "Para retirar a alguien, se abre su contrato y se marca el retiro.",
+   "Se elige el motivo y la fecha; Brynex calcula qué se cobra del último mes."
+  ],
+  "buscar": "retiro retirar contrato desafiliar fecha motivo novedad",
+  "archivo": "clips/contratos-retiro-escritorio.mp4",
+  "kb": 710
+ },
+ {
+  "id": "entrar",
+  "titulo": "Cómo entrar a Brynex",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "escritorio",
+  "segundos": 13.2,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "Se entra con la cédula y la contraseña que te entrega el administrador de tu empresa."
+  ],
+  "buscar": "entrar iniciar sesión login cédula contraseña clave ingresar",
+  "archivo": "clips/entrar-escritorio.mp4",
+  "kb": 341
+ },
+ {
+  "id": "aviso-datos",
+  "titulo": "El aviso de tratamiento de datos",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "escritorio",
+  "segundos": 7.2,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "La primera vez, Brynex pide aceptar el aviso de tratamiento de datos personales, como lo exige la ley."
+  ],
+  "buscar": "aviso tratamiento datos personales ley 1581 aceptar primera vez",
+  "archivo": "clips/aviso-datos-escritorio.mp4",
+  "kb": 442
+ },
+ {
+  "id": "inicio",
+  "titulo": "El inicio y el menú",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "escritorio",
+  "segundos": 10,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "En el inicio ves la empresa activa y los módulos que puedes usar.",
+   "Arriba está la barra con cada módulo, y en Admin lo de la configuración."
+  ],
+  "buscar": "inicio tablero menú módulos empresa activa navegar",
+  "archivo": "clips/inicio-escritorio.mp4",
+  "kb": 336
+ },
+ {
+  "id": "salir",
+  "titulo": "Cómo salir",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "escritorio",
+  "segundos": 7.1,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "Para salir, abre el menú con tu nombre y toca Salir del sistema."
+  ],
+  "buscar": "salir cerrar sesión logout",
+  "archivo": "clips/salir-escritorio.mp4",
+  "kb": 209
+ },
+ {
+  "id": "entrar",
+  "titulo": "Cómo entrar a Brynex",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "movil",
+  "segundos": 11,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "Se entra con la cédula y la contraseña que te entrega el administrador de tu empresa."
+  ],
+  "buscar": "entrar iniciar sesión login cédula contraseña clave ingresar",
+  "archivo": "clips/entrar-movil.mp4",
+  "kb": 342
+ },
+ {
+  "id": "aviso-datos",
+  "titulo": "El aviso de tratamiento de datos",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "movil",
+  "segundos": 7.2,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "La primera vez, Brynex pide aceptar el aviso de tratamiento de datos personales, como lo exige la ley."
+  ],
+  "buscar": "aviso tratamiento datos personales ley 1581 aceptar primera vez",
+  "archivo": "clips/aviso-datos-movil.mp4",
+  "kb": 496
+ },
+ {
+  "id": "inicio",
+  "titulo": "El inicio y el menú",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "movil",
+  "segundos": 11.7,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "En el inicio ves la empresa activa y los módulos que puedes usar.",
+   "En el celular, el menú se abre con este botón."
+  ],
+  "buscar": "inicio tablero menú módulos empresa activa navegar",
+  "archivo": "clips/inicio-movil.mp4",
+  "kb": 403
+ },
+ {
+  "id": "salir",
+  "titulo": "Cómo salir",
+  "rol": "NADIE",
+  "escena": "entrada",
+  "formato": "movil",
+  "segundos": 5.1,
+  "tema": "Primeros pasos",
+  "pasos": [
+   "Para salir, abre el menú con tu nombre y toca Salir del sistema."
+  ],
+  "buscar": "salir cerrar sesión logout",
+  "archivo": "clips/salir-movil.mp4",
+  "kb": 228
+ },
+ {
+  "id": "facturacion-empresas",
+  "titulo": "La lista de empresas",
+  "rol": "USUARIO",
+  "escena": "facturacion",
+  "formato": "escritorio",
+  "segundos": 8.7,
+  "tema": "Facturación",
+  "pasos": [
+   "En Empresas están las empresas cliente, con cuántos contratos activos tiene cada una."
+  ],
+  "buscar": "empresas facturación clientes empresa nit lista contratos activos",
+  "archivo": "clips/facturacion-empresas-escritorio.mp4",
+  "kb": 313
+ },
+ {
+  "id": "facturacion-lote",
+  "titulo": "Facturar el mes de una empresa",
+  "rol": "USUARIO",
+  "escena": "facturacion",
+  "formato": "escritorio",
+  "segundos": 38.8,
+  "tema": "Facturación",
+  "pasos": [
+   "Dentro de la empresa está cada trabajador con lo que cuesta su mes: salud, riesgos, pensión, caja y administración.",
+   "Se marcan los que se van a cobrar y se toca Facturar.",
+   "El detalle muestra cada aporte, la administración, las afiliaciones del mes y la mora, si la hay.",
+   "Se escribe cómo pagó: en efectivo o por consignación, a la cuenta del aliado.",
+   "Listo: la factura queda pagada, y con ella las planillas de seguridad social de ese mes."
+  ],
+  "buscar": "facturar lote empresa mes planilla seguridad social cobrar pago efectivo consignación",
+  "archivo": "clips/facturacion-lote-escritorio.mp4",
+  "kb": 1082
+ },
+ {
+  "id": "facturacion-recibo",
+  "titulo": "El recibo de pago",
+  "rol": "USUARIO",
+  "escena": "facturacion",
+  "formato": "escritorio",
+  "segundos": 11.4,
+  "tema": "Facturación",
+  "pasos": [
+   "Y sale el recibo, con el detalle de cada trabajador, para imprimirlo o enviarlo."
+  ],
+  "buscar": "recibo de pago imprimir pdf comprobante factura",
+  "archivo": "clips/facturacion-recibo-escritorio.mp4",
+  "kb": 468
+ },
+ {
+  "id": "facturacion-historial",
+  "titulo": "El historial de pagos",
+  "rol": "USUARIO",
+  "escena": "facturacion",
+  "formato": "escritorio",
+  "segundos": 12.1,
+  "tema": "Facturación",
+  "pasos": [
+   "Y en Historial están todos los meses pagados de la empresa, con su saldo."
+  ],
+  "buscar": "historial pagos facturas meses pagados saldo a favor anuladas",
+  "archivo": "clips/facturacion-historial-escritorio.mp4",
+  "kb": 472
+ },
+ {
+  "id": "tareas-tablero",
+  "titulo": "El tablero de tareas",
+  "rol": "USUARIO",
+  "escena": "tareas",
+  "formato": "escritorio",
+  "segundos": 18.6,
+  "tema": "Tareas",
+  "pasos": [
+   "Tareas reúne los pendientes del equipo, cada uno con su encargado, su fecha límite y un semáforo.",
+   "Rojo es vencida, amarillo urgente y verde al día. Se filtra por encargado, tipo o estado."
+  ],
+  "buscar": "tareas tablero pendientes semáforo vencidas urgentes encargado",
+  "archivo": "clips/tareas-tablero-escritorio.mp4",
+  "kb": 659
+ },
+ {
+  "id": "tareas-crear",
+  "titulo": "Crear una tarea",
+  "rol": "USUARIO",
+  "escena": "tareas",
+  "formato": "escritorio",
+  "segundos": 31.4,
+  "tema": "Tareas",
+  "pasos": [
+   "Para crear una: el tipo, el encargado y la persona.",
+   "Queda en el tablero, con su semáforo desde el primer día."
+  ],
+  "buscar": "nueva tarea crear traslado eps inclusión beneficiarios encargado cédula",
+  "archivo": "clips/tareas-crear-escritorio.mp4",
+  "kb": 872
+ },
+ {
+  "id": "tareas-gestionar",
+  "titulo": "Registrar la gestión y cerrar una tarea",
+  "rol": "USUARIO",
+  "escena": "tareas",
+  "formato": "escritorio",
+  "segundos": 17.6,
+  "tema": "Tareas",
+  "pasos": [
+   "Cada avance se anota en Gestionar: qué se hizo y qué sigue. Así nadie pierde el hilo.",
+   "En Acciones se traslada a otra persona del equipo o se cierra, con su resultado."
+  ],
+  "buscar": "gestionar tarea gestión llamada cerrar trasladar encargado",
+  "archivo": "clips/tareas-gestionar-escritorio.mp4",
+  "kb": 645
+ },
+ {
+  "id": "cobro-visita",
+  "titulo": "Cobrar en una visita, desde el celular",
+  "rol": "USUARIO",
+  "escena": "visita",
+  "formato": "movil",
+  "segundos": 19.7,
+  "tema": "Cobros",
+  "pasos": [
+   "Cobro en visita está hecho para el celular: arriba, lo que llevas cobrado hoy en efectivo y por transferencia.",
+   "Se busca al cliente por su nombre o su cédula.",
+   "Aparece lo que debe; se cobra en efectivo o por transferencia y se le muestra su recibo."
+  ],
+  "buscar": "cobro en visita calle celular moto cobrar recibo efectivo transferencia",
+  "archivo": "clips/cobro-visita-movil.mp4",
+  "kb": 514
+ },
+ {
+  "id": "comercial",
+  "titulo": "Brynex en dos minutos",
+  "rol": "SUPERADMIN",
+  "escena": "comercial",
+  "formato": "movil",
+  "segundos": 136.4,
+  "tema": "Conoce Brynex",
+  "pasos": [
+   "¡Hola! Soy Avi, y te presento Brynex.",
+   "Afiliar en cada portal, digitar datos, pagar planillas, cuadrar la caja y perseguir incapacidades: todos los días, a mano.",
+   "Con Brynex, escribes una cédula y consulta el registro oficial: nombre, EPS y fondo de pensión, sin digitar nada.",
+   "El contrato calcula cada aporte y el total del mes al instante, con las tarifas del aliado.",
+   "La ARL se afilia por API con Sura y Colmena, y las novedades en los portales de las EPS y las cajas se automatizan.",
+   "Desde cada radicado, un clic: Brynex arma los datos del trabajador y lo afilia. Esta demo no tiene conexión con la ARL.",
+   "La planilla PILA se liquida por API con Enlace y Simple; para los demás operadores, el plano sale listo.",
+   "Cada mes, la planilla de cada razón social ya viene armada, con sus novedades.",
+   "Brynex valida antes de pagar: la cédula, las reglas PILA, el salario mínimo, el riesgo y cada peso de la caja.",
+   "Facturar el mes de una empresa es marcar y cobrar.",
+   "Y la caja del día se arma sola: lo facturado, el efectivo y lo consignado, por canal.",
+   "Se cobra en la calle desde el celular, cada empresa consulta su portal, y por WhatsApp un asistente de IA atiende a los clientes.",
+   "Brynex: todo tu aliado en un solo lugar. ¿Lo vemos juntos?"
+  ],
+  "buscar": "comercial presentación bondades afiliaciones automáticas api validaciones",
+  "archivo": "clips/comercial-movil.mp4",
+  "kb": 3609
+ },
+ {
+  "id": "afiliaciones-bandeja",
+  "titulo": "La bandeja de afiliaciones del mes",
+  "rol": "USUARIO",
+  "escena": "afiliaciones",
+  "formato": "escritorio",
+  "segundos": 15.8,
+  "tema": "Afiliaciones",
+  "pasos": [
+   "Afiliaciones muestra los ingresos del mes, y cómo va el trámite ante cada entidad.",
+   "Naranja es pendiente, azul en trámite y verde confirmado. Abajo, el conteo de cada estado."
+  ],
+  "buscar": "afiliaciones bandeja ingresos mes radicados eps arl caja pensión pendiente trámite ok",
+  "archivo": "clips/afiliaciones-bandeja-escritorio.mp4",
+  "kb": 485
+ },
+ {
+  "id": "afiliaciones-radicado",
+  "titulo": "Actualizar el estado de un radicado",
+  "rol": "USUARIO",
+  "escena": "afiliaciones",
+  "formato": "escritorio",
+  "segundos": 21,
+  "tema": "Afiliaciones",
+  "pasos": [
+   "Al tocar una entidad se abre su radicado: el estado, el canal y lo que se hizo.",
+   "Queda en la historia del contrato, con quién lo hizo y cuándo."
+  ],
+  "buscar": "radicado estado trámite número canal portal correo observación enviado al cliente",
+  "archivo": "clips/afiliaciones-radicado-escritorio.mp4",
+  "kb": 702
+ },
+ {
+  "id": "afiliaciones-arl-api",
+  "titulo": "Afiliar a la ARL por API",
+  "rol": "USUARIO",
+  "escena": "afiliaciones",
+  "formato": "escritorio",
+  "segundos": 25.5,
+  "tema": "Afiliaciones",
+  "pasos": [
+   "Con ARL Sura o Colmena, la afiliación se hace por API, desde el mismo radicado.",
+   "Brynex arma los datos del trabajador y la radica sin entrar al portal; luego trae el certificado.",
+   "En esta demo no hay conexión con la ARL: pide la clave del portal, y hasta aquí llega."
+  ],
+  "buscar": "afiliar arl sura colmena api automático sin portal certificado",
+  "archivo": "clips/afiliaciones-arl-api-escritorio.mp4",
+  "kb": 777
+ },
+ {
+  "id": "gestion-arl",
+  "titulo": "El semáforo de Gestión ARL",
+  "rol": "USUARIO",
+  "escena": "afiliaciones",
+  "formato": "escritorio",
+  "segundos": 20.8,
+  "tema": "Afiliaciones",
+  "pasos": [
+   "Gestión ARL es para quien solo toma riesgos laborales: el semáforo dice qué vigencias vencen.",
+   "Desde cada fila se renueva, se factura o se retira, y se baja el certificado al día."
+  ],
+  "buscar": "gestión arl semáforo vigencia renovar facturar retirar certificado carné",
+  "archivo": "clips/gestion-arl-escritorio.mp4",
+  "kb": 602
+ },
+ {
+  "id": "incapacidades-lista",
+  "titulo": "Ver las incapacidades",
+  "rol": "USUARIO",
+  "escena": "incapacidades",
+  "formato": "escritorio",
+  "segundos": 11.2,
+  "tema": "Incapacidades",
+  "pasos": [
+   "Incapacidades muestra todas las activas, con su estado, la entidad y cuántos días lleva sin gestión."
+  ],
+  "buscar": "incapacidades lista activas semáforo sin gestión estado entidad",
+  "archivo": "clips/incapacidades-lista-escritorio.mp4",
+  "kb": 389
+ },
+ {
+  "id": "incapacidades-registrar",
+  "titulo": "Registrar una incapacidad",
+  "rol": "USUARIO",
+  "escena": "incapacidades",
+  "formato": "escritorio",
+  "segundos": 33.7,
+  "tema": "Incapacidades",
+  "pasos": [
+   "Para registrar una nueva: la cédula, y Brynex trae su contrato y su razón social.",
+   "Luego el tipo, los días, desde cuándo, y la entidad que la paga.",
+   "Queda registrada como recibida, y se le adjuntan la incapacidad y la epicrisis."
+  ],
+  "buscar": "nueva incapacidad registrar enfermedad general licencia accidente días fecha diagnóstico",
+  "archivo": "clips/incapacidades-registrar-escritorio.mp4",
+  "kb": 886
+ },
+ {
+  "id": "incapacidades-gestion",
+  "titulo": "Seguir el trámite ante la EPS",
+  "rol": "USUARIO",
+  "escena": "incapacidades",
+  "formato": "escritorio",
+  "segundos": 28.3,
+  "tema": "Incapacidades",
+  "pasos": [
+   "Cada incapacidad tiene su historia: los datos, los documentos y las gestiones.",
+   "Cada llamada, correo o radicado en el portal queda anotado, y mueve el estado: radicada, en liquidación, pagada.",
+   "Si el médico la extiende, se agrega la prórroga y queda unida a la original."
+  ],
+  "buscar": "gestión incapacidad radicar eps portal estado liquidación pagada prórroga",
+  "archivo": "clips/incapacidades-gestion-escritorio.mp4",
+  "kb": 824
+ },
+ {
+  "id": "informes-centro",
+  "titulo": "El centro de informes",
+  "rol": "CONTABLE",
+  "escena": "informes",
+  "formato": "escritorio",
+  "segundos": 19.2,
+  "tema": "Informes",
+  "pasos": [
+   "El Centro de informes resume el mes: lo que requiere atención, cómo va hoy y cómo va el mes.",
+   "Cada cifra abre su detalle: clientes activos, empresas, entidades, ingresos y retiros."
+  ],
+  "buscar": "informes centro resumen mes clientes activos afiliaciones retiros tareas incapacidades",
+  "archivo": "clips/informes-centro-escritorio.mp4",
+  "kb": 755
+ },
+ {
+  "id": "informes-financiero",
+  "titulo": "El estado financiero del mes",
+  "rol": "CONTABLE",
+  "escena": "informes",
+  "formato": "escritorio",
+  "segundos": 21.7,
+  "tema": "Informes",
+  "pasos": [
+   "El estado financiero muestra lo cobrado, los gastos y la utilidad del mes.",
+   "Y cada canal por separado: la administración, las afiliaciones y la seguridad social recaudada."
+  ],
+  "buscar": "estado financiero ingresos gastos utilidad canal administración afiliaciones seguridad social contable",
+  "archivo": "clips/informes-financiero-escritorio.mp4",
+  "kb": 889
+ },
+ {
+  "id": "informes-ingresos-retiros",
+  "titulo": "Ingresos y retiros, mes a mes",
+  "rol": "CONTABLE",
+  "escena": "informes",
+  "formato": "escritorio",
+  "segundos": 12.6,
+  "tema": "Informes",
+  "pasos": [
+   "Ingresos y retiros dice cuántos entraron y cuántos salieron, con la tendencia de seis meses."
+  ],
+  "buscar": "ingresos retiros tendencia seis meses consolidado afiliaciones nuevas reingresos",
+  "archivo": "clips/informes-ingresos-retiros-escritorio.mp4",
+  "kb": 556
+ },
+ {
+  "id": "informes-comisiones",
+  "titulo": "Las comisiones de los asesores",
+  "rol": "CONTABLE",
+  "escena": "informes",
+  "formato": "escritorio",
+  "segundos": 16.6,
+  "tema": "Informes",
+  "pasos": [
+   "En Comisiones, lo que le toca a cada asesor por sus afiliaciones y su administración.",
+   "El contable ve y descarga todo en Excel, pero no puede cambiar nada."
+  ],
+  "buscar": "comisiones asesores pagar distribución afiliaciones",
+  "archivo": "clips/informes-comisiones-escritorio.mp4",
+  "kb": 444
+ },
+ {
+  "id": "planos-ver",
+  "titulo": "Ver la planilla del mes",
+  "rol": "ADMIN",
+  "escena": "planos",
+  "formato": "escritorio",
+  "segundos": 22.6,
+  "tema": "Planos SS",
+  "pasos": [
+   "En Planos SS se paga la seguridad social. Se elige el mes de pago y la razón social.",
+   "Salen todos los que entran en la planilla, con sus días, su IBC y el aporte a cada entidad.",
+   "Las novedades del mes, como ingresos, retiros e incapacidades, ya vienen marcadas."
+  ],
+  "buscar": "planos pila planilla seguridad social mes razón social operador días ibc aportes",
+  "archivo": "clips/planos-ver-escritorio.mp4",
+  "kb": 975
+ },
+ {
+  "id": "planos-descargar",
+  "titulo": "Descargar el plano para el operador",
+  "rol": "ADMIN",
+  "escena": "planos",
+  "formato": "escritorio",
+  "segundos": 18.6,
+  "tema": "Planos SS",
+  "pasos": [
+   "Con Descargar plano sale el archivo PILA, que sirve para cualquier operador, o el Excel de cada uno.",
+   "Con Enlace y Simple, además, Brynex liquida la planilla por API, sin subir archivos. Esta demo no tiene conexión con el operador."
+  ],
+  "buscar": "descargar plano txt pila excel operador enlace simple asopagos mi planilla aportes en línea soi",
+  "archivo": "clips/planos-descargar-escritorio.mp4",
+  "kb": 664
+ },
+ {
+  "id": "planos-pago",
+  "titulo": "Confirmar el pago de la planilla",
+  "rol": "ADMIN",
+  "escena": "planos",
+  "formato": "escritorio",
+  "segundos": 25,
+  "tema": "Planos SS",
+  "pasos": [
+   "Cuando se paga, se confirma con el operador, el número de planilla, el valor y la cuenta de donde salió.",
+   "La planilla queda pagada, y cada persona puede descargar su soporte."
+  ],
+  "buscar": "confirmar pago planilla número operador valor banco soporte",
+  "archivo": "clips/planos-pago-escritorio.mp4",
+  "kb": 891
+ },
+ {
+  "id": "usuarios-roles",
+  "titulo": "Usuarios y roles",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 12.5,
+  "tema": "Administración",
+  "pasos": [
+   "En Usuarios está el equipo del aliado, cada uno con su rol: superadministrador, administrador, usuario, contable o asesor."
+  ],
+  "buscar": "usuarios crear usuario rol superadministrador administrador usuario contable asesor desactivar",
+  "archivo": "clips/usuarios-roles-escritorio.mp4",
+  "kb": 384
+ },
+ {
+  "id": "usuarios-permisos",
+  "titulo": "Dar permisos a un usuario",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 18.8,
+  "tema": "Administración",
+  "pasos": [
+   "Además del rol, se le pueden dar permisos de uno en uno, como pagar planillas o anular facturas.",
+   "A la derecha de cada permiso se ve quién más del equipo ya lo tiene."
+  ],
+  "buscar": "permisos usuario otorgar módulo planos anular facturas quién lo tiene",
+  "archivo": "clips/usuarios-permisos-escritorio.mp4",
+  "kb": 672
+ },
+ {
+  "id": "configuracion",
+  "titulo": "El centro de configuración",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 14.1,
+  "tema": "Administración",
+  "pasos": [
+   "El centro de configuración reúne lo del aliado: parámetros, cuentas bancarias, seguros, operadores de planilla y razones sociales."
+  ],
+  "buscar": "configuración parámetros cuentas bancarias seguros operadores planilla razones sociales asesores niveles",
+  "archivo": "clips/configuracion-escritorio.mp4",
+  "kb": 523
+ },
+ {
+  "id": "tarifas",
+  "titulo": "Las tarifas del aliado",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 16.7,
+  "tema": "Administración",
+  "pasos": [
+   "En Parámetros y precios están las tarifas: la administración y la afiliación por plan, modalidad y riesgo."
+  ],
+  "buscar": "parámetros precios tarifas administración afiliación plan modalidad riesgo salario mínimo",
+  "archivo": "clips/tarifas-escritorio.mp4",
+  "kb": 660
+ },
+ {
+  "id": "razones-sociales",
+  "titulo": "Las razones sociales",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 15.7,
+  "tema": "Administración",
+  "pasos": [
+   "Las razones sociales son las empresas por las que se cotiza: su NIT, su ARL, su caja, su operador y sus documentos."
+  ],
+  "buscar": "razón social empresa aportante nit arl caja operador documentos cámara rut",
+  "archivo": "clips/razones-sociales-escritorio.mp4",
+  "kb": 586
+ },
+ {
+  "id": "auditoria",
+  "titulo": "La auditoría: quién hizo qué",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 14.9,
+  "tema": "Administración",
+  "pasos": [
+   "Nada pasa en silencio: la auditoría registra quién hizo qué, cuándo y desde dónde.",
+   "Y cada registro guarda el detalle de lo que cambió."
+  ],
+  "buscar": "auditoría bitácora quién hizo qué cuándo historial cambios accesos",
+  "archivo": "clips/auditoria-escritorio.mp4",
+  "kb": 512
+ },
+ {
+  "id": "cartas-laborales",
+  "titulo": "Generar una carta laboral",
+  "rol": "SUPERADMIN",
+  "escena": "administracion",
+  "formato": "escritorio",
+  "segundos": 13.1,
+  "tema": "Administración",
+  "pasos": [
+   "Las cartas laborales se generan aquí: se busca al trabajador y sale la carta con la firma de la empresa."
+  ],
+  "buscar": "carta laboral certificado laboral firma empresa trabajador generar pdf",
+  "archivo": "clips/cartas-laborales-escritorio.mp4",
+  "kb": 369
+ },
+ {
+  "id": "whatsapp-bandeja",
+  "titulo": "La bandeja de WhatsApp",
+  "rol": "ADMIN",
+  "escena": "comunicacion",
+  "formato": "escritorio",
+  "segundos": 28.5,
+  "tema": "Comunicación",
+  "pasos": [
+   "WhatsApp reúne en una bandeja todas las conversaciones del aliado: las que esperan respuesta, las tuyas y las que atiende la IA.",
+   "Cada chat dice si es cliente, prospecto o excliente.",
+   "Desde la conversación se asigna a alguien del equipo, se abre la ficha del cliente o se marca atendida.",
+   "Esta demo no está conectada a WhatsApp: aquí no se envía ningún mensaje."
+  ],
+  "buscar": "whatsapp bandeja conversaciones chat esperando míos ia clientes prospectos",
+  "archivo": "clips/whatsapp-bandeja-escritorio.mp4",
+  "kb": 740
+ },
+ {
+  "id": "marketing",
+  "titulo": "Marketing: campañas y reactivación",
+  "rol": "ADMIN",
+  "escena": "comunicacion",
+  "formato": "escritorio",
+  "segundos": 13.8,
+  "tema": "Comunicación",
+  "pasos": [
+   "Marketing tiene las campañas por WhatsApp, la reactivación de los que se retiraron y las piezas para redes."
+  ],
+  "buscar": "marketing campañas whatsapp listas reactivación retirados envío masivo",
+  "archivo": "clips/marketing-escritorio.mp4",
+  "kb": 345
+ },
+ {
+  "id": "publicidad",
+  "titulo": "Crear una pieza para redes",
+  "rol": "ADMIN",
+  "escena": "comunicacion",
+  "formato": "escritorio",
+  "segundos": 30.8,
+  "tema": "Comunicación",
+  "pasos": [
+   "El generador de publicidad arma piezas con la marca del aliado: una promo de precio, una tarjeta de plan o un dato útil.",
+   "Con IA también genera la imagen o el video; esta demo no tiene IA conectada. Cada pieza se aprueba antes de publicarse."
+  ],
+  "buscar": "publicidad pieza imagen redes facebook instagram promo plan aprobar publicar ia",
+  "archivo": "clips/publicidad-escritorio.mp4",
+  "kb": 692
+ },
+ {
+  "id": "pagina-web",
+  "titulo": "La página web del aliado",
+  "rol": "ADMIN",
+  "escena": "comunicacion",
+  "formato": "escritorio",
+  "segundos": 21.4,
+  "tema": "Comunicación",
+  "pasos": [
+   "La página web del aliado se edita aquí: el título, los planes, las preguntas frecuentes y los leads que llegan."
+  ],
+  "buscar": "página web pública aliado editar textos planes preguntas frecuentes leads cotizador",
+  "archivo": "clips/pagina-web-escritorio.mp4",
+  "kb": 566
+ },
+ {
+  "id": "pagina-publica",
+  "titulo": "La página web pública del aliado",
+  "rol": "NADIE",
+  "escena": "cotizador",
+  "formato": "escritorio",
+  "segundos": 6.1,
+  "tema": "Página y cotizador",
+  "pasos": [
+   "Cada aliado tiene su página web, con su marca, sus servicios y sus planes."
+  ],
+  "buscar": "página web pública aliado sitio planes servicios preguntas frecuentes",
+  "archivo": "clips/pagina-publica-escritorio.mp4",
+  "kb": 570
+ },
+ {
+  "id": "cotizador-publico",
+  "titulo": "Cotizar en línea con Arma tu plan",
+  "rol": "NADIE",
+  "escena": "cotizador",
+  "formato": "escritorio",
+  "segundos": 53.8,
+  "tema": "Página y cotizador",
+  "pasos": [
+   "En Arma tu plan, el visitante elige su caso: empleado, independiente, tiempo parcial o solo ARL.",
+   "Su nivel de riesgo y su ingreso, y el precio sale al instante, con lo que incluye."
+  ],
+  "buscar": "cotizador arma tu plan cotizar precio independiente empleado riesgo salario en línea",
+  "archivo": "clips/cotizador-publico-escritorio.mp4",
+  "kb": 1531
+ },
+ {
+  "id": "cotizador-lead",
+  "titulo": "Dejar los datos para afiliarse",
+  "rol": "NADIE",
+  "escena": "cotizador",
+  "formato": "escritorio",
+  "segundos": 41.2,
+  "tema": "Página y cotizador",
+  "pasos": [
+   "Si le sirve, deja su nombre y su celular. Ese prospecto le llega al aliado en Brynex, listo para llamarlo."
+  ],
+  "buscar": "lead prospecto datos contacto afiliarme formulario página cotización",
+  "archivo": "clips/cotizador-lead-escritorio.mp4",
+  "kb": 798
+ },
+ {
+  "id": "portal-entrar",
+  "titulo": "Cómo entra la empresa",
+  "rol": "NADIE",
+  "escena": "portal-empresas",
+  "formato": "escritorio",
+  "segundos": 15.9,
+  "tema": "Portal de empresas",
+  "pasos": [
+   "La empresa entra por la misma puerta, con su NIT y la clave que le crea el aliado.",
+   "Ve el resumen de su mes: cuántos trabajadores tiene activos, qué debe y qué pagó."
+  ],
+  "buscar": "portal empresas entrar nit clave empresa cliente acceso",
+  "archivo": "clips/portal-entrar-escritorio.mp4",
+  "kb": 535
+ },
+ {
+  "id": "portal-consultar",
+  "titulo": "La planilla, las facturas y las incapacidades",
+  "rol": "NADIE",
+  "escena": "portal-empresas",
+  "formato": "escritorio",
+  "segundos": 20.2,
+  "tema": "Portal de empresas",
+  "pasos": [
+   "En Planilla, quiénes están en la seguridad social del mes y cuánto aporta cada uno.",
+   "En Facturas, cada mes pagado, con su recibo.",
+   "Y en Incapacidades, cómo va el trámite de las de sus trabajadores."
+  ],
+  "buscar": "portal planilla facturas incapacidades retirados descargar soporte",
+  "archivo": "clips/portal-consultar-escritorio.mp4",
+  "kb": 604
+ },
+ {
+  "id": "portal-tramites",
+  "titulo": "Pedir un trámite desde el portal",
+  "rol": "NADIE",
+  "escena": "portal-empresas",
+  "formato": "escritorio",
+  "segundos": 12.7,
+  "tema": "Portal de empresas",
+  "pasos": [
+   "Y en Trámites pide ingresos, retiros o incapacidades. Cada solicitud le llega al equipo como una tarea."
+  ],
+  "buscar": "portal trámites solicitud ingreso retiro incapacidad empresa pedir",
+  "archivo": "clips/portal-tramites-escritorio.mp4",
+  "kb": 434
+ },
+ {
+  "id": "rol-asesor",
+  "titulo": "Qué ve un asesor",
+  "rol": "ASESOR",
+  "escena": "roles",
+  "formato": "escritorio",
+  "segundos": 15.7,
+  "tema": "Roles",
+  "pasos": [
+   "El asesor tiene un menú corto: clientes, empresas, tareas e incapacidades.",
+   "Puede consultar; si intenta crear o editar, Brynex no lo deja: no tiene ese permiso."
+  ],
+  "buscar": "rol asesor solo lectura consultar permisos qué puede ver",
+  "archivo": "clips/rol-asesor-escritorio.mp4",
+  "kb": 402
+ },
+ {
+  "id": "rol-resumen",
+  "titulo": "Los roles de Brynex",
+  "rol": "ASESOR",
+  "escena": "roles",
+  "formato": "escritorio",
+  "segundos": 13.5,
+  "tema": "Roles",
+  "pasos": null,
+  "buscar": "roles superadministrador administrador usuario contable asesor diferencias permisos",
+  "archivo": "clips/rol-resumen-escritorio.mp4",
+  "kb": 439
+ }
+]

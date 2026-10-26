@@ -111,8 +111,13 @@ Originales, capítulos, completos y el comercial quedan en `~/Movies/Brynex-vide
   los scripts ponen `DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib`.
   `sandbox-exec`, `env` y composer la borran por ser binarios del sistema: por
   eso `app-videos.sh` la vuelve a poner dentro del sandbox y sirve con `php -S`.
-- **Cuota de Gemini (plan gratis): 100 voces por día y por modelo.** Todo con el
-  mismo modelo (`gemini-3.1-flash-tts-preview`), para que la voz suene igual. La
+- **Cuota de Gemini (plan gratis): 100 voces por día y por modelo**, compartida
+  con LiderApp (misma llave). La serie va con `gemini-3.1-flash-tts-preview`,
+  salvo las 22 frases de Comunicación, Cotizador, Administración, Portal de
+  empresas y Roles, que salieron con `gemini-2.5-flash-preview-tts` (26-oct-2026,
+  aprobado tras compararlas: suenan casi igual). Cada `voz-cache/<hash>.json`
+  dice qué modelo hizo la frase. Para rehacerlas con 3.1: borrar esos `.wav`/`.json`
+  y `generar`. La
   caché (`~/Movies/Brynex-videos/voz-cache`) va por texto: cambiar una frase
   gasta una voz.
 - **Roles.** Lo que dice el manual de quién puede qué sale de `roles.mjs`
