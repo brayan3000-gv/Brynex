@@ -486,16 +486,39 @@ try {
     return resultados;
   };
 
+  /**
+   * El cargo del catálogo del portal con ese código. El portal busca por texto y
+   * devuelve 30 como mucho, así que con una palabra suelta ("JEFE", "VENDEDOR")
+   * el código puede quedar fuera: primero la descripción completa y, si no
+   * aparece, cada palabra larga por separado.
+   */
+  const buscarCargo = async (codigo, descripcion) => {
+    const texto = String(descripcion || '').trim();
+    const filtros = [texto, ...texto.split(/[\s,]+/).filter(w => w.length > 3)];
+    for (const filtro of [...new Set(filtros)].filter(Boolean)) {
+      const r = await api('GET', 'ReInsertRegister/loadPositionTypes?filtro=' + encodeURIComponent(filtro));
+      const hallado = (Array.isArray(r.json) ? r.json : []).find(c => String(c.ocpCodigo) === String(codigo));
+      if (hallado) return hallado;
+    }
+    return null;
+  };
+
   // Catálogo de cargos del portal, para llenar `eps_ocupaciones`. Solo lee: un
-  // filtro por palabra, porque el portal busca por texto.
+  // filtro por palabra, porque el portal busca por texto. Con `verificar`
+  // ([{codigo, descripcion}]) prueba cada equivalencia como lo hará el reingreso.
   if (modo === 'cargos') {
     paso = 'cargos';
     const cargos = {};
-    for (const filtro of entrada.filtros || ['']) {
+    for (const filtro of entrada.filtros || []) {
       const r = await api('GET', 'ReInsertRegister/loadPositionTypes?filtro=' + encodeURIComponent(filtro));
       (Array.isArray(r.json) ? r.json : []).forEach(c => { cargos[String(c.ocpCodigo)] = c.ocpDescripcion; });
     }
-    salir({ ok: true, modo, total: Object.keys(cargos).length, cargos });
+    const verificados = [];
+    for (const v of entrada.verificar || []) {
+      const c = await buscarCargo(v.codigo, v.descripcion);
+      verificados.push({ codigo: String(v.codigo), encontrado: !!c, descripcion_portal: c?.ocpDescripcion ?? null });
+    }
+    salir({ ok: true, modo, total: Object.keys(cargos).length, cargos, verificados });
   }
 
   if (modo === 'novedades') {
@@ -540,10 +563,7 @@ try {
 
   // Cargo: el código viene de la tabla de equivalencias; la descripción se toma
   // del catálogo del portal para mandar exactamente lo que la SPA mandaría.
-  let cargoPortal = null;
-  const palabra = String(entrada.cargo?.descripcion || '').split(/\s+/).find(w => w.length > 3) || '';
-  const catalogo = (await api('GET', 'ReInsertRegister/loadPositionTypes?filtro=' + encodeURIComponent(palabra))).json || [];
-  cargoPortal = catalogo.find(c => String(c.ocpCodigo) === String(entrada.cargo?.codigo)) || null;
+  const cargoPortal = await buscarCargo(entrada.cargo?.codigo, entrada.cargo?.descripcion);
 
   const normalizar = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   const apellidoCoincide = !!persona.apellido && normalizar(nombreEps).includes(normalizar(persona.apellido));
