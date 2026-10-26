@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Manual de Brynex</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="Videos cortos de cada tarea de Brynex: busca lo que necesitas y mira solo esa parte.">
+<meta property="og:title" content="Manual de Brynex">
+<meta property="og:description" content="Cómo crear un cliente, hacer un contrato, facturar, pagar la planilla… un video corto por tarea.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,500..800&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: encabezado oscuro con el buscador; debajo, temas como chips y las
+   tareas en tarjetas. Al tocar una, el reproductor ocupa la parte de arriba
+   (en el celular, la pantalla) con solo ese clip y sus pasos. Paleta de Brynex:
+   cabecera azul marino sobre un cuerpo claro azulado, acentos en azul vivo. */
+:root {
+  --bg: #F4F6F9; --surface: #FFFFFF; --ink: #0F1B2D; --muted: #566276; --line: #DBE2EB;
+  --navy: #1E40AF; --navy-soft: #E0E9FB; --accent: #2563EB; --accent-ink: #1E40AF;
+  --hero-bg: #0A1628; --hero-ink: #EEF2F8; --hero-muted: #93A8C8; --hero-line: #1E3A6B;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A111C; --surface: #121C2B; --ink: #E6ECF4; --muted: #95A3B8; --line: #23324A;
+    --navy: #93C5FD; --navy-soft: #16264A; --accent: #60A5FA; --accent-ink: #93C5FD;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A111C; --surface: #121C2B; --ink: #E6ECF4; --muted: #95A3B8; --line: #23324A;
+  --navy: #93C5FD; --navy-soft: #16264A; --accent: #60A5FA; --accent-ink: #93C5FD;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.5; }
+h1, h2, h3 { font-family: var(--display); font-stretch: 118%; line-height: 1.1; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+a { color: inherit; }
+button { font: inherit; color: inherit; }
+.envoltura { max-width: 1120px; margin: 0 auto; padding-inline: 16px; }
+@media (min-width: 720px) { .envoltura { padding-inline: 24px; } }
+
+/* Encabezado */
+.cabeza { background: var(--hero-bg); color: var(--hero-ink); padding: 28px 0 22px; }
+.cabeza .volver { display: inline-flex; gap: 6px; align-items: center; color: var(--hero-muted); font-size: 14px; text-decoration: none; }
+.cabeza .volver:hover { color: var(--hero-ink); }
+.etiqueta { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); margin-top: 18px; }
+.cabeza h1 { font-size: clamp(30px, 6vw, 46px); margin-top: 6px; }
+.cabeza p.sub { color: var(--hero-muted); margin-top: 8px; max-width: 620px; }
+.buscador { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.buscador label { flex: 1 1 280px; position: relative; display: block; }
+.buscador svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; color: var(--hero-muted); pointer-events: none; }
+.buscador input { width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--hero-line); background: #0F2142; color: var(--hero-ink); padding: 0 14px 0 42px; font: inherit; font-size: 16px; }
+.buscador input::placeholder { color: var(--hero-muted); }
+.buscador input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.formato { display: inline-flex; padding: 3px; border-radius: 12px; background: #0F2142; border: 1px solid var(--hero-line); }
+.formato button { border: 0; background: none; height: 40px; padding: 0 14px; border-radius: 9px; cursor: pointer; color: var(--hero-muted); display: inline-flex; gap: 6px; align-items: center; font-size: 14px; font-weight: 600; }
+.formato button[aria-pressed="true"] { background: var(--hero-ink); color: var(--hero-bg); }
+.formato svg { width: 16px; height: 16px; }
+
+/* Temas */
+.temas { display: flex; gap: 8px; overflow-x: auto; padding: 16px 0 4px; scrollbar-width: none; }
+.temas::-webkit-scrollbar { display: none; }
+.chip { flex: none; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 14px; font-weight: 600; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+:root[data-theme="dark"] .chip[aria-pressed="true"] { color: var(--bg); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .chip[aria-pressed="true"] { color: var(--bg); } }
+
+/* Reproductor */
+.reproductor { display: none; margin-top: 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.reproductor.abierto { display: grid; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .reproductor.abierto { grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); } .reproductor.vertical { grid-template-columns: minmax(0, 360px) 1fr; } }
+.marco { background: #000; display: flex; align-items: center; justify-content: center; }
+.marco video { display: block; width: 100%; max-height: 78vh; background: #000; }
+.vertical .marco video { width: auto; max-width: 100%; aspect-ratio: 9 / 16; }
+.detalle { padding: 18px 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+.detalle h2 { font-size: 24px; }
+.quien { display: flex; flex-wrap: wrap; gap: 6px; }
+.rol { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--navy-soft); color: var(--navy); }
+.detalle ol { margin: 0; padding-left: 20px; display: grid; gap: 6px; color: var(--muted); font-size: 15px; }
+.acciones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.boton { height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 600; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+.boton.primario { background: var(--navy); border-color: var(--navy); color: #fff; }
+
+/* Lista */
+.grupo { margin-top: 26px; }
+.grupo h3 { font-size: 20px; margin-bottom: 10px; }
+.tarjetas { display: grid; gap: 10px; grid-template-columns: 1fr; }
+@media (min-width: 620px) { .tarjetas { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 960px) { .tarjetas { grid-template-columns: repeat(3, 1fr); } }
+.tarjeta { text-align: left; display: flex; gap: 12px; align-items: center; padding: 12px; min-height: 72px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.tarjeta:hover { border-color: var(--navy); }
+.tarjeta[aria-current="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.play { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--navy-soft); color: var(--navy); display: grid; place-items: center; }
+.play svg { width: 16px; height: 16px; margin-left: 2px; }
+.tarjeta .t { display: block; font-weight: 600; line-height: 1.3; }
+.tarjeta .m { display: block; font-size: 13px; color: var(--muted); margin-top: 2px; }
+.vacio { margin-top: 40px; text-align: center; color: var(--muted); }
+.pie { margin: 48px 0 36px; color: var(--muted); font-size: 14px; display: grid; gap: 6px; }
+.pie a { color: var(--navy); }
+.oculto { display: none !important; }
+.conoce { margin-top: 16px; display: grid; gap: 16px; grid-template-columns: 1fr; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+@media (min-width: 900px) { .conoce { grid-template-columns: minmax(0, 1.4fr) 1fr; padding: 18px; } }
+.conoce video { width: 100%; border-radius: 10px; background: #000; display: block; }
+.conoce h2 { font-size: 24px; }
+.conoce p { color: var(--muted); margin-top: 8px; }
+</style>
+</head>
+<body>
+<header class="cabeza">
+  <div class="envoltura">
+    <a class="volver" href="/">← Entrar a Brynex</a>
+    <p class="etiqueta">Manual en video</p>
+    <h1>¿Qué necesitas hacer?</h1>
+    <p class="sub">Un video corto por tarea, grabado en Brynex con un aliado de demostración: la gente, las empresas y los números son inventados, salvo una persona real que autorizó mostrar su consulta por cédula.</p>
+    <div class="buscador">
+      <label>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Ej.: contrato, facturar, planilla, incapacidad, contraseña…" aria-label="Buscar una tarea" autocomplete="off">
+      </label>
+      <div class="formato" role="group" aria-label="Ver en">
+        <button type="button" data-formato="escritorio" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>Computador</button>
+        <button type="button" data-formato="movil" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Celular</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="envoltura">
+  <section class="conoce" id="conoce">
+    <video id="v-comercial" controls playsinline preload="metadata" poster="comercial-portada.jpg"></video>
+    <div>
+      <h2>Conoce Brynex en dos minutos</h2>
+      <p>Afiliaciones automáticas, planillas PILA por API, validaciones antes de pagar y todo el aliado en un solo lugar.</p>
+    </div>
+  </section>
+  <nav class="temas" id="temas" aria-label="Temas"></nav>
+  <section class="reproductor" id="reproductor" aria-live="polite">
+    <div class="marco"><video id="video" controls playsinline preload="metadata"></video></div>
+    <div class="detalle">
+      <h2 id="r-titulo"></h2>
+      <div class="quien" id="r-quien"></div>
+      <ol id="r-pasos"></ol>
+      <div class="acciones">
+        <button class="boton primario" id="r-siguiente" type="button">Siguiente tarea →</button>
+        <button class="boton" id="r-cerrar" type="button">Cerrar</button>
+      </div>
+    </div>
+  </section>
+  <div id="lista"></div>
+  <p class="vacio oculto" id="vacio">No encontramos esa tarea. Prueba con otra palabra, o mira todos los temas.</p>
+  <footer class="pie">
+    <p>Lo que cada quien ve depende de su rol: si no encuentras una opción en tu menú, es que tu cuenta no la tiene. El superadministrador de tu aliado puede dártela.</p>
+    <p>Lo que depende de una conexión externa (la afiliación por API a la ARL, la liquidación de la planilla con el operador, el envío por WhatsApp, la IA) se muestra hasta donde llega: la demo no está conectada a ningún servicio.</p>
+  </footer>
+</main>
+
+<script>
+// Quién puede hacer cada tarea, comprobado ENTRANDO con una cuenta de cada rol
+// en la demo (scripts/videos/roles.mjs, 24-oct-2026), no solo leyendo permisos:
+// varios controladores exigen un rol fijo además del permiso.
+const S = 'Superadministrador', A = 'Administrador', U = 'Usuario', C = 'Contable', E = 'Asesor'
+const TODOS = [S, A, U, C, E]
+const QUIEN = {
+  'comercial': TODOS, 'entrar': TODOS, 'aviso-datos': TODOS, 'inicio': TODOS, 'salir': TODOS,
+  'clientes-buscar': TODOS, 'clientes-crear': [S, A, U], 'clientes-ficha': TODOS, 'clientes-beneficiarios': [S, A, U], 'clientes-documentos': [S, A, U],
+  'contratos-crear': [S, A, U], 'contratos-lista': [S, A, U], 'contratos-retiro': [S, A, U],
+  'afiliaciones-bandeja': [S, A, U], 'afiliaciones-radicado': [S, A, U], 'afiliaciones-arl-api': [S, A, U, 'Si el aliado tiene ARL por API'], 'gestion-arl': [S, A, U],
+  'facturacion-empresas': TODOS, 'facturacion-lote': [S, A, U], 'facturacion-recibo': [S, A, U], 'facturacion-historial': TODOS,
+  'cobros-cartera': [S, A, U, C], 'cobros-empresas': [S, A, U, C], 'prestamos-abonar': [S, A, U], 'cobro-visita': [S, A, U],
+  'caja-dia': [S, A, U, C], 'caja-gasto': [S, A, U], 'caja-entregar': [S, A, U],
+  'planos-ver': [S, A, 'Usuario con el permiso'], 'planos-descargar': [S, A, 'Usuario con el permiso'], 'planos-pago': [S, A, 'Usuario con el permiso'],
+  'incapacidades-lista': TODOS, 'incapacidades-registrar': [S, A, U], 'incapacidades-gestion': [S, A, U],
+  'tareas-tablero': TODOS, 'tareas-crear': [S, A, U], 'tareas-gestionar': [S, A, U],
+  'informes-centro': [S, A, C], 'informes-financiero': [S, C], 'informes-ingresos-retiros': [S, A, C], 'informes-comisiones': [S, A, C],
+  'whatsapp-bandeja': [S, A, U, C], 'marketing': [S, A, U], 'publicidad': [S, A], 'pagina-web': [S, A],
+  'pagina-publica': ['Cualquier visitante'], 'cotizador-publico': ['Cualquier visitante'], 'cotizador-lead': ['Cualquier visitante'],
+  'usuarios-roles': [S, A], 'usuarios-permisos': [S], 'configuracion': [S, A, C], 'tarifas': [S, A], 'razones-sociales': [S, A],
+  'auditoria': [S], 'cartas-laborales': [S, A],
+  'portal-entrar': ['La empresa cliente, con su NIT'], 'portal-consultar': ['La empresa cliente, con su NIT'], 'portal-tramites': ['La empresa cliente, con su NIT'],
+  'rol-asesor': [E], 'rol-resumen': TODOS,
+}
+const ORDEN_TEMAS = ['Conoce Brynex', 'Primeros pasos', 'Clientes', 'Contratos', 'Afiliaciones', 'Facturación', 'Cobros', 'Caja', 'Planos SS',
+  'Incapacidades', 'Tareas', 'Informes', 'Comunicación', 'Página y cotizador', 'Administración', 'Portal de empresas', 'Roles']
+const BASE = '/manual/'
+
+const $ = (s) => document.querySelector(s)
+const sinTildes = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+let clips = [], tema = 'Todos', formato = matchMedia('(max-width: 700px)').matches ? 'movil' : 'escritorio', actual = null
+
+function guardarPreferencia() { try { localStorage.setItem('manual-formato', formato) } catch {} }
+try { const f = localStorage.getItem('manual-formato'); if (f === 'movil' || f === 'escritorio') formato = f } catch {}
+
+/** Una tarea = un id; puede tener versión de computador, de celular o ambas. */
+function tareas() {
+  const porId = new Map()
+  for (const c of clips) {
+    const t = porId.get(c.id) ?? { id: c.id, titulo: c.titulo, tema: c.tema ?? 'Otros', pasos: c.pasos ?? [], buscar: c.buscar ?? '', versiones: {},
+      orden: (ESCENAS.indexOf(c.escena) + 1 || 99) * 100 + clips.filter((x) => x.escena === c.escena && x.formato === c.formato).findIndex((x) => x.id === c.id) }
+    t.versiones[c.formato] = c
+    if (!t.pasos.length && c.pasos) t.pasos = c.pasos
+    porId.set(c.id, t)
+  }
+  return [...porId.values()]
+}
+
+/** El orden del recorrido: por tema, y dentro del tema, como aparece en los videos. */
+const ESCENAS = ['comercial', 'entrada', 'clientes', 'contratos', 'afiliaciones', 'facturacion', 'cobros', 'visita', 'caja', 'planos', 'incapacidades',
+  'tareas', 'informes', 'comunicacion', 'cotizador', 'administracion', 'portal-empresas', 'roles']
+const posTema = (t) => { const i = ORDEN_TEMAS.indexOf(t); return i === -1 ? 99 : i }
+function filtradas() {
+  const q = sinTildes($('#q').value.trim())
+  const palabras = q.split(/\s+/).filter(Boolean)
+  return tareas().sort((a, b) => posTema(a.tema) - posTema(b.tema) || a.orden - b.orden).filter((t) => {
+    if (tema !== 'Todos' && t.tema !== tema) return false
+    if (!palabras.length) return true
+    const texto = sinTildes([t.titulo, t.tema, t.buscar, ...(t.pasos ?? []), ...(QUIEN[t.id] ?? [])].join(' '))
+    return palabras.every((p) => texto.includes(p))
+  })
+}
+
+function pintarTemas() {
+  const hay = new Set(tareas().map((t) => t.tema))
+  const lista = ['Todos', ...ORDEN_TEMAS.filter((t) => hay.has(t)), ...[...hay].filter((t) => !ORDEN_TEMAS.includes(t))]
+  $('#temas').replaceChildren(...lista.map((t) => {
+    const b = document.createElement('button')
+    b.type = 'button'; b.className = 'chip'; b.textContent = t
+    b.setAttribute('aria-pressed', String(t === tema))
+    b.onclick = () => { tema = t; pintarTemas(); pintarLista() }
+    return b
+  }))
+}
+
+function versionDe(t) { return t.versiones[formato] ?? t.versiones.escritorio ?? t.versiones.movil }
+
+function pintarLista() {
+  const ts = filtradas()
+  $('#vacio').classList.toggle('oculto', ts.length > 0)
+  const grupos = new Map()
+  for (const t of ts) { if (!grupos.has(t.tema)) grupos.set(t.tema, []); grupos.get(t.tema).push(t) }
+  const orden = [...grupos.keys()]
+  $('#lista').replaceChildren(...orden.map((nombre) => {
+    const s = document.createElement('section'); s.className = 'grupo'
+    const h = document.createElement('h3'); h.textContent = nombre
+    const d = document.createElement('div'); d.className = 'tarjetas'
+    for (const t of grupos.get(nombre)) {
+      const v = versionDe(t)
+      const b = document.createElement('button')
+      b.type = 'button'; b.className = 'tarjeta'
+      if (actual === t.id) b.setAttribute('aria-current', 'true')
+      b.innerHTML = '<span class="play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg></span><span><span class="t"></span><span class="m"></span></span>'
+      b.querySelector('.t').textContent = t.titulo
+      b.querySelector('.m').textContent = `${Math.round(v.segundos)} s · ${(QUIEN[t.id] ?? []).slice(0, 3).join(', ')}${(QUIEN[t.id] ?? []).length > 3 ? '…' : ''}`
+      b.onclick = () => abrir(t.id)
+      d.append(b)
+    }
+    s.append(h, d)
+    return s
+  }))
+}
+
+function abrir(id, { sinMover = false } = {}) {
+  const ts = tareas()
+  const t = ts.find((x) => x.id === id)
+  if (!t) return
+  actual = id
+  const v = versionDe(t)
+  const r = $('#reproductor')
+  r.classList.add('abierto')
+  r.classList.toggle('vertical', v.formato === 'movil')
+  const video = $('#video')
+  video.src = BASE + v.archivo
+  video.play().catch(() => {})
+  $('#r-titulo').textContent = t.titulo
+  $('#r-quien').replaceChildren(...(QUIEN[t.id] ?? []).map((q) => { const s = document.createElement('span'); s.className = 'rol'; s.textContent = q; return s }))
+  $('#r-pasos').replaceChildren(...(t.pasos ?? []).map((p) => { const li = document.createElement('li'); li.textContent = p; return li }))
+  const lista = filtradas()
+  const i = lista.findIndex((x) => x.id === id)
+  const sig = lista[i + 1] ?? null
+  $('#r-siguiente').classList.toggle('oculto', !sig)
+  $('#r-siguiente').onclick = () => sig && abrir(sig.id)
+  history.replaceState(null, '', '#' + id)
+  pintarLista()
+  if (!sinMover) r.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+$('#r-cerrar').onclick = () => {
+  const v = $('#video'); v.pause(); v.removeAttribute('src'); v.load()
+  $('#reproductor').classList.remove('abierto'); actual = null
+  history.replaceState(null, '', location.pathname); pintarLista()
+}
+$('#q').addEventListener('input', () => { if ($('#q').value) tema = 'Todos'; pintarTemas(); pintarLista() })
+for (const b of document.querySelectorAll('.formato button')) {
+  b.onclick = () => {
+    formato = b.dataset.formato; guardarPreferencia()
+    for (const o of document.querySelectorAll('.formato button')) o.setAttribute('aria-pressed', String(o === b))
+    pintarLista(); if (actual) abrir(actual, { sinMover: true })
+  }
+  b.setAttribute('aria-pressed', String(b.dataset.formato === formato))
+}
+
+// Un enlace a otra tarea dentro de la misma página (#cobertura) cambia el clip.
+addEventListener('hashchange', () => { const id = decodeURIComponent(location.hash.slice(1)); if (id && id !== actual) abrir(id) })
+
+fetch(BASE + 'manual.json').then((r) => r.json()).then((datos) => {
+  // El comercial va en su recuadro de arriba, no en la lista de tareas.
+  const comercial = datos.filter((c) => c.id === 'comercial')
+  clips = datos.filter((c) => c.id !== 'comercial')
+  const vc = comercial.find((c) => c.formato === formato) ?? comercial[0]
+  if (vc) $('#v-comercial').src = BASE + vc.archivo
+  else $('#conoce').classList.add('oculto')
+  // Casi todo está grabado en el computador: el selector solo aparece si hay clips de celular.
+  if (!clips.some((c) => c.formato === 'movil')) document.querySelector('.formato').classList.add('oculto')
+  pintarTemas(); pintarLista()
+  const id = decodeURIComponent(location.hash.slice(1))
+  if (id) abrir(id, { sinMover: true })
+}).catch(() => { $('#vacio').textContent = 'No se pudo cargar el manual. Revisa tu conexión y recarga la página.'; $('#vacio').classList.remove('oculto') })
+</script>
+</body>
+</html>

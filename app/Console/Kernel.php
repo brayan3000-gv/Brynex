@@ -196,11 +196,16 @@ class Kernel extends ConsoleKernel
         // Sondea si el operador volvió a dejar pasar el subtipo de cotizante
         // 03/04 (ver PlanillaVigilarSubtipo4). Cada media hora porque la
         // hipótesis es que la validación de la UGPP se apaga por ventanas: con
-        // una corrida diaria no se vería. No liquida nada — el archivo lleva
-        // freno —, y el aviso por WhatsApp sale una vez cada 6 h.
+        // una corrida diaria no se vería.
+        //
+        // Las 24 horas, sin corte nocturno: dos días de sondeo de 5 a 23 no
+        // encontraron una sola franja limpia, así que si queda alguna ventana
+        // es de madrugada — justo la que no se estaba mirando.
+        //
+        // No liquida nada —el archivo lleva freno— y el aviso por WhatsApp sale
+        // una vez cada 6 h.
         $schedule->command('planilla:vigilar-subtipo4')
             ->everyThirtyMinutes()
-            ->between('5:00', '23:00')
             ->timezone('America/Bogota')
             ->name('vigia-subtipo4')
             ->withoutOverlapping(25)
