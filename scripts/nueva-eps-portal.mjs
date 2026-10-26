@@ -490,11 +490,14 @@ try {
    * El cargo del catálogo del portal con ese código. El portal busca por texto y
    * devuelve 30 como mucho, así que con una palabra suelta ("JEFE", "VENDEDOR")
    * el código puede quedar fuera: primero la descripción completa y, si no
-   * aparece, cada palabra larga por separado.
+   * aparece, cada palabra larga por separado. Con Ñ o tilde el portal no
+   * encuentra nada ("ALBAÑILES"), así que de último va lo que hay antes ("ALBA").
    */
   const buscarCargo = async (codigo, descripcion) => {
     const texto = String(descripcion || '').trim();
-    const filtros = [texto, ...texto.split(/[\s,]+/).filter(w => w.length > 3)];
+    const palabras = texto.split(/[\s,]+/).filter(w => w.length > 3);
+    const sinTilde = palabras.map(w => w.split(/[^A-Za-z0-9]/)[0]).filter(w => w.length > 3);
+    const filtros = [texto, ...palabras, ...sinTilde];
     for (const filtro of [...new Set(filtros)].filter(Boolean)) {
       const r = await api('GET', 'ReInsertRegister/loadPositionTypes?filtro=' + encodeURIComponent(filtro));
       const hallado = (Array.isArray(r.json) ? r.json : []).find(c => String(c.ocpCodigo) === String(codigo));
