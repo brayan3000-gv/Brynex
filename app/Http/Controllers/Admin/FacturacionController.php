@@ -3182,12 +3182,6 @@ class FacturacionController extends Controller
                 $f->save();
                 $f->delete(); // SoftDeletes → establece deleted_at
 
-                // Soft-delete de TODOS los planos de esta factura.
-                // IMPORTANTE: en lotes masivos hay N planos por factura_id (uno por contrato).
-                // El hasOne solo eliminaría el primero, dejando los demás activos y causando
-                // duplicados cuando se re-factura el mismo período tras una anulación.
-                Plano::where('factura_id', $f->id)->each(fn ($p) => $p->delete());
-
                 // \u2500\u2500 Reversar retiro: dos casos seg\u00fan el tipo de factura de retiro \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
                 // CASO 1: Factura de retiro facturado desde empresa (factura_retiro_origen_id != null)
                 //   \u2192 Reactivar la factura 0 original, restaurar el plano, NO revertir el contrato
@@ -3248,6 +3242,17 @@ class FacturacionController extends Controller
                         );
                     }
                 }
+
+                // Soft-delete de TODOS los planos de esta factura.
+                // IMPORTANTE: en lotes masivos hay N planos por factura_id (uno por contrato).
+                // El hasOne solo eliminaría el primero, dejando los demás activos y causando
+                // duplicados cuando se re-factura el mismo período tras una anulación.
+                //
+                // Va DESPUÉS de reversar el retiro: el CASO 1 devuelve el plano a la factura 0,
+                // y si ya estaba borrado no lo encontraba y el retiro quedaba sin plano. Al
+                // volver a cobrarlo en un lote salía una factura de retiro sin planilla que
+                // pagar (4 casos ago–oct 2026, entre ellos la cédula 1107509472 de GiMave).
+                Plano::where('factura_id', $f->id)->each(fn ($p) => $p->delete());
 
                 // ── Restaurar anticipos aplicados a esta factura ──────────────────
                 // Al anular, los anticipos que se aplicaron en el momento de facturar

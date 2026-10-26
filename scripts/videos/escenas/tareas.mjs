@@ -18,8 +18,10 @@ export default async function (e) {
   e.tarea('tareas-crear', 'Crear una tarea', { tema: 'Tareas', buscar: 'nueva tarea crear traslado eps inclusión beneficiarios encargado cédula' })
   await e.dice('Para crear una: el tipo, el encargado y la persona.')
   await e.clic('button[onclick="abrirModalNueva()"]', { espera: 1000 })
-  await e.elegir('select[name=tipo]:visible', { index: 2 })
-  await e.elegir('.modal select[name=encargado_id], select[name=encargado_id]:visible >> nth=-1', { label: 'Daniela Restrepo Gómez' }).catch(() => {})
+  // Los campos del modal (la lista de arriba tiene filtros con los mismos nombres).
+  const modal = 'form:has(#inputCedula)'
+  await e.elegir(`${modal} select[name=tipo]`, { index: 2 })
+  await e.elegir(`${modal} select[name=encargado_id]`, { label: 'Daniela Restrepo Gómez' }).catch(() => {})
   await e.escribir('#inputCedula', '9985100020', { retraso: 70 })
   await e.esperar(1600)
   await e.clic({ texto: '9985100020 —' }, { espera: 1000 }).catch(() => {})
