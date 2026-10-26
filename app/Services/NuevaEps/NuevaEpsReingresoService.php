@@ -322,8 +322,10 @@ class NuevaEpsReingresoService
      */
     private function cargo(Contrato $contrato): array
     {
+        // El catálogo común (razon_social_id NULL) vale para todos los aliados, igual
+        // que en RazonSocialCargo::porDefecto(): vive bajo el aliado 1 y los aliados
+        // sin cargos propios (Global Contact en el 9) se quedaban sin ninguno.
         $query = DB::table('razon_social_cargos')
-            ->where('aliado_id', $contrato->aliado_id)
             ->where('activo', true)
             ->where(fn ($q) => $q->where('razon_social_id', $contrato->razon_social_id)->orWhereNull('razon_social_id'))
             ->whereNotNull('codigo_ocupacion');
@@ -334,10 +336,11 @@ class NuevaEpsReingresoService
 
         $nombre = Str::upper(Str::ascii((string) $contrato->cargo));
 
-        $fila = $query->get(['cargo', 'codigo_ocupacion', 'razon_social_id', 'por_defecto'])
+        $fila = $query->get(['cargo', 'codigo_ocupacion', 'razon_social_id', 'aliado_id', 'por_defecto'])
             ->sortByDesc(fn ($c) => [
                 $c->razon_social_id ? 1 : 0,
                 Str::upper(Str::ascii($c->cargo)) === $nombre ? 1 : 0,
+                (int) $c->aliado_id === (int) $contrato->aliado_id ? 1 : 0,
                 (int) $c->por_defecto,
             ])
             ->first();
