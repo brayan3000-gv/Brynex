@@ -300,6 +300,11 @@ class MiPlanillaPortalService
      * menos de 8 s). De ahí se baja el ZIP y se saca el PDF. Si ya había uno
      * disponible de antes, se usa ese sin pedir otro.
      *
+     * Recién generado, Históricos lo muestra «Disponible» unos segundos con el
+     * `historicoId` que el portal todavía resuelve al archivo anterior: se bajaba
+     * el resumen de la planilla del mes pasado (Erika Ramírez, 27-oct-2026). Por
+     * eso solo vale el ZIP que trae ese nombre exacto; si trae otro, se espera.
+     *
      * @throws \RuntimeException con el motivo si no se pudo
      */
     public function resumenPagoPdf(string $numero, ?callable $paso = null): string
@@ -308,10 +313,8 @@ class MiPlanillaPortalService
         $nombre = "Resumen_de_pago{$numero}.pdf";
 
         $paso('Buscando el resumen de pago');
-        if ($url = $this->historicoDisponible($nombre)) {
-            $paso('Descargando el PDF');
-
-            return $this->pdfDelZip($this->get($url), $nombre);
+        if ($pdf = $this->resumenDeHistoricos($nombre, $paso)) {
+            return $pdf;
         }
 
         $planilla = $this->pagada($numero);
@@ -342,14 +345,24 @@ class MiPlanillaPortalService
         $paso('Esperando que Mi Planilla lo genere');
         for ($i = 0; $i < 20; $i++) {
             sleep(2);
-            if ($url = $this->historicoDisponible($nombre)) {
-                $paso('Descargando el PDF');
-
-                return $this->pdfDelZip($this->get($url), $nombre);
+            if ($pdf = $this->resumenDeHistoricos($nombre, $paso)) {
+                return $pdf;
             }
         }
 
         throw new \RuntimeException('Mi Planilla no terminó de generar el resumen de pago a tiempo: reintenta en un minuto.');
+    }
+
+    /** El PDF si Históricos ya lo entrega, o null si todavía no (o entrega otro). */
+    private function resumenDeHistoricos(string $nombre, callable $paso): ?string
+    {
+        if (! $url = $this->historicoDisponible($nombre)) {
+            return null;
+        }
+
+        $paso('Descargando el PDF');
+
+        return $this->pdfDelZip($this->get($url), $nombre);
     }
 
     /** El enlace de descarga del primer archivo «Disponible» con ese nombre en Históricos. */
@@ -370,30 +383,23 @@ class MiPlanillaPortalService
         return null;
     }
 
-    private function pdfDelZip(string $zip, string $nombre): string
+    /** El PDF con ese nombre dentro del ZIP, o null si el ZIP no lo trae (es otro archivo). */
+    private function pdfDelZip(string $zip, string $nombre): ?string
     {
-        if (str_starts_with($zip, '%PDF')) {
-            return $zip;
-        }
-
         $tmp = tempnam(sys_get_temp_dir(), 'mpzip');
         try {
             file_put_contents($tmp, $zip);
             $archivo = new \ZipArchive;
             if ($archivo->open($tmp) !== true) {
-                throw new \RuntimeException("Mi Planilla no entregó un archivo válido para {$nombre}.");
+                return null;
             }
-            $pdf = $archivo->getFromName($nombre) ?: $archivo->getFromIndex(0);
+            $pdf = $archivo->getFromName($nombre);
             $archivo->close();
         } finally {
             @unlink($tmp);
         }
 
-        if (! is_string($pdf) || ! str_starts_with($pdf, '%PDF')) {
-            throw new \RuntimeException("El archivo de Mi Planilla no trae el PDF {$nombre}.");
-        }
-
-        return $pdf;
+        return is_string($pdf) && str_starts_with($pdf, '%PDF') ? $pdf : null;
     }
 
     /**
