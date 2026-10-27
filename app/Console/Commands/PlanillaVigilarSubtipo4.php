@@ -313,10 +313,10 @@ class PlanillaVigilarSubtipo4 extends Command
         $l = substr_replace($modelo, $this->n($seq, 5), 2, 5);
         $l = substr_replace($l, $this->a($cl->tipo_doc, 2), 7, 2);
         $l = substr_replace($l, $this->a($cedula, 16), 9, 16);
-        $l = substr_replace($l, $this->a(strtoupper($cl->primer_apellido ?? ''), 20), 36, 20);
-        $l = substr_replace($l, $this->a(strtoupper($cl->segundo_apellido ?? ''), 30), 56, 30);
-        $l = substr_replace($l, $this->a(strtoupper($cl->primer_nombre ?? ''), 20), 86, 20);
-        $l = substr_replace($l, $this->a(strtoupper($cl->segundo_nombre ?? ''), 30), 106, 30);
+        $l = substr_replace($l, $this->a($cl->primer_apellido, 20), 36, 20);
+        $l = substr_replace($l, $this->a($cl->segundo_apellido, 30), 56, 30);
+        $l = substr_replace($l, $this->a($cl->primer_nombre, 20), 86, 20);
+        $l = substr_replace($l, $this->a($cl->segundo_nombre, 30), 106, 30);
         $l = substr_replace($l, '04', 27, 2);                 // el subtipo que se vigila
         $l = substr_replace($l, $this->a('', 6), 153, 6);     // sin AFP
         $l = substr_replace($l, '00303030', 183, 8);
@@ -358,8 +358,21 @@ class PlanillaVigilarSubtipo4 extends Command
         return str_pad((string) $v, $largo, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * Alfanumérico de ancho fijo, con el mismo tratamiento que
+     * PlanoPilaTxtService::A().
+     *
+     * El `iconv` no es cosmético: la Ñ y las tildes ocupan dos bytes en UTF-8 y
+     * `substr`/`str_pad` cuentan bytes, así que un apellido como NUÑEZ corría la
+     * línea entera un byte y el operador devolvía una cascada de errores de
+     * formato (`2.C029`, `2.C030`, `2.C032`…). El sondeo informaba basura en vez
+     * de responder si la persona pasa o no.
+     */
     private function a(?string $v, int $largo): string
     {
-        return str_pad(substr((string) $v, 0, $largo), $largo, ' ', STR_PAD_RIGHT);
+        $v = mb_strtoupper(trim((string) $v), 'UTF-8');
+        $v = iconv('UTF-8', 'ISO-8859-1//TRANSLIT//IGNORE', $v);
+
+        return str_pad(substr($v, 0, $largo), $largo, ' ', STR_PAD_RIGHT);
     }
 }
