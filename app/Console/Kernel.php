@@ -194,18 +194,24 @@ class Kernel extends ConsoleKernel
         // log y nadie los abre: sin esto, uno que empiece a fallar de madrugada
         // puede pasar semanas así. Solo avisa cuando hay algo que contar.
         // Sondea si el operador volvió a dejar pasar el subtipo de cotizante
-        // 03/04 (ver PlanillaVigilarSubtipo4). Cada media hora porque la
-        // hipótesis es que la validación de la UGPP se apaga por ventanas: con
-        // una corrida diaria no se vería.
+        // 03/04 (ver PlanillaVigilarSubtipo4). Las 24 horas, sin corte nocturno.
         //
-        // Las 24 horas, sin corte nocturno: dos días de sondeo de 5 a 23 no
-        // encontraron una sola franja limpia, así que si queda alguna ventana
-        // es de madrugada — justo la que no se estaba mirando.
+        // Nació cada media hora para poner a prueba la hipótesis de que la
+        // validación se apagaba por ventanas de tiempo. Quedó descartada: 159
+        // corridas entre el 24 y el 28 de octubre, 649 sondeos cubriendo las
+        // 24 horas, **ninguno limpio**. El bloqueo no es de horario sino por
+        // persona, y lo reparte el Ministerio de Salud (lo dijo Aportes en
+        // Línea con su error 9132).
+        //
+        // Pasa a cada hora: sigue sirviendo de centinela por si la lista
+        // cambia, y deja libre la sesión del operador, que admite **una sola
+        // por usuario** y cada media hora atropellaba cualquier trabajo manual
+        // en Simple.
         //
         // No liquida nada —el archivo lleva freno— y el aviso por WhatsApp sale
         // una vez cada 6 h.
         $schedule->command('planilla:vigilar-subtipo4')
-            ->everyThirtyMinutes()
+            ->hourly()
             ->timezone('America/Bogota')
             ->name('vigia-subtipo4')
             ->withoutOverlapping(25)
