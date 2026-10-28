@@ -2317,7 +2317,7 @@ function _cargarCuentasRS(incId) {
             window._rsCuentas    = cuentasConNit;
             window._rsCuentaOpts = cuentasConNit.length
                 ? cuentasConNit.map(c =>
-                    `<option value="${c.id}">${c.banco} · ${c.tipo_cuenta||''} · ****${(c.numero_cuenta||'').slice(-4)} (${c.nombre}) [NIT: ${c.nit}]</option>`
+                    `<option value="${c.id}">${c.banco} · ${c.tipo_cuenta||''} · ****${(c.numero_cuenta||'').slice(-4)} (${c.nombre}) [NIT: ${c.nit}]${c.prestada_de ? ` · cuenta de ${c.prestada_de}` : ''}</option>`
                   ).join('')
                 : '';
 

@@ -1254,6 +1254,13 @@ class IncapacidadController extends Controller
             if (in_array($forma, ['transferencia', 'opi_banco'], true) && ! $request->banco_cuenta_id) {
                 return response()->json(['ok' => false, 'message' => 'Debes seleccionar la cuenta bancaria que recibió el pago.'], 422);
             }
+            if (in_array($forma, ['transferencia', 'opi_banco'], true)
+                && ! $this->cuentaAdmitidaParaIncapacidad($incActualizar, (int) $request->banco_cuenta_id)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'La cuenta seleccionada no es de este aliado ni de la razón social de la incapacidad.',
+                ], 422);
+            }
             if ($forma === 'odi') {
                 if (trim((string) $request->ref_pago_rs) === '') {
                     return response()->json(['ok' => false, 'message' => 'Escribe el número de la ODI.'], 422);
@@ -2108,6 +2115,15 @@ class IncapacidadController extends Controller
                 ->get(['id', 'nombre', 'banco', 'tipo_cuenta', 'numero_cuenta', 'nit']);
         }
 
+        // Prioridad 3: la razón social es prestada (copia de la de otro aliado,
+        // p. ej. WORK AT HOME de Brygar usada en Fecop). La cuenta está registrada
+        // en el aliado dueño y la plata entra ahí: se ofrece esa misma cuenta en
+        // vez de obligar a duplicarla en el aliado que la usa.
+        $origenId = $rsId ? DB::table('razones_sociales')->where('id', $rsId)->value('origen_id') : null;
+        if ($cuentas->isEmpty() && $origenId) {
+            $cuentas = $this->cuentasRazonSocialOrigen((int) $origenId);
+        }
+
         // Las demás cuentas del aliado: de ahí sale el pago al afiliado cuando la
         // incapacidad llegó por ODI, porque a la razón social no le entró nada.
         $cuentasAliado = (clone $base)
@@ -2125,6 +2141,65 @@ class IncapacidadController extends Controller
                 ? ($nit ? "NIT: {$nit}" : "razon_social_id: {$rsId}")
                 : 'sin coincidencia',
         ]);
+    }
+
+    /**
+     * Cuentas activas que la razón social original tiene en su propio aliado,
+     * por NIT o, si no, por razon_social_id. Cada una lleva `prestada_de` con
+     * el nombre de ese aliado para que la pantalla diga de quién es la cuenta.
+     */
+    private function cuentasRazonSocialOrigen(int $origenId): \Illuminate\Support\Collection
+    {
+        $origen = DB::table('razones_sociales')->where('id', $origenId)->first(['id', 'nit', 'aliado_id']);
+        if (! $origen || ! $origen->aliado_id) {
+            return collect();
+        }
+
+        $base = DB::table('banco_cuentas')
+            ->where('aliado_id', $origen->aliado_id)
+            ->where('activo', true);
+
+        $nitOrigen = preg_replace('/[\.\s-]/', '', (string) $origen->nit);
+        $cuentas = $nitOrigen !== ''
+            ? (clone $base)
+                ->whereRaw("REPLACE(REPLACE(REPLACE(nit, '.', ''), ' ', ''), '-', '') = ?", [$nitOrigen])
+                ->orderBy('banco')
+                ->get(['id', 'nombre', 'banco', 'tipo_cuenta', 'numero_cuenta', 'nit'])
+            : collect();
+
+        if ($cuentas->isEmpty()) {
+            $cuentas = (clone $base)
+                ->where('razon_social_id', $origen->id)
+                ->orderBy('banco')
+                ->get(['id', 'nombre', 'banco', 'tipo_cuenta', 'numero_cuenta', 'nit']);
+        }
+
+        $aliadoDueno = DB::table('aliados')->where('id', $origen->aliado_id)->value('nombre');
+
+        return $cuentas->each(fn ($c) => $c->prestada_de = $aliadoDueno);
+    }
+
+    /**
+     * ¿La cuenta puede recibir el pago de esta incapacidad? Sirve cualquier
+     * cuenta del aliado, o la de la razón social original cuando la de la
+     * incapacidad es prestada de otro aliado.
+     */
+    private function cuentaAdmitidaParaIncapacidad(Incapacidad $inc, int $bancoCuentaId): bool
+    {
+        $aliadoCuenta = DB::table('banco_cuentas')->where('id', $bancoCuentaId)->value('aliado_id');
+        if ($aliadoCuenta === null) {
+            return false;
+        }
+        if ((int) $aliadoCuenta === (int) $inc->aliado_id) {
+            return true;
+        }
+
+        $rsId = $inc->razon_social_id
+            ?: ($inc->contrato_id ? DB::table('contratos')->where('id', $inc->contrato_id)->value('razon_social_id') : null);
+        $origenId = $rsId ? DB::table('razones_sociales')->where('id', $rsId)->value('origen_id') : null;
+
+        return $origenId
+            && $this->cuentasRazonSocialOrigen((int) $origenId)->contains(fn ($c) => (int) $c->id === $bancoCuentaId);
     }
 
     // ── GENERAR LINK DE SUBIDA ───────────────────────────────────────────────
