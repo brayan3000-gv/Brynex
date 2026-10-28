@@ -217,8 +217,9 @@ $waUrl = fn($tel) => $tel ? 'https://wa.me/57' . preg_replace('/\D/', '', $tel) 
 </div>
 </form>
 
-{{-- CARDS --}}
-<div class="cards-row">
+{{-- CARDS (con las bandejas, el filtro de gestión va en la misma fila) --}}
+@php $vistaBandejas = request('diseno') !== 'tabla' && $empresas->isNotEmpty(); @endphp
+<div class="cards-row" @if($vistaBandejas) style="grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.35fr);" @endif>
     <div class="card-item c-emp">
         <div class="ci-label">🏢 Empresas</div>
         <div class="ci-val">{{ $totalEmpresas }}</div>
@@ -239,12 +240,31 @@ $waUrl = fn($tel) => $tel ? 'https://wa.me/57' . preg_replace('/\D/', '', $tel) 
         <div class="ci-val" style="color:#dc2626;">{{ $totalPendientes }}</div>
         <div class="ci-sub">Afil + Ind + Plan sin pagar</div>
     </div>
+    @if($vistaBandejas)
+    <form method="GET" action="{{ route('admin.cobros.empresas') }}" class="card-item" style="border-top:3px solid #d97706;display:flex;flex-direction:column;gap:.35rem;">
+        @foreach(request()->except(['semaforo','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+        <div class="ci-label">🔎 Filtrar por gestión</div>
+        <select name="semaforo" onchange="this.form.submit()" style="font-size:.75rem;padding:.28rem .5rem;border:1px solid #cbd5e1;border-radius:7px;background:#fff;">
+            <option value="">Toda gestión</option>
+            <option value="gris" {{ request('semaforo')=='gris'?'selected':'' }}>⬜ Sin llamadas</option>
+            <option value="verde" {{ request('semaforo')=='verde'?'selected':'' }}>🟢 Llamada reciente</option>
+            <option value="amarillo" {{ request('semaforo')=='amarillo'?'selected':'' }}>🟡 3–7 días sin llamar</option>
+            <option value="rojo" {{ request('semaforo')=='rojo'?'selected':'' }}>🔴 Más de 7 días</option>
+        </select>
+        <div class="ci-sub" style="color:#64748b;">
+            Admon <b style="color:#d97706;">${{ number_format($empresas->sum('admon_pend'), 0, '', '.') }}</b>
+            · Mora <b style="color:#b45309;">${{ number_format($empresas->sum('mora_estimada'), 0, '', '.') }}</b>
+        </div>
+    </form>
+    @endif
 </div>
 
 
 
 {{-- TABLA --}}
-@if($empresas->isEmpty())
+@if($vistaBandejas)
+@include('admin.cobros._empresas_bandejas')
+@elseif($empresas->isEmpty())
 <div style="text-align:center;padding:3rem;color:#94a3b8;background:#fff;border-radius:12px;border:1px solid #e2e8f0;">
     <div style="font-size:3rem;">🏢</div>
     <div style="font-size:1rem;font-weight:600;margin-top:.5rem;">Sin empresas para este período</div>
