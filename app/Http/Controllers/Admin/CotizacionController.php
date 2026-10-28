@@ -512,13 +512,9 @@ class CotizacionController extends Controller
             ->orderBy('tipo_modalidad')
             ->get();
 
-        $planesPermitidos = DB::table('modalidad_planes')
-            ->get()
-            ->groupBy('tipo_modalidad_id')
-            ->map(fn($rows) => $rows->pluck('plan_id')->values())
-            ->toArray();
-
         $aliadoId = session('aliado_id_activo');
+
+        $planesPermitidos = \App\Models\TipoModalidad::planesPermitidos((int) $aliadoId);
         $cfg = \App\Models\ConfiguracionAliado::paraAliado($aliadoId);
 
         return [

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class TipoModalidad extends BaseModel
 {
@@ -188,9 +189,56 @@ class TipoModalidad extends BaseModel
         self::ID_CAJA_30 => [2],
         self::ID_CAJA_14 => [2],
         self::ID_PENSION_30 => [2],
-        // Fecop (6) la vende desde el 28-oct-2026.
+        // Fecop (6) la vende desde el 28-oct-2026, solo en los planes que
+        // limita PLANES_POR_ALIADO.
         self::ID_EXTRAS => [2, 6],
     ];
+
+    /**
+     * Planes que un aliado vende de una modalidad, cuando no son todos los de
+     * `modalidad_planes`. Por código de plan.
+     *
+     * Fecop vende de Tipo E - Extras solo caja de 30 días y pensión: las que
+     * se corrigen por API. Los de salud se corrigen por el portal y en Fecop
+     * todavía no se ha podido subir ese plano (28-oct-2026).
+     */
+    const PLANES_POR_ALIADO = [
+        self::ID_EXTRAS => [
+            6 => ['SOLO_CCF_30', 'SOLO_AFP'],
+        ],
+    ];
+
+    /**
+     * Mapa tipo_modalidad_id => [plan_id] que ofrece el formulario al aliado:
+     * los de `modalidad_planes`, recortados por PLANES_POR_ALIADO.
+     */
+    public static function planesPermitidos(int $aliadoId): array
+    {
+        $mapa = DB::table('modalidad_planes')
+            ->get()
+            ->groupBy('tipo_modalidad_id')
+            ->map(fn ($rows) => $rows->pluck('plan_id')->values())
+            ->toArray();
+
+        foreach (self::PLANES_POR_ALIADO as $modalidadId => $porAliado) {
+            if (! isset($porAliado[$aliadoId], $mapa[$modalidadId])) {
+                continue;
+            }
+
+            $ids = DB::table('planes_contrato')
+                ->whereIn('codigo', $porAliado[$aliadoId])
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            $mapa[$modalidadId] = collect($mapa[$modalidadId])
+                ->filter(fn ($id) => in_array((int) $id, $ids, true))
+                ->values()
+                ->all();
+        }
+
+        return $mapa;
+    }
 
     /**
      * Tiempo Parcial Independiente: cotizante 76 de la Resolución 1529 de 2026.

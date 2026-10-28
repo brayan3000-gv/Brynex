@@ -1457,11 +1457,7 @@ class ContratoController extends Controller
         $modalidadesMesActual = Contrato::MODALIDADES_MES_ACTUAL;
 
         // Mapa: tipo_modalidad_id => [plan_ids] — para filtrado dinámico en el JS
-        $planesPermitidos = DB::table('modalidad_planes')
-            ->get()
-            ->groupBy('tipo_modalidad_id')
-            ->map(fn ($rows) => $rows->pluck('plan_id')->values())
-            ->toArray();
+        $planesPermitidos = TipoModalidad::planesPermitidos((int) $alidoId);
 
         // ── RS ya ocupadas por contratos VIGENTES de este cliente ──────
         // Se excluye el contrato actual (en edición) para no bloquear su propia RS.
