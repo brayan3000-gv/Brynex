@@ -184,6 +184,7 @@ $sortClassC = function ($col, $cs, $cd) {
 .tbl-cob .c-gris    { color:#cbd5e1; }
 .tbl-cob .c-fecha   { text-align:center; font-size:.72rem; color:#64748b; }
 .tbl-cob .c-mod     { text-align:center; font-size:.72rem; font-weight:700; }
+.tbl-cob .c-mod-ing { font-size:.66rem; font-weight:500; color:#64748b; white-space:nowrap; }
 .tbl-cob .c-admon   { font-size:.68rem; font-weight:600; color:#64748b; }
 .tbl-cob .th-sub    { font-size:.85em; font-weight:500; opacity:.7; }
 .tbl-cob .c-total   { font-weight:700; color:#1e40af; }
@@ -551,9 +552,7 @@ $sortClassC = function ($col, $cs, $cd) {
             </select>
         </form>
     </th>
-    {{-- Ingreso --}}
-    <th><a href="{{ $sortUrlC('ingreso', $sort, $dir) }}"  class="{{ $sortClassC('ingreso', $sort, $dir) }}">Ingreso</a></th>
-    {{-- Tipo Modalidad --}}
+    {{-- Tipo Modalidad y, debajo, el ingreso (sigue ordenando por fecha) --}}
     <th>
         <form method="GET" action="{{ route('admin.cobros.index') }}" style="margin:0">
             @foreach(request()->except(['tipo_modal','page']) as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
@@ -566,6 +565,7 @@ $sortClassC = function ($col, $cs, $cd) {
                 @endforeach
             </select>
         </form>
+        <a href="{{ $sortUrlC('ingreso', $sort, $dir) }}" class="th-sub {{ $sortClassC('ingreso', $sort, $dir) }}">Ingreso</a>
     </th>
     <th>
         <form method="GET" action="{{ route('admin.cobros.index') }}" style="margin:0">
@@ -730,11 +730,11 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
         @endif
     </td>
 
-    {{-- Ingreso --}}
-    <td class="c-fecha">{{ $fIng }}</td>
-
-    {{-- Tipo Modalidad --}}
-    <td class="c-mod" title="{{ $tipoNom }}">{{ $tipoMod }}</td>
+    {{-- Tipo Modalidad y, debajo, el ingreso --}}
+    <td class="c-mod" title="{{ $tipoNom }}">
+        {{ $tipoMod }}
+        <div class="c-mod-ing">{{ $fIng }}</div>
+    </td>
 
     {{-- TIPO (AFIL / PLAN / RETIRO / RETIRO INF. / ret.) --}}
     <td class="c-ctr">
@@ -950,7 +950,7 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
 </tbody>
 <tfoot>
 <tr style="background:#0f172a;color:#fff;font-weight:700;">
-    <td colspan="{{ $soloInd === 'todos' ? 9 : 8 }}" style="padding:.5rem .55rem;font-size:.72rem;">TOTALES ({{ $contratos->count() }} registros)</td>
+    <td colspan="{{ $soloInd === 'todos' ? 8 : 7 }}" style="padding:.5rem .55rem;font-size:.72rem;">TOTALES ({{ $contratos->count() }} registros)</td>
     <td class="num-col" style="color:#34d399;padding:.5rem .55rem;">
         {{ $fmt($contratos->sum(fn($c) => $c->total_estimado + ($c->mora_estimada ?? 0))) }}
         @if($soloInd !== 'todos')
