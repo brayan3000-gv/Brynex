@@ -59,6 +59,22 @@ class PautaSemanal extends Command
             $desde = now()->subDays($dias);
             $entrega = MetaAdsService::entregaPorAnuncio($config, $desde->toDateString(), now()->toDateString());
 
+            // No se pudo LEER Meta: no es lo mismo que «no gastó». Del 12 al 26-oct-2026, con el
+            // token vencido, este corte avisó tres lunes seguidos «pauta detenida, casi siempre es
+            // el pago» mientras #90 traía 31 conversaciones.
+            if ($entrega === null) {
+                $texto = 'No pude leer la pauta en Meta, así que esta semana no se juzgó ninguna creatividad. '
+                    .'Revisa el token de anuncios (pauta:token).';
+                $this->error('   '.$texto);
+                if (! $this->option('no-enviar')) {
+                    foreach ($this->destinatarios() as $numero) {
+                        $alertas->enviarA($numero, 'Corte de pauta', $texto);
+                    }
+                }
+
+                continue;
+            }
+
             // Si la cuenta entera no entregó nada, el problema no es de ninguna creatividad y no
             // hay nada que juzgar. Sin esta puerta el corte leería ceros como fracasos y apagaría
             // las que funcionan: el 27-sep-2026 Meta cortó la entrega por falta de pago

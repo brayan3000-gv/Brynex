@@ -59,10 +59,18 @@ class PautaTokenVigilar extends Command
     {
         $nombre = Aliado::find($config->aliado_id)?->nombre ?? "aliado {$config->aliado_id}";
 
-        $datos = Http::get('https://graph.facebook.com/v23.0/debug_token', [
+        $resp = Http::get('https://graph.facebook.com/v23.0/debug_token', [
             'input_token'  => $config->access_token_ads,
             'access_token' => $config->access_token_ads,
-        ])->json('data');
+        ]);
+        $datos = $resp->json('data');
+
+        // Un token vencido no puede depurarse a sí mismo: Meta responde con error 190 en vez de
+        // is_valid=false. Eso se leía como «¿sin red?» y del 11 al 28-oct-2026 el aviso se calló
+        // 17 días seguidos justo con el token muerto. El 190 es la respuesta, no un corte.
+        if ((int) $resp->json('error.code') === 190) {
+            $datos = ['is_valid' => false];
+        }
 
         // Sin respuesta utilizable no se puede concluir nada: puede ser un corte de red, y
         // gritar "token vencido" por eso sería peor que callarse.
@@ -76,7 +84,7 @@ class PautaTokenVigilar extends Command
             $alertas->enviarUnaVez(
                 "pauta_token_invalido_{$config->aliado_id}",
                 'Pauta ' . $nombre,
-                'El token de anuncios ya no sirve: no se están creando anuncios nuevos. Hay que regenerarlo con pauta:token.',
+                'El token de anuncios ya no sirve: no se están creando anuncios nuevos (la lectura sigue con el token de la página). Hay que regenerarlo con pauta:token.',
                 60 * 12
             );
             return;

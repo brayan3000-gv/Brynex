@@ -8,6 +8,7 @@ use App\Models\Publicacion;
 use App\Models\WhatsappConversacion;
 use App\Services\AlertaOperativaService;
 use Illuminate\Console\Command;
+use App\Services\RedesSociales\MetaAdsService;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -62,7 +63,7 @@ class InformePauta extends Command
             return;
         }
 
-        $token = $config->access_token_ads;
+        $token = MetaAdsService::tokenLectura($config);
         $filas = [];
 
         foreach ($piezas as $pieza) {

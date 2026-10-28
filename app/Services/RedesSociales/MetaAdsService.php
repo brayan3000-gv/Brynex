@@ -76,7 +76,36 @@ class MetaAdsService
      */
     private static function tokenAds(PautaConfig $config, RedSocialConfig $fb): string
     {
-        return $config->access_token_ads ?: (string) $fb->access_token;
+        // Si el token propio venció, se sigue con el de la página: lee, sincroniza y pausa igual
+        // (tiene ads_read y ads_management y no vence). Lo único que no puede es CREAR anuncios,
+        // y ahí Meta responde «Certificación necesaria», que dice qué pasa. Antes el vencido se
+        // seguía usando: del 11 al 28-oct-2026 el sistema no vio la pauta y nadie se enteró.
+        if ($config->access_token_ads && self::tokenSirve($config->access_token_ads)) {
+            return $config->access_token_ads;
+        }
+
+        return (string) $fb->access_token;
+    }
+
+    /** Token para LEER la pauta (gasto, entrega, informes): el propio si sirve, si no el de la página. */
+    public static function tokenLectura(PautaConfig $config): ?string
+    {
+        $token = self::tokenAds($config, RedSocialConfig::paraAliado($config->aliado_id, 'facebook'));
+
+        return $token !== '' ? $token : null;
+    }
+
+    /**
+     * ¿El token responde? Solo un 190 (vencido o revocado) cuenta como que no sirve: un corte de
+     * red no puede tumbar al token bueno. Se recuerda media hora para no consultar en cada llamada.
+     */
+    public static function tokenSirve(string $token): bool
+    {
+        return Cache::remember('meta_token_sirve_'.sha1($token), now()->addMinutes(30), function () use ($token) {
+            $r = Http::timeout(15)->get(self::BASE_URL.'/me', ['access_token' => $token, 'fields' => 'id']);
+
+            return (int) $r->json('error.code') !== 190;
+        });
     }
 
     /**
@@ -922,20 +951,27 @@ class MetaAdsService
      *
      * @return array<string, array{gasto: float, impresiones: int, clics: int}>
      */
-    public static function entregaPorAnuncio(PautaConfig $config, string $desde, string $hasta): array
+    public static function entregaPorAnuncio(PautaConfig $config, string $desde, string $hasta): ?array
     {
-        if (! $config->ad_account_id || ! $config->access_token_ads) {
-            return [];
+        $token = self::tokenLectura($config);
+        if (! $config->ad_account_id || ! $token) {
+            return null;
         }
 
         $cuenta = 'act_'.ltrim($config->ad_account_id, 'act_');
         $resp = Http::timeout(60)->get(self::BASE_URL."/{$cuenta}/insights", [
-            'access_token' => $config->access_token_ads,
+            'access_token' => $token,
             'level' => 'ad',
             'limit' => 200,
             'time_range' => json_encode(['since' => $desde, 'until' => $hasta]),
             'fields' => 'ad_id,spend,impressions,clicks',
         ]);
+
+        // null = no se pudo leer, que NO es lo mismo que «no gastó nada». Confundirlos hizo que el
+        // corte semanal avisara «pauta detenida, casi siempre es el pago» con el token vencido.
+        if (! $resp->successful() || $resp->json('error')) {
+            return null;
+        }
 
         $porAnuncio = [];
         foreach (($resp->json('data') ?? []) as $fila) {
@@ -1244,7 +1280,8 @@ class MetaAdsService
      */
     public static function gastoDelMes(PautaConfig $config): ?float
     {
-        if (! $config->ad_account_id || ! $config->access_token_ads) {
+        $token = self::tokenLectura($config);
+        if (! $config->ad_account_id || ! $token) {
             return null;
         }
 
@@ -1253,11 +1290,11 @@ class MetaAdsService
         return Cache::remember(
             "pauta_gasto_mes_{$config->aliado_id}",
             now()->addMinutes(15),
-            function () use ($config) {
+            function () use ($config, $token) {
                 $cuenta = 'act_'.ltrim($config->ad_account_id, 'act_');
 
                 $resp = Http::get(self::BASE_URL."/{$cuenta}/insights", [
-                    'access_token' => $config->access_token_ads,
+                    'access_token' => $token,
                     'fields' => 'spend',
                     'level' => 'account',
                     'time_range' => json_encode([
