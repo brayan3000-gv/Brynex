@@ -686,6 +686,19 @@ class PlanoPilaTxtService
             }
         }
 
+        // Tipo E - Extras, planes de caja: el día de pensión sale con retiro
+        // únicamente de pensión (RET = P); riesgos y caja no se retiran. La
+        // fecha cae en el período de cotización —fuera de él es eo.val.2.429—
+        // y en la línea A de la corrección va en blanco, como todas las fechas
+        // de novedades. Ver PilaCotizanteDosPasos::PLANES_RETIRO_PENSION.
+        if (! empty($c['retiroPension'])) {
+            $ret = 'P';
+
+            if ($tipoCorr !== 'A' && $periodoLiq !== '') {
+                $fechaRet = $periodoLiq.'-01';
+            }
+        }
+
         // La licencia remunerada del mes completo (plan "Solo EPS" de Tipo E -
         // X1) va con sus fechas, y tienen que caer en el **período de
         // cotización** —el mes vencido, campo 15 del registro tipo 1—, no en el
