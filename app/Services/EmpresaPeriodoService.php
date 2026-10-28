@@ -124,13 +124,17 @@ class EmpresaPeriodoService
             ->whereIn('tipo', ['planilla', 'afiliacion'])
             ->whereIn('cedula', $contratos->pluck('cedula'))
             ->whereNotNull('contrato_id')
-            ->where('numero_factura', '>', 0)
+            // El número 0 es el retiro informativo, salvo en afiliación: la que
+            // se registra en $0 (traslado de razón social, retirado sin cobro)
+            // también lleva número 0 y sí es la factura del mes.
+            ->where(fn ($q) => $q->where('numero_factura', '>', 0)->orWhere('tipo', 'afiliacion'))
             ->get()
             ->keyBy('contrato_id');
 
         $facturasRetiro0 = Factura::where('aliado_id', $aliadoId)
             ->whereIn('contrato_id', $contratos->pluck('id'))
             ->where('numero_factura', 0)
+            ->where('tipo', 'planilla')   // la afiliación en $0 no es un retiro
             ->whereNull('deleted_at')
             ->get()
             ->keyBy('contrato_id');
@@ -266,6 +270,21 @@ class EmpresaPeriodoService
             }
 
             $c->factura_exist = $facturasExistentes->get($c->id);
+
+            // Retirado que nunca facturó la afiliación de su mes de ingreso,
+            // aunque sí la planilla del retiro (Laura Giraldo, 55919: pagó el
+            // día de retiro, $12.600, y no los $52.800 de afiliación). La fila
+            // pasa a ser esa afiliación pendiente, como la cuenta Cobros.
+            $c->afil_sin_cobrar = false;
+            if ($c->estado === 'retirado' && $c->fecha_ingreso
+                && (int) $c->fecha_ingreso->month === $mes && (int) $c->fecha_ingreso->year === $anio
+                && ($c->factura_exist === null || $c->factura_exist->tipo !== 'afiliacion')) {
+                $afil = \App\Services\AfiliacionPendienteService::deContrato($c);
+                if ($afil && $afil['mes'] === $mes && $afil['anio'] === $anio) {
+                    $c->afil_sin_cobrar = true;
+                    $c->factura_exist = null;
+                }
+            }
 
             $facturaRetiro0 = $facturasRetiro0->get($c->id);
             $c->factura_retiro_0 = $facturaRetiro0;
@@ -538,8 +557,9 @@ class EmpresaPeriodoService
                     ? (int) (($c->administracion ?? 0) + ($c->admon_asesor ?? 0))
                     : 0;
                 $vTot = $vSS + $vAdm + $vIva;
-            } elseif ($esRetirado && ! $factRetiroPreview) {
-                // Retirado sin retiro facturable — ya fue cobrado o es retiro masivo → 0
+            } elseif ($esRetirado && ! $factRetiroPreview && ! ($esAfil && ($c->afil_sin_cobrar ?? false))) {
+                // Retirado sin retiro facturable — ya fue cobrado o es retiro masivo → 0.
+                // Salvo si debe la afiliación de este mes: esa sí se cobra (rama $esAfil).
                 $vEps = $vArl = $vPen = $vCaja = $vIva = $vAdm = $vSS = 0;
                 $vTot = 0;
             } elseif ($esArlModalidad && ! $esAfil) {

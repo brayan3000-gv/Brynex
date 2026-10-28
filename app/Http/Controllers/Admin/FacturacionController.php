@@ -620,6 +620,7 @@ class FacturacionController extends Controller
         $facturasRetiro0 = Factura::where('aliado_id', $aliadoId)
             ->whereIn('contrato_id', $contratoIds)
             ->where('numero_factura', 0)
+            ->where('tipo', 'planilla')   // la afiliación en $0 no es un retiro
             ->get(['id', 'contrato_id'])
             ->keyBy('contrato_id');
 
@@ -686,12 +687,15 @@ class FacturacionController extends Controller
                 continue;
             }
 
-            if ($facturasDup->contains(fn ($f) => $f->tipo === $tipoSolicitado)) {
+            // Retirado con la afiliación del mes sin cobrar: lo que se crea es la
+            // afiliación, así que la planilla de su retiro no la duplica.
+            $tipoC = $this->_afiliacionDeRetirado($contrato, $mes, $anio) ? 'afiliacion' : $tipoSolicitado;
+            if ($facturasDup->contains(fn ($f) => $f->tipo === $tipoC)) {
                 $duplicados[] = [
                     'contrato_id' => $contrato->id,
                     'cedula' => $contrato->cedula,
                     'nombre' => $nombre,
-                    'motivo' => "Ya existe una {$tipoSolicitado} para {$mes}/{$anio} en este contrato",
+                    'motivo' => "Ya existe una {$tipoC} para {$mes}/{$anio} en este contrato",
                 ];
             }
         }
@@ -1000,6 +1004,7 @@ class FacturacionController extends Controller
             ->where('aliado_id', $aliadoId)
             ->whereIn('contrato_id', $contratosCargados->pluck('id')->all())
             ->where('numero_factura', 0)
+            ->where('tipo', 'planilla')   // la afiliación en $0 no es un retiro
             ->whereNull('deleted_at')
             ->get()
             ->keyBy('contrato_id');
@@ -1735,13 +1740,14 @@ class FacturacionController extends Controller
                     continue; // saltar la lógica normal del foreach
                 }
 
-                $yaExiste = $facturasDup->contains(fn ($f) => $f->tipo === $tipoSolicitado);
+                $tipoDup = $afilRetirado ? 'afiliacion' : $tipoSolicitado;
+                $yaExiste = $facturasDup->contains(fn ($f) => $f->tipo === $tipoDup);
 
                 if ($yaExiste) {
                     $omitidos[] = [
                         'cedula' => $contrato->cedula,
                         'nombre' => $contrato->cliente?->primer_nombre.' '.$contrato->cliente?->primer_apellido,
-                        'motivo' => "Ya existe una {$tipoSolicitado} para {$mes}/{$anio} en este contrato",
+                        'motivo' => "Ya existe una {$tipoDup} para {$mes}/{$anio} en este contrato",
                     ];
                     $contratosPendientes--; // descontar aunque se omita
 
@@ -3265,7 +3271,8 @@ class FacturacionController extends Controller
                             alidoId: $aliadoId
                         );
                     }
-                } elseif (((int) $f->numero_factura === 0 || ($f->plano && $f->plano->fecha_ret)) && $f->contrato_id) {
+                } elseif ((((int) $f->numero_factura === 0 && $f->tipo !== 'afiliacion') || ($f->plano && $f->plano->fecha_ret)) && $f->contrato_id) {
+                    // (La afiliación en $0 también lleva número 0, pero anularla no deshace ningún retiro.)
                     // CASO 2: Factura de retiro original (numero_factura=0) \u2192 revertir contrato a vigente
                     $contratoRetiro = \App\Models\Contrato::find($f->contrato_id);
                     if ($contratoRetiro && $contratoRetiro->estado === 'retirado') {
@@ -4852,7 +4859,9 @@ class FacturacionController extends Controller
             ->whereIn('tipo', ['planilla', 'afiliacion'])
             ->whereIn('cedula', $contratos->pluck('cedula'))
             ->whereNotNull('contrato_id')
-            ->where('numero_factura', '>', 0)  // excluir factura temporal de retiro (número 0)
+            // Excluir la factura temporal de retiro (número 0); la afiliación en $0
+            // también lleva número 0 y sí cuenta como factura del mes.
+            ->where(fn ($q) => $q->where('numero_factura', '>', 0)->orWhere('tipo', 'afiliacion'))
             ->get()
             ->keyBy('contrato_id');
 
@@ -4860,6 +4869,7 @@ class FacturacionController extends Controller
         $facturasRetiro0 = Factura::where('aliado_id', $aliadoId)
             ->whereIn('contrato_id', $contratos->pluck('id'))
             ->where('numero_factura', 0)
+            ->where('tipo', 'planilla')   // la afiliación en $0 no es un retiro
             ->whereNull('deleted_at')
             ->get()
             ->keyBy('contrato_id');

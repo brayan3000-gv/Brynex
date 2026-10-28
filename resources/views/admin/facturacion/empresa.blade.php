@@ -447,14 +447,14 @@ $lblEstado = 'Sin factura';
 $esAfilDeRetirado = $esRetirado && $esAfil;
 if ($esAfilDeRetirado && !$fact) {
     $lblEstado = 'AFIL. PEND.';
-} elseif ($esAfilDeRetirado && $fact && (int)$fact->numero_factura !== 0) {
+} elseif ($esAfilDeRetirado && $fact && ((int)$fact->numero_factura !== 0 || $fact->tipo === 'afiliacion')) {
     $lblEstado = $estadoLabel($fact->estado);
 } elseif ($esRetirado) {
     $lblEstado = 'RETIRO';
 } elseif ($tieneRetiroPendiente) {
     $lblEstado = 'Retiro Pd.';
 } elseif ($fact) {
-    if ((int)$fact->numero_factura === 0) {
+    if (((int)$fact->numero_factura === 0 && $fact->tipo !== 'afiliacion')) {
         $lblEstado = 'RETIRO';
     } else {
         $lblEstado = $estadoLabel($fact->estado);
@@ -608,7 +608,7 @@ if ($esAfilDeRetirado && !$fact) {
                   title="Ingresó este mes — afiliación pendiente de facturar">
                 AFIL. PEND.
             </span>
-        @elseif($esAfilDeRetirado && $fact && (int)$fact->numero_factura !== 0)
+        @elseif($esAfilDeRetirado && $fact && ((int)$fact->numero_factura !== 0 || $fact->tipo === 'afiliacion'))
             {{-- Afiliación del mes de ingreso ya facturada, aunque después se retirara --}}
             @php $coloresAfil = $estadoBg($fact->estado); @endphp
             <span style="display:inline-block;padding:.16rem .5rem;border-radius:20px;font-size:.63rem;font-weight:700;background:{{ $coloresAfil[0] }};color:{{ $coloresAfil[1] }}"
@@ -641,7 +641,7 @@ if ($esAfilDeRetirado && !$fact) {
             </span>
         @elseif($fact)
         @php $colores=$estadoBg($fact->estado); @endphp
-        @if((int)$fact->numero_factura === 0)
+        @if(((int)$fact->numero_factura === 0 && $fact->tipo !== 'afiliacion'))
         <span style="display:inline-block;padding:.16rem .5rem;border-radius:20px;font-size:.63rem;font-weight:800;background:#fee2e2;color:#dc2626">
             RETIRO
         </span>
@@ -681,7 +681,7 @@ if ($esAfilDeRetirado && !$fact) {
         @endif
     </td>
     <td style="text-align:center;white-space:nowrap;">
-        @if($fact && (int)$fact->numero_factura !== 0)
+        @if($fact && ((int)$fact->numero_factura !== 0 || $fact->tipo === 'afiliacion'))
             <button onclick="abrirRecibo('{{ route('admin.facturacion.recibo',$fact->id) }}?modal=1')"
                class="btn-sm" style="background:#eff6ff;color:#1d4ed8;" title="Ver recibo">🖨</button>
         @else
