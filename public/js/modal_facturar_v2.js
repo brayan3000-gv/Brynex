@@ -1601,11 +1601,37 @@ const MF = (function () {
         }
     }
 
-    // ── Estado (pagada/pre_factura/prestamo) ──────────────────────
+    // ── Estado (pagada/prestamo) ──────────────────────────────────
+    // "Anticipo" no es un estado: abre el modal de anticipo y el selector
+    // vuelve a lo que tenía (reemplazó al botón "Registrar Anticipo").
+    let _estadoPrevio = 'pagada';
+    // El préstamo lo propuso el modal: sigue a lo que falta mientras nadie lo
+    // escriba a mano (pagan una parte en efectivo y el resto queda debiendo).
+    let _prestAuto = false;
+    function prestamoTocado() {
+        _prestAuto = false;
+        recalc();
+    }
     function onEstado(skip) {
-        const estado = el('mf-estado')?.value;
+        const sel = el('mf-estado');
+        const estado = sel?.value;
+        if (estado === 'anticipo') {
+            if (sel) sel.value = _estadoPrevio;
+            _abrirAnticipo();
+            return;
+        }
+        _estadoPrevio = estado || 'pagada';
+
+        // Préstamo: su casilla va al lado del efectivo, del mismo tamaño. Al
+        // activarlo se propone como préstamo lo que falta por pagar; si una
+        // parte entra en efectivo, se escribe ahí y se baja el préstamo.
+        const esPrest = estado === 'prestamo';
         const w = el('mf-prest-wrap');
-        if (w) w.style.display = estado === 'prestamo' ? 'flex' : 'none';
+        const g = el('mf-pago-grid');
+        if (w) w.style.display = esPrest ? 'block' : 'none';
+        if (g) g.style.gridTemplateColumns = esPrest ? 'minmax(0,1fr) minmax(0,1fr)' : 'minmax(0,1fr)';
+        if (!esPrest) setVal('mf-prestamo', '0');
+        _prestAuto = esPrest && parse(el('mf-prestamo')?.value) === 0;
         if (!skip) recalc();
     }
 
@@ -1699,9 +1725,12 @@ const MF = (function () {
         // Pendiente = totalBruto - saldoFavor - anticipos - consignaciones - efectivo - prestamo
         const consigs       = [...document.querySelectorAll('.mf-consig-monto')].reduce((s, e) => s + parse(e.value), 0);
         const efect         = parse(el('mf-efectivo')?.value);
-        const prest         = parse(el('mf-prestamo')?.value);
         const totalAnticipo = (window.MF_ANT ? MF_ANT.totalSeleccionado() : 0);
         const favorUsado    = favorAplicado();
+        if (_prestAuto && el('mf-estado')?.value === 'prestamo') {
+            setVal('mf-prestamo', String(Math.max(0, totalBruto - favorUsado - totalAnticipo - consigs - efect)));
+        }
+        const prest         = parse(el('mf-prestamo')?.value);
 
         // Calcular diferencia REAL (puede ser negativa = saldo a favor por exceso de pago)
         const diferencia    = totalBruto - favorUsado - totalAnticipo - consigs - efect - prest;
@@ -2262,7 +2291,8 @@ const MF = (function () {
         // El backend también lo rechaza; aquí se avisa sin gastar el viaje.
         if (el('mf-estado')?.value === 'prestamo' && prest <= 0) {
             alert('🚫 Marcaste la factura como PRÉSTAMO pero el campo Préstamo quedó en $0.\n\n'
-                + 'Escribe cuánto queda debiendo el cliente, o cambia el estado a Pagada.');
+                + 'Escribe en Préstamo cuánto queda debiendo el cliente (lo que pagó va en Efectivo), '
+                + 'o cambia el tipo a Facturar.');
             el('mf-prestamo')?.focus();
             return;
         }
@@ -2566,7 +2596,7 @@ const MF = (function () {
         ANT.abrir(contratoId, empresaId, onRegistrado);
     }
 
-    return { init, abrir, cerrar, detectarTipo, actualizarTipo, cambiarPeriodo, onEstado, recalc, distRecalc, addConsig, guardar, toggleRetiro, onRetiroFecha, setMora, onMoraInput, seleccionarSegundoContrato, _abrirAnticipo, actualizarValoresDesdeAlpine, toggleFavor, abrirCorreccion, cerrarCorreccion, guardarCorreccion, facturarSiguiente, setAfilCero };
+    return { init, abrir, cerrar, detectarTipo, actualizarTipo, cambiarPeriodo, onEstado, recalc, distRecalc, addConsig, guardar, toggleRetiro, onRetiroFecha, setMora, onMoraInput, seleccionarSegundoContrato, _abrirAnticipo, actualizarValoresDesdeAlpine, toggleFavor, abrirCorreccion, cerrarCorreccion, guardarCorreccion, facturarSiguiente, setAfilCero, prestamoTocado };
 
 })();
 

@@ -574,8 +574,9 @@
                 <span class="mf-ctrl-label">Tipo</span>
                 <select id="mf-estado" class="mf-ctrl-sel" onchange="MF.onEstado()">
                     <option value="pagada">🧳 Facturar</option>
-                    <option value="pre_factura">📋 Pre-factura</option>
                     <option value="prestamo">💳 Préstamo</option>
+                    {{-- No es un estado: abre el modal de anticipo y el selector vuelve a lo que estaba --}}
+                    <option value="anticipo">💰 Anticipo</option>
                 </select>
             </div>
             <div class="mf-ctrl-group">
@@ -818,8 +819,9 @@
                 <div id="mf-consig-list"></div>
             </div>
 
-            {{-- Efectivo --}}
-            <div class="mf-pagos-sec" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #3b82f6;border-radius:10px;margin-top:.4rem;">
+            {{-- Efectivo y, al lado, el préstamo (solo si estado=prestamo) --}}
+            <div id="mf-pago-grid" style="display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem;margin-top:.4rem;">
+            <div class="mf-pagos-sec" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1.5px solid #3b82f6;border-radius:10px;">
                 <div class="mf-pagos-sec-hdr" style="color:#1d4ed8;font-weight:800;font-size:.82rem;">💵 Efectivo</div>
                 <div style="padding:.4rem .7rem .55rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
                     <span style="font-size:.78rem;font-weight:700;color:#1e40af;">Valor en efectivo</span>
@@ -830,14 +832,17 @@
                 </div>
             </div>
 
-            {{-- Préstamo (solo si estado=prestamo) --}}
-            <div id="mf-prest-wrap" style="display:none;" class="mf-pagos-sec">
-                <div class="mf-pagos-sec-hdr"><span>💳 Valor Préstamo</span></div>
-                <div class="mf-pago-row">
-                    <span class="mf-pago-lbl">Monto del préstamo</span>
-                    <input type="text" id="mf-prestamo" value="0" oninput="MF.recalc()" class="mf-pago-inp">
+            <div id="mf-prest-wrap" class="mf-pagos-sec" style="display:none;background:linear-gradient(135deg,#faf5ff,#ede9fe);border:1.5px solid #8b5cf6;border-radius:10px;">
+                <div class="mf-pagos-sec-hdr" style="color:#6d28d9;font-weight:800;font-size:.82rem;">💳 Préstamo</div>
+                <div style="padding:.4rem .7rem .55rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem;">
+                    <span style="font-size:.78rem;font-weight:700;color:#5b21b6;">Queda debiendo</span>
+                    <input type="text" id="mf-prestamo" value="0" oninput="MF.prestamoTocado()"
+                        style="width:130px;padding:.45rem .65rem;border:2px solid #8b5cf6;border-radius:8px;
+                               font-size:1rem;font-weight:800;color:#6d28d9;text-align:right;
+                               background:#fff;outline:none;box-shadow:0 2px 8px rgba(139,92,246,.15);">
                 </div>
             </div>
+            </div>{{-- /mf-pago-grid --}}
 
             {{-- Retiro --}}
             <div id="mf-retiro-card">
@@ -912,15 +917,9 @@
     </div>{{-- /mf-body --}}
 
     {{-- ── FOOTER ── --}}
-    <div id="mf-footer" style="justify-content:space-between">
+    <div id="mf-footer" style="justify-content:flex-end">
 
-        {{-- Izquierda: registrar anticipo --}}
-        <button type="button" class="mf-btn-anticipo" id="mf-btn-anticipo"
-                onclick="MF._abrirAnticipo()">
-            💰 Registrar Anticipo
-        </button>
-
-        {{-- Derecha: cancelar + facturar --}}
+        {{-- El anticipo se registra desde el selector Tipo --}}
         <div style="display:flex;gap:.5rem;align-items:center">
             <button type="button" class="mf-btn-cancel" onclick="MF.cerrar()">Cancelar</button>
             <button type="button" class="mf-btn-guardar" id="mf-btn-guardar" onclick="MF.guardar()">🧾 Facturar ahora</button>
