@@ -188,7 +188,8 @@ class TipoModalidad extends BaseModel
         self::ID_CAJA_30 => [2],
         self::ID_CAJA_14 => [2],
         self::ID_PENSION_30 => [2],
-        self::ID_EXTRAS => [2],
+        // Fecop (6) la vende desde el 28-oct-2026.
+        self::ID_EXTRAS => [2, 6],
     ];
 
     /**
