@@ -184,7 +184,8 @@ $sortClassC = function ($col, $cs, $cd) {
 .tbl-cob .c-gris    { color:#cbd5e1; }
 .tbl-cob .c-fecha   { text-align:center; font-size:.72rem; color:#64748b; }
 .tbl-cob .c-mod     { text-align:center; font-size:.72rem; font-weight:700; }
-.tbl-cob .c-admon   { font-weight:600; color:#0f172a; }
+.tbl-cob .c-admon   { font-size:.68rem; font-weight:600; color:#64748b; }
+.tbl-cob .th-sub    { font-size:.85em; font-weight:500; opacity:.7; }
 .tbl-cob .c-total   { font-weight:700; color:#1e40af; }
 .tbl-cob .c-pill    { display:inline-block; padding:.15rem .45rem; border-radius:20px; font-size:.62rem; font-weight:700; }
 .tbl-cob .c-emp     { background:#dbeafe; color:#1e40af; max-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; vertical-align:middle; }
@@ -595,11 +596,11 @@ $sortClassC = function ($col, $cs, $cd) {
         </form>
     </th>
     @endif
-    {{-- Admon: solo cuando tipo = individual --}}
-    @if($soloInd !== 'todos')
-    <th class="num-col" title="Administración (solo empresa)">Admon</th>
-    @endif
-    <th class="num-col" title="Total estimado (SS+Admon+Seguro)">Total</th>
+    {{-- Total y, debajo, la admon (esta solo cuando tipo = individual) --}}
+    <th class="num-col" title="Total estimado (SS+Admon+Seguro){{ $soloInd !== 'todos' ? ' y, debajo, la administración' : '' }}">
+        Total
+        @if($soloInd !== 'todos')<div class="th-sub">Admon</div>@endif
+    </th>
     {{-- Mora estimada al cliente --}}
     @if($soloPend !== 'pagado')
     <th class="num-col" title="Mora estimada por pago tardío" style="color:#fbbf24;">⚠️ Mora</th>
@@ -775,16 +776,12 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
     </td>
     @endif
 
-    {{-- Admon: solo cuando tipo = individual --}}
-    @if($soloInd !== 'todos')
-    <td class="num-col c-admon">
-        {{ $fmt($c->administracion ?? 0) }}
-    </td>
-    @endif
-
-    {{-- Total estimado --}}
+    {{-- Total estimado y, debajo, la admon (solo cuando tipo = individual) --}}
     <td class="num-col c-total" title="SS: {{ $fmt($c->v_ss) }}">
         {{ $fmt($c->total_estimado + ($c->mora_estimada ?? 0)) }}
+        @if($soloInd !== 'todos')
+        <div class="c-admon">{{ $fmt($c->administracion ?? 0) }}</div>
+        @endif
         {{-- Afiliación de un mes anterior que nunca se cobró: va aparte del cobro del mes --}}
         @if(($c->afil_atrasada ?? null) && !($c->es_afil_atrasada_sola ?? false))
         <div style="font-size:.6rem;font-weight:700;color:#b45309;white-space:nowrap;"
@@ -953,9 +950,13 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
 </tbody>
 <tfoot>
 <tr style="background:#0f172a;color:#fff;font-weight:700;">
-    <td colspan="8" style="padding:.5rem .55rem;font-size:.72rem;">TOTALES ({{ $contratos->count() }} registros)</td>
-    <td class="num-col" style="color:#34d399;padding:.5rem .55rem;">{{ $fmt($totalAdmon) }}</td>
-    <td class="num-col" style="color:#34d399;padding:.5rem .55rem;">{{ $fmt($contratos->sum(fn($c) => $c->total_estimado + ($c->mora_estimada ?? 0))) }}</td>
+    <td colspan="{{ $soloInd === 'todos' ? 9 : 8 }}" style="padding:.5rem .55rem;font-size:.72rem;">TOTALES ({{ $contratos->count() }} registros)</td>
+    <td class="num-col" style="color:#34d399;padding:.5rem .55rem;">
+        {{ $fmt($contratos->sum(fn($c) => $c->total_estimado + ($c->mora_estimada ?? 0))) }}
+        @if($soloInd !== 'todos')
+        <div style="font-size:.68rem;font-weight:600;color:#a7f3d0;">{{ $fmt($totalAdmon) }}</div>
+        @endif
+    </td>
     <td class="num-col" style="color:#fbbf24;padding:.5rem .55rem;" title="Mora total estimada">
         {{ $contratos->sum('mora_estimada') > 0 ? $fmt($contratos->sum('mora_estimada')) : '—' }}
     </td>
