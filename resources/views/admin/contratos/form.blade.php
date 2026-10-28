@@ -992,7 +992,8 @@
     </div>
     {{-- Nota informativa --}}
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:0.5rem 0.75rem;margin-bottom:0.85rem;font-size:0.73rem;color:#0369a1;display:flex;align-items:center;gap:0.4rem;">
-      &#128270; Los radicados se gestionan desde el módulo <strong>Afiliaciones</strong>. Aquí solo se visualizan.
+      @php $puedeSubirPdfRad = auth()->user()?->can('radicados.ver') && auth()->user()?->can('radicados.gestionar'); @endphp
+      &#128270; Los radicados se gestionan desde el módulo <strong>Afiliaciones</strong>.@if($puedeSubirPdfRad) Aquí se puede adjuntar el documento que falte (p. ej. una inclusión en la caja).@else Aquí solo se visualizan.@endif
     </div>
     @if($contrato->radicados->count() === 0)
     <p style="text-align:center;color:#94a3b8;font-size:0.82rem;padding:1.5rem 0;">No hay radicados generados para este contrato.</p>
@@ -1052,7 +1053,10 @@
         {{ $rad->observacion }}
       </div>
       @endif
-      {{-- Documento subido desde Afiliaciones --}}
+      {{-- Documento del radicado: el mismo que se sube desde Afiliaciones. Si
+           falta, se puede adjuntar aquí sin ir al módulo (trámites de la caja
+           como inclusiones, que llegan meses después de la afiliación). --}}
+      <div id="rad-doc-{{ $rad->id }}">
       @if($rad->ruta_pdf)
       <div style="margin-top:0.45rem;">
         <a href="{{ route('admin.radicados.pdf.download', $rad->id) }}" target="_blank"
@@ -1061,8 +1065,20 @@
         </a>
       </div>
       @else
-      <div style="margin-top:0.35rem;font-size:0.68rem;color:#94a3b8;font-style:italic;">Sin documento adjunto</div>
+      <div style="margin-top:0.35rem;display:flex;align-items:center;gap:0.55rem;flex-wrap:wrap;">
+        <span style="font-size:0.68rem;color:#94a3b8;font-style:italic;">Sin documento adjunto</span>
+        @if($puedeSubirPdfRad)
+        <input type="file" accept="application/pdf,.pdf" id="rad-pdf-{{ $rad->id }}" style="display:none;"
+               onchange="radSubirPdf({{ $rad->id }}, this)">
+        <button type="button" onclick="document.getElementById('rad-pdf-{{ $rad->id }}').click()"
+                style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.28rem 0.7rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;color:#15803d;font-size:0.72rem;font-weight:600;cursor:pointer;">
+          &#128206; Cargar PDF
+        </button>
+        <span id="rad-pdf-msg-{{ $rad->id }}" style="font-size:0.68rem;"></span>
+        @endif
+      </div>
       @endif
+      </div>
     </div>
     @endforeach
     @endif
@@ -1072,6 +1088,43 @@
     </div>
   </div>
 </div>
+@endif
+
+@if($esEdicion)
+<script>
+// Sube el PDF de un radicado con el mismo endpoint de Afiliaciones y deja el
+// enlace puesto sin recargar: el formulario del contrato puede tener cambios
+// sin guardar.
+async function radSubirPdf(id, input) {
+  const archivo = input.files?.[0];
+  if (!archivo) return;
+  const msg = document.getElementById('rad-pdf-msg-' + id);
+  if (archivo.size > 3 * 1024 * 1024) {
+    msg.style.color = '#dc2626'; msg.textContent = 'El PDF pasa de 3 MB.';
+    input.value = ''; return;
+  }
+  msg.style.color = '#64748b'; msg.textContent = 'Subiendo…';
+  const fd = new FormData();
+  fd.append('pdf', archivo);
+  try {
+    const r = await fetch(`/admin/radicados/${id}/pdf`, {
+      method: 'POST', body: fd,
+      headers: { 'Accept': 'application/json',
+                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) throw new Error(data.message || 'No se pudo subir el PDF.');
+    document.getElementById('rad-doc-' + id).innerHTML =
+      `<div style="margin-top:0.45rem;"><a href="/admin/radicados/${id}/pdf/descargar" target="_blank"
+         style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.28rem 0.7rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;font-size:0.72rem;font-weight:600;text-decoration:none;">
+         &#128196; Ver Documento</a>
+       <span style="font-size:0.68rem;color:#15803d;margin-left:0.4rem;">✓ Cargado</span></div>`;
+  } catch (e) {
+    msg.style.color = '#dc2626'; msg.textContent = e.message;
+    input.value = '';
+  }
+}
+</script>
 @endif
 
 {{-- MODAL RETIRO --}}
