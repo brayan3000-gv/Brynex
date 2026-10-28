@@ -11,8 +11,7 @@ use App\Models\TipoModalidad;
  * las tres que reemplazó: Solo Caja 30 (-5), Solo Caja 14 (-10) y Solo
  * Pensión 30 (-11), inactivas pero con contratos y planos vivos.
  *
- *   paso 1 — planilla E con un día de pensión y nada más. Se paga. En los
- *            planes de caja ese día va con retiro de pensión (RET = P).
+ *   paso 1 — planilla E con un día de pensión y nada más. Se paga.
  *   paso 2 — planilla N que corrige la anterior y anexa lo que se vendió.
  *
  * El paso 1 es **casi el mismo archivo para todos**; lo que cambia es qué sube
@@ -123,15 +122,6 @@ class PilaCotizanteDosPasos
     private const IBC_CAJA_MINIMO = 100;
 
     /**
-     * Planes cuyo día de pensión va con retiro de pensión (RET = P).
-     *
-     * Solo los de caja: en Solo AFP la corrección sube la pensión al mes, y
-     * retirarlo de pensión en el paso 1 se contradice con eso. Los de salud se
-     * corrigen por el portal y no se tocan.
-     */
-    private const PLANES_RETIRO_PENSION = ['SOLO_CCF_14', 'SOLO_CCF_30'];
-
-    /**
      * @param  array  $res  Resultado de PilaCotizanteCalculator (rama general)
      * @param  object  $p  Fila del plano; `paso_e1` (1|2) decide qué planilla
      * @param  int  $ibcFull  Salario completo
@@ -207,14 +197,6 @@ class PilaCotizanteDosPasos
         $res['forzarIng'] = true;
         $res['novedades'] = array_merge($res['novedades'] ?? [], ['VACLR' => 'L']);
         $res['horasLaboradas'] = 0;
-
-        // En los planes de caja el día de pensión sale además con retiro de
-        // pensión, y SOLO de pensión: RET = P ("el aportante retira al
-        // cotizante únicamente del Sistema General de Pensiones", Res. 2421 de
-        // 2020). Riesgos y caja no se retiran. Va en las dos planillas, porque
-        // la línea A de la corrección repite lo que se pagó en el paso 1 y en
-        // la C la pensión sigue en su día. Decisión del dueño, 28-oct-2026.
-        $res['retiroPension'] = in_array($plan, self::PLANES_RETIRO_PENSION, true);
 
         // ── Caja: depende de si la corrección va a tocarla ───────────────
         //
