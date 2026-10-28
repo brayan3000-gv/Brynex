@@ -808,7 +808,11 @@ class FacturacionController extends Controller
             'indep_modo' => 'nullable|in:normal,ambos',
             // Retiro desde empresa: incluir administración aunque sean ≤3 días
             'incluir_admon_retiro_corto' => 'boolean',
+            // Afiliación sin cobrar de un retirado registrada en $0 (corrección,
+            // no se le cobró nada al cliente). Ver _afiliacionDeRetirado().
+            'afiliacion_en_cero' => 'boolean',
         ]);
+        $afilEnCero = ! empty($validated['afiliacion_en_cero']);
 
         // Decodificar manual_ss_por_contrato si viene como JSON string
         $manualSsPorContrato = [];
@@ -971,6 +975,21 @@ class FacturacionController extends Controller
             ->get()
             ->keyBy('id');
 
+        // La afiliación en $0 solo vale para el retirado que la debe de este mes.
+        if ($afilEnCero) {
+            $noAplica = $contratosCargados
+                ->reject(fn ($c) => $this->_afiliacionDeRetirado($c, $mes, $anio))
+                ->keys();
+            if ($validated['tipo'] !== 'afiliacion' || $noAplica->isNotEmpty()) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'No se generó ninguna factura. La afiliación en $0 solo aplica a un contrato '
+                        ."retirado cuya afiliación de {$mes}/{$anio} nunca se facturó"
+                        .($noAplica->isNotEmpty() ? ' (no aplica al contrato '.$noAplica->implode(', ').').' : '.'),
+                ], 422);
+            }
+        }
+
         // ── Retiros facturables del lote (contrato retirado con factura 0) ──
         // Se precargan ANTES del costeo: lo que cuesta un contrato retirado es
         // su retiro, no un mes completo. Costearlo como mes completo infla su
@@ -1014,7 +1033,9 @@ class FacturacionController extends Controller
                 continue;
             }
 
-            $esIndAct = (bool) ($c->paga_mes_actual ?? false);
+            // Retirado con la afiliación de este mes sin cobrar: solo esa afiliación.
+            $afilRetirado = $this->_afiliacionDeRetirado($c, $mes, $anio);
+            $esIndAct = ! $afilRetirado && (bool) ($c->paga_mes_actual ?? false);
             $esArl = (int) ($c->tipo_modalidad_id) === 15;
             $tipoForzado = $validated['tipo'];
             $esMesIng = false;
@@ -1140,6 +1161,10 @@ class FacturacionController extends Controller
 
                 $afiliacion = ($esAfiliacion || $esIndActPrimerMes) ? (int) ($c->costo_afiliacion ?? 0) : 0;
                 $seguro = (int) ($c->seguro ?? 0);
+                if ($afilEnCero && $afilRetirado) {
+                    $afiliacion = 0;
+                    $seguro = 0;
+                }
                 $admon = ($esAfiliacion && ! $esIndActPrimerMes) ? 0 : intval($c->administracion ?? 0);
                 $adminAsesor = ($esAfiliacion && ! $esIndActPrimerMes) ? 0 : intval($c->admon_asesor ?? 0);
                 // Los "otros" son del lote y se reparten después de conocer lo que
@@ -1394,8 +1419,12 @@ class FacturacionController extends Controller
                 $facturasDup = $facturasDuplicadasLote->get($contrato->id) ?: collect();
                 $tipoSolicitado = $validated['tipo'];
 
+                // Retirado con la afiliación de este mes sin cobrar: solo esa
+                // afiliación, nunca planilla (ver _afiliacionDeRetirado).
+                $afilRetirado = $this->_afiliacionDeRetirado($contrato, $mes, $anio);
+
                 // ─── Detectar modo "ambos" (afiliación + planilla) ────────
-                $indepModo = $validated['indep_modo'] ?? 'normal';
+                $indepModo = $afilRetirado ? 'normal' : ($validated['indep_modo'] ?? 'normal');
                 $esIndVenc = (int) ($contrato->tipo_modalidad_id) === 10
                     && ! (bool) ($contrato->paga_mes_actual ?? false);
                 $esIndActCheck = (bool) ($contrato->paga_mes_actual ?? false);
@@ -1721,7 +1750,7 @@ class FacturacionController extends Controller
 
                 // Mes actual: cobra afiliación + planilla el mismo mes de ingreso.
                 // Sin el flag: solo afiliación el primer mes.
-                $esIndAct = (bool) ($contrato->paga_mes_actual ?? false);
+                $esIndAct = ! $afilRetirado && (bool) ($contrato->paga_mes_actual ?? false);
                 $tipoForzado = $validated['tipo'];
 
                 if ($contrato->fecha_ingreso) {
@@ -1854,6 +1883,10 @@ class FacturacionController extends Controller
                     ? (int) ($contrato->costo_afiliacion ?? 0)
                     : 0;
                 $seguro = (int) ($contrato->seguro ?? 0);
+                if ($afilEnCero && $afilRetirado) {
+                    $afiliacion = 0;
+                    $seguro = 0;
+                }
 
                 // Admon:
                 // • Afiliación pura (I VENC, empresa): sin admon mensual
@@ -2087,7 +2120,9 @@ class FacturacionController extends Controller
                     'empresa_id' => $validated['empresa_id'] ?? null,
                     'razon_social_id' => $contrato->razon_social_id,
                     'usuario_id' => Auth::id(),
-                    'observacion' => $validated['observacion'] ?? null,
+                    'observacion' => ($afilEnCero && $afilRetirado)
+                        ? trim('Afiliación en $0: contrato retirado sin cobro (corrección). '.($validated['observacion'] ?? ''))
+                        : ($validated['observacion'] ?? null),
                     // Mora al cliente (no es ingreso — se reporta separado en SS)
                     'mora' => $moraCliente,
                     // Anticipo: pagos previos registrados antes de la factura.
@@ -3442,8 +3477,16 @@ class FacturacionController extends Controller
         $mes = (int) ($request->mes ?? now()->month);
         $anio = (int) ($request->anio ?? now()->year);
 
+        // Retirado con la afiliación sin facturar: su mes de ingreso queda abierto
+        // para esa afiliación aunque ya tenga la planilla en $0 del retiro.
+        $afilRetirado = $contrato->estado === 'retirado'
+            ? \App\Services\AfiliacionPendienteService::deContrato($contrato)
+            : null;
+        $esMesAfilRetirado = $afilRetirado
+            && $afilRetirado['mes'] === $mes && $afilRetirado['anio'] === $anio;
+
         // Verificar si ya existe factura pagada o pre-factura para este periodo
-        $existe = Factura::where('aliado_id', $aliadoId)
+        $existe = ! $esMesAfilRetirado && Factura::where('aliado_id', $aliadoId)
             ->where('contrato_id', $contratoId)
             ->where('mes', $mes)
             ->where('anio', $anio)
@@ -3515,14 +3558,21 @@ class FacturacionController extends Controller
             'gap_anio' => $gap['anio'] ?? null,
             'gap_mensaje' => $gap['mensaje'] ?? null,
             // Primer mes sin facturar, para que el modal abra ahí y no en el mes en curso
-            'pendiente' => $this->primerMesPendiente($aliadoId, $contrato),
+            'pendiente' => $afilRetirado
+                ? ['mes' => $afilRetirado['mes'], 'anio' => $afilRetirado['anio']]
+                : $this->primerMesPendiente($aliadoId, $contrato),
+            // Este mes solo admite la afiliación sin cobrar de un retirado (ver
+            // _afiliacionDeRetirado): el modal la ofrece cobrada o en $0.
+            'afiliacion_retirado' => $esMesAfilRetirado ? $afilRetirado : null,
             // El mes escogido ya está pagado y es el del pago en curso: en vez de
             // saltar al siguiente, el modal ofrece corregir su planilla.
             'correccion' => $existe
                 ? \App\Services\CorreccionPlanillaService::oferta($aliadoId, $contrato->id, $mes, $anio)
                 : null,
             // El contrato ya se retiró antes del período que cubre esta factura.
-            'retiro_bloquea' => $this->_facturaDespuesDelRetiro($contrato, $targetMes, $targetAnio),
+            'retiro_bloquea' => $esMesAfilRetirado
+                ? null
+                : $this->_facturaDespuesDelRetiro($contrato, $targetMes, $targetAnio),
             // Préstamos pendientes del cliente
             'tiene_prestamo_pendiente' => $prestamosPendientes->isNotEmpty(),
             'prestamos_pendientes' => $prestamosPendientes,
@@ -3654,10 +3704,38 @@ class FacturacionController extends Controller
             ->sum('valor');
     }
 
+    /** @var array<int, array|false> por contrato_id: afiliación sin cobrar de un retirado (false = no debe) */
+    private array $afilRetiradoCache = [];
+
+    /**
+     * Contrato retirado cuya afiliación de este mes nunca se facturó. Lo único
+     * que dejó fue el retiro informativo (la planilla en $0), y por eso el mes
+     * figuraba como facturado: el modal saltaba al siguiente y armaba un mes
+     * completo para alguien que ya no cotiza, mientras Cobros seguía pidiendo
+     * la afiliación (Yesenia Vidal y el 56504, oct-2026). Ese mes queda abierto
+     * solo para la afiliación, que se puede cobrar o registrar en $0.
+     */
+    private function _afiliacionDeRetirado(Contrato $contrato, int $mes, int $anio): ?array
+    {
+        if ($contrato->estado !== 'retirado') {
+            return null;
+        }
+
+        $afil = $this->afilRetiradoCache[$contrato->id]
+            ??= \App\Services\AfiliacionPendienteService::deContrato($contrato) ?? false;
+
+        return $afil && $afil['mes'] === $mes && $afil['anio'] === $anio ? $afil : null;
+    }
+
     private function _esAfiliacionDelMesDeIngreso(Contrato $contrato, int $mes, int $anio): bool
     {
         if (! $contrato->fecha_ingreso) {
             return false;
+        }
+        // Retirado con la afiliación sin facturar: aunque cotice el mes en curso,
+        // lo que queda por cobrar de ese mes es solo la afiliación.
+        if ($this->_afiliacionDeRetirado($contrato, $mes, $anio)) {
+            return true;
         }
         // Quien cotiza el mes en curso cobra afiliación y planilla juntas: ese caso
         // sí es el flujo normal, no una afiliación pura.

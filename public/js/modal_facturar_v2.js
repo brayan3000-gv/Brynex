@@ -84,6 +84,10 @@ const MF = (function () {
     // lo recien escrito) ni la suma por contratos del modo masivo. Se limpia al abrir
     // el modal y al cambiar de periodo, donde la mora es otra y hay que recalcularla.
     let _moraTocada = false;
+    // Retirado con la afiliación de este mes sin facturar (ver mesPagado): el mes
+    // solo admite esa afiliación, cobrada o en $0. _afilCero es la opción escogida.
+    let _afilRetirado = null;      // null | { mes, anio, periodo, valor }
+    let _afilCero = true;
     // ── Estado 2do contrato (multi-contrato desde form individual) ──
     let _segundoContrato = null;   // null | { id, razon_social, ss, admon, seguro, afiliacion, iva, mora, total }
 
@@ -490,6 +494,8 @@ const MF = (function () {
         setVal('mf-otros-admon', '0');
         setVal('mf-estado', 'pagada');
         setVal('mf-nplano', '');
+        _afilRetirado = null;
+        _afilCero = true;
         // Mora: pre-cargar desde _cfg si viene del servidor, si no 0
         _moraTocada = false;
         _mora = parseInt(_cfg.moraCalculada || 0);
@@ -846,6 +852,7 @@ const MF = (function () {
             const url = _cfg.urlMesPagado + '/' + _cfg.contratoId + '?mes=' + mes + '&anio=' + anio;
             const data = await fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': _cfg.csrf } }).then(r => r.json());
             if (seq !== _verifSeq) return;
+            _afilRetirado = data.afiliacion_retirado || null;
             const avisoMes = el('mf-aviso-mes');
             const saldoPanel = el('mf-saldos-panel');
             const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -1082,6 +1089,39 @@ const MF = (function () {
 
         const avisoEl   = el('mf-aviso-tipo');
         const indepOpts = el('mf-indep-opts');
+
+        // ── Retirado que nunca facturó su afiliación ─────────────────────────
+        // Lo único que dejó fue el retiro informativo en $0, así que de este mes
+        // solo queda la afiliación: se cobra o se registra en $0 cuando al
+        // cliente no se le cobró nada. Sin esto el modal tomaba el mes por
+        // facturado y armaba el siguiente completo.
+        if (_afilRetirado) {
+            const costo = _cfg.costoAfiliacion || 0;
+            _totalAfil = _afilCero ? 0 : costo;
+            if (avisoEl) {
+                avisoEl.style.display = 'block';
+                avisoEl.style.background = '#fff7ed';
+                avisoEl.style.borderColor = '#fdba74';
+                avisoEl.style.color = '#9a3412';
+                avisoEl.innerHTML = '🚪 <strong>Contrato retirado</strong> — de ' + _afilRetirado.periodo
+                    + ' solo queda la <strong>AFILIACIÓN</strong>, que nunca se facturó (el retiro dejó la planilla en $0).'
+                    + '<div style="display:flex;flex-wrap:wrap;gap:.9rem;margin-top:.4rem;font-weight:600;">'
+                    + '<label style="cursor:pointer;"><input type="radio" name="mf_afil_cero" value="1"' + (_afilCero ? ' checked' : '')
+                    + ' onchange="MF.setAfilCero(true)"> Registrar en $0 (no se le cobró)</label>'
+                    + '<label style="cursor:pointer;"><input type="radio" name="mf_afil_cero" value="0"' + (_afilCero ? '' : ' checked')
+                    + ' onchange="MF.setAfilCero(false)"> Cobrarla (' + fmt(costo) + ')</label>'
+                    + '</div>';
+            }
+            if (indepOpts) indepOpts.style.display = 'none';
+            _setTipo('afiliacion');
+            if (_afilCero) {
+                ['mf-dist-asesor', 'mf-dist-retiro', 'mf-dist-encargado', 'mf-dist-admon'].forEach(id => setVal(id, 0));
+                const distSec = el('mf-dist-sec');
+                if (distSec) distSec.style.display = 'none';
+            }
+            return;
+        }
+        _totalAfil = _cfg.costoAfiliacion || 0;
 
         // ── GESTIÓN ARL (id=15): SIEMPRE afiliación ─────────────────────────
         // Los contratos ARL nunca pagan planilla SS. Cada mes es afiliación pura.
@@ -1422,6 +1462,12 @@ const MF = (function () {
     // oferta en pantalla no se factura, así que no aplican.
     function _ocultarAvisosDelMes() {
         ['mf-aviso-gap', 'mf-aviso-tipo-plan'].forEach(id => { const n = el(id); if (n) n.style.display = 'none'; });
+    }
+
+    // Afiliación de un retirado: registrarla en $0 o cobrarla (ver detectarTipo).
+    function setAfilCero(cero) {
+        _afilCero = !!cero;
+        detectarTipo();
     }
 
     function facturarSiguiente() {
@@ -2318,6 +2364,8 @@ const MF = (function () {
                 dist_utilidad: distUtilidad,
                 // Modo independiente: 'normal' | 'ambos' (afiliación + planilla en mismo recibo)
                 indep_modo: document.querySelector('input[name="mf_indep_modo"]:checked')?.value || 'normal',
+                // Afiliación de un retirado registrada en $0 (ver detectarTipo)
+                afiliacion_en_cero: !!(_afilRetirado && _afilCero && tipoActual === 'afiliacion'),
             };
 
 
@@ -2518,7 +2566,7 @@ const MF = (function () {
         ANT.abrir(contratoId, empresaId, onRegistrado);
     }
 
-    return { init, abrir, cerrar, detectarTipo, actualizarTipo, cambiarPeriodo, onEstado, recalc, distRecalc, addConsig, guardar, toggleRetiro, onRetiroFecha, setMora, onMoraInput, seleccionarSegundoContrato, _abrirAnticipo, actualizarValoresDesdeAlpine, toggleFavor, abrirCorreccion, cerrarCorreccion, guardarCorreccion, facturarSiguiente };
+    return { init, abrir, cerrar, detectarTipo, actualizarTipo, cambiarPeriodo, onEstado, recalc, distRecalc, addConsig, guardar, toggleRetiro, onRetiroFecha, setMora, onMoraInput, seleccionarSegundoContrato, _abrirAnticipo, actualizarValoresDesdeAlpine, toggleFavor, abrirCorreccion, cerrarCorreccion, guardarCorreccion, facturarSiguiente, setAfilCero };
 
 })();
 
