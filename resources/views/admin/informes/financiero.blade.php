@@ -2031,7 +2031,7 @@ function verMovimientosBanco(bancoId, label) {
                     const icon    = (e.empresa_id&&e.empresa_id>0)?'🏢':'👤';
                     const refTxt  = e.referencia?'<span style="font-size:.74rem;color:#475569;">'+e.referencia+'</span>':'<span style="color:#cbd5e1;">—</span>';
                     const factTxt = e.numero_factura?'<span style="background:#dbeafe;color:#1e40af;border-radius:5px;padding:.1rem .35rem;font-size:.7rem;font-weight:700;">#'+e.numero_factura+'</span>':'<span style="color:#94a3b8;">—</span>';
-                    const tipoLbl = (e.tipo&&e.tipo!=='cliente')?'<span style="font-size:.6rem;color:#94a3b8;display:block;">'+e.tipo+'</span>':'';
+                    const tipoLbl = (e.tipo&&e.tipo!=='cliente')?'<span style="font-size:.6rem;color:#94a3b8;display:block;">'+e.tipo.replace(/_/g,' ')+'</span>':'';
                     
                     let estadoLbl = '';
                     if (e.confirmado) {

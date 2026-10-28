@@ -2450,6 +2450,7 @@ class InformeController extends Controller
                 cs.confirmado,
                 cs.no_aparece,
                 cs.anticipo_id,
+                cs.incapacidad_id,
                 f.numero_factura,
                 f.empresa_id,
                 CASE
@@ -2478,7 +2479,19 @@ class InformeController extends Controller
                 ->keyBy('id');
         }
 
-        $entradas = $entradas->map(function ($c) use ($anticipos) {
+        // Pagos de incapacidades de otros aliados que entraron a la cuenta de una
+        // razón social prestada: el pagador es ese aliado y su afiliado.
+        $incAliados = collect();
+        $idsIncAliado = $entradas->where('tipo', 'incapacidad_aliado')->pluck('incapacidad_id')->filter()->unique();
+        if ($idsIncAliado->isNotEmpty()) {
+            $incAliados = DB::table('incapacidades AS i')
+                ->leftJoin('aliados AS a', 'a.id', '=', 'i.aliado_id')
+                ->whereIn('i.id', $idsIncAliado->all())
+                ->get(['i.id', 'i.cedula_usuario', 'a.nombre AS aliado'])
+                ->keyBy('id');
+        }
+
+        $entradas = $entradas->map(function ($c) use ($anticipos, $incAliados) {
             $c->confirmado = (int)$c->confirmado;
             $c->no_aparece = (int)$c->no_aparece;
 
@@ -2494,6 +2507,9 @@ class InformeController extends Controller
                         $pagador = trim($ant->cliente->nombre_completo);
                     }
                 }
+            }
+            if (($c->tipo ?? '') === 'incapacidad_aliado' && ($inc = $incAliados[$c->incapacidad_id] ?? null)) {
+                $pagador = "Incapacidad aliado {$inc->aliado} · CC {$inc->cedula_usuario}";
             }
             $c->nombre_cliente = $pagador ?: '—';
             return $c;

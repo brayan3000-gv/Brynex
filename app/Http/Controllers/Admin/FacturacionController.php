@@ -4352,9 +4352,7 @@ class FacturacionController extends Controller
     {
         $aliadoId = session('aliado_id_activo');
 
-        $consig = \App\Models\Consignacion::where('id', $id)
-            ->where('aliado_id', $aliadoId)
-            ->firstOrFail();
+        $consig = $this->consignacionVisible($id, (int) $aliadoId);
 
         $request->validate([
             'imagen' => 'required|file|mimes:jpg,jpeg,png,pdf,webp|max:8192', // 8 MB
@@ -4385,13 +4383,27 @@ class FacturacionController extends Controller
      * GET /admin/facturacion/consignacion/{id}/imagen
      * Redirige a la URL pública de la imagen de soporte.
      */
+    /**
+     * Consignación del aliado activo, o la que su incapacidad dejó en la cuenta
+     * de la razón social prestada de otro aliado (tipo incapacidad_aliado): esa
+     * es de Brygar, pero la foto la sube quien registró el pago.
+     */
+    private function consignacionVisible(int $id, int $aliadoId): \App\Models\Consignacion
+    {
+        return \App\Models\Consignacion::where('id', $id)
+            ->where(function ($q) use ($aliadoId) {
+                $q->where('aliado_id', $aliadoId)
+                    ->orWhere(fn ($o) => $o->where('tipo', 'incapacidad_aliado')
+                        ->whereIn('incapacidad_id', DB::table('incapacidades')->where('aliado_id', $aliadoId)->select('id')));
+            })
+            ->firstOrFail();
+    }
+
     public function verImagenConsignacion(int $id)
     {
         $aliadoId = session('aliado_id_activo');
 
-        $consig = \App\Models\Consignacion::where('id', $id)
-            ->where('aliado_id', $aliadoId)
-            ->firstOrFail();
+        $consig = $this->consignacionVisible($id, (int) $aliadoId);
 
         if (! $consig->imagen_path || ! \Storage::disk('public')->exists($consig->imagen_path)) {
             abort(404, 'Imagen no encontrada.');

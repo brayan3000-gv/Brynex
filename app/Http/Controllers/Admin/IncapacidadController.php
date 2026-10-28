@@ -1382,14 +1382,15 @@ class IncapacidadController extends Controller
                     // Solo se crea consignación cuando la plata entró a una cuenta.
                     $consignacionId = null;
                     if ($entraAlBanco) {
+                        $destino = $this->consignacionEnCuentaDe($incActualizar, (int) $request->banco_cuenta_id);
                         $consignacionId = DB::table('consignaciones')->insertGetId([
-                            'aliado_id' => $incActualizar->aliado_id,
+                            'aliado_id' => $destino['aliado_id'],
                             'fecha' => $request->fecha_pago_rs ?? now()->toDateString(),
                             'banco_cuenta_id' => $request->banco_cuenta_id ?: null,
                             'valor' => $request->valor_pago_rs,
                             'referencia' => $request->ref_pago_rs ?: ('Pago incapacidad #'.$incActualizar->id),
-                            'observacion' => $obsAbono,
-                            'tipo' => 'incapacidad',
+                            'observacion' => $destino['prefijo'].$obsAbono,
+                            'tipo' => $destino['tipo'],
                             'incapacidad_id' => $incActualizar->id,
                             'gestion_incapacidad_id' => $gestion->id,
                             'confirmado' => 0,
@@ -2202,6 +2203,33 @@ class IncapacidadController extends Controller
             && $this->cuentasRazonSocialOrigen((int) $origenId)->contains(fn ($c) => (int) $c->id === $bancoCuentaId);
     }
 
+    /**
+     * A qué aliado pertenece la consignación de un pago que entró a esta cuenta.
+     *
+     * La consignación es del banco, no de la incapacidad: si la cuenta es de la
+     * razón social prestada (WORK AT HOME de Brygar usada en Fecop), la plata
+     * entró a la cuenta de Brygar y es ahí donde tiene que verse —saldo,
+     * movimientos y conciliación del extracto—, como «incapacidad de aliado».
+     * El abono sigue en el aliado de la incapacidad.
+     *
+     * @return array{aliado_id:int, tipo:string, prefijo:string}
+     */
+    private function consignacionEnCuentaDe(Incapacidad $inc, int $bancoCuentaId): array
+    {
+        $aliadoCuenta = (int) DB::table('banco_cuentas')->where('id', $bancoCuentaId)->value('aliado_id');
+        if (! $aliadoCuenta || $aliadoCuenta === (int) $inc->aliado_id) {
+            return ['aliado_id' => (int) $inc->aliado_id, 'tipo' => 'incapacidad', 'prefijo' => ''];
+        }
+
+        $aliadoInc = DB::table('aliados')->where('id', $inc->aliado_id)->value('nombre');
+
+        return [
+            'aliado_id' => $aliadoCuenta,
+            'tipo' => 'incapacidad_aliado',
+            'prefijo' => "Incapacidad de aliado ({$aliadoInc}) · ",
+        ];
+    }
+
     // ── GENERAR LINK DE SUBIDA ───────────────────────────────────────────────
     public function generarLink(int $id)
     {
@@ -2224,6 +2252,13 @@ class IncapacidadController extends Controller
         $inc = $this->incapacidadDelAliado($id);
         $alidoId = session('aliado_id_activo') ?? Auth::user()->aliado_id;
 
+        if ($request->banco_cuenta_id && ! $this->cuentaAdmitidaParaIncapacidad($inc, (int) $request->banco_cuenta_id)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'La cuenta seleccionada no es de este aliado ni de la razón social de la incapacidad.',
+            ], 422);
+        }
+
         // Guardar imagen si viene (I/O de disco, no participa de la transacción de BD)
         $imagenPath = null;
         if ($request->hasFile('imagen')) {
@@ -2242,17 +2277,18 @@ class IncapacidadController extends Controller
             // Si es entrada_incapacidad → crear también en consignaciones (Canal 5 entrada bancaria)
             $consignacionId = null;
             if ($request->tipo === 'entrada_incapacidad' && $request->banco_cuenta_id) {
+                $destino = $this->consignacionEnCuentaDe($inc, (int) $request->banco_cuenta_id);
                 $consignacionId = DB::table('consignaciones')->insertGetId([
-                    'aliado_id' => $alidoId,
+                    'aliado_id' => $destino['aliado_id'],
                     'incapacidad_id' => $inc->id,
                     'banco_cuenta_id' => $request->banco_cuenta_id,
                     'fecha' => $request->fecha,
                     'valor' => $request->valor,
                     'referencia' => $request->referencia,
                     'confirmado' => true,
-                    'observacion' => $request->observacion,
+                    'observacion' => $destino['prefijo'].$request->observacion,
                     'usuario_id' => Auth::id(),
-                    'tipo' => 'ingreso',
+                    'tipo' => $destino['aliado_id'] === (int) $inc->aliado_id ? 'ingreso' : $destino['tipo'],
                     'created_at' => now(),
                     'updated_at' => now(),
                 ]);
@@ -2679,9 +2715,11 @@ class IncapacidadController extends Controller
             $soportes[(int) $gestionId][] = ['etiqueta' => $etiqueta, 'url' => $url];
         };
 
+        // Sin filtro de aliado: las gestiones ya son del aliado activo, y la
+        // consignación de una razón social prestada queda en el aliado dueño
+        // de la cuenta (incapacidad_aliado).
         DB::table('consignaciones')
             ->whereIn('gestion_incapacidad_id', $ids)
-            ->where('aliado_id', $aliadoId)
             ->whereNotNull('imagen_path')
             ->get(['gestion_incapacidad_id', 'imagen_path', 'valor'])
             ->each(fn ($c) => $agregar($c->gestion_incapacidad_id, 'Consignación $'.number_format((float) $c->valor, 0, ',', '.'), \Storage::url($c->imagen_path)));
