@@ -6,7 +6,7 @@
             "runtimeExecutable": "sh",
             "runtimeArgs": [
                 "-c",
-                "cd public && DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib PHP_CLI_SERVER_WORKERS=4 exec php -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
+                "cd public && DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib PHP_CLI_SERVER_WORKERS=4 exec php -d max_execution_time=300 -S 127.0.0.1:8000 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
             ],
             "port": 8000
         },
@@ -15,7 +15,7 @@
             "runtimeExecutable": "sh",
             "runtimeArgs": [
                 "-c",
-                "cd public && DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib PHP_CLI_SERVER_WORKERS=4 exec php -S 127.0.0.1:8001 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
+                "cd public && DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib PHP_CLI_SERVER_WORKERS=4 exec php -d max_execution_time=300 -S 127.0.0.1:8001 ../vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
             ],
             "port": 8001
         },
