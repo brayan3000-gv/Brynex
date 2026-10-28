@@ -1291,6 +1291,9 @@ class CobrosController extends Controller
                     ->whereIn('cod_empresa', $empresaIds);
             })
             ->whereIn('estado', ['vigente', 'activo'])
+            // Los que ingresan después del mes no son de este período (igual
+            // que Cobros individual y la facturación de la empresa).
+            ->where(fn ($f) => $f->whereNull('fecha_ingreso')->orWhere('fecha_ingreso', '<=', $finMes->toDateString()))
             // `cliente` y `plan` también: sin ellos, el cálculo de cotización de
             // más abajo los pedía uno por uno. En el aliado 7 eran 730 consultas
             // por el plan y 1.360 por el cliente —directas y a través de

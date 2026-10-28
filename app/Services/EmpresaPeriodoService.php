@@ -34,11 +34,17 @@ class EmpresaPeriodoService
     {
         $mesAnterior = $mes === 1 ? 12 : $mes - 1;
         $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
+        $finMes = \Carbon\Carbon::create($anio, $mes, 1)->endOfMonth()->toDateString();
 
         return Contrato::where('aliado_id', $aliadoId)
             ->whereIn('cedula', $cedulasEmpresa)
-            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                $q->whereIn('estado', ['vigente', 'activo'])
+            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior, $finMes) {
+                // Vigentes que ya habían ingresado: quien entra después del mes
+                // no es de este período (MAQUITEXTIL en agosto mostraba a los
+                // que ingresaban en septiembre y octubre, oct-2026). Mismo
+                // criterio que Cobros individual.
+                $q->where(fn ($v) => $v->whereIn('estado', ['vigente', 'activo'])
+                    ->where(fn ($f) => $f->whereNull('fecha_ingreso')->orWhere('fecha_ingreso', '<=', $finMes)))
                     ->orWhere(function ($q2) use ($mes, $anio, $mesAnterior, $anioAnterior) {
                         $q2->where('estado', 'retirado')
                             ->where(function ($q3) use ($mes, $anio, $mesAnterior, $anioAnterior) {
