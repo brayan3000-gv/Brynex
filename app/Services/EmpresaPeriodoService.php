@@ -23,6 +23,13 @@ use Illuminate\Support\Facades\DB;
 class EmpresaPeriodoService
 {
     /**
+     * Hasta cuántos días un retiro es "corto": no se le cobra a la empresa salvo
+     * que tenga prendido `empresas.cobrar_retiros_cortos`. Mismo umbral que ya
+     * usaba la administración del retiro (FacturacionController::_totalRetiroFacturable).
+     */
+    public const DIAS_RETIRO_CORTO = 3;
+
+    /**
      * Los contratos que la planilla del período muestra: los que siguen
      * activos y los retiros que todavía se facturan ese mes.
      *
@@ -195,7 +202,9 @@ class EmpresaPeriodoService
 
         $hoy = now();
 
-        $contratos = $contratos->map(function ($c) use ($mes, $anio, $facturasExistentes, $facturasRetiro0, $saldosTotales, $saldosPrevios, $ivaClientes, $facturasMesAnterior, $inicioMesAnterior, $finMesAnterior) {
+        $cobraRetirosCortos = (bool) $empresa->cobrar_retiros_cortos;
+
+        $contratos = $contratos->map(function ($c) use ($cobraRetirosCortos, $mes, $anio, $facturasExistentes, $facturasRetiro0, $saldosTotales, $saldosPrevios, $ivaClientes, $facturasMesAnterior, $inicioMesAnterior, $finMesAnterior) {
             // ¿Le correspondía factura el mes pasado y no la tiene? Solo cuenta si
             // el contrato ya existía entonces y no se había retirado antes de que
             // empezara el mes; un ingreso de este mes no debe nada de atrás.
@@ -291,6 +300,17 @@ class EmpresaPeriodoService
             $c->tiene_retiro_facturable = $c->estado === 'retirado'
                 && $facturaRetiro0 !== null
                 && $c->factura_exist === null;
+
+            // Retiro de 1 a 3 días en una empresa que no los paga: queda
+            // registrado pero no se cobra (oct-2026). No sale en Pendientes.
+            // Si la fila es una afiliación (Gestión ARL, o el mes de ingreso) no
+            // es un retiro que cobrar y la regla no aplica.
+            $filaEsAfiliacion = (int) $c->tipo_modalidad_id === 15
+                || ($c->fecha_ingreso && (int) $c->fecha_ingreso->month === $mes && (int) $c->fecha_ingreso->year === $anio);
+            $c->retiro_corto_sin_cobro = $c->tiene_retiro_facturable
+                && ! $filaEsAfiliacion
+                && ! $cobraRetirosCortos
+                && (int) ($facturaRetiro0->dias_cotizados ?? 0) <= self::DIAS_RETIRO_CORTO;
 
             $ivaFlag = $ivaClientes[$c->cedula] ?? null;
             $c->tiene_iva = (bool) $ivaFlag;
@@ -453,6 +473,7 @@ class EmpresaPeriodoService
         // Solo existen en algunas ramas; la vista los lee con ?? y deben seguir
         // llegando vacíos cuando la rama no corre.
         $fIngC = $periodoIngresoVista = $periodoActualVista = $vAdmProporcional = $cotizRetPend = null;
+        $vRetiroCortoNoCobrado = 0;
 
         $fact = $c->factura_exist;
         $factRetiroPreview = (! $fact && ($c->tiene_retiro_facturable ?? false)) ? ($c->factura_retiro_0 ?? null) : null;
@@ -544,6 +565,13 @@ class EmpresaPeriodoService
                 // porque aún no se sabe si se cobrará (lo decide el checkbox de admon).
                 $vIva = \App\Services\IvaService::calcular($vAdm, (bool) ($c->tiene_iva ?? false));
                 $vTot = $vSS + $vAdm + $vIva; // total con admon completa (JS ajusta si es proporcional)
+                // Retiro de 1 a 3 días que la empresa no paga: se muestra lo que
+                // habría costado, pero la fila no suma al cobro.
+                if ($c->retiro_corto_sin_cobro ?? false) {
+                    $vRetiroCortoNoCobrado = $vSS + $vAdm + $vIva;
+                    $vEps = $vArl = $vPen = $vCaja = $vIva = $vAdm = $vSS = $vTot = 0;
+                    $vAdmProporcional = 0;
+                }
             } elseif ($tieneRetiroPendiente) {
                 // Retiro pendiente nuevo: calcular SS proporcional con los días del retiro
                 $cotizRetPend = $c->calcularCotizacion($diasRetiroPendiente);
@@ -626,7 +654,12 @@ class EmpresaPeriodoService
         // Costo de afiliación para data-* (lo necesita el modal)
         $vAfiliacion = ($esAfil || $esIndActPrimerMes) ? (int) ($c->costo_afiliacion ?? 0) : 0;
 
+        if ($c->retiro_corto_sin_cobro ?? false) {
+            $vMora = 0;   // lo que no se cobra no causa mora
+        }
+
         return [
+            'vRetiroCortoNoCobrado' => $vRetiroCortoNoCobrado,
             'fact' => $fact,
             'factRetiroPreview' => $factRetiroPreview,
             'yaP' => $yaP,

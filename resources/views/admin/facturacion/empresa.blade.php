@@ -437,6 +437,7 @@ $fechaPredeterminada = \Carbon\Carbon::create((int)($anio ?? now()->year), (int)
     'vParaf' => $vParaf,
     'vMora' => $vMora,
     'vAfiliacion' => $vAfiliacion,
+    'vRetiroCortoNoCobrado' => $vRetiroCortoNoCobrado,
 ] = app(\App\Services\EmpresaPeriodoService::class)->valoresFila($c, (int) $mes, (int) $anio, $moraPorContrato);
 $totEps+=$vEps;$totArl+=$vArl;$totCaja+=$vCaja;$totPen+=$vPen;
 $totAdmon+=$vAdm;$totIva+=$vIva;$totTotal+=$vTot;$totMora+=$vMora;
@@ -449,6 +450,8 @@ if ($esAfilDeRetirado && !$fact) {
     $lblEstado = 'AFIL. PEND.';
 } elseif ($esAfilDeRetirado && $fact && ((int)$fact->numero_factura !== 0 || $fact->tipo === 'afiliacion')) {
     $lblEstado = $estadoLabel($fact->estado);
+} elseif ($c->retiro_corto_sin_cobro ?? false) {
+    $lblEstado = 'RETIRO';
 } elseif ($esRetirado) {
     $lblEstado = 'RETIRO';
 } elseif ($tieneRetiroPendiente) {
@@ -462,7 +465,7 @@ if ($esAfilDeRetirado && !$fact) {
 }
 @endphp
 <tr class="{{ $yaP?'ya-pago':'' }}"
-    data-estado="{{ $fact?->estado ?? 'sin_factura' }}"
+    data-estado="{{ ($c->retiro_corto_sin_cobro ?? false) ? 'no_cobra' : ($fact?->estado ?? 'sin_factura') }}"
     data-estado-label="{{ $lblEstado }}"
     data-cedula="{{ $c->cedula }}"
     data-contrato="{{ $c->id }}"
@@ -621,7 +624,13 @@ if ($esAfilDeRetirado && !$fact) {
                 $tieneRetiroFacturable = $c->tiene_retiro_facturable ?? false;
                 $numeroPlanillaRet = $factRetiro0 ? (\App\Models\Plano::where('factura_id', $factRetiro0->id)->whereNull('deleted_at')->value('numero_planilla') ?? null) : null;
             @endphp
-            @if($tieneRetiroFacturable)
+            @if($c->retiro_corto_sin_cobro ?? false)
+                {{-- Retiro de 1 a 3 días: la empresa no los paga (botón abajo) --}}
+                <span style="display:inline-block;padding:.16rem .5rem;border-radius:20px;font-size:.63rem;font-weight:800;background:#f1f5f9;color:#64748b;"
+                      title="Retiro de {{ (int) ($factRetiro0->dias_cotizados ?? 0) }} día(s): no se cobra en esta empresa (habría sido ${{ number_format($vRetiroCortoNoCobrado, 0, ',', '.') }}). Se activa con «Cobrar retiros de 1 a 3 días», abajo.">
+                    RETIRO
+                </span>
+            @elseif($tieneRetiroFacturable)
                 {{-- Retiro marcado pero no cobrado aún — mostrar en rojo --}}
                 <span style="display:inline-block;padding:.16rem .5rem;border-radius:20px;font-size:.63rem;font-weight:800;background:#fee2e2;color:#dc2626;"
                       title="Retiro marcado — pendiente de facturar{{ $numeroPlanillaRet ? ' ⚠ Planilla pagada: '.$numeroPlanillaRet : '' }}">
@@ -705,8 +714,12 @@ if ($esAfilDeRetirado && !$fact) {
             $selRetiroFacturable = ($factRetiroPreview ?? null) && ! $esAfil;
             $selDiasRetiro       = $selRetiroFacturable ? (int) $factRetiroPreview->dias_cotizados : 0;
             $selFueraLote        = (bool) $fact || ($esRetirado && ! $selRetiroFacturable);
+            $selNoCobra          = (bool) ($c->retiro_corto_sin_cobro ?? false);
 
-            if ($fact) {
+            if ($selNoCobra) {
+                $selColor = '#94a3b8';
+                $selTitle = 'Retiro de 1 a 3 días: no se cobra en esta empresa (actívalo abajo para cobrarlo)';
+            } elseif ($fact) {
                 $selColor = '#64748b';
                 $selTitle = 'Ya facturado — se puede marcar para la cuenta de cobro, no para facturar';
             } elseif ($esAfilDeRetirado) {
@@ -727,6 +740,7 @@ if ($esAfilDeRetirado && !$fact) {
             }
         @endphp
         <input type="checkbox" class="chk-row" value="{{ $c->id }}"
+               @if($selNoCobra) disabled @endif
                @if($selFueraLote) data-fuera-lote="1" @endif
                @if($selRetiroFacturable) data-es-retiro-facturable="1" data-dias-retiro="{{ $selDiasRetiro }}" @endif
                onchange="onCheckChange()"
@@ -846,6 +860,17 @@ document.addEventListener('DOMContentLoaded', function() {
      abajo empujaba las tarjetas de saldo fuera de la pantalla.
 --}}
 <div style="display:flex;align-items:flex-start;gap:.6rem;flex-wrap:wrap;margin-top:.55rem;">
+{{-- Retiros de 1 a 3 días: por defecto no se cobran; algunas empresas sí los pagan --}}
+@php $nRetCortos = $contratos->filter(fn ($x) => ($x->retiro_corto_sin_cobro ?? false))->count(); @endphp
+<label id="lbl-retiros-cortos" title="Por defecto un retiro de 1 a 3 días no se le cobra a la empresa. Actívalo si esta empresa sí los paga."
+    style="background:#fff;border:1.5px solid {{ $empresa->cobrar_retiros_cortos ? '#fdba74' : '#e2e8f0' }};border-radius:10px;padding:.5rem .9rem;display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.75rem;font-weight:700;color:#475569;">
+    <input type="checkbox" id="chk-retiros-cortos" {{ $empresa->cobrar_retiros_cortos ? 'checked' : '' }}
+        onchange="toggleRetirosCortos(this)" style="width:1rem;height:1rem;accent-color:#c2410c;cursor:pointer;">
+    Cobrar retiros de 1 a 3 días
+    @if(! $empresa->cobrar_retiros_cortos && $nRetCortos > 0)
+        <span style="background:#f1f5f9;color:#64748b;border-radius:999px;padding:.1rem .45rem;font-size:.7rem;font-weight:800;" title="Retiros cortos de este mes que no se cobran">{{ $nRetCortos }} sin cobrar</span>
+    @endif
+</label>
 @if($retiradosPreviosTotal > 0)
     <button type="button" onclick="abrirRetirados()" id="btn-retirados"
         style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:.5rem .9rem;display:inline-flex;align-items:center;gap:.5rem;cursor:pointer;font-family:inherit;font-size:.75rem;font-weight:700;color:#475569;transition:background .15s,border-color .15s;"
@@ -1712,6 +1737,26 @@ function ordenarTabla(campo) {
 let _filtroActivo = 'todos';
 
 // ─── Filtro por estado ───────────────────────────────────────────────
+// ─── Cobro de retiros de 1 a 3 días en esta empresa ────────────────
+async function toggleRetirosCortos(chk) {
+    const cobrar = chk.checked;
+    chk.disabled = true;
+    try {
+        const r = await fetch('{{ route('admin.facturacion.empresa.retiros_cortos', $empresa->id) }}', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
+                       'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content },
+            body: JSON.stringify({ cobrar }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        location.reload();
+    } catch (e) {
+        chk.checked = !cobrar;
+        chk.disabled = false;
+        alert('No se pudo guardar el cambio. Intenta de nuevo.');
+    }
+}
+
 function filtrar(btn, tipo) {
     _filtroActivo = tipo;
     document.querySelectorAll('.fil-btn').forEach(b => b.classList.remove('active'));
@@ -1870,7 +1915,7 @@ function aplicarFiltrosTabla() {
 
         // 1) Botones de estado superior
         let showEstadoBtn = true;
-        if (_filtroActivo === 'pendiente') showEstadoBtn = !['pagada','prestamo'].includes(est);
+        if (_filtroActivo === 'pendiente') showEstadoBtn = !['pagada','prestamo','no_cobra'].includes(est);
         else if (_filtroActivo === 'pago')  showEstadoBtn = est === 'pagada';
 
         // 2) Buscador global

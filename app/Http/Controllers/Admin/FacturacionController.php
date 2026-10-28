@@ -1009,6 +1009,30 @@ class FacturacionController extends Controller
             ->get()
             ->keyBy('contrato_id');
 
+        // Retiros de 1 a 3 días: solo se cobran en la empresa que los paga
+        // (empresas.cobrar_retiros_cortos). La planilla ya no deja marcarlos;
+        // esto cubre lo que llegue igual.
+        $cortosNoCobrables = $contratosCargados->filter(function ($c) use ($facturasRetiro0Lote, $mes, $anio, $aliadoId) {
+            if (! $this->_tieneRetiroFacturable($c, $facturasRetiro0Lote, $mes, $anio)
+                || (int) $c->tipo_modalidad_id === 15) {
+                return false;
+            }
+            if ((int) ($facturasRetiro0Lote->get($c->id)->dias_cotizados ?? 0) > \App\Services\EmpresaPeriodoService::DIAS_RETIRO_CORTO) {
+                return false;
+            }
+            $codEmpresa = (int) ($c->cliente?->cod_empresa ?? 0);
+
+            return $codEmpresa > 1 && ! Empresa::where('aliado_id', $aliadoId)->where('id', $codEmpresa)->value('cobrar_retiros_cortos');
+        });
+        if ($cortosNoCobrables->isNotEmpty()) {
+            return response()->json([
+                'ok' => false,
+                'mensaje' => 'No se generó ninguna factura. Los retiros de 1 a 3 días no se cobran en esta empresa ('
+                    .$cortosNoCobrables->map(fn ($c) => 'CC '.$c->cedula)->implode(', ')
+                    .'). Si esta empresa sí los paga, activa «Cobrar retiros de 1 a 3 días» abajo en la planilla.',
+            ], 422);
+        }
+
         $incluirAdmonRetiroCorto = ! empty($validated['incluir_admon_retiro_corto']);
 
         // Calcular COSTO BRUTO REAL de cada contrato para proporcionar el pago proporcional.
@@ -3587,6 +3611,30 @@ class FacturacionController extends Controller
             // El JS la inyecta en el campo editable con MF.setMora()
             ...$this->_calcularMoraParaModal($aliadoId, $contrato, $targetMes, $targetAnio),
         ]);
+    }
+
+    /**
+     * Prende o apaga el cobro de los retiros de 1 a 3 días en una empresa.
+     * Por defecto no se cobran (ver EmpresaPeriodoService::DIAS_RETIRO_CORTO).
+     */
+    public function retirosCortosEmpresa(Request $request, int $id)
+    {
+        $aliadoId = session('aliado_id_activo');
+        $empresa = Empresa::where('aliado_id', $aliadoId)->findOrFail($id);
+        $cobrar = $request->boolean('cobrar');
+
+        $empresa->cobrar_retiros_cortos = $cobrar;
+        $empresa->save();
+
+        Bitacora::registrar(
+            'actualizar',
+            'empresa',
+            $empresa->id,
+            ($cobrar ? 'Activó' : 'Desactivó')." el cobro de retiros de 1 a 3 días en {$empresa->empresa}.",
+            alidoId: $aliadoId
+        );
+
+        return response()->json(['ok' => true, 'cobrar' => $cobrar]);
     }
 
     // ─── API: N_PLANO actual de una razón social ─────────────────────

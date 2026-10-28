@@ -606,6 +606,7 @@ Route::middleware('auth')->group(function () {
             Route::get('empresa/{id}/retirados', [$fc, 'retiradosEmpresa'])->name('empresa.retirados');
             Route::get('empresa/{id}/editar', [$fc, 'editEmpresa'])->name('empresa.edit')->middleware('permiso:facturacion.editar');
             Route::put('empresa/{id}/editar', [$fc, 'updateEmpresa'])->name('empresa.update')->middleware('permiso:facturacion.editar');
+            Route::patch('empresa/{id}/retiros-cortos', [$fc, 'retirosCortosEmpresa'])->whereNumber('id')->name('empresa.retiros_cortos')->middleware('permiso:facturacion.editar');
             // Acceso de la empresa a su portal (brynex.co/portal).
             Route::middleware('permiso:facturacion.portal_empresas')->group(function () {
                 $ea = \App\Http\Controllers\Admin\EmpresaAccesoController::class;
