@@ -1394,7 +1394,7 @@ class FacturacionController extends Controller
         }
 
         DB::transaction(function () use (
-            $validated, $aliadoId, $np, $mes, $anio,
+            $validated, $aliadoId, $np, $mes, $anio, $afilEnCero,
             $esMasivo, $favorPrevioLote,
             &$facturasCreadas, &$omitidos, &$nPlanosPorRS,
             $totalPagoConsig, $totalPagoEfectivo, $totalPagoPrestamo,
