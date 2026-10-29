@@ -3040,7 +3040,12 @@ async function cargarEstadoEnlace() {
             const p2 = yaLiquidado.e1 && yaLiquidado.e1.paso2;
             const mostrar = (p2 && p2.estado === 'validada' && !p2.pago_confirmado)
                 ? p2 : yaLiquidado.planilla;
-            renderEstadoEnlace(mostrar, yaLiquidado.nombre);
+            // El paso 1 ya pagado no se vuelve a ofrecer para pagar: el PSE y
+            // el "Ya pagué" invitaban a pagarlo dos veces mientras se espera
+            // la corrección.
+            const fechaPago = (mostrar === yaLiquidado.planilla && yaLiquidado.e1 && yaLiquidado.e1.pago_confirmado)
+                ? yaLiquidado.e1.fecha_pago : null;
+            renderEstadoEnlace(mostrar, yaLiquidado.nombre, fechaPago);
         } else {
             // No hay planilla para ESTE filtro, pero sí para la tanda con otro.
             // Callarlo hace creer que nunca se liquidó, y basta marcar una
@@ -3345,17 +3350,22 @@ function avisoOdiEnPago() {
 }
 
 // Pinta el resultado guardado de una liquidación anterior.
-function renderEstadoEnlace(p, operadorNombre) {
+// `fechaPago`: el pago de esa planilla ya está confirmado (paso 1 de los dos
+// pasos), así que se muestra como pagada y sin botones para pagarla.
+function renderEstadoEnlace(p, operadorNombre, fechaPago = null) {
     const cont = document.getElementById('enlace-ultima');
     cont.style.display = '';
     const enOperador = operadorNombre ? ` en ${operadorNombre}` : '';
 
     if (p.estado === 'validada' && p.numero_planilla) {
         aplicarTotalDelOperador(p.valor_total, p.numero_planilla, p.fecha);
+        const valor = p.valor_total ? `<strong>$ ${fmtNum(Math.round(p.valor_total))}</strong>` : '';
         cont.innerHTML = avisoEnlace('#f0fdf4', '#bbf7d0', '#166534',
             `<strong>✅ Planilla ${p.numero_planilla}</strong> liquidada${enOperador} el ${p.fecha || ''}.` +
-            (p.valor_total ? `<br>Total a pagar: <strong>$ ${fmtNum(Math.round(p.valor_total))}</strong>` : '') +
-            accionesPago(p.url_pago, p.numero_planilla, p.valor_total, operadorNombre));
+            (fechaPago
+                ? `<br>Pagada el <strong>${fechaPago}</strong>` + (valor ? ` · ${valor}` : '') + '.'
+                : (valor ? `<br>Total a pagar: ${valor}` : '')
+                  + accionesPago(p.url_pago, p.numero_planilla, p.valor_total, operadorNombre)));
     } else if (p.estado === 'con_errores') {
         cont.innerHTML = avisoEnlace('#fffbeb', '#fde68a', '#92400e',
             `<strong>⚠️ Último intento con errores.</strong><br>${p.mensaje_error || ''}`);
