@@ -1730,7 +1730,7 @@
 <div class="modal-overlay" id="modal-enlace-errores">
     <div class="modal-box" style="max-width:820px">
         <div class="modal-head" style="background:linear-gradient(135deg,#92400e,#b45309);border-radius:16px 16px 0 0">
-            <h3 style="color:#fff;display:flex;align-items:center;gap:.5rem">⚠️ Errores reportados por el operador</h3>
+            <h3 id="enlace-errores-titulo" style="color:#fff;display:flex;align-items:center;gap:.5rem">⚠️ Errores reportados por el operador</h3>
             <button class="modal-close" onclick="cerrarModal('modal-enlace-errores')" style="color:#fde68a">✕</button>
         </div>
         <div class="modal-body">
@@ -1768,7 +1768,7 @@
 
             <div class="aviso-modal" style="margin-top:.85rem">
                 <strong>ℹ️ Nota</strong>
-                La validación solo lista las primeras 100 líneas con error. Corrija los datos en Brynex y vuelva a liquidar.
+                <span id="enlace-errores-nota">La validación solo lista las primeras 100 líneas con error. Corrija los datos en Brynex y vuelva a liquidar.</span>
             </div>
         </div>
     </div>
@@ -3368,7 +3368,7 @@ function renderEstadoEnlace(p, operadorNombre, fechaPago = null) {
                   + accionesPago(p.url_pago, p.numero_planilla, p.valor_total, operadorNombre)));
     } else if (p.estado === 'con_errores') {
         cont.innerHTML = avisoEnlace('#fffbeb', '#fde68a', '#92400e',
-            `<strong>⚠️ Último intento con errores.</strong><br>${p.mensaje_error || ''}`);
+            `<strong>⚠️ El último intento no quedó liquidado.</strong><br>${p.mensaje_error || ''}`);
     } else if (p.estado === 'error') {
         cont.innerHTML = avisoEnlace('#fef2f2', '#fecaca', '#991b1b',
             `<strong>✗ Último intento falló.</strong><br>${p.mensaje_error || ''}`);
@@ -3458,13 +3458,21 @@ async function liquidarEnEnlace(operadorId, operadorNombre, paso = 1) {
         }
 
         if (!data.liquidada) {
+            const sinErrores = sinNumeroSinErrores(data);
+            const verDetalle = !sinErrores || (data.advertencias || []).length
+                ? `<br><button type="button" onclick="verErroresEnlace()" style="margin-top:.4rem;background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:.35rem .7rem;font-size:.74rem;font-weight:700;cursor:pointer">`
+                  + (sinErrores ? 'Ver advertencias' : 'Ver detalle de errores') + '</button>'
+                : '';
             cont.innerHTML = avisoPensionCorregida(data.pension_corregida) +
                 avisoEnlace('#fffbeb', '#fde68a', '#92400e',
-                `<strong>⚠️ El archivo tiene ${data.total_errores} error(es).</strong> ` +
-                `Enlace no generó número de planilla.<br>` +
-                `<button type="button" onclick="verErroresEnlace()" style="margin-top:.4rem;background:#f59e0b;color:#fff;border:none;border-radius:8px;padding:.35rem .7rem;font-size:.74rem;font-weight:700;cursor:pointer">Ver detalle de errores</button>`);
+                (sinErrores
+                    ? `<strong>⚠️ ${operadorNombre} no le asignó número a la planilla.</strong> ${TEXTO_SIN_NUMERO}`
+                    : `<strong>⚠️ El archivo tiene ${data.total_errores} error(es).</strong> Enlace no generó número de planilla.`)
+                + verDetalle);
             window._enlaceErrores = data;
-            mostrarToast(`La planilla tiene ${data.total_errores} error(es).`, 'error');
+            mostrarToast(sinErrores
+                ? 'El operador no asignó número de planilla. Vuelva a intentarlo.'
+                : `La planilla tiene ${data.total_errores} error(es).`, 'error');
             return;
         }
 
@@ -3592,7 +3600,9 @@ async function liquidarIndependienteRow(planoId, operadorId, btnEl) {
         }
 
         if (!data.liquidada) {
-            mostrarToast(`La planilla tiene ${data.total_errores} error(es).`, 'error');
+            mostrarToast(sinNumeroSinErrores(data)
+                ? 'El operador no asignó número de planilla. Vuelva a intentarlo.'
+                : `La planilla tiene ${data.total_errores} error(es).`, 'error');
             window._enlaceErrores = data;
             verErroresEnlace();
             return;
@@ -3619,6 +3629,18 @@ async function liquidarIndependienteRow(planoId, operadorId, btnEl) {
             btnEl.innerHTML = orig;
         }
     }
+}
+
+// A veces el operador valida "OK", sin un solo error, y aun así no asigna
+// número —unas 2 de cada 100—. Las advertencias no lo causan: el propio
+// operador dice que no intervienen en el pago. Antes salía "0 error(es)" y
+// "Corrija los datos", que mandaba a buscar un error que no existe.
+const TEXTO_SIN_NUMERO = 'Validó el archivo sin errores, pero no le asignó número, así que no hay nada que pagar. '
+    + 'Vuelva a liquidar una vez; si se repite, hágala en el portal del operador. '
+    + 'Las advertencias no impiden el pago.';
+
+function sinNumeroSinErrores(data) {
+    return !data.liquidada && Number(data.total_errores || 0) === 0;
 }
 
 // Detalle de errores devuelto por la validación (máximo 100 líneas).
@@ -3665,8 +3687,16 @@ function verErroresEnlace() {
             </tr>`).join('')
         : '<tr><td colspan="3" style="padding:.8rem;color:#64748b">Enlace no devolvió el detalle. Consulte la planilla en el portal.</td></tr>';
 
-    document.getElementById('enlace-errores-resumen').textContent =
-        `Código de planilla ${data.codigo_planilla} · ${data.total_errores} error(es)`;
+    const sinErrores = sinNumeroSinErrores(data);
+    document.getElementById('enlace-errores-titulo').textContent = sinErrores
+        ? '⚠️ Sin número de planilla'
+        : '⚠️ Errores reportados por el operador';
+    document.getElementById('enlace-errores-resumen').textContent = sinErrores
+        ? `Código de planilla ${data.codigo_planilla} · sin errores, sin número`
+        : `Código de planilla ${data.codigo_planilla} · ${data.total_errores} error(es)`;
+    document.getElementById('enlace-errores-nota').textContent = sinErrores
+        ? TEXTO_SIN_NUMERO
+        : 'La validación solo lista las primeras 100 líneas con error. Corrija los datos en Brynex y vuelva a liquidar.';
 
     document.getElementById('modal-enlace-errores').classList.add('open');
 }

@@ -787,7 +787,7 @@ class PlanillaApiController extends Controller
             $registro->update([
                 'estado'          => 'con_errores',
                 'api_planilla_id' => $resultado['codigo_planilla'] ?? null,
-                'mensaje_error'   => "La planilla tiene {$resultado['total_errores']} error(es).",
+                'mensaje_error'   => $this->motivoSinNumero($resultado),
                 'response_log'    => $resultado['response'] ?? null,
             ]);
 
@@ -823,7 +823,9 @@ class PlanillaApiController extends Controller
                 'correcciones'     => $correcciones,
                 'pension_corregida'=> $pensionCorregida['aplicadas'],
                 'razon_social_id'  => $rs->id,
-                'message'          => 'El archivo tiene errores. Corríjalos y vuelva a liquidar.',
+                'message'          => (int) ($resultado['total_errores'] ?? 0) > 0
+                    ? 'El archivo tiene errores. Corríjalos y vuelva a liquidar.'
+                    : $this->motivoSinNumero($resultado),
             ]);
         }
 
@@ -1074,7 +1076,7 @@ class PlanillaApiController extends Controller
             $registro->update([
                 'estado'          => 'con_errores',
                 'api_planilla_id' => $resultado['codigo_planilla'] ?? null,
-                'mensaje_error'   => "La planilla tiene {$resultado['total_errores']} error(es).",
+                'mensaje_error'   => $this->motivoSinNumero($resultado),
                 'response_log'    => $resultado['response'] ?? null,
             ]);
 
@@ -1091,7 +1093,9 @@ class PlanillaApiController extends Controller
                 'correcciones'     => $correcciones,
                 'pension_corregida'=> $pensionCorregida['aplicadas'],
                 'razon_social_id'  => $rs->id,
-                'message'          => 'El archivo tiene errores. Corríjalos y vuelva a liquidar.',
+                'message'          => (int) ($resultado['total_errores'] ?? 0) > 0
+                    ? 'El archivo tiene errores. Corríjalos y vuelva a liquidar.'
+                    : $this->motivoSinNumero($resultado),
             ]);
         }
 
@@ -1304,6 +1308,25 @@ class PlanillaApiController extends Controller
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    /**
+     * Por qué una validación no dejó planilla liquidada.
+     *
+     * Casi siempre son errores del archivo, pero a veces el operador responde
+     * "OK" con cero errores y aun así sin número —unas 2 de cada 100, sin
+     * motivo que lo explique, y la primera corrección por Enlace de Fecop
+     * cayó ahí el 29-oct-2026—. "La planilla tiene 0 error(es)" mandaba a
+     * buscar un error que no existe.
+     */
+    private function motivoSinNumero(array $resultado): string
+    {
+        $errores = (int) ($resultado['total_errores'] ?? 0);
+
+        return $errores > 0
+            ? "La planilla tiene {$errores} error(es)."
+            : 'El operador validó el archivo sin errores, pero no le asignó número de planilla. '
+              .'No queda nada por pagar: vuelva a liquidar una vez y, si se repite, hágala en el portal del operador.';
+    }
 
     /**
      * Deja lista una sesión de Enlace autorizada sobre el aportante dueño de
