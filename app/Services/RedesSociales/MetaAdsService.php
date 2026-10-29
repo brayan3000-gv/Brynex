@@ -793,9 +793,13 @@ class MetaAdsService
         // saber si sirve. Solo pasan las primeras del cupo semanal; el resto se queda en
         // orgánico, que no cuesta nada.
         $cupo = max(1, (int) ($config->piezas_semana_max ?: 3));
+        // Por la fecha en que ENTRÓ a la pauta, no por updated_at: la sincronización del gasto
+        // toca las piezas viejas todos los días, así que el cupo vivía lleno con #90 (3-sep),
+        // #104 (19-sep) y #97 (7-oct) y ninguna pieza nueva podía entrar. El 29-oct-2026 el video
+        // #112 se quedó por fuera con «ya hay 3 de 3» sin que hubiera entrado nada esa semana.
         $estaSemana = Publicacion::where('aliado_id', $publicacion->aliado_id)
             ->where('meta_adset_id', $conjunto['adset_id'])
-            ->where('updated_at', '>=', now()->subDays(7))
+            ->where('pauta_activada_at', '>=', now()->subDays(7))
             ->whereNotNull('meta_ad_id')
             ->count();
         if ($estaSemana >= $cupo) {
