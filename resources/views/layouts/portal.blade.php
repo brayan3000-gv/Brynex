@@ -233,7 +233,7 @@
                 @if(!empty($aliadoPortal->logo))
                     <img src="{{ asset('storage/'.$aliadoPortal->logo) }}" alt="{{ $aliadoPortal->nombre }}">
                 @else
-                    <img src="{{ asset('img/logo-brynex.png') }}" alt="BryNex">
+                    <img src="{{ asset('img/logo-brynex-icono.png') }}" alt="BryNex">
                 @endif
                 <div style="min-width:0">
                     <div class="pt-empresa">{{ $nombreEmpresa }}</div>

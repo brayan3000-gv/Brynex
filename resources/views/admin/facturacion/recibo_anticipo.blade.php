@@ -371,7 +371,7 @@
                         @if($logoAliado)
                             <img src="{{ $logoAliado }}" alt="{{ $nomAliado }}" style="max-width:140px; max-height:70px; object-fit:contain">
                         @else
-                            <img src="{{ asset('img/logo-brynex.png') }}" alt="BryNex" style="max-width:140px; max-height:70px; object-fit:contain" onerror="this.style.display='none'">
+                            <img src="{{ asset('img/logo-brynex-claro.png') }}" alt="BryNex" style="max-width:140px; max-height:70px; object-fit:contain" onerror="this.style.display='none'">
                         @endif
                         <div style="font-size:.55rem;font-weight:800;color:#64748b;margin-top:.4rem;letter-spacing:.05em;text-align:center;text-transform:uppercase">
                             {{ strtoupper($nomAliado) }}

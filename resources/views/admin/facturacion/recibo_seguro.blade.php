@@ -101,7 +101,7 @@ $estadoColor = match ($factura->estado) {
             <span class="rs-badge" style="background:{{ $estadoColor[0] }};color:{{ $estadoColor[1] }}">{{ $estadoLabel }}</span>
         </div>
         <div style="text-align:center">
-            <img src="{{ $logoAliado ?? asset('img/logo-brynex.png') }}" alt="{{ $nomAliado }}"
+            <img src="{{ $logoAliado ?? asset('img/logo-brynex-claro.png') }}" alt="{{ $nomAliado }}"
                  style="max-width:130px;max-height:64px;object-fit:contain">
             <div style="font-size:.55rem;color:rgba(255,255,255,.6);margin-top:.3rem;font-weight:600;letter-spacing:.04em">
                 {{ strtoupper($nomAliado) }}

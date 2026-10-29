@@ -8,7 +8,7 @@
     <meta property="og:title" content="Alianzas Brygar — planes y cotizador">
     <meta property="og:description" content="Experiencia, tecnología propia BryNex y automatización para la gestión de la seguridad social.">
     <meta property="og:image" content="{{ asset('img/aliados/atencion.jpg') }}">
-    <link rel="icon" href="{{ asset('img/logo-brynex.png') }}">
+    <link rel="icon" href="{{ asset('img/logo-brynex-icono.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Inter:wght@400;500;600&display=swap">

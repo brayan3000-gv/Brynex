@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>@yield('titulo', 'BryNex') — @yield('modulo', 'Dashboard')</title>
+    <link rel="apple-touch-icon" href="{{ asset('img/apple-touch-icon.png') }}">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     {{-- Alpine.js: requerido para el cotizador reactivo --}}
@@ -791,7 +792,7 @@
             @if (!empty($alidoActivo?->logo))
                 <img class="logo-aliado" src="{{ asset('storage/' . $alidoActivo->logo) }}" alt="{{ $alidoActivo->nombre }}">
             @else
-                <img class="logo-aliado" src="{{ asset('img/logo-brynex.png') }}" alt="BryNex">
+                <img class="logo-aliado" src="{{ asset('img/logo-brynex-icono.png') }}" alt="BryNex">
             @endif
             <div class="header-aliado-info">
                 <h2>{{ $alidoActivo->nombre ?? 'BryNex' }}</h2>

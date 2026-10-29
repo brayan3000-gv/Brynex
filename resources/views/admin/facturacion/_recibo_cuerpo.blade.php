@@ -87,7 +87,7 @@ $numGrupo    = str_pad($filas->first()?->numero_factura ?? $factura->numero_fact
         @if($logoAliadoG)
         <img src="{{ $logoAliadoG }}" alt="{{ $nomAliadoG }}" style="max-width:140px;max-height:70px;object-fit:contain">
         @else
-        <img src="{{ asset('img/logo-brynex.png') }}" alt="BryNex" style="max-width:140px;max-height:70px;object-fit:contain">
+        <img src="{{ asset('img/logo-brynex-claro.png') }}" alt="BryNex" style="max-width:140px;max-height:70px;object-fit:contain">
         @endif
         <div style="font-size:.55rem;color:#64748b;text-align:center;margin-top:.35rem;font-weight:600;letter-spacing:.04em">
             {{ strtoupper($nomAliadoG) }}
@@ -594,7 +594,7 @@ $dir1 = trim((string) ($empresaCliente?->direccion ?? ''))
         @if($logoAliado)
         <img src="{{ $logoAliado }}" alt="{{ $nomAliado }}" style="max-width:140px;max-height:70px;object-fit:contain">
         @else
-        <img src="{{ asset('img/logo-brynex.png') }}" alt="BryNex" style="max-width:140px;max-height:70px;object-fit:contain">
+        <img src="{{ asset('img/logo-brynex-claro.png') }}" alt="BryNex" style="max-width:140px;max-height:70px;object-fit:contain">
         @endif
         <div style="font-size:.55rem;color:#64748b;text-align:center;margin-top:.35rem;font-weight:600;letter-spacing:.04em">
             {{ strtoupper($nomAliado) }}
