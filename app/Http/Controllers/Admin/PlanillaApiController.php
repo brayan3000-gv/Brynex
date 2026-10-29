@@ -44,7 +44,18 @@ class PlanillaApiController extends Controller
             'tipos_modalidad.*' => 'integer',
         ]);
 
-        $filtro = $this->filtroModalidades($validated['tipos_modalidad'] ?? []);
+        // Una tanda toda de dos pasos liquidada con "Todos" se trata como si
+        // hubieran marcado sus modalidades. Ver PlanillaDosPasosService::filtroDeLaTanda.
+        $validated['tipos_modalidad'] = PlanillaDosPasosService::filtroDeLaTanda(
+            (int) $aliadoId,
+            (int) $validated['razon_social_id'],
+            (int) $validated['mes'],
+            (int) $validated['anio'],
+            (int) $validated['n_plano'],
+            $validated['tipos_modalidad'] ?? []
+        );
+
+        $filtro = $this->filtroModalidades($validated['tipos_modalidad']);
 
         // La E-1, Solo Caja y Solo Pensión se pagan en dos liquidaciones
         // encadenadas, así que la pantalla necesita saber en cuál va la tanda.
@@ -322,7 +333,19 @@ class PlanillaApiController extends Controller
             'paso'                 => 'integer|in:1,2',
         ]);
 
-        $filtro = $this->filtroModalidades($validated['tipos_modalidad'] ?? []);
+        // Ver PlanillaDosPasosService::filtroDeLaTanda: con "Todos" una tanda
+        // de dos pasos tiene que quedar guardada con su filtro, o el paso 2 no
+        // encuentra la planilla que corrige.
+        $validated['tipos_modalidad'] = PlanillaDosPasosService::filtroDeLaTanda(
+            (int) $aliadoId,
+            (int) $validated['razon_social_id'],
+            (int) $validated['mes'],
+            (int) $validated['anio'],
+            (int) $validated['n_plano'],
+            $validated['tipos_modalidad'] ?? []
+        );
+
+        $filtro = $this->filtroModalidades($validated['tipos_modalidad']);
         $paso   = (int) ($validated['paso'] ?? 1);
 
         // ── Tanda mezclada: no se liquida ────────────────────────────────

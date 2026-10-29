@@ -96,6 +96,74 @@ class PlanillaDosPasosService
         int $nPlano,
         array $tiposFiltro
     ): bool {
+        $modalidades = self::modalidadesDeLaTanda($aliadoId, $razonSocialId, $mes, $anio, $nPlano, $tiposFiltro);
+
+        $aparte = \App\Models\TipoModalidad::IDS_TANDA_APARTE;
+
+        return $modalidades->contains(fn ($id) => in_array($id, $aparte, true))
+            && $modalidades->contains(fn ($id) => ! in_array($id, $aparte, true));
+    }
+
+    /**
+     * El filtro de modalidades con el que se liquida la tanda.
+     *
+     * Sin modalidades marcadas ("Todos") la tanda se trataba como planilla
+     * normal aunque toda su gente fuera de dos pasos: el paso 1 salía bien
+     * —el archivo depende de la modalidad de cada fila, no del filtro—, pero
+     * quedaba guardado sin filtro, al confirmar su pago el plano se daba por
+     * pagado completo y la corrección ya no encontraba su planilla. Le pasó a
+     * Fecop el 29-oct-2026 (planilla 89101638, todos Tipo E - Extras).
+     *
+     * Así que si no hay filtro y la tanda es toda de una familia de dos pasos
+     * —o toda E-1—, el filtro son sus modalidades, como si las hubieran
+     * marcado. Salvo que ya exista un paso 1 liquidado sin filtro: ese es el
+     * que identifica a la tanda, y cambiarle el filtro lo escondería y dejaría
+     * liquidarla otra vez.
+     *
+     * @param  array  $tiposFiltro  Modalidades marcadas en pantalla; vacío = todas
+     */
+    public static function filtroDeLaTanda(
+        int $aliadoId,
+        int $razonSocialId,
+        int $mes,
+        int $anio,
+        int $nPlano,
+        array $tiposFiltro
+    ): array {
+        if ($tiposFiltro !== []) {
+            return $tiposFiltro;
+        }
+
+        $modalidades = self::modalidadesDeLaTanda($aliadoId, $razonSocialId, $mes, $anio, $nPlano, [])
+            ->sort()->values()->all();
+
+        if ($modalidades === []
+            || ! (self::aplica($modalidades) || PlanillaE1Service::aplica($modalidades))) {
+            return [];
+        }
+
+        $yaSinFiltro = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+            ->where('razon_social_id', $razonSocialId)
+            ->where('anio', $anio)
+            ->where('mes', $mes)
+            ->where('n_plano', $nPlano)
+            ->where('paso', 1)
+            ->where('estado', 'validada')
+            ->whereRaw("ISNULL(tipos_modalidad, '') = ''")
+            ->exists();
+
+        return $yaSinFiltro ? [] : $modalidades;
+    }
+
+    /** Las modalidades de la gente de la tanda, dentro del filtro si lo hay. */
+    private static function modalidadesDeLaTanda(
+        int $aliadoId,
+        int $razonSocialId,
+        int $mes,
+        int $anio,
+        int $nPlano,
+        array $tiposFiltro
+    ): \Illuminate\Support\Collection {
         // El alias `p` no es capricho: Plano::filtrarPeriodoDePago escribe sus
         // condiciones con ese prefijo, igual que en PlanoPilaTxtService.
         $query = \Illuminate\Support\Facades\DB::table('planos AS p')
@@ -111,14 +179,9 @@ class PlanillaDosPasosService
             $query->whereIn('p.tipo_modalidad_id', array_map('intval', $tiposFiltro));
         }
 
-        $modalidades = $query->distinct()
+        return $query->distinct()
             ->pluck('p.tipo_modalidad_id')
             ->map(fn ($id) => (int) $id);
-
-        $aparte = \App\Models\TipoModalidad::IDS_TANDA_APARTE;
-
-        return $modalidades->contains(fn ($id) => in_array($id, $aparte, true))
-            && $modalidades->contains(fn ($id) => ! in_array($id, $aparte, true));
     }
 
     /**
