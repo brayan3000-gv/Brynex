@@ -667,6 +667,20 @@ class PlanillaApiController extends Controller
         }
 
         // ── 4. Registro de trazabilidad ──────────────────────────────────
+        // Volver a liquidar reusa el registro de la planilla que ya había. Si
+        // el intento nuevo no deja otra liquidada, esa sigue siendo la buena y
+        // se devuelve tal cual: antes quedaba "con errores" y se perdía de la
+        // pantalla una planilla que existe en el operador y está por pagar
+        // (Fecop, corrección 89104371, 30-oct-2026).
+        $anterior = OperadorPlanillaApi::where($llave)
+            ->where('estado', 'validada')
+            ->whereNotNull('numero_planilla')
+            ->first()
+            ?->only([
+                'estado', 'api_planilla_id', 'numero_planilla', 'valor_total', 'url_pago',
+                'mensaje_error', 'response_log', 'planilla_asociada_numero', 'planilla_asociada_fecha_pago',
+            ]);
+
         $registro = OperadorPlanillaApi::updateOrCreate(
             $llave,
             ['estado' => 'procesando', 'mensaje_error' => null]
@@ -769,7 +783,7 @@ class PlanillaApiController extends Controller
 
         // ── 4. Persistir el resultado ────────────────────────────────────
         if (!($resultado['success'] ?? false)) {
-            $registro->update([
+            $registro->update($anterior ?? [
                 'estado'        => 'error',
                 'mensaje_error' => $resultado['message'] ?? 'Error desconocido.',
                 'response_log'  => $resultado['response'] ?? null,
@@ -778,18 +792,29 @@ class PlanillaApiController extends Controller
             return response()->json([
                 'success' => false,
                 'paso'    => $resultado['paso'] ?? null,
-                'message' => $resultado['message'] ?? 'No fue posible liquidar la planilla.',
+                'message' => ($resultado['message'] ?? 'No fue posible liquidar la planilla.')
+                    .($anterior ? " La planilla {$anterior['numero_planilla']} sigue liquidada." : ''),
             ], 422);
         }
 
         // Planilla con errores: Enlace la crea pero sin número, para corregir.
         if (!($resultado['liquidada'] ?? false)) {
-            $registro->update([
+            $registro->update($anterior ?? [
                 'estado'          => 'con_errores',
                 'api_planilla_id' => $resultado['codigo_planilla'] ?? null,
                 'mensaje_error'   => $this->motivoSinNumero($resultado),
                 'response_log'    => $resultado['response'] ?? null,
             ]);
+
+            if ($anterior) {
+                Log::info('Enlace API: el intento nuevo no quedó liquidado; se conserva la planilla anterior', [
+                    'razon_social_id' => $rs->id,
+                    'n_plano'         => $validated['n_plano'],
+                    'paso'            => $paso,
+                    'conservada'      => $anterior['numero_planilla'],
+                    'codigo_intento'  => $resultado['codigo_planilla'] ?? null,
+                ]);
+            }
 
             $correcciones = (new CorreccionEnlaceService())
                 ->interpretar($resultado['errores_cotizante'] ?? [], $aliadoId);
