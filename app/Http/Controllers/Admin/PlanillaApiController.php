@@ -1443,6 +1443,9 @@ class PlanillaApiController extends Controller
     /** Único operador que liquida Tipo E - X1. Ver operadoresParaTanda(). */
     private const OPERADOR_EX1 = 'SIMPLE';
 
+    /** Operador que se sugiere para Tipo E - Extras. Ver operadorSugerido(). */
+    private const OPERADOR_EXTRAS = 'SIMPLE';
+
     private function operadoresConApi(int $aliadoId)
     {
         return OperadorPlanilla::paraAliado($aliadoId)
@@ -1560,6 +1563,7 @@ class PlanillaApiController extends Controller
      *  1. La planilla N va donde se pagó la planilla que corrige.
      *  2. Si la tanda ya tiene planilla liquidada, ese operador (en dos pasos
      *     la corrección solo existe allá).
+     *  2b. Tipo E - Extras, sin nada liquidado todavía: Simple.
      *  3. El último con el que la razón social liquidó una tanda de la misma
      *     familia: las normales en uno, las de dos pasos o la X1 a veces en otro.
      *  4. Sin historial propio, el último del aliado para esa familia.
@@ -1595,6 +1599,19 @@ class PlanillaApiController extends Controller
             ->value('operador_planilla_id');
         if ($id = $valido($deLaTanda)) {
             return $id;
+        }
+
+        // Tipo E - Extras entra de una por Simple. En Enlace su corrección se
+        // quedaba sin número cada vez que alguien de la tanda ya aparecía en
+        // otra planilla pagada del período, y el API no decía por qué (Fecop,
+        // GLOBAL CONTACT, oct-2026). Enlace sigue detrás del enlace.
+        if ($filtro === (string) \App\Models\TipoModalidad::ID_EXTRAS) {
+            $simple = OperadorPlanilla::whereIn('id', $ofrecidos)
+                ->where('codigo', self::OPERADOR_EXTRAS)
+                ->value('id');
+            if ($id = $valido($simple)) {
+                return $id;
+            }
         }
 
         $familia = $this->familiaFiltro($filtro);
