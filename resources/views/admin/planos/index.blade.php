@@ -3013,6 +3013,14 @@ async function cargarEstadoEnlace() {
             enlace.href = '#';
             enlace.style.cssText = 'font-size:.72rem;color:#6d28d9;text-align:center;text-decoration:underline';
             enlace.textContent = `¿Esta vez va por otro operador? Liquidar en ${otros}`;
+            // Si el último intento con el sugerido no quedó liquidado, los
+            // otros operadores salen abiertos: es justo cuando toca probar
+            // allá, y el enlace pasaba de largo (Fecop, tanda 16, 30-oct-2026).
+            const sugerido = data.operadores.find(o => Number(o.id) === sugeridoId);
+            if (sugerido && sugerido.planilla && sugerido.planilla.estado !== 'validada') {
+                contOtros.style.display = 'flex';
+                enlace.textContent = 'Ocultar los otros operadores';
+            }
             enlace.onclick = (e) => {
                 e.preventDefault();
                 const abierto = contOtros.style.display !== 'none';
