@@ -1581,6 +1581,17 @@ class PlanillaApiController extends Controller
             return null;
         }
 
+        // Un operador que ya le negó permisos a esta razón social no se
+        // sugiere hasta que liquide allá: el usuario no está autorizado sobre
+        // ese aportante y cada intento vuelve con el mismo error.
+        $ofrecidos = array_values(array_diff(
+            $ofrecidos,
+            $this->operadoresSinPermiso($aliadoId, $razonSocialId, $ofrecidos)
+        ));
+        if (count($ofrecidos) < 2) {
+            return $ofrecidos[0] ?? null;
+        }
+
         $valido = fn ($id) => $id && in_array((int) $id, $ofrecidos, true) ? (int) $id : null;
 
         if ($id = $valido($correccion['operador_planilla_id'] ?? null)) {
@@ -1605,11 +1616,19 @@ class PlanillaApiController extends Controller
         // quedaba sin número cada vez que alguien de la tanda ya aparecía en
         // otra planilla pagada del período, y el API no decía por qué (Fecop,
         // GLOBAL CONTACT, oct-2026). Enlace sigue detrás del enlace.
+        // Solo si la razón social ya liquidó alguna vez en Simple: el usuario
+        // tiene que estar autorizado sobre el aportante, y donde no lo está
+        // Simple responde "No cuenta con permisos" (LALA CONFECCIONES).
         if ($filtro === (string) \App\Models\TipoModalidad::ID_EXTRAS) {
             $simple = OperadorPlanilla::whereIn('id', $ofrecidos)
                 ->where('codigo', self::OPERADOR_EXTRAS)
                 ->value('id');
-            if ($id = $valido($simple)) {
+            $yaLiquidoAlla = $simple && OperadorPlanillaApi::where('aliado_id', $aliadoId)
+                ->where('razon_social_id', $razonSocialId)
+                ->where('operador_planilla_id', $simple)
+                ->where('estado', 'validada')
+                ->exists();
+            if ($yaLiquidoAlla && ($id = $valido($simple))) {
                 return $id;
             }
         }
@@ -1635,6 +1654,30 @@ class PlanillaApiController extends Controller
         }
 
         return null;
+    }
+
+    /**
+     * Operadores cuyo último intento con esta razón social terminó en "No
+     * cuenta con permisos para este aportante" y que no han liquidado allá
+     * desde entonces.
+     */
+    private function operadoresSinPermiso(int $aliadoId, int $razonSocialId, array $operadores): array
+    {
+        $intentos = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+            ->where('razon_social_id', $razonSocialId)
+            ->whereIn('operador_planilla_id', $operadores)
+            ->where(fn ($q) => $q->where('estado', 'validada')
+                ->orWhere('mensaje_error', 'like', '%No cuenta con permisos%'))
+            ->orderBy('id')
+            ->get(['operador_planilla_id', 'estado']);
+
+        // El último que cuenta de cada operador: si es el rechazo, está vetado.
+        return $intentos->groupBy('operador_planilla_id')
+            ->filter(fn ($filas) => $filas->last()->estado !== 'validada')
+            ->keys()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     /** normal, dos_pasos o ex1: las tandas que suelen ir a operadores distintos. */
