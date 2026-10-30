@@ -828,12 +828,23 @@ class PlanillaApiController extends Controller
 
                 $numero = $opcionesPlano['planilla_asociada']['numero'] ?? '';
 
+                // Con el pago ya confirmado en BryNex casi siempre es que el
+                // operador no lo ha reflejado: un pago por PSE tarda unos
+                // minutos en pasar a pagada, y "pague el paso 1" confundía a
+                // quien ya lo había pagado (LALA CONFECCIONES, 30-oct-2026).
+                $yaConfirmado = $numero !== '' && PlanillaE1Service::pagoConfirmado((int) $aliadoId, (string) $numero);
+
                 return response()->json([
                     'success'    => false,
                     'falta_pago' => true,
-                    'message'    => "La planilla {$numero} del paso 1 todavía no aparece pagada en el "
-                        .'operador. La corrección solo se puede enviar sobre una planilla ya pagada: '
-                        .'pague el paso 1 y vuelva a intentarlo.',
+                    'message'    => $yaConfirmado
+                        ? "La planilla {$numero} del paso 1 ya tiene el pago confirmado en BryNex, pero el "
+                          .'operador todavía no la ve pagada: un pago por PSE tarda unos minutos en reflejarse. '
+                          .'Espere 10 a 15 minutos y vuelva a intentarlo; si a la media hora sigue igual, '
+                          .'revise en el operador que el pago haya quedado aprobado.'
+                        : "La planilla {$numero} del paso 1 todavía no aparece pagada en el "
+                          .'operador. La corrección solo se puede enviar sobre una planilla ya pagada: '
+                          .'pague el paso 1 y vuelva a intentarlo.',
                 ], 422);
             }
 
