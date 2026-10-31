@@ -122,8 +122,8 @@
         <table>
             <thead>
                 <tr>
-                    <th @click="ordenar('nombre')">Nombre <span class="flecha" x-text="flecha('nombre')"></span></th>
-                    <th @click="ordenar('cedula')">Cédula <span class="flecha" x-text="flecha('cedula')"></span></th>
+                    <th class="der" style="cursor:default;width:1%">#</th>
+                    <th @click="ordenar('nombre')">Nombre y cédula <span class="flecha" x-text="flecha('nombre')"></span></th>
                     <th @click="ordenar('periodo')">Próximo pago <span class="flecha" x-text="flecha('periodo')"></span></th>
                     <th class="der" @click="ordenar('total_mes')">Total a pagar <span class="flecha" x-text="flecha('total_mes')"></span></th>
                     <th class="der" @click="ordenar('abono_persona')">Abono persona libre <span class="flecha" x-text="flecha('abono_persona')"></span></th>
@@ -133,13 +133,14 @@
                 </tr>
             </thead>
             <tbody>
-                <template x-for="f in visibles()" :key="f.contrato_id">
+                <template x-for="(f, i) in visibles()" :key="f.contrato_id">
                     <tr>
+                        <td class="der num sub" x-text="i + 1"></td>
                         <td>
-                            <div class="nom" x-text="f.nombre || ('CC ' + f.cedula)"></div>
+                            <div class="nom" x-text="f.nombre || 'Sin nombre'"></div>
+                            <div class="sub num" x-text="'CC ' + f.cedula"></div>
                             <div class="sub" x-show="f.varios" x-text="'Dos contratos · ' + f.razon_social"></div>
                         </td>
-                        <td class="num" x-text="f.cedula"></td>
                         <td>
                             <template x-if="!f.calc"><span class="cargando" style="color:var(--tenue)"></span></template>
                             <span x-show="f.calc && !f.calc.error" x-text="f.calc && f.calc.periodo"></span>
