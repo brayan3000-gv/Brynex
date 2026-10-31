@@ -726,18 +726,22 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 @endforeach
 
                 {{-- Tarjeta Efectivo --}}
-                @php $efColor = $efMes->neto >= 0 ? '#16a34a' : '#dc2626'; @endphp
+                @php
+                    $efColor    = $efMes->neto >= 0 ? '#16a34a' : '#dc2626';
+                    $efColorSal = $efMes->saldo_actual >= 0 ? '#15803d' : '#dc2626';
+                @endphp
                 <div class="bank-card" onclick="verMovimientosEfectivo()" title="Clic para ver facturas en efectivo y desglose por asesor" style="border-top-color:#16a34a;">
                     {{-- Cabecera --}}
                     <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">💵 Caja</div>
                     <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Efectivo</div>
 
-                    {{-- Hero: Neto del mes --}}
+                    {{-- Hero: lo que hay en caja. Antes era el neto del mes, que se
+                         confundía con lo que había (lo pidió el dueño, 31-oct-2026). --}}
                     <div style="margin-top:.55rem;">
-                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">Neto {{ $mesesEs[$mes] }}</div>
-                        <div style="font-size:1.3rem;font-weight:900;color:{{ $efColor }};line-height:1.1;">
-                            {{ $efMes->neto >= 0 ? '+' : '' }}{{ $fmt($efMes->neto) }}
+                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">
+                            {{ ($mes == now()->month && $anio == now()->year) ? 'En caja hoy' : 'En caja al cierre' }}
                         </div>
+                        <div style="font-size:1.3rem;font-weight:900;color:{{ $efColorSal }};line-height:1.1;">{{ $fmt($efMes->saldo_actual) }}</div>
                     </div>
 
                     {{-- Movimientos del mes --}}
@@ -794,10 +798,11 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                         </div>
                         @endif
 
-                        {{-- Saldo final --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
-                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">{{ $efMes->label_saldo }}</span>
-                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">{{ $fmt($efMes->saldo_actual) }}</span>
+                        {{-- Neto del mes: cuánto creció (o bajó) la caja --}}
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;"
+                             title="Lo que entró menos lo que salió en el mes: cuánto creció la caja, no lo que hay">
+                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Neto {{ $mesesEs[$mes] }}</span>
+                            <span style="font-size:.68rem;font-weight:700;color:{{ $efColor }};font-family:monospace;">{{ $efMes->neto >= 0 ? '+' : '' }}{{ $fmt($efMes->neto) }}</span>
                         </div>
                         {{-- Lo que tiene el dueño ya es caja de la empresa: no sale en «Por recoger» --}}
                         @if($efEmpresa)
