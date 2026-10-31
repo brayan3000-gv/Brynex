@@ -27,4 +27,22 @@ return [
         // la afiliación se cobraba en el sistema viejo.
         'desde' => '2026-08-01',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Caja de la empresa
+    |--------------------------------------------------------------------------
+    |
+    | El efectivo que tiene el dueño ya es de la empresa: no está «pendiente
+    | por pasar» ni «por recoger», está en caja. Lo pidió Brayan el
+    | 31-oct-2026 (Brygar, octubre: $11.687.153 salían por recoger a su
+    | nombre). No se deduce del rol superadmin ni de es_brynex, que tienen
+    | muchos más usuarios. Ver FlujoEfectivo::esCajaEmpresa().
+    |
+    */
+
+    // aliado_id => user_id del dueño
+    'caja_empresa' => [
+        2 => 2, // Brygar → Brayan Garcia
+    ],
 ];

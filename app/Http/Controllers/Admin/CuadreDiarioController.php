@@ -267,6 +267,9 @@ class CuadreDiarioController extends Controller
                 'dias_movimiento' => $suyos->count(),
                 'dias_cuadrados'  => $suyos->filter(fn($d) => $d->cuadre)->count(),
                 'pendiente'       => $this->saldoAlCierre((int) $aliadoId, (int) $u->id, $corte),
+                // Lo que tiene el dueño ya está en caja: sale aparte y no suma
+                // al total pendiente por pasar.
+                'caja_empresa'    => FlujoEfectivo::esCajaEmpresa((int) $aliadoId, (int) $u->id),
             ];
         })
         // Solo quien movió plata o tiene algo pendiente por pasar; sin esto la

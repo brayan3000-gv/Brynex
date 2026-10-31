@@ -612,7 +612,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 </div>
                 <div style="font-size:.6rem;color:#94a3b8;margin:-.15rem 0 .25rem;">La empresa: todas las cuentas y cajas</div>
                 {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo verificado') !!}
-                {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'Lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
+                {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'La caja de la empresa más lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
                 <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
                 {!! $fila('= Hay', $pl['hay'], '#0f172a', 800) !!}
                 {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 700, 'Plata que está en las cuentas o en efectivo pero es de otros, o que Brygar debe') !!}
@@ -799,6 +799,14 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                             <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">{{ $efMes->label_saldo }}</span>
                             <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">{{ $fmt($efMes->saldo_actual) }}</span>
                         </div>
+                        {{-- Lo que tiene el dueño ya es caja de la empresa: no sale en «Por recoger» --}}
+                        @if($efEmpresa)
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#15803d;"
+                             title="Efectivo que tiene {{ implode(', ', array_column($efEmpresa, 'nombre')) }}: ya está en la caja de la empresa">
+                            <span>🏢 En la empresa</span>
+                            <span style="font-family:monospace;font-weight:700;">{{ $fmt($enEmpresa) }}</span>
+                        </div>
+                        @endif
                     </div>
                 </div>
 

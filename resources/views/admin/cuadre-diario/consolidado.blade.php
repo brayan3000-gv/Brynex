@@ -104,9 +104,16 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
             <td class="num" style="color:#0369a1">{{ $r->consignado ? $fmt($r->consignado) : '—' }}</td>
             <td class="num" style="color:#dc2626">-{{ $fmt($r->gastos_efectivo) }}</td>
             <td class="num" style="font-weight:800;color:#1d4ed8">{{ $fmt($r->saldo_esperado) }}</td>
+            @if($r->caja_empresa)
+            <td class="num" style="font-weight:800;color:{{ ($r->pendiente ?? 0) < 0 ? '#dc2626' : '#15803d' }}"
+                title="Es la caja de la empresa: lo que tiene ya está en caja, no por pasar">
+                🏢 En caja {{ $fmt($r->pendiente) }}
+            </td>
+            @else
             <td class="num" style="font-weight:800;color:{{ ($r->pendiente ?? 0) < 0 ? '#dc2626' : '#b45309' }}">
                 {{ $r->pendiente === null ? '—' : $fmt($r->pendiente) }}
             </td>
+            @endif
             <td>
                 @if($vistaMes)
                 <span class="badge-est" style="{{ $r->dias_cuadrados >= $r->dias_movimiento ? 'background:#dcfce7;color:#15803d' : 'background:#fef3c7;color:#92400e' }}">
@@ -138,7 +145,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:.8rem}
             <td class="num" style="color:#7dd3fc">{{ $fmt($resumen->sum('consignado')) }}</td>
             <td class="num" style="color:#f87171">-{{ $fmt($resumen->sum('gastos_efectivo')) }}</td>
             <td class="num" style="color:#fbbf24">{{ $fmt($resumen->sum('saldo_esperado')) }}</td>
-            <td class="num" style="color:#fdba74">{{ $fmt($resumen->sum(fn($r) => (int) $r->pendiente)) }}</td>
+            <td class="num" style="color:#fdba74" title="Sin la caja de la empresa, que ya está en caja">{{ $fmt($resumen->reject(fn($r) => $r->caja_empresa)->sum(fn($r) => (int) $r->pendiente)) }}</td>
             <td colspan="2"></td>
         </tr></tfoot>
     </table>

@@ -228,6 +228,16 @@ class FlujoEfectivo
         return array_values(array_unique(array_filter($ids)));
     }
 
+    /**
+     * Si el efectivo de esta persona es la caja de la empresa (el dueño): lo
+     * que tiene ya está en caja, no pendiente por pasar ni por recoger.
+     * Ver config cobros.caja_empresa.
+     */
+    public static function esCajaEmpresa(int $aliadoId, int $usuarioId): bool
+    {
+        return (int) (config('cobros.caja_empresa')[$aliadoId] ?? 0) === $usuarioId;
+    }
+
     /** Suma un conjunto de filas de porUsuarioDia. */
     public static function resumir(array $filas): array
     {
