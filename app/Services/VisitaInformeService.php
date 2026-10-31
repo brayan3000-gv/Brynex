@@ -230,6 +230,7 @@ class VisitaInformeService
                     'total_mes' => $r['total_mes'],
                     'abono_empresa' => $r['anticipos_empresa'],
                     'abono_persona' => $r['anticipos'] - $r['anticipos_empresa'] + $r['saldo_favor'],
+                    'abonos_persona' => $r['n_anticipos_persona'],
                     'saldo_favor' => $r['saldo_favor'],
                     'falta' => $r['falta'],
                     'facturable' => $r['facturable'],

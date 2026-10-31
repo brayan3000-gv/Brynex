@@ -98,6 +98,9 @@ class VisitaCobroService
             // La parte que puso la empresa (lo repartido de un anticipo por
             // NIT); el resto lo abonó la persona. Ver faltantes por empresa.
             'anticipos_empresa' => (int) $anticipos->whereNotNull('anticipo_padre_id')->sum('valor_disponible'),
+            // Cuántos abonos libres tiene la persona: en las empresas que pagan
+            // por quincena, dos quiere decir que ya trajo las dos.
+            'n_anticipos_persona' => $anticipos->whereNull('anticipo_padre_id')->count(),
             'anticipo_ids' => $anticipos->pluck('id')->all(),
             // Cada anticipo con su recibo: el cliente suele preguntar cuáles
             // fueron cuando tiene dos o tres.

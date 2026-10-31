@@ -18,14 +18,15 @@
         }
         * { box-sizing: border-box; }
         [x-cloak] { display: none !important; }
-        body { margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--fondo); color: var(--tinta); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+        html, body { height: 100%; }
+        body { display: flex; flex-direction: column; margin: 0; font-family: 'Inter', system-ui, sans-serif; background: var(--fondo); color: var(--tinta); font-size: 14px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
         .num { font-variant-numeric: tabular-nums; }
         .cab { background: var(--azul-oscuro); color: #fff; padding: 14px 16px; }
         .cab-in { max-width: 1280px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
         .cab h1 { margin: 0; font-size: 1.1rem; font-weight: 800; flex: 1; min-width: 200px; }
         .cab a { color: #cbd5e1; text-decoration: none; font-size: .85rem; font-weight: 600; }
         .cab a:hover { color: #fff; }
-        main { max-width: 1280px; margin: 0 auto; padding: 16px; }
+        main { flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 1280px; margin: 0 auto; padding: 16px; }
         .barra { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 14px; }
         .entrada { border: 1.5px solid var(--borde); border-radius: 10px; padding: 9px 12px; background: #fff; font: inherit; min-width: 0; }
         .entrada:focus { outline: none; border-color: var(--azul); }
@@ -38,14 +39,14 @@
         .dato b { font-size: 1.15rem; font-weight: 800; }
         .progreso { height: 4px; background: var(--borde); border-radius: 99px; overflow: hidden; margin: -6px 0 12px; }
         .progreso div { height: 100%; background: var(--azul); transition: width .3s; }
-        .caja-tabla { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; overflow-x: auto; }
+        .caja-tabla { flex: 1 1 auto; min-height: 260px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; overflow: auto; }
         table { width: 100%; border-collapse: collapse; min-width: 900px; }
         th { background: #1e3a8a; color: #fff; font-size: .74rem; text-transform: uppercase; letter-spacing: .03em; text-align: left; padding: 9px 10px; white-space: nowrap; position: sticky; top: 0; cursor: pointer; user-select: none; }
         th.der, td.der { text-align: right; }
         th .flecha { opacity: .7; font-size: .7rem; }
         td { padding: 8px 10px; border-bottom: 1px solid var(--borde); vertical-align: top; }
         tbody tr:hover td { background: #f8fafc; }
-        tfoot td { font-weight: 800; background: #f1f5f9; border-top: 2px solid #cbd5e1; }
+        tfoot td { font-weight: 800; background: #f1f5f9; border-top: 2px solid #cbd5e1; position: sticky; bottom: 0; }
         .nom { font-weight: 600; }
         .sub { color: var(--tenue); font-size: .75rem; }
         .link { background: none; border: 0; padding: 2px 4px; margin: -2px -4px; border-radius: 6px; font: inherit; font-weight: 700; cursor: pointer; color: var(--azul); }
@@ -57,6 +58,8 @@
         .chip { display: inline-block; border-radius: 99px; padding: 2px 9px; font-size: .72rem; font-weight: 700; white-space: nowrap; }
         .chip.verde { background: var(--verde-suave); color: var(--verde); }
         .chip.ambar { background: var(--ambar-suave); color: var(--ambar); }
+        .chip.motivo { white-space: normal; border-radius: 10px; line-height: 1.3; padding: 4px 9px; display: inline-block; max-width: 220px; }
+        .veces { display: block; color: var(--tenue); font-size: .72rem; font-weight: 700; margin-top: 1px; }
         .chip.gris { background: #f1f5f9; color: var(--tenue); }
         .ayuda { text-align: center; color: var(--tenue); padding: 40px 16px; }
         .cargando { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: gira .7s linear infinite; vertical-align: -2px; }
@@ -106,8 +109,8 @@
                 <div class="dato"><small>Personas</small><b class="num" x-text="filas.length"></b></div>
                 <div class="dato"><small>Ya completaron</small><b class="num" style="color:var(--verde)" x-text="completos()"></b></div>
                 <div class="dato"><small>Total a pagar</small><b class="num" x-text="plata(total('total_mes'))"></b></div>
-                <div class="dato"><small>Abono persona libre</small><b class="num" style="color:var(--azul)" x-text="plata(total('abono_persona'))"></b></div>
-                <div class="dato"><small>Abono empresa libre</small><b class="num" style="color:var(--morado)" x-text="plata(total('abono_empresa'))"></b></div>
+                <div class="dato"><small>Abono persona</small><b class="num" style="color:var(--azul)" x-text="plata(total('abono_persona'))"></b></div>
+                <div class="dato"><small>Abono empresa</small><b class="num" style="color:var(--morado)" x-text="plata(total('abono_empresa'))"></b></div>
                 <div class="dato"><small>Falta en total</small><b class="num" style="color:var(--rojo)" x-text="plata(total('falta'))"></b></div>
             </div>
             <div class="progreso" x-show="calculados() < filas.length"><div :style="'width:' + (100 * calculados() / filas.length) + '%'"></div></div>
@@ -126,8 +129,8 @@
                     <th @click="ordenar('nombre')">Nombre y cédula <span class="flecha" x-text="flecha('nombre')"></span></th>
                     <th @click="ordenar('periodo')">Próximo pago <span class="flecha" x-text="flecha('periodo')"></span></th>
                     <th class="der" @click="ordenar('total_mes')">Total a pagar <span class="flecha" x-text="flecha('total_mes')"></span></th>
-                    <th class="der" @click="ordenar('abono_persona')">Abono persona libre <span class="flecha" x-text="flecha('abono_persona')"></span></th>
-                    <th class="der" @click="ordenar('abono_empresa')">Abono empresa libre <span class="flecha" x-text="flecha('abono_empresa')"></span></th>
+                    <th class="der" @click="ordenar('abono_persona')">Abono persona <span class="flecha" x-text="flecha('abono_persona')"></span></th>
+                    <th class="der" @click="ordenar('abono_empresa')">Abono empresa <span class="flecha" x-text="flecha('abono_empresa')"></span></th>
                     <th class="der" @click="ordenar('falta')">Falta <span class="flecha" x-text="flecha('falta')"></span></th>
                     <th @click="ordenar('estado')">Estado <span class="flecha" x-text="flecha('estado')"></span></th>
                 </tr>
@@ -137,7 +140,7 @@
                     <tr>
                         <td class="der num sub" x-text="i + 1"></td>
                         <td>
-                            <div class="nom" x-text="f.nombre || 'Sin nombre'"></div>
+                            <div class="nom" x-text="nombrePropio(f.nombre) || 'Sin nombre'"></div>
                             <div class="sub num" x-text="'CC ' + f.cedula"></div>
                         </td>
                         <td>
@@ -147,7 +150,10 @@
                         <td class="der num" x-text="ok(f) ? plata(f.calc.total_mes) : ''"></td>
                         <td class="der num">
                             <template x-if="ok(f)">
-                                <button type="button" class="link" :class="!f.calc.abono_persona && 'cero'" @click="abrirDetalle(f, 'persona')" x-text="plata(f.calc.abono_persona)"></button>
+                                <div>
+                                    <button type="button" class="link" :class="!f.calc.abono_persona && 'cero'" @click="abrirDetalle(f, 'persona')" x-text="plata(f.calc.abono_persona)"></button>
+                                    <span class="veces" x-show="f.calc.abonos_persona > 0" x-text="'x' + f.calc.abonos_persona" :title="f.calc.abonos_persona === 1 ? 'Un abono' : f.calc.abonos_persona + ' abonos'"></span>
+                                </div>
                             </template>
                         </td>
                         <td class="der num">
@@ -162,7 +168,7 @@
                         <td>
                             <template x-if="completo(f)"><span class="chip verde">✓ Completo</span></template>
                             <template x-if="ok(f) && f.calc.falta > 0 && f.calc.facturable"><span class="chip gris">Debe</span></template>
-                            <template x-if="ok(f) && !f.calc.facturable"><span class="chip ambar" :title="f.calc.motivo" x-text="'⚠ ' + (f.calc.motivo || 'En la oficina')"></span></template>
+                            <template x-if="ok(f) && !f.calc.facturable"><span class="chip ambar motivo" x-html="motivo(f.calc.motivo)"></span></template>
                             <template x-if="f.calc && f.calc.error"><span class="chip ambar" x-text="f.calc.error"></span></template>
                         </td>
                     </tr>
@@ -192,7 +198,7 @@
     <section class="modal" role="dialog" aria-modal="true">
         <div class="modal-cab">
             <div style="flex:1;min-width:0">
-                <h2 x-text="detalle.fila.nombre || ('CC ' + detalle.fila.cedula)"></h2>
+                <h2 x-text="nombrePropio(detalle.fila.nombre) || ('CC ' + detalle.fila.cedula)"></h2>
                 <div class="sub" x-text="'CC ' + detalle.fila.cedula + (ok(detalle.fila) ? ' · ' + detalle.fila.calc.periodo + ': ' + plata(detalle.fila.calc.total_mes) + ' · falta ' + plata(detalle.fila.calc.falta) : '')"></div>
             </div>
             <button class="cerrar" @click="cerrarDetalle()" aria-label="Cerrar">✕</button>
@@ -288,6 +294,13 @@ function personas() {
 
         plata(v) { return '$' + Number(v || 0).toLocaleString('es-CO'); },
         ok(f) { return f && f.calc && !f.calc.error; },
+        // «KEVIN ALEJANDRO DE LA CRUZ» → «Kevin Alejandro de la Cruz».
+        nombrePropio(n) {
+            const menores = ['de', 'del', 'la', 'las', 'los', 'y'];
+            return String(n || '').trim().toLowerCase().split(/\s+/)
+                .map((p, i) => (i > 0 && menores.includes(p)) ? p : p.charAt(0).toUpperCase() + p.slice(1))
+                .join(' ');
+        },
 
         elegirEmpresa() {
             const e = EMPRESAS.find(x => x.nombre === this.empresaTexto.trim());
@@ -342,6 +355,11 @@ function personas() {
             await Promise.all([trabajar(), trabajar(), trabajar()]);
         },
 
+        motivo(m) {
+            const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+            const [uno, ...resto] = String(m || 'Se factura en la oficina.').split(': ');
+            return '⚠ ' + esc(uno) + (resto.length ? ':<br>' + esc(resto.join(': ')) : '');
+        },
         calculados() { return this.filas.filter(f => f.calc).length; },
         completo(f) { return this.ok(f) && f.calc.falta === 0 && f.calc.facturable; },
         completos() { return this.filas.filter(f => this.completo(f)).length; },
