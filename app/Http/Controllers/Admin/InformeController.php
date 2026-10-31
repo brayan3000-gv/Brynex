@@ -1923,7 +1923,7 @@ class InformeController extends Controller
         $vivo = self::cierreVivoDe($this, (int) $v['anio'], (int) $v['mes']);
         \App\Services\Caja\CierreMes::guardarFoto($this->aliadoId(), (int) $v['anio'], (int) $v['mes'], $vivo, (bool) ($v['rehacer'] ?? false));
 
-        return back()->with('success', 'Foto del cierre guardada.');
+        return back()->with('ver_cierre', true)->with('success', 'Foto del cierre guardada.');
     }
 
     /** Lo que hay de verdad en cada cuenta y en efectivo al cierre. */
@@ -1949,7 +1949,7 @@ class InformeController extends Controller
 
         \App\Services\Caja\CierreMes::guardarSaldosReales($aid, (int) $v['anio'], (int) $v['mes'], $reales, (int) Auth::id());
 
-        return back()->with('success', 'Saldos reales del cierre guardados.');
+        return back()->with('ver_cierre', true)->with('success', 'Saldos reales del cierre guardados.');
     }
 
     /**

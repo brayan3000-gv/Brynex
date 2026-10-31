@@ -58,12 +58,6 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
     <div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:.6rem 1rem;border-radius:8px;margin-bottom:.8rem;font-size:.83rem">❌ {{ session('error') }}</div>
     @endif
 
-    {{-- Cierre del mes: utilidad, lo que pasa al mes siguiente, por cobrar,
-         dónde está la plata y si cuadra. Va antes que todo lo demás. --}}
-    @if($cierre)
-    @include('admin.informes.partials.cierre_mes')
-    @endif
-
     {{-- KPIs principales --}}
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.5rem;">
         <div class="fin-kpi" style="--c:#2563eb;">
@@ -1373,6 +1367,34 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             🔍 Auditoría de Facturas
         </a>
     </div>
+
+    {{-- Cierre del mes (los 5 puntos): al final y cerrado, porque la vista ya
+         tiene mucho (lo pidió el dueño, 31-oct-2026). Va en un <template>: el
+         navegador no lo arma hasta que se pide. Se abre solo al volver de
+         guardar la foto o los saldos reales, o con ?cierre=1. --}}
+    @if($cierre)
+    <div id="cierre" style="margin-bottom:1.5rem;">
+        <button type="button" id="btnVerCierre" onclick="verCierre()"
+                style="width:100%;display:flex;align-items:center;justify-content:center;gap:.5rem;background:#fff;border:1.5px dashed #93c5fd;color:#1e40af;border-radius:12px;padding:.8rem;font-size:.86rem;font-weight:800;cursor:pointer;">
+            📘 Ver cierre del mes · {{ $mesesEs[$mes] }} {{ $anio }}
+            <span style="font-weight:500;color:#64748b;font-size:.74rem;">utilidad · qué pasa al mes siguiente · por cobrar · dónde está la plata · ¿cuadra?</span>
+        </button>
+        <template id="tplCierre">
+            @include('admin.informes.partials.cierre_mes')
+        </template>
+    </div>
+    <script>
+    function verCierre() {
+        const tpl = document.getElementById('tplCierre');
+        if (!tpl) return;
+        document.getElementById('btnVerCierre').replaceWith(tpl.content.cloneNode(true));
+        tpl.remove();
+    }
+    @if(session('ver_cierre') || request()->boolean('cierre'))
+    document.addEventListener('DOMContentLoaded', () => { verCierre(); document.getElementById('cierre').scrollIntoView(); });
+    @endif
+    </script>
+    @endif
 </div>
 
 {{-- ══ Modal Egresos Operativos — detalle de gastos ══ --}}
