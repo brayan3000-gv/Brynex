@@ -139,7 +139,6 @@
                         <td>
                             <div class="nom" x-text="f.nombre || 'Sin nombre'"></div>
                             <div class="sub num" x-text="'CC ' + f.cedula"></div>
-                            <div class="sub" x-show="f.varios" x-text="'Dos contratos · ' + f.razon_social"></div>
                         </td>
                         <td>
                             <template x-if="!f.calc"><span class="cargando" style="color:var(--tenue)"></span></template>
