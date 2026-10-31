@@ -1471,7 +1471,12 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div style="color:#fff;font-weight:800;font-size:1rem;">💵 Movimientos en Efectivo — {{ $mesesEs[$mes] }} {{ $anio }}</div>
                 <div style="color:rgba(255,255,255,.65);font-size:.74rem;margin-top:.15rem;">Facturas cobradas en efectivo · Gastos en efectivo · Cuadres abiertos por asesor</div>
             </div>
-            <button onclick="document.getElementById('modalEfectivo').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
+            <div style="display:flex;align-items:center;gap:.5rem;">
+                @can('gastos.gestionar')
+                <button onclick="abrirTraslado(null)" title="Registrar que pasó plata de aquí a un banco, sin ir a Gastos" style="background:#fff;border:none;color:#15803d;border-radius:8px;padding:.35rem .75rem;cursor:pointer;font-size:.78rem;font-weight:800;">⇄ Mover a otro banco</button>
+                @endcan
+                <button onclick="document.getElementById('modalEfectivo').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
+            </div>
         </div>
         <div id="modalEfectivoSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;padding:.85rem 1.25rem;background:#f0fdf4;border-bottom:1px solid #bbf7d0;"></div>
         <div id="modalEfectivoBody" style="padding:1.25rem;max-height:65vh;overflow-y:auto;font-size:.82rem;color:#475569;">Cargando...</div>
@@ -1486,12 +1491,71 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div id="modalBancoTitulo" style="color:#fff;font-weight:800;font-size:1rem;"></div>
                 <div id="modalBancoSub" style="color:rgba(255,255,255,.65);font-size:.74rem;margin-top:.15rem;"></div>
             </div>
-            <button onclick="document.getElementById('modalBanco').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
+            <div style="display:flex;align-items:center;gap:.5rem;">
+                @can('gastos.gestionar')
+                <button onclick="abrirTraslado(_bancoActualId)" title="Registrar que pasó plata de aquí a un banco, sin ir a Gastos" style="background:#fff;border:none;color:#1e40af;border-radius:8px;padding:.35rem .75rem;cursor:pointer;font-size:.78rem;font-weight:800;">⇄ Mover a otro banco</button>
+                @endcan
+                <button onclick="document.getElementById('modalBanco').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
+            </div>
         </div>
         <div id="modalBancoSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;padding:.85rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;"></div>
         <div id="modalBancoBody" style="padding:1.25rem;max-height:62vh;overflow-y:auto;font-size:.82rem;color:#475569;">Cargando...</div>
     </div>
 </div>
+
+{{-- Modal Mover a otro banco: un traslado banco→banco o efectivo→banco sin
+     ir a Gastos. Guarda lo mismo que el formulario de Gastos (gastos.store). --}}
+@can('gastos.gestionar')
+<div id="modalTraslado" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center;">
+    <form method="POST" action="{{ route('admin.informes.gastos.store') }}" onsubmit="return enviarTraslado(this)"
+          style="background:#fff;border-radius:16px;width:min(460px,96vw);box-shadow:0 25px 60px rgba(0,0,0,.25);">
+        @csrf
+        <input type="hidden" name="tipo" id="trasTipo">
+        <input type="hidden" name="forma_pago" id="trasForma">
+        <input type="hidden" name="banco_origen_id" id="trasOrigen">
+        <input type="hidden" name="banco_destino_id" id="trasDestinoHidden">
+        <input type="hidden" name="descripcion" id="trasDescripcion">
+        <input type="hidden" name="valor" id="trasValorRaw">
+        <input type="hidden" name="imagen_base64" id="trasBase64">
+        <div style="background:linear-gradient(135deg,#0d2550,#1e40af);border-radius:16px 16px 0 0;padding:.9rem 1.25rem;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <div style="color:#fff;font-weight:800;font-size:.95rem;">⇄ Mover a otro banco</div>
+                <div id="trasSub" style="color:rgba(255,255,255,.75);font-size:.72rem;margin-top:.1rem;"></div>
+            </div>
+            <button type="button" onclick="cerrarTraslado()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:1rem;">✕</button>
+        </div>
+        <div style="padding:1.2rem 1.5rem;">
+            <div style="margin-bottom:.8rem;">
+                <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:.3rem;">¿A qué banco pasó?</label>
+                <select id="trasDestino" required style="width:100%;padding:.5rem .7rem;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+                    <option value="">Elige el banco…</option>
+                    @foreach($bancos as $b)
+                        <option value="{{ $b->id }}">{{ trim($b->banco . ' ' . $b->nombre) }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-bottom:.8rem;">
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:.3rem;">Valor ($)</label>
+                    <input type="text" id="trasValor" required inputmode="numeric" placeholder="$ 0" oninput="fmtTrasValor(this)" style="width:100%;padding:.5rem .7rem;border:1px solid #d1d5db;border-radius:8px;font-size:.9rem;font-weight:700;font-family:monospace;color:#1e40af;box-sizing:border-box;">
+                </div>
+                <div>
+                    <label style="font-size:.75rem;font-weight:600;color:#374151;display:block;margin-bottom:.3rem;">Fecha</label>
+                    <input type="date" name="fecha" id="trasFecha" required style="width:100%;padding:.5rem .7rem;border:1px solid #d1d5db;border-radius:8px;font-size:.85rem;box-sizing:border-box;">
+                </div>
+            </div>
+            <div style="margin-bottom:.9rem;">
+                <div style="font-size:.75rem;font-weight:600;color:#374151;margin-bottom:.3rem;">Comprobante</div>
+                <div id="trasPasteZone" style="border:2px dashed #cbd5e1;border-radius:10px;padding:.9rem;text-align:center;color:#64748b;font-size:.78rem;">
+                    📋 Pega la imagen con <b>Ctrl+V</b>
+                </div>
+            </div>
+            <div id="trasError" style="display:none;color:#dc2626;font-size:.78rem;margin-bottom:.6rem;"></div>
+            <button type="submit" id="trasBtn" style="width:100%;padding:.6rem;background:#1e40af;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:.88rem;cursor:pointer;">Guardar traslado</button>
+        </div>
+    </form>
+</div>
+@endcan
 
 {{-- Modal Auditoría Planilla --}}
 <div id="modalAudit" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:3vh;overflow-y:auto;">
@@ -2290,6 +2354,79 @@ document.getElementById('modalEditarConsig').addEventListener('click',function(e
         if(e.target===this) this.style.display='none';
     });
 });
+
+@can('gastos.gestionar')
+// ── Mover a otro banco ──────────────────────────────────────────────
+// bancoId null = sale del efectivo de quien registra (Efectivo → Banco, que
+// guarda el banco que recibe en banco_origen_id, igual que Gastos).
+const _bancosNombre = @json(collect($bancos)->mapWithKeys(fn ($b) => [$b->id => trim($b->banco . ' ' . $b->nombre)]));
+let _trasOrigenId = null, _trasPaste = null;
+function abrirTraslado(bancoId) {
+    _trasOrigenId = bancoId;
+    const desdeEf = bancoId === null;
+    document.getElementById('trasSub').textContent = desdeEf
+        ? 'Sale del efectivo de {{ addslashes(auth()->user()->nombre) }}'
+        : 'Sale de ' + (_bancosNombre[bancoId] || 'este banco');
+    const sel = document.getElementById('trasDestino');
+    sel.value = '';
+    [...sel.options].forEach(o => { o.hidden = o.value !== '' && Number(o.value) === Number(bancoId); });
+    document.getElementById('trasValor').value = '';
+    document.getElementById('trasFecha').value = new Date().toLocaleDateString('en-CA');
+    document.getElementById('trasBase64').value = '';
+    document.getElementById('trasError').style.display = 'none';
+    const btn = document.getElementById('trasBtn');
+    btn.disabled = false;
+    btn.textContent = 'Guardar traslado';
+    const zone = document.getElementById('trasPasteZone');
+    zone.style.borderColor = '#cbd5e1';
+    zone.innerHTML = '📋 Pega la imagen con <b>Ctrl+V</b>';
+    _trasPaste = e => {
+        const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+        if (!item) return;
+        e.preventDefault();
+        const reader = new FileReader();
+        reader.onload = ev => {
+            document.getElementById('trasBase64').value = ev.target.result;
+            zone.style.borderColor = '#10b981';
+            zone.innerHTML = `<img src="${ev.target.result}" style="max-height:110px;max-width:100%;border-radius:6px"><div style="font-size:.7rem;color:#10b981">✅ Comprobante listo</div>`;
+        };
+        reader.readAsDataURL(item.getAsFile());
+    };
+    document.addEventListener('paste', _trasPaste);
+    document.getElementById('modalTraslado').style.display = 'flex';
+}
+function cerrarTraslado() {
+    document.getElementById('modalTraslado').style.display = 'none';
+    if (_trasPaste) { document.removeEventListener('paste', _trasPaste); _trasPaste = null; }
+}
+function fmtTrasValor(inp) {
+    const n = inp.value.replace(/\D/g, '');
+    inp.value = n ? '$ ' + Number(n).toLocaleString('es-CO') : '';
+}
+function enviarTraslado(form) {
+    const err     = document.getElementById('trasError');
+    const destino = document.getElementById('trasDestino').value;
+    const valor   = Number(document.getElementById('trasValor').value.replace(/\D/g, '')) || 0;
+    if (!destino || valor < 1) {
+        err.textContent = 'Elige el banco y escribe el valor.';
+        err.style.display = 'block';
+        return false;
+    }
+    const desdeEf = _trasOrigenId === null;
+    const origen  = desdeEf ? 'efectivo' : (_bancosNombre[_trasOrigenId] || 'banco');
+    document.getElementById('trasTipo').value          = desdeEf ? 'efectivo_banco' : 'banco_banco';
+    document.getElementById('trasForma').value         = desdeEf ? 'efectivo' : 'banco_banco';
+    document.getElementById('trasOrigen').value        = desdeEf ? destino : _trasOrigenId;
+    document.getElementById('trasDestinoHidden').value = desdeEf ? '' : destino;
+    document.getElementById('trasDescripcion').value   = 'Traslado de ' + origen + ' a ' + (_bancosNombre[destino] || 'banco');
+    document.getElementById('trasValorRaw').value      = valor;
+    const btn = document.getElementById('trasBtn');
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+    return true;
+}
+document.getElementById('modalTraslado').addEventListener('click', function (e) { if (e.target === this) cerrarTraslado(); });
+@endcan
 
 // ── Modal Efectivo ──────────────────────────────────────────────────
 function verMovimientosEfectivo() {
