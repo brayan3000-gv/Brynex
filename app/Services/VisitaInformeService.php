@@ -91,16 +91,32 @@ class VisitaInformeService
                 ->whereNotNull('anticipo_padre_id')
                 ->whereIn('cedula', $lote->all())
                 ->whereNotIn('estado', [Anticipo::ESTADO_DEVUELTO, Anticipo::ESTADO_ANULADO])
+                ->with('factura:id,numero_factura,mes,anio,fecha_pago')
                 ->orderBy('fecha_pago')->get());
         }
 
-        $personas = $cedulas->map(function ($cedula) use ($cobros, $empresa, $clientes) {
+        // La parte de la empresa que ya pagó una factura dentro de esas fechas
+        // fue para el cobro anterior, no para el que se está recogiendo: no
+        // suma al abono (Kevin Montenegro, oct-2026: los $107.000 del 6-oct
+        // pagaron la #14296 y el abono salía con el de noviembre encima).
+        $yaUsado = fn ($a) => $a->factura && (int) $a->valor_aplicado > 0
+            && $a->factura->fecha_pago && $a->factura->fecha_pago->toDateString() <= $hasta;
+
+        $contratos = collect();
+        foreach ($cedulas->chunk(1000) as $lote) {
+            $contratos = $contratos->concat(Contrato::where('aliado_id', $aliadoId)->where('estado', 'vigente')
+                ->whereIn('cedula', $lote->all())->orderBy('id')->get());
+        }
+        $contratos = $contratos->groupBy(fn ($k) => (string) $k->cedula);
+
+        $personas = $cedulas->map(function ($cedula) use ($cobros, $empresa, $clientes, $yaUsado, $contratos) {
             $suyos = $cobros->where('cedula', $cedula);
             $efectivo = (int) $suyos->sum('efectivo');
             $transfer = (int) $suyos->sum('transferencia');
-            $deEmpresa = (int) $empresa->where('cedula', $cedula)->sum('valor');
+            $deEmpresa = (int) $empresa->where('cedula', $cedula)
+                ->sum(fn ($a) => (int) $a->valor - ($yaUsado($a) ? (int) $a->valor_aplicado : 0));
 
-            return [
+            return $this->proximoPago($contratos->get($cedula, collect())) + [
                 'cedula' => $cedula,
                 'nombre' => $clientes->get($cedula)?->nombre_completo ?? '',
                 'empresa' => $clientes->get($cedula)?->empresa?->empresa ?? 'Individual',
@@ -125,6 +141,9 @@ class VisitaInformeService
                 'nombre' => $nombres[(string) $a->cedula] ?? '', 'empresa' => $empresas[(string) $a->cedula] ?? '',
                 'valor' => (int) $a->valor, 'numero' => 'ANT-'.$a->id, 'de' => 'ANT-'.$a->anticipo_padre_id,
                 'periodo' => $a->periodo_mes ? ReciboVisitaService::periodo((int) $a->periodo_mes, (int) $a->periodo_anio) : '',
+                'usado' => $yaUsado($a) ? (int) $a->valor_aplicado : 0,
+                'factura' => $yaUsado($a) ? '#'.$a->factura->numero_factura.' · '
+                    .ReciboVisitaService::periodo((int) $a->factura->mes, (int) $a->factura->anio) : '',
             ]),
         ];
     }
@@ -136,10 +155,12 @@ class VisitaInformeService
 
         $hoja = $libro->getActiveSheet()->setTitle('Por persona');
         $this->tabla($hoja, ['Cédula', 'Nombre completo', 'Empresa', 'Efectivo', 'Transferencia', 'Abono de la persona',
-            'Abono de la empresa', 'Total', 'Cobros', 'Cobró'], $datos['personas']->map(fn ($p) => [
+            'Abono de la empresa', 'Total', 'Próximo pago', 'Valor del próximo pago', 'Anticipos libres hoy', 'Le falta',
+            'Cobros', 'Cobró'], $datos['personas']->map(fn ($p) => [
                 $p['cedula'], $p['nombre'], $p['empresa'], $p['efectivo'], $p['transferencia'], $p['abono'],
-                $p['abono_empresa'], $p['total'], $p['cobros'], $p['cobro'],
-            ]), ['D', 'E', 'F', 'G', 'H'], '1e40af', true);
+                $p['abono_empresa'], $p['total'], $p['proximo'], $p['proximo_valor'], $p['libres'], $p['falta'],
+                $p['cobros'], $p['cobro'],
+            ]), ['D', 'E', 'F', 'G', 'H', 'J', 'K', 'L'], '1e40af', true);
 
         $this->tabla($libro->createSheet()->setTitle('Cada cobro'), ['Fecha', 'Hora', 'Cédula', 'Nombre completo', 'Empresa',
             'Tipo', 'N.º', 'Efectivo', 'Transferencia', 'Valor', 'Aplicado a la factura', 'Quedó de anticipo', 'Factura', 'Cobró', 'Nota'], $datos['cobros']->map(fn ($c) => [
@@ -149,9 +170,10 @@ class VisitaInformeService
             ]), ['H', 'I', 'J', 'K', 'L'], '059669');
 
         $this->tabla($libro->createSheet()->setTitle('Abonos de la empresa'), ['Fecha', 'Cédula', 'Nombre completo', 'Empresa',
-            'Valor', 'Para el mes', 'N.º', 'Parte de'], $datos['empresa']->map(fn ($a) => [
-                $a['fecha']?->format('Y-m-d'), $a['cedula'], $a['nombre'], $a['empresa'], $a['valor'], $a['periodo'], $a['numero'], $a['de'],
-            ]), ['E'], '7c3aed');
+            'Valor', 'Ya pagó una factura', 'Cuenta en el abono', 'Factura que pagó', 'Para el mes', 'N.º', 'Parte de'], $datos['empresa']->map(fn ($a) => [
+                $a['fecha']?->format('Y-m-d'), $a['cedula'], $a['nombre'], $a['empresa'], $a['valor'], $a['usado'],
+                $a['valor'] - $a['usado'], $a['factura'], $a['periodo'], $a['numero'], $a['de'],
+            ]), ['E', 'F', 'G'], '7c3aed');
 
         $libro->setActiveSheetIndex(0);
         $ruta = tempnam(sys_get_temp_dir(), 'visita');
@@ -211,6 +233,37 @@ class VisitaInformeService
                     'motivo' => $r['motivo_no_factura'],
                 ];
             })->values()->all();
+    }
+
+    /**
+     * El próximo pago de la persona y cuánto le falta, con el mismo cálculo de
+     * la pantalla (VisitaCobroService::resumen). Con dos contratos vigentes se
+     * suman los dos meses; los anticipos son de la cédula y se cuentan una vez.
+     * "Libres" incluye el saldo a favor, que también se descuenta del pago.
+     */
+    private function proximoPago(Collection $contratos): array
+    {
+        if ($contratos->isEmpty()) {
+            return ['proximo' => 'Sin contrato vigente', 'proximo_valor' => null, 'libres' => null, 'falta' => null];
+        }
+
+        try {
+            $resumenes = $contratos->map(fn ($k) => $this->cobros->resumen($k));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ['proximo' => 'No se pudo calcular', 'proximo_valor' => null, 'libres' => null, 'falta' => null];
+        }
+
+        $valor = (int) $resumenes->sum('total_mes');
+        $libres = (int) $resumenes->first()['anticipos'] + (int) $resumenes->sum('saldo_favor');
+
+        return [
+            'proximo' => $resumenes->pluck('periodo')->unique()->implode(' + '),
+            'proximo_valor' => $valor,
+            'libres' => $libres,
+            'falta' => max(0, $valor - $libres),
+        ];
     }
 
     private function clientes(int $aliadoId, Collection $cedulas): Collection
