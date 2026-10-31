@@ -340,4 +340,72 @@ class Anticipo extends BaseModel
 
         return $aplicar;
     }
+
+    /**
+     * Devuelve a disponible lo que una factura tomó de anticipos (al anularla).
+     *
+     * Se devuelve el monto que dice la factura (`anticipo_aplicado`), no el
+     * anticipo completo: en un lote los anticipos son una bolsa repartida por
+     * proporción, y un anticipo ligado a esta factura pudo pagar también otras.
+     * Lo que tomó puede estar ligado a otra factura del mismo recibo (hasta
+     * oct-2026 la primera del lote se quedaba con todos), así que se busca ahí
+     * también: primero los de la misma cédula, luego los ligados a esta factura.
+     *
+     * @return array<int, array{devuelto:int, aplicado_antes:int, estado_antes:string, factura_id_antes:?int}>
+     */
+    public static function devolverDeFactura(Factura $factura): array
+    {
+        $porDevolver = (int) $factura->anticipo_aplicado;
+
+        $facturaIds = collect([(int) $factura->id]);
+        if ((int) $factura->numero_factura > 0 && $factura->created_at) {
+            $facturaIds = Factura::withTrashed()
+                ->where('aliado_id', $factura->aliado_id)
+                ->where('numero_factura', $factura->numero_factura)
+                ->whereDate('created_at', $factura->created_at->toDateString())
+                ->pluck('id')->map(fn ($id) => (int) $id)
+                ->push((int) $factura->id)->unique();
+        }
+
+        $rango = fn ($a) => ((string) $a->cedula === (string) $factura->cedula ? 0 : 2)
+            + ((int) $a->factura_id === (int) $factura->id ? 0 : 1);
+
+        $candidatos = static::where('aliado_id', $factura->aliado_id)
+            ->whereIn('factura_id', $facturaIds)
+            ->where('valor_aplicado', '>', 0)
+            ->get()
+            ->sort(fn ($a, $b) => [$rango($a), (int) $b->id] <=> [$rango($b), (int) $a->id]);
+
+        // Facturas viejas sin el monto guardado: se devuelve lo ligado a ella, como antes.
+        if ($porDevolver <= 0) {
+            $candidatos = $candidatos->where('factura_id', $factura->id);
+            $porDevolver = (int) $candidatos->sum('valor_aplicado');
+        }
+
+        $devueltos = [];
+        foreach ($candidatos as $ant) {
+            if ($porDevolver <= 0) {
+                break;
+            }
+            $antes = (int) $ant->valor_aplicado;
+            $devuelto = min($antes, $porDevolver);
+            $resta = $antes - $devuelto;
+
+            $devueltos[(int) $ant->id] = [
+                'devuelto' => $devuelto,
+                'aplicado_antes' => $antes,
+                'estado_antes' => (string) $ant->estado,
+                'factura_id_antes' => $ant->factura_id ? (int) $ant->factura_id : null,
+            ];
+
+            $ant->update([
+                'valor_aplicado' => $resta,
+                'estado' => $resta > 0 ? self::ESTADO_PARCIAL : self::ESTADO_DISPONIBLE,
+                'factura_id' => $resta > 0 ? $ant->factura_id : null,
+            ]);
+            $porDevolver -= $devuelto;
+        }
+
+        return $devueltos;
+    }
 }

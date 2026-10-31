@@ -2255,14 +2255,20 @@ class FacturacionController extends Controller
 
             // ─── Marcar anticipos como aplicados (post-loop, fuera del foreach) ──
             // Se hace al final de la transacción para que todos los factura->id existan.
-            // La primera factura del lote "absorbe" los anticipos.
+            // Cada anticipo queda en la factura de su cédula; los que no son de
+            // nadie del lote (empresa sin repartir) en la primera. Antes la
+            // primera absorbía todos, y anular la factura de otra persona del
+            // lote no le devolvía nada (Yuly Rodríguez, lote #14266, oct-2026).
             if ($anticiposSeleccionados->isNotEmpty() && ! empty($facturasCreadas)) {
-                $facturaAnticipo = $facturasCreadas[0]; // primera del lote
+                $facturaPorCedula = Factura::whereIn('id', $facturasCreadas)->orderBy('id')
+                    ->get(['id', 'cedula'])->groupBy(fn ($f) => (string) $f->cedula)
+                    ->map(fn ($g) => (int) $g->first()->id);
                 $pendienteAplicar = $totalAnticipo;
                 foreach ($anticiposSeleccionados as $ant) {
                     if ($pendienteAplicar <= 0) {
                         break;
                     }
+                    $facturaAnticipo = $facturaPorCedula[(string) $ant->cedula] ?? $facturasCreadas[0];
                     $aplicado = $ant->aplicarAFactura($facturaAnticipo, $pendienteAplicar);
                     $pendienteAplicar -= $aplicado;
                 }
@@ -3027,8 +3033,9 @@ class FacturacionController extends Controller
                 ->get();
         }
 
-        // Anticipos aplicados a esta factura (para el recibo/PDF)
-        $anticiposAplicados = \App\Models\Anticipo::where('factura_id', $facturaId)
+        // Anticipos aplicados al recibo (para el recibo/PDF). En un lote cada
+        // anticipo está en la factura de su cédula, así que se buscan en todas.
+        $anticiposAplicados = \App\Models\Anticipo::whereIn('factura_id', $grupoNp?->pluck('id')->push($facturaId) ?? [$facturaId])
             ->with(['bancoCuenta', 'usuario'])
             ->orderBy('fecha_pago')
             ->get();
@@ -3332,26 +3339,23 @@ class FacturacionController extends Controller
                 // ── Restaurar anticipos aplicados a esta factura ──────────────────
                 // Al anular, los anticipos que se aplicaron en el momento de facturar
                 // deben quedar nuevamente disponibles para ser usados en una re-facturación.
-                \App\Models\Anticipo::where('factura_id', $f->id)->each(function ($ant) use ($aliadoId, $f) {
+                foreach (\App\Models\Anticipo::devolverDeFactura($f) as $antId => $d) {
                     Bitacora::registrar(
                         accion: 'updated',
                         modelo: 'Anticipo',
-                        registroId: $ant->id,
-                        descripcion: "Anticipo #{$ant->id} revertido a disponible por anulación de factura #{$f->numero_factura}.",
+                        registroId: $antId,
+                        descripcion: "Anticipo #{$antId}: se devolvieron $".number_format($d['devuelto'], 0, ',', '.')
+                                    ." por anulación de factura #{$f->numero_factura}.",
                         detalle: [
-                            'valor_aplicado_revertido' => $ant->valor_aplicado,
-                            'estado_anterior' => $ant->estado,
+                            'valor_aplicado_revertido' => $d['devuelto'],
+                            'valor_aplicado_anterior' => $d['aplicado_antes'],
+                            'estado_anterior' => $d['estado_antes'],
+                            'factura_id_anterior' => $d['factura_id_antes'],
                             'factura_id_anulada' => $f->id,
                         ],
                         alidoId: $aliadoId
                     );
-
-                    $ant->update([
-                        'valor_aplicado' => 0,
-                        'estado' => \App\Models\Anticipo::ESTADO_DISPONIBLE,
-                        'factura_id' => null,
-                    ]);
-                });
+                }
 
                 // Las consignaciones se eliminan físicamente (quedan en el snapshot de la bitácora),
                 // también las de los abonos, que no cuelgan de la factura.
