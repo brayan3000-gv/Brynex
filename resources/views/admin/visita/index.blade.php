@@ -41,7 +41,7 @@
 
         .empresa { margin-top: 10px; display: flex; gap: 8px; }
         .empresa input { flex: 1; min-width: 0; border: 0; border-radius: 10px; padding: 9px 12px; background: rgba(255,255,255,.95); color: var(--tinta); font-size: .88rem; }
-        .empresa button { border: 0; border-radius: 10px; padding: 0 12px; background: rgba(255,255,255,.14); color: #fff; font-weight: 700; cursor: pointer; }
+        .empresa button, .empresa a { border: 0; border-radius: 10px; padding: 0 12px; background: rgba(255,255,255,.14); color: #fff; font-weight: 700; cursor: pointer; }
 
         /* Buscador */
         .buscador { position: sticky; top: var(--alto-cab, 150px); z-index: 10; background: var(--fondo); padding: 12px 0 8px; }
@@ -142,6 +142,8 @@
         <div class="empresa">
             <input list="lista-empresas" placeholder="🏢 Empresa que visitas (opcional)" x-model="empresaTexto" @change="elegirEmpresa()">
             <button type="button" x-show="empresaId" x-cloak @click="abrirFaltantes()" title="Lo que le falta a cada persona de la empresa">📋 Faltan</button>
+            <a x-show="empresaId" x-cloak :href="@js(route('admin.visita.personas')) + '?empresa_id=' + empresaId" target="_blank" rel="noopener"
+               title="Tabla por personas, para el computador" style="display:grid;place-items:center;text-decoration:none">🗂</a>
             <button type="button" x-show="empresaId" x-cloak @click="empresaTexto=''; elegirEmpresa()">✕</button>
         </div>
         <datalist id="lista-empresas">

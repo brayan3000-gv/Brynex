@@ -312,6 +312,41 @@ class VisitaCobroController extends Controller
         return response()->json(['faltantes' => $this->informes->faltantes($aliadoId, $v['ids'])]);
     }
 
+    /**
+     * La tabla por personas de una empresa (para el computador): lo que cada
+     * una tiene abonado y libre, lo que vale su próximo pago y lo que le falta.
+     * Usa los mismos faltantes() y calcularFaltantes() de la hoja del celular.
+     */
+    public function personas()
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+
+        return view('admin.visita.personas', [
+            'empresas' => Empresa::where('aliado_id', $aliadoId)->where('id', '>', 1)
+                ->orderBy('empresa')->get(['id', 'empresa'])
+                ->map(fn ($e) => ['id' => $e->id, 'nombre' => $e->empresa])->values(),
+        ]);
+    }
+
+    /** Los abonos libres de un contrato, de la persona y de la empresa, con su detalle. */
+    public function abonos(Request $request)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+        $contrato = Contrato::where('aliado_id', $aliadoId)->findOrFail($request->integer('contrato_id'));
+
+        return response()->json($this->informes->abonos($aliadoId, (int) $contrato->id));
+    }
+
+    /** La foto del comprobante de un anticipo (la consignación que lo registró). */
+    public function soporte(int $consignacion)
+    {
+        $cs = \App\Models\Consignacion::where('aliado_id', (int) session('aliado_id_activo'))
+            ->whereNotNull('anticipo_id')->findOrFail($consignacion);
+        abort_unless($cs->imagen_path && \Storage::disk('public')->exists($cs->imagen_path), 404, 'Este abono no tiene soporte.');
+
+        return redirect(\Storage::url($cs->imagen_path));
+    }
+
     /** Excel de lo cobrado en visita entre dos fechas. Solo el superadmin. */
     public function excel(Request $request)
     {

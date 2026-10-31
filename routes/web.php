@@ -1045,6 +1045,9 @@ Route::middleware('auth')->group(function () {
         Route::post('/recibo/enviar', [$vc, 'enviarRecibo'])->name('recibo.enviar');
         Route::get('/faltantes', [$vc, 'faltantes'])->name('faltantes');
         Route::get('/faltantes/calcular', [$vc, 'calcularFaltantes'])->name('faltantes.calcular');
+        Route::get('/personas', [$vc, 'personas'])->name('personas');
+        Route::get('/abonos', [$vc, 'abonos'])->name('abonos');
+        Route::get('/soporte/{consignacion}', [$vc, 'soporte'])->whereNumber('consignacion')->name('soporte');
         Route::get('/excel', [$vc, 'excel'])->name('excel');   // solo superadmin (ver el controlador)
     });
 

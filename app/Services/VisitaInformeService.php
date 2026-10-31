@@ -225,14 +225,67 @@ class VisitaInformeService
                 return [
                     'contrato_id' => (int) $k->id,
                     'periodo' => $r['periodo'],
+                    'mes' => $r['mes'],
+                    'anio' => $r['anio'],
                     'total_mes' => $r['total_mes'],
                     'abono_empresa' => $r['anticipos_empresa'],
                     'abono_persona' => $r['anticipos'] - $r['anticipos_empresa'] + $r['saldo_favor'],
+                    'saldo_favor' => $r['saldo_favor'],
                     'falta' => $r['falta'],
                     'facturable' => $r['facturable'],
                     'motivo' => $r['motivo_no_factura'],
                 ];
             })->values()->all();
+    }
+
+    /**
+     * Los abonos libres con que cuenta un contrato (los mismos que descuenta
+     * faltantes()), separados en los de la persona y los de la empresa, con lo
+     * que se pregunta de cada uno: cuándo, cómo, a qué cuenta, quién lo recibió
+     * y el soporte. El soporte de una parte de la empresa es el del anticipo
+     * por NIT del que salió.
+     *
+     * @return array{persona: array, empresa: array}
+     */
+    public function abonos(int $aliadoId, int $contratoId): array
+    {
+        $anticipos = Anticipo::disponiblesParaContrato($aliadoId, $contratoId)
+            ->load(['usuario:id,nombre', 'bancoCuenta', 'padre.bancoCuenta', 'padre.empresa:id,empresa', 'contrato.razonSocial']);
+
+        // La consignación (con su foto) cuelga del anticipo que entró al banco.
+        $consignaciones = \App\Models\Consignacion::where('aliado_id', $aliadoId)
+            ->whereIn('anticipo_id', $anticipos->pluck('id')->concat($anticipos->pluck('anticipo_padre_id'))->filter()->unique()->values())
+            ->get(['id', 'anticipo_id', 'imagen_path', 'referencia', 'banco_cuenta_id'])
+            ->keyBy('anticipo_id');
+
+        $fila = function (Anticipo $a) use ($consignaciones) {
+            $origen = $a->padre ?? $a;
+            $cs = $consignaciones->get($a->id) ?? $consignaciones->get($a->anticipo_padre_id);
+            $cuenta = $origen->bancoCuenta ?? $a->bancoCuenta;
+
+            return [
+                'id' => (int) $a->id,
+                'fecha' => $a->fecha_pago?->format('d/m/Y'),
+                'forma' => Anticipo::FORMAS_PAGO[$a->forma_pago] ?? $a->forma_pago,
+                'efectivo' => in_array($a->forma_pago, ['efectivo', 'nequi'], true),
+                'cuenta' => $cuenta ? trim($cuenta->banco.' · '.$cuenta->nombre.' '.$cuenta->numero_cuenta) : null,
+                'referencia' => $a->referencia ?: $origen->referencia ?: $cs?->referencia,
+                'valor' => (int) $a->valor,
+                'disponible' => (int) $a->valor_disponible,
+                'recibio' => $a->usuario?->nombre,
+                'para' => $a->periodo_mes ? ReciboVisitaService::periodo((int) $a->periodo_mes, (int) $a->periodo_anio) : null,
+                'de' => $a->anticipo_padre_id ? 'ANT-'.$a->anticipo_padre_id.($a->padre?->empresa ? ' · '.$a->padre->empresa->empresa : '') : null,
+                'contrato' => $a->contrato?->razonSocial?->razon_social,
+                'nota' => $this->nota($a->observacion),
+                'soporte_url' => $cs?->imagen_path ? route('admin.visita.soporte', $cs->id) : null,
+                'recibo_url' => $a->anticipo_padre_id ? null : route('admin.visita.recibo', ['a' => [$a->id]]),
+            ];
+        };
+
+        return [
+            'persona' => $anticipos->whereNull('anticipo_padre_id')->map($fila)->values()->all(),
+            'empresa' => $anticipos->whereNotNull('anticipo_padre_id')->map($fila)->values()->all(),
+        ];
     }
 
     /**
