@@ -21,8 +21,10 @@ use Illuminate\Support\Facades\DB;
  *   - cuenta de razón social (`incapacidad`): sigue con su saldo, porque la
  *     plata de una incapacidad entra un mes y sale al afiliado otro. Toma el
  *     real anotado si lo hay; si no, el saldo calculado al cierre anterior.
- *   - cuenta personal (`uso_personal`): siempre 0. El extracto mezcla plata
- *     del dueño, así que solo se lleva lo del negocio en el mes.
+ *   - cuenta personal (`uso_personal`): 0, porque el extracto mezcla plata
+ *     del dueño y solo se lleva lo del negocio en el mes. Si se anota cuánto
+ *     del negocio siguió en la cuenta (tarjeta «Viene de…», nov-2026), arranca
+ *     con eso.
  *
  * Un saldo inicial anotado a mano en `saldos_banco` dentro del mes manda
  * desde su fecha (es el saldo al empezar ese día).
@@ -92,10 +94,12 @@ class SaldosBanco
                 $inicial = (int) $manuales[$id]->saldo_acumulado;
                 $origen  = 'manual';
                 $desde   = substr((string) $manuales[$id]->fecha, 0, 10);
+            } elseif (isset($reales[$id])) {
+                // En la personal, lo anotado es la plata del negocio que siguió
+                // en la cuenta (no el extracto, que mezcla la del dueño).
+                [$inicial, $origen, $desde] = [(int) $reales[$id], 'verificado', $inicio->toDateString()];
             } elseif ($c->uso_personal) {
                 [$inicial, $origen, $desde] = [0, 'personal', $inicio->toDateString()];
-            } elseif (isset($reales[$id])) {
-                [$inicial, $origen, $desde] = [(int) $reales[$id], 'verificado', $inicio->toDateString()];
             } elseif ($c->incapacidad) {
                 [$inicial, $origen, $desde] = [(int) ($previos[$id]['saldo'] ?? 0), 'arrastre', $inicio->toDateString()];
             } else {

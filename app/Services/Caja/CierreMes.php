@@ -328,9 +328,19 @@ class CierreMes
     }
 
     /** Guarda lo que el superadmin anotó que hay de verdad al cierre. */
-    public static function guardarSaldosReales(int $aliadoId, int $anio, int $mes, array $reales, int $usuarioId): CierreMesModel
+    public static function guardarSaldosReales(int $aliadoId, int $anio, int $mes, array $reales, int $usuarioId, bool $sumar = false): CierreMesModel
     {
         $fila = CierreMesModel::firstOrNew(['aliado_id' => $aliadoId, 'anio' => $anio, 'mes' => $mes]);
+        if ($sumar) {
+            // Una cuenta a la vez (la tarjeta «Viene de…»): lo nuevo pisa solo
+            // esas cuentas y el resto de lo anotado se queda. `+` conserva las
+            // llaves numéricas (array_merge las renumeraría).
+            $antes  = $fila->saldos_reales ?? [];
+            $reales = [
+                'bancos'   => ($reales['bancos'] ?? []) + ($antes['bancos'] ?? []),
+                'efectivo' => ($reales['efectivo'] ?? []) + ($antes['efectivo'] ?? []),
+            ];
+        }
         $fila->saldos_reales = $reales;
         $fila->saldos_por    = $usuarioId;
         $fila->saldos_at     = now();

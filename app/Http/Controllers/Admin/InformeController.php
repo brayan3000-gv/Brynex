@@ -1675,8 +1675,10 @@ class InformeController extends Controller
         $efEmpresa  = array_filter($cierreHoy['efectivo'], fn ($e) => \App\Services\Caja\FlujoEfectivo::esCajaEmpresa((int) $aid, (int) $e['id']));
         $porRecoger = array_values(array_filter(array_diff_key($cierreHoy['efectivo'], $efEmpresa), fn ($e) => (int) ($e['real'] ?? $e['saldo']) !== 0));
 
+        $vieneDe = $this->vieneDelMesAnterior((int) $aid, (int) $anio, (int) $mes, $bancos);
+
         return view('admin.informes.financiero', compact(
-            'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger', 'efEmpresa',
+            'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger', 'efEmpresa', 'vieneDe',
             'mes','anio','ingresos','egresos','utilidad',
             'usuarios', 'esAdmin',
             'recaudoSS','pagadoSSRaw','saldoSS',
@@ -1925,13 +1927,87 @@ class InformeController extends Controller
         return back()->with('ver_cierre', true)->with('success', 'Foto del cierre guardada.');
     }
 
+    /**
+     * La tarjeta «Viene de…»: los compromisos con que terminó el mes anterior
+     * (lo que pasa al siguiente según su foto) contra la plata ubicada al
+     * arrancar este mes: el saldo de extracto anotado de cada cuenta, el
+     * efectivo contado y las de razón social, que siguen con su saldo. Lo
+     * prestado a clientes también cubre, porque es de la empresa aunque no
+     * esté en caja. Nunca usa un saldo calculado (los aliados no anotan
+     * todos los gastos): ese solo sale de referencia, «BryNex calculaba».
+     *
+     * null si el mes anterior no tiene foto del cierre.
+     */
+    private function vieneDelMesAnterior(int $aid, int $anio, int $mes, $bancos): ?array
+    {
+        $ant  = \Carbon\Carbon::createFromDate($anio, $mes, 1)->subMonth();
+        $fila = \App\Models\CierreMes::de($aid, $ant->year, $ant->month);
+        if (! $fila || empty($fila->foto)) {
+            return null;
+        }
+
+        $foto   = $fila->foto;
+        $reales = $fila->saldos_reales ?? [];
+        $calcB  = collect($foto['bancos'] ?? [])->keyBy('id');
+        $calcE  = collect($foto['efectivo'] ?? [])->keyBy('id');
+
+        $compromisos = collect($foto['b'] ?? [])->filter(fn ($r) => (int) $r[3] !== 0)
+            ->map(fn ($r) => ['nombre' => $r[1], 'valor' => (int) $r[3]])->values();
+
+        // Cuentas: la anotada o la de razón social ya cuentan; la que terminó
+        // con plata según BryNex y no se ha anotado queda pendiente.
+        $cuentas = collect($bancos)->map(function ($b) use ($calcB) {
+            $ubicada = in_array($b->origen_saldo ?? '', ['verificado', 'manual', 'arrastre'], true);
+
+            return [
+                'id'        => (int) $b->id,
+                'nombre'    => trim($b->banco . ' · ' . $b->nombre),
+                'personal'  => (bool) ($b->uso_personal ?? false),
+                'origen'    => $b->origen_saldo ?? 'sin_verificar',
+                'inicial'   => $ubicada ? (int) $b->saldo_inicial : null,
+                'calculaba' => (int) ($calcB[$b->id]['saldo'] ?? 0),
+            ];
+        })->filter(fn ($c) => $c['inicial'] !== null || $c['calculaba'] !== 0)->values();
+
+        $nombres  = \App\Models\User::whereIn('id', $calcE->keys()->merge(array_keys($reales['efectivo'] ?? []))->all() ?: [0])->pluck('nombre', 'id');
+        $personas = $calcE->keys()->merge(array_keys($reales['efectivo'] ?? []))->unique()
+            ->map(fn ($uid) => [
+                'id'        => (int) $uid,
+                'nombre'    => $nombres[$uid] ?? "Usuario $uid",
+                'inicial'   => isset($reales['efectivo'][$uid]) ? (int) $reales['efectivo'][$uid] : null,
+                'calculaba' => (int) ($calcE[$uid]['saldo'] ?? 0),
+            ])
+            ->filter(fn ($p) => $p['inicial'] !== null || $p['calculaba'] !== 0)->values();
+
+        $totalComp = (int) $compromisos->sum('valor');
+        $ubicado   = (int) $cuentas->sum('inicial') + (int) $personas->sum('inicial');
+        $prestado  = (int) ($foto['total_c'] ?? 0);
+
+        return [
+            'anio'        => $ant->year,
+            'mes'         => $ant->month,
+            'mes_nombre'  => $ant->locale('es')->monthName,
+            'compromisos' => $compromisos,
+            'total'       => $totalComp,
+            'ubicado'     => $ubicado,
+            'prestado'    => $prestado,
+            'resultado'   => $ubicado + $prestado - $totalComp,
+            'cuentas'     => $cuentas,
+            'personas'    => $personas,
+            'pendientes'  => $cuentas->whereNull('inicial')->count() + $personas->whereNull('inicial')->count(),
+        ];
+    }
+
     /** Lo que hay de verdad en cada cuenta y en efectivo al cierre. */
     public function cierreSaldos(Request $request)
     {
-        abort_unless(Auth::user()->hasRole('superadmin'), 403, 'Solo el superadmin anota los saldos del cierre.');
+        abort_unless(Auth::user()->can('informes.cierre_saldos'), 403, 'No tienes permiso para «Anotar saldos de arranque del mes (Informes)».');
         $v = $request->validate([
             'mes'        => 'required|integer|between:1,12',
             'anio'       => 'required|integer|min:2026',
+            // Desde una tarjeta se anota UNA cuenta: se suma a lo ya anotado en
+            // vez de reemplazarlo todo, como hace el formulario del cierre.
+            'parcial'    => 'nullable|boolean',
             'bancos'     => 'nullable|array',
             'bancos.*'   => 'nullable|integer',
             'efectivo'   => 'nullable|array',
@@ -1946,7 +2022,12 @@ class InformeController extends Controller
             'efectivo' => collect($v['efectivo'] ?? [])->filter(fn ($x) => $x !== null)->map(fn ($x) => (int) $x)->all(),
         ];
 
-        \App\Services\Caja\CierreMes::guardarSaldosReales($aid, (int) $v['anio'], (int) $v['mes'], $reales, (int) Auth::id());
+        $parcial = (bool) ($v['parcial'] ?? false);
+        \App\Services\Caja\CierreMes::guardarSaldosReales($aid, (int) $v['anio'], (int) $v['mes'], $reales, (int) Auth::id(), $parcial);
+
+        if ($parcial) {
+            return back()->with('success', 'Saldo de arranque guardado.');
+        }
 
         return back()->with('ver_cierre', true)->with('success', 'Saldos reales del cierre guardados.');
     }

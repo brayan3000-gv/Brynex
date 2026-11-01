@@ -96,7 +96,7 @@
     <div style="margin-top:.8rem;background:#fff7ed;border:2px solid #fb923c;border-radius:12px;padding:.7rem 1rem;display:flex;gap:.8rem;align-items:center;flex-wrap:wrap">
         <div style="font-size:.8rem;color:#9a3412"><b>⚠️ FALTA ANOTAR EL CIERRE DE {{ mb_strtoupper($mesNom) }}.</b>
             Mientras no se anote cuánto hay de verdad en cada cuenta y en efectivo al {{ $corteTx }}, se usan los saldos según BryNex.</div>
-        @if($esSuper)
+        @if(auth()->user()->can('informes.cierre_saldos'))
         <button type="button" class="cm-btn" style="background:#ea580c;color:#fff;margin-left:auto" onclick="document.getElementById('cm-reales').open=true;document.getElementById('cm-reales').scrollIntoView({behavior:'smooth'})">Anotar saldos reales</button>
         @endif
     </div>
@@ -157,7 +157,7 @@
 
     {{-- ── 4 · Dónde está la plata ─────────────────────────────────────── --}}
     <div class="cm-sec">🏦 4 · Dónde está la plata al {{ $corteTx }} <span>— cada cuenta arranca con lo verificado al cierre anterior y suma solo lo del mes</span></div>
-    @php $editable = $esSuper && !$c['en_curso']; @endphp
+    @php $editable = auth()->user()->can('informes.cierre_saldos') && !$c['en_curso']; @endphp
     <form method="POST" action="{{ route('admin.informes.financiero.cierre.saldos') }}" class="cm-card">
         @csrf
         <input type="hidden" name="mes" value="{{ $mes }}"><input type="hidden" name="anio" value="{{ $anio }}">

@@ -196,6 +196,10 @@ class ModulosPermisosSeeder extends Seeder
                 // otorga a mano desde Usuarios → Permisos.
                 'financiero' => ['Ver el estado financiero',   ['C']],
                 'financiero_editar' => ['Corregir consignaciones y subir soportes desde el financiero', []],
+                // Con qué arranca cada cuenta y cada caja el mes: el saldo del
+                // extracto o el efectivo contado al cierre del anterior. Lo tiene
+                // el superadmin; a un admin se le da a mano.
+                'cierre_saldos' => ['Anotar saldos de arranque del mes', []],
             ]],
             ['comisiones', 'Comisiones de asesores', 'reportes', '💼', 'admin.informes.comisiones.index', [
                 'ver' => ['Ver comisiones',            ['A', 'C']],

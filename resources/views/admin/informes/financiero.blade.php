@@ -673,6 +673,10 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 }
                 return null;
             };
+            $pendArranque = $vieneDe
+                ? ['bancos' => $vieneDe['cuentas']->whereNull('inicial')->pluck('id')->all(), 'efectivo' => $vieneDe['personas']->whereNull('inicial')->isNotEmpty()]
+                : ['bancos' => [], 'efectivo' => false];
+            $sinArranque = fn ($c) => $c['tipo'] === 'banco' ? in_array($c['id'], $pendArranque['bancos'], true) : ($c['tipo'] === 'efectivo' && $pendArranque['efectivo']);
             $clicCuenta = fn ($c) => match ($c['tipo']) {
                 'banco'    => "verMovimientosBanco({$c['id']},'" . addslashes(trim($c['arriba'] . ' · ' . $c['nombre'])) . "')",
                 'efectivo' => 'verMovimientosEfectivo()',
@@ -690,6 +694,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             .cuenta-mini .saldo{font-size:1.3rem;font-weight:900;line-height:1.1;margin-top:.2rem;white-space:nowrap}
             .cuenta-mini .pie{margin-top:auto;padding-top:.6rem;font-size:.66rem;color:#64748b}
             #cuentasCero[hidden]{display:none!important}
+            @media(max-width:520px){.viene-de{grid-column:auto!important}}
             .cuenta-cero-chip{padding:.35rem .65rem;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;font:inherit;font-size:.72rem;color:#334155;cursor:pointer}
         </style>
         <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
@@ -698,6 +703,52 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div style="font-size:.74rem;color:#64748b;">Total <b style="font-family:monospace;color:#0d2550;font-size:.85rem;">{{ $fmt($cuentasConSaldo->sum('saldo')) }}</b></div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;">
+                {{-- Viene del mes anterior: los compromisos que pasaron contra la
+                     plata ubicada al arrancar (saldos de extracto anotados, efectivo
+                     contado, razón social y lo prestado). Ver vieneDelMesAnterior(). --}}
+                @if($vieneDe)
+                @php
+                    $vd = $vieneDe;
+                    $vdMes = ucfirst($vd['mes_nombre']);
+                    $vdPend = $vd['cuentas']->whereNull('inicial')->map(fn ($c) => ['banco', $c])
+                        ->concat($vd['personas']->whereNull('inicial')->map(fn ($p) => ['efectivo', $p]));
+                @endphp
+                <div class="cuenta-mini viene-de" style="grid-column:span 2;cursor:default;border-top-color:#7c3aed;">
+                    <span class="cabeza"><span class="arriba">Viene de {{ $vd['mes_nombre'] }}</span></span>
+                    <span class="nombre">Compromisos que pasaron a {{ $mesesEs[$mes] }}</span>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.6rem 1.2rem;margin-top:.55rem;font-size:.72rem;">
+                        <div style="display:flex;flex-direction:column;gap:.18rem;color:#475569;">
+                            @foreach($vd['compromisos'] as $cp)
+                            <div style="display:flex;justify-content:space-between;gap:.4rem;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $cp['nombre'] }}</span><span style="font-family:monospace;white-space:nowrap;">{{ $fmt($cp['valor']) }}</span></div>
+                            @endforeach
+                            <div style="display:flex;justify-content:space-between;gap:.4rem;border-top:1px dashed #e2e8f0;padding-top:.2rem;font-weight:700;color:#334155;"><span>Tiene que haber</span><span style="font-family:monospace;">{{ $fmt($vd['total']) }}</span></div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:.18rem;color:#475569;">
+                            <div style="display:flex;justify-content:space-between;"><span title="Saldos de extracto y efectivo contado ya anotados, más las cuentas de razón social">Ubicado en cuentas</span><span style="font-family:monospace;color:#0d2550;font-weight:700;">{{ $fmt($vd['ubicado']) }}</span></div>
+                            <div style="display:flex;justify-content:space-between;"><span title="Préstamos y deudas de clientes: es plata de la empresa aunque no esté en caja">Prestado a clientes</span><span style="font-family:monospace;color:#6d28d9;font-weight:700;">{{ $fmt($vd['prestado']) }}</span></div>
+                            <div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px dashed #e2e8f0;padding-top:.3rem;margin-top:auto;">
+                                @if($vd['resultado'] >= 0)
+                                <span style="font-weight:800;color:#15803d;">✅ Cubierto · sobran</span><span style="font-family:monospace;font-size:1.05rem;font-weight:900;color:#15803d;">{{ $fmt($vd['resultado']) }}</span>
+                                @else
+                                <span style="font-weight:800;color:#b91c1c;">Faltan</span><span style="font-family:monospace;font-size:1.05rem;font-weight:900;color:#b91c1c;">{{ $fmt(-$vd['resultado']) }}</span>
+                                @endif
+                            </div>
+                        </div>
+                    </div>
+                    @if($vdPend->isNotEmpty())
+                    <div style="margin-top:.6rem;padding-top:.5rem;border-top:1px solid #f1f5f9;display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;">
+                        <span style="font-size:.66rem;font-weight:700;color:#b45309;">⚠ Falta el saldo de arranque:</span>
+                        @foreach($vdPend as [$tipo, $p])
+                        <button type="button" class="cuenta-cero-chip" style="border-color:#fde68a;background:#fffbeb;color:#92400e;"
+                                onclick="{{ $tipo === 'banco' ? "verMovimientosBanco({$p['id']},'" . addslashes($p['nombre']) . "')" : 'verMovimientosEfectivo()' }}"
+                                title="BryNex calculaba {{ $fmt($p['calculaba']) }}">{{ $tipo === 'banco' ? $p['nombre'] : 'Efectivo · ' . $p['nombre'] }}</button>
+                        @endforeach
+                    </div>
+                    @else
+                    <div style="margin-top:.6rem;padding-top:.5rem;border-top:1px solid #f1f5f9;font-size:.66rem;color:#15803d;font-weight:600;">Todas las cuentas tienen su saldo de arranque.</div>
+                    @endif
+                </div>
+                @endif
                 @foreach($cuentasConSaldo as $c)
                 @php $colorTipo = ['banco' => '#1d4ed8', 'efectivo' => '#16a34a', 'recoger' => '#0d9488'][$c['tipo']]; @endphp
                 <button type="button" class="cuenta-mini" onclick="{{ $clicCuenta($c) }}" style="border-top-color:{{ $colorTipo }};"
@@ -714,7 +765,11 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     <span class="nombre" title="{{ $c['nombre'] }}">{{ $c['nombre'] }}</span>
                     <span class="etq">Saldo</span>
                     <span class="saldo" style="color:{{ $c['saldo'] < 0 ? '#dc2626' : ($c['tipo'] === 'banco' ? '#0d2550' : $colorTipo) }};">{{ $fmt($c['saldo']) }}</span>
+                    @if($sinArranque($c))
+                    <span class="pie" style="color:#b45309;font-weight:700;">⚠ Falta el saldo de arranque</span>
+                    @else
                     <span class="pie">{{ $c['tipo'] === 'recoger' ? 'Ver consolidado →' : 'Cómo entró y salió →' }}</span>
+                    @endif
                 </button>
                 @endforeach
                 @if($cuentasCero->isNotEmpty())
@@ -1489,6 +1544,40 @@ button.desg-fila{cursor:pointer}button.desg-fila:hover{background:#f8fafc}
                 </div>
             </div>
             @endif
+            {{-- Efectivo contado al cierre del mes anterior: con eso arranca cada
+                 persona este mes (tarjeta «Viene de…»). En blanco = no se cambia. --}}
+            @if($vieneDe && $vieneDe['personas']->isNotEmpty())
+            <div style="padding:.2rem 1.25rem 1rem;">
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#475569;margin:.4rem 0 .45rem;">Arranque de {{ $mesesEs[$mes] }} · efectivo contado al cierre de {{ $vieneDe['mes_nombre'] }}</div>
+                <form method="POST" action="{{ route('admin.informes.financiero.cierre.saldos') }}" onsubmit="return enviarArranque(this)"
+                      style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+                    @csrf
+                    <input type="hidden" name="mes" value="{{ $vieneDe['mes'] }}">
+                    <input type="hidden" name="anio" value="{{ $vieneDe['anio'] }}">
+                    <input type="hidden" name="parcial" value="1">
+                    @foreach($vieneDe['personas'] as $p)
+                    <div data-arranque style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem 1rem;padding:.5rem .7rem;border-top:{{ $loop->first ? '0' : '1px solid #f1f5f9' }};font-size:.78rem;background:{{ $p['inicial'] === null ? '#fffbeb' : '#fff' }};">
+                        <span style="font-weight:700;min-width:140px;">{{ $p['nombre'] }}</span>
+                        <span style="color:{{ $p['inicial'] === null ? '#92400e' : '#334155' }};">
+                            {!! $p['inicial'] === null ? '⚠ Falta' : 'Anotado <b style="font-family:monospace;">' . e($fmt($p['inicial'])) . '</b>' !!}
+                        </span>
+                        <span style="color:#64748b;font-size:.72rem;">BryNex calculaba {{ $fmt($p['calculaba']) }}</span>
+                        @can('informes.cierre_saldos')
+                        <input type="hidden" name="efectivo[{{ $p['id'] }}]" class="arranque-raw">
+                        <input type="text" inputmode="numeric" class="arranque-valor" placeholder="$ 0" aria-label="Efectivo contado de {{ $p['nombre'] }}"
+                               value="{{ $p['inicial'] === null ? '' : $fmt($p['inicial']) }}" oninput="fmtArranque(this)"
+                               style="margin-left:auto;width:140px;padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:monospace;font-weight:700;">
+                        @endcan
+                    </div>
+                    @endforeach
+                    @can('informes.cierre_saldos')
+                    <div style="padding:.5rem .7rem;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:right;">
+                        <button type="submit" style="background:#7c3aed;color:#fff;border:0;border-radius:7px;padding:.45rem .9rem;font:inherit;font-size:.76rem;font-weight:700;cursor:pointer;">Guardar efectivo de arranque</button>
+                    </div>
+                    @endcan
+                </form>
+            </div>
+            @endif
         </div>
         <div id="modalEfectivoBody" style="padding:1.25rem;max-height:65vh;overflow-y:auto;font-size:.82rem;color:#475569;">Cargando...</div>
     </div>
@@ -2068,6 +2157,55 @@ const _bancoFiltros = {facturas: 'Facturación', consignaciones: 'Consignaciones
 const _esFacturacion = e => Number(e.factura_id) > 0;
 const _esPlanilla    = g => g.tipo === 'pago_planilla';
 
+// Arranque de cada cuenta este mes (tarjeta «Viene de…»): lo anotado, o lo que
+// calculaba BryNex como referencia para anotar el del extracto.
+const _arranqueBanco = @json($vieneDe ? $vieneDe['cuentas']->keyBy('id') : (object) []);
+@if($vieneDe)
+const _arranqueMes = {mes: {{ $vieneDe['mes'] }}, anio: {{ $vieneDe['anio'] }}, nombre: '{{ $vieneDe['mes_nombre'] }}', puede: @json(auth()->user()->can('informes.cierre_saldos'))};
+@else
+const _arranqueMes = null;
+@endif
+
+function htmlArranqueBanco(id) {
+    const a = _arranqueBanco[id];
+    if (!_arranqueMes || !a) return '';
+    const fmtN = v => '$ '+Math.round(Number(v)||0).toLocaleString('es-CO');
+    const queEs = a.personal ? 'Plata del negocio que siguió en la cuenta' : 'Saldo del extracto';
+    const etiqueta = {verificado: 'anotado', manual: 'anotado a mano', arrastre: 'viene del mes anterior (razón social)'}[a.origen];
+    let html = '<div style="padding:.75rem 1.25rem;border-bottom:1px solid #e2e8f0;background:'+(a.inicial === null ? '#fffbeb' : '#fff')+';display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;font-size:.78rem;">'
+        + '<span style="font-weight:700;color:'+(a.inicial === null ? '#92400e' : '#334155')+';">'+(a.inicial === null ? '⚠ Falta el saldo de arranque' : 'Arrancó el mes con <span style="font-family:monospace;">'+fmtN(a.inicial)+'</span> <span style="font-weight:500;color:#64748b;">('+(etiqueta || 'anotado')+')</span>')+'</span>'
+        + '<span style="color:#64748b;font-size:.72rem;">BryNex calculaba '+fmtN(a.calculaba)+' al cierre de '+_arranqueMes.nombre+'</span>';
+    if (_arranqueMes.puede && a.origen !== 'manual') {
+        html += '<form method="POST" action="{{ route('admin.informes.financiero.cierre.saldos') }}" onsubmit="return enviarArranque(this)" style="display:flex;align-items:center;gap:.4rem;margin-left:auto;">'
+            + '<input type="hidden" name="_token" value="{{ csrf_token() }}">'
+            + '<input type="hidden" name="mes" value="'+_arranqueMes.mes+'"><input type="hidden" name="anio" value="'+_arranqueMes.anio+'"><input type="hidden" name="parcial" value="1">'
+            + '<input type="hidden" name="bancos['+id+']" class="arranque-raw">'
+            + '<label style="font-size:.7rem;color:#475569;">'+queEs+' al cierre de '+_arranqueMes.nombre
+            + ' <input type="text" inputmode="numeric" class="arranque-valor" required placeholder="$ 0" value="'+(a.inicial === null ? '' : fmtN(a.inicial))+'" oninput="fmtArranque(this)" style="width:130px;padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:monospace;font-weight:700;"></label>'
+            + '<button type="submit" style="background:#7c3aed;color:#fff;border:0;border-radius:7px;padding:.4rem .75rem;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;">Guardar</button>'
+            + '</form>';
+    }
+    return html + '</div>';
+}
+function fmtArranque(inp) {
+    const neg = inp.value.trim().startsWith('-');
+    const n = inp.value.replace(/\D/g, '');
+    inp.value = n ? (neg ? '-' : '') + '$ ' + Number(n).toLocaleString('es-CO') : (neg ? '-' : '');
+}
+// Pasa cada valor escrito a su campo oculto (entero, puede ser negativo).
+function enviarArranque(form) {
+    let ok = true;
+    form.querySelectorAll('.arranque-valor').forEach(inp => {
+        const n = inp.value.replace(/\D/g, '');
+        const raw = inp.closest('[data-arranque]')?.querySelector('.arranque-raw') || form.querySelector('.arranque-raw');
+        if (inp.required && n === '') ok = false;
+        if (raw) raw.value = n === '' ? '' : (inp.value.trim().startsWith('-') ? '-' : '') + n;
+    });
+    if (!ok) return false;
+    form.querySelector('button[type="submit"]').disabled = true;
+    return true;
+}
+
 function verMovimientosBanco(bancoId, label) {
     _bancoActualId = bancoId; _bancoActualLabel = label; _consigMap = {}; _gastosMap = {};
     _bancoData = null; _bancoFiltro = null;
@@ -2110,7 +2248,7 @@ function pintarResumenBanco() {
             + '<div class="desg-linea"><span>'+_bancoFiltros[k]+'</span><b>'+fmtN(v)+'</b></div>'
             + '<div class="desg-barra"><span style="width:'+(total>0 ? Math.round(v*100/total) : 0)+'%"></span></div></button>').join('')
         + '</div>';
-    document.getElementById('modalBancoSummary').innerHTML =
+    document.getElementById('modalBancoSummary').innerHTML = htmlArranqueBanco(_bancoActualId) +
         '<div style="padding:.9rem 1.25rem;display:flex;align-items:baseline;gap:.8rem;border-bottom:1px solid #e2e8f0;">'
             + '<span style="font-size:.78rem;color:#475569;font-weight:600;">Saldo</span>'
             + '<span style="font-family:monospace;font-size:1.5rem;font-weight:800;color:'+(saldo<0?'#dc2626':'#0d2550')+';">'+fmtN(saldo)+'</span>'
