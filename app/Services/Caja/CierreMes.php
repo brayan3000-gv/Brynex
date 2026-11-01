@@ -105,6 +105,8 @@ class CierreMes
                 'inicial'    => (int) ($apertura['valor'] ?? 0),
                 'verificado' => $apertura !== null,
                 'entro'      => $mes['recibido'] + $mes['recibidas'],
+                'cobro'      => $mes['recibido'],
+                'recibidas'  => $mes['recibidas'],
                 'salio'      => $mes['salidas'] + $mes['dadas'] + $mes['retiros'],
                 'saldo'      => (int) ($apertura['valor'] ?? 0) + $mes['neto'],
             ];

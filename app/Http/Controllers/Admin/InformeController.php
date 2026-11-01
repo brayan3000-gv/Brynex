@@ -1670,14 +1670,13 @@ class InformeController extends Controller
         $cierreHoy = \App\Services\Caja\CierreMes::componer($aid, (int) $anio, (int) $mes, $cierreVivo);
         $cierre    = $mostrarCierre ? $cierreHoy : null;
         $plata     = \App\Services\Caja\CierreMes::plata($aid, (int) $anio, (int) $mes, $cierreHoy);
-        // Lo que tiene el dueño ya está en caja: no se recoge, sale como
-        // «En la empresa» en la tarjeta de efectivo.
+        // Lo que tiene el dueño ya está en caja: no se recoge (en el modal de
+        // efectivo sale «en caja»).
         $efEmpresa  = array_filter($cierreHoy['efectivo'], fn ($e) => \App\Services\Caja\FlujoEfectivo::esCajaEmpresa((int) $aid, (int) $e['id']));
-        $enEmpresa  = (int) array_sum(array_map(fn ($e) => $e['real'] ?? $e['saldo'], $efEmpresa));
         $porRecoger = array_values(array_filter(array_diff_key($cierreHoy['efectivo'], $efEmpresa), fn ($e) => (int) ($e['real'] ?? $e['saldo']) !== 0));
 
         return view('admin.informes.financiero', compact(
-            'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger', 'enEmpresa', 'efEmpresa',
+            'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger', 'efEmpresa',
             'mes','anio','ingresos','egresos','utilidad',
             'usuarios', 'esAdmin',
             'recaudoSS','pagadoSSRaw','saldoSS',
@@ -2444,6 +2443,7 @@ class InformeController extends Controller
             ->selectRaw("
                 cs.id,
                 cs.banco_cuenta_id,
+                cs.factura_id,
                 cs.observacion,
                 CONVERT(VARCHAR(10), cs.fecha, 120) AS fecha,
                 cs.created_at,

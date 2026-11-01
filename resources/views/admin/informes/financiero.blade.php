@@ -643,198 +643,66 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             </div>
         </div>
 
-        {{-- Bancos + Efectivo --}}
+        {{-- Bancos y caja: una tarjeta mini por cuenta, solo con el saldo y de
+             mayor a menor; las que están en $0 van juntas en una sola (lo pidió
+             el dueño, 31-oct-2026). Cómo entró y cómo salió está en el modal. --}}
+        @php
+            $cuentasMini = collect($bancos)
+                ->filter(fn ($b) => $b->saldo_actual != 0 || $b->ing_mes != 0 || $b->sal_mes != 0)
+                ->map(fn ($b) => ['tipo' => 'banco', 'id' => (int) $b->id, 'arriba' => $b->banco, 'nombre' => $b->nombre, 'saldo' => (float) $b->saldo_actual])
+                ->push(['tipo' => 'efectivo', 'id' => null, 'arriba' => 'Caja', 'nombre' => 'Efectivo', 'saldo' => (float) $efMes->saldo_actual])
+                ->push(['tipo' => 'recoger', 'id' => null, 'arriba' => 'Efectivo', 'nombre' => 'Por recoger', 'saldo' => (float) collect($porRecoger)->sum(fn ($e) => $e['real'] ?? $e['saldo'])]);
+            [$cuentasCero, $cuentasConSaldo] = $cuentasMini->partition(fn ($c) => round($c['saldo']) == 0);
+            $cuentasConSaldo = $cuentasConSaldo->sortByDesc('saldo')->values();
+            $clicCuenta = fn ($c) => match ($c['tipo']) {
+                'banco'    => "verMovimientosBanco({$c['id']},'" . addslashes(trim($c['arriba'] . ' · ' . $c['nombre'])) . "')",
+                'efectivo' => 'verMovimientosEfectivo()',
+                default    => "window.location='" . route('admin.cuadre-diario.consolidado', ['vista' => 'mes', 'mes' => sprintf('%04d-%02d', $anio, $mes)]) . "'",
+            };
+        @endphp
+        <style>
+            .cuenta-mini{text-align:left;background:#fff;border:1px solid #e2e8f0;border-top:3px solid #1d4ed8;border-radius:12px;padding:.7rem .8rem;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;gap:.1rem;min-width:0;transition:box-shadow .15s}
+            .cuenta-mini:hover{box-shadow:0 6px 16px rgba(15,23,42,.1)}
+            .cuenta-mini .arriba{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b}
+            .cuenta-mini .nombre{font-size:.76rem;font-weight:700;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .cuenta-mini .saldo{font-family:monospace;font-size:1rem;font-weight:800;margin-top:.3rem;white-space:nowrap}
+            #cuentasCero[hidden]{display:none!important}
+            .cuenta-cero-chip{padding:.35rem .65rem;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;font:inherit;font-size:.72rem;color:#334155;cursor:pointer}
+        </style>
         <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
-                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;" title="Los saldos de cada cuenta están arriba, en «Dónde está la plata»">🏦 Movimientos del mes por cuenta <span style="text-transform:none;font-weight:500">— lo que entró y salió en {{ $mesesEs[$mes] }}</span></div>
-                <div style="font-size:.66rem;color:#94a3b8;">Cómo está la plata de la empresa: a la izquierda, debajo de la gráfica</div>
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.85rem;flex-wrap:wrap;gap:.5rem;">
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">🏦 Bancos y caja</div>
+                <div style="font-size:.74rem;color:#64748b;">Total <b style="font-family:monospace;color:#0d2550;font-size:.85rem;">{{ $fmt($cuentasConSaldo->sum('saldo')) }}</b></div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;">
-
-                {{-- Tarjetas banco — solo bancos con movimiento o saldo distinto de cero --}}
-                @foreach($bancos as $b)
-                @if($b->saldo_actual != 0 || $b->ing_mes != 0 || $b->sal_mes != 0)
-                @php
-                    // Cuenta de razón social (ni de cobros ni personal): la plata de
-                    // incapacidades entra un mes y sale otro, así que el neto del mes
-                    // asusta sin decir nada. Lo que importa es que quede en cero: se
-                    // muestra el saldo de la cuenta.
-                    $esCuentaRs = ! $b->cobro && ! $b->uso_personal;
-                    $heroValor  = $esCuentaRs ? $b->saldo_actual : $b->saldo_mes;
-                    $netColor = $heroValor >= 0 ? '#16a34a' : '#dc2626'; $netBg = $heroValor >= 0 ? '#f0fdf4' : '#fef2f2';
-                @endphp
-                <div class="bank-card" onclick="verMovimientosBanco({{ $b->id }},'{{ addslashes($b->nombre) }}')" title="Clic para ver movimientos del mes">
-                    {{-- Cabecera --}}
-                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">{{ $b->banco }}</div>
-                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $b->nombre }}">{{ $b->nombre }}</div>
-
-                    {{-- Hero: neto del mes, o el saldo en las cuentas de razón social --}}
-                    <div style="margin-top:.55rem;">
-                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;"
-                             @if($esCuentaRs) title="Cuenta de razón social: lo que entra de incapacidades sale al afiliado, así que debe quedar en cero" @endif>
-                            {{ $esCuentaRs ? 'Saldo cuenta razón social' : 'Neto '.$mesesEs[$mes] }}
-                        </div>
-                        <div style="font-size:1.3rem;font-weight:900;color:{{ $heroValor == 0 ? '#16a34a' : $netColor }};line-height:1.1;">
-                            {{ $heroValor > 0 ? '+' : '' }}{{ $fmt($heroValor) }}
-                        </div>
-                    </div>
-
-                    {{-- Movimientos del mes --}}
-                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
-                        {{-- Entró total e hijos --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
-                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">{{ $fmt($b->ing_mes) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Facturas</span>
-                            <span style="font-family:monospace;">{{ $fmt($b->ing_facturas) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Consignaciones</span>
-                            <span style="font-family:monospace;">{{ $fmt($b->ing_consignaciones) }}</span>
-                        </div>
-
-                        {{-- Salió total e hijos --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
-                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
-                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">{{ $fmt($b->sal_mes) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Planillas (SS)</span>
-                            <span style="font-family:monospace;">{{ $fmt($b->sal_planillas) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Transferencias</span>
-                            <span style="font-family:monospace;">{{ $fmt($b->sal_transferencias) }}</span>
-                        </div>
-
-                        {{-- Saldo final --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;">
-                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">{{ $b->label_saldo }}</span>
-                            <span style="font-size:.68rem;font-weight:700;color:#334155;font-family:monospace;">{{ $fmt($b->saldo_actual) }}</span>
-                        </div>
-                    </div>
-                </div>
-                @endif
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.6rem;">
+                @foreach($cuentasConSaldo as $c)
+                @php $colorTipo = ['banco' => '#1d4ed8', 'efectivo' => '#16a34a', 'recoger' => '#0d9488'][$c['tipo']]; @endphp
+                <button type="button" class="cuenta-mini" onclick="{{ $clicCuenta($c) }}" style="border-top-color:{{ $colorTipo }};"
+                        title="{{ $c['tipo'] === 'recoger' ? 'Ver el consolidado de caja del mes' : 'Ver cómo entró y cómo salió' }}">
+                    <span class="arriba">{{ $c['arriba'] }}</span>
+                    <span class="nombre" title="{{ $c['nombre'] }}">{{ $c['nombre'] }}</span>
+                    <span class="saldo" style="color:{{ $c['saldo'] < 0 ? '#dc2626' : ($c['tipo'] === 'banco' ? '#0d2550' : $colorTipo) }};">{{ $fmt($c['saldo']) }}</span>
+                </button>
                 @endforeach
+                @if($cuentasCero->isNotEmpty())
+                <button type="button" class="cuenta-mini" aria-expanded="false" aria-controls="cuentasCero"
+                        onclick="const v=document.getElementById('cuentasCero');const abrir=v.hidden;v.hidden=!abrir;this.setAttribute('aria-expanded',abrir);this.querySelector('.ver').textContent=abrir?'Ocultar ▴':'Ver cuáles ▾';"
+                        style="background:#f8fafc;border:1.5px dashed #94a3b8;">
+                    <span class="arriba">En $0</span>
+                    <span class="nombre">{{ $cuentasCero->count() }} {{ $cuentasCero->count() === 1 ? 'cuenta' : 'cuentas' }}</span>
+                    <span class="ver" style="font-size:.72rem;color:#64748b;margin-top:.3rem;">Ver cuáles ▾</span>
+                </button>
+                @endif
+            </div>
+            @if($cuentasCero->isNotEmpty())
+            <div id="cuentasCero" hidden style="margin-top:.6rem;padding:.65rem .8rem;border:1px solid #e2e8f0;border-radius:10px;display:flex;flex-wrap:wrap;gap:.45rem;">
+                @foreach($cuentasCero as $c)
+                <button type="button" class="cuenta-cero-chip" onclick="{{ $clicCuenta($c) }}">{{ trim($c['arriba'] . ' · ' . $c['nombre']) }} <b style="font-family:monospace;">$0</b></button>
+                @endforeach
+            </div>
+            @endif
 
-                {{-- Tarjeta Efectivo --}}
-                @php
-                    $efColor    = $efMes->neto >= 0 ? '#16a34a' : '#dc2626';
-                    $efColorSal = $efMes->saldo_actual >= 0 ? '#15803d' : '#dc2626';
-                @endphp
-                <div class="bank-card" onclick="verMovimientosEfectivo()" title="Clic para ver facturas en efectivo y desglose por asesor" style="border-top-color:#16a34a;">
-                    {{-- Cabecera --}}
-                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">💵 Caja</div>
-                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Efectivo</div>
-
-                    {{-- Hero: lo que hay en caja. Antes era el neto del mes, que se
-                         confundía con lo que había (lo pidió el dueño, 31-oct-2026). --}}
-                    <div style="margin-top:.55rem;">
-                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">
-                            {{ ($mes == now()->month && $anio == now()->year) ? 'En caja hoy' : 'En caja al cierre' }}
-                        </div>
-                        <div style="font-size:1.3rem;font-weight:900;color:{{ $efColorSal }};line-height:1.1;">{{ $fmt($efMes->saldo_actual) }}</div>
-                    </div>
-
-                    {{-- Movimientos del mes --}}
-                    <div style="margin-top:auto;padding-top:.6rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.22rem;">
-                        {{-- Con cuánto arrancó el mes: lo contado al cierre anterior.
-                             Sin esto el neto del mes parecía el saldo. --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;" title="Lo contado al cierre del mes anterior (0 si no se anotó)">
-                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↪ Arrancó el mes</span>
-                            <span style="font-size:.72rem;font-weight:800;color:#334155;font-family:monospace;">{{ $fmt($efMes->saldo_actual - $efMes->neto) }}</span>
-                        </div>
-                        {{-- Entró total e hijos --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↑ Entró</span>
-                            <span style="font-size:.72rem;font-weight:800;color:#16a34a;font-family:monospace;">{{ $fmt($efMes->entradas) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Facturas</span>
-                            <span style="font-family:monospace;">{{ $fmt($efMes->facturas) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Anticipos</span>
-                            <span style="font-family:monospace;">{{ $fmt($efMes->anticipos) }}</span>
-                        </div>
-                        @if(($efMes->incapacidades ?? 0) > 0)
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;" title="OPI de la ARL cobradas en efectivo">
-                            <span>└ OPI incapacidades</span>
-                            <span style="font-family:monospace;">{{ $fmt($efMes->incapacidades) }}</span>
-                        </div>
-                        @endif
-
-                        {{-- Salió total e hijos --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.15rem;border-top:1px dashed #f1f5f9;padding-top:.15rem;">
-                            <span style="font-size:.65rem;color:#475569;font-weight:700;">↓ Salió</span>
-                            <span style="font-size:.72rem;font-weight:800;color:#dc2626;font-family:monospace;">{{ $fmt($efMes->salidas) }}</span>
-                        </div>
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#64748b;">
-                            <span>└ Gastos</span>
-                            <span style="font-family:monospace;">{{ $fmt($efMes->gastos) }}</span>
-                        </div>
-                        
-                        {{-- Traslados a banco (Consignaciones) --}}
-                        @if($efMes->consignaciones > 0)
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#d97706;" title="Efectivo consignado en cuentas de banco este mes">
-                            <span>⇄ Consignado</span>
-                            <span style="font-family:monospace;font-weight:700;">{{ $fmt($efMes->consignaciones) }}</span>
-                        </div>
-                        @endif
-
-                        {{-- Retiros del dueño: no son gasto, pero la plata sale de la caja --}}
-                        @if(($efMes->retiros ?? 0) > 0)
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#92400e;" title="Plata que el dueño sacó de la caja: no es gasto, se descuenta de la utilidad acumulada">
-                            <span>👤 Retiro del dueño</span>
-                            <span style="font-family:monospace;font-weight:700;">{{ $fmt($efMes->retiros) }}</span>
-                        </div>
-                        @endif
-
-                        {{-- Neto del mes: cuánto creció (o bajó) la caja --}}
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:.2rem;padding-top:.3rem;border-top:1.5px solid #e2e8f0;"
-                             title="Lo que entró menos lo que salió en el mes: cuánto creció la caja, no lo que hay">
-                            <span style="font-size:.6rem;color:#94a3b8;font-weight:600;">Neto {{ $mesesEs[$mes] }}</span>
-                            <span style="font-size:.68rem;font-weight:700;color:{{ $efColor }};font-family:monospace;">{{ $efMes->neto >= 0 ? '+' : '' }}{{ $fmt($efMes->neto) }}</span>
-                        </div>
-                        {{-- Lo que tiene el dueño ya es caja de la empresa: no sale en «Por recoger» --}}
-                        @if($efEmpresa)
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding-left:.5rem;font-size:.6rem;color:#15803d;"
-                             title="Efectivo que tiene {{ implode(', ', array_column($efEmpresa, 'nombre')) }}: ya está en la caja de la empresa">
-                            <span>🏢 En la empresa</span>
-                            <span style="font-family:monospace;font-weight:700;">{{ $fmt($enEmpresa) }}</span>
-                        </div>
-                        @endif
-                    </div>
-                </div>
-
-                {{-- Tarjeta Efectivo por recoger: lo que cada persona tiene por entregar --}}
-                <div class="bank-card" onclick="window.location='{{ route('admin.cuadre-diario.consolidado', ['vista' => 'mes', 'mes' => sprintf('%04d-%02d', $anio, $mes)]) }}'"
-                     title="Ver el consolidado de caja del mes" style="border-top-color:#0d9488;">
-                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">💵 Efectivo</div>
-                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Por recoger</div>
-                    <div style="margin-top:.55rem;">
-                        <div style="font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-bottom:.2rem;">
-                            {{ ($mes == now()->month && $anio == now()->year) ? 'Lo tienen hoy' : 'Lo tenían al cierre' }}
-                        </div>
-                        <div style="font-size:1.3rem;font-weight:900;color:#0f766e;line-height:1.1;">{{ $fmt(collect($porRecoger)->sum(fn ($e) => $e['real'] ?? $e['saldo'])) }}</div>
-                    </div>
-                    <div style="margin-top:.6rem;padding-top:.5rem;border-top:1px dashed #e2e8f0;display:flex;flex-direction:column;gap:.25rem;">
-                        @forelse($porRecoger as $e)
-                        @php $v = $e['real'] ?? $e['saldo']; @endphp
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:.3rem;">
-                            <span style="font-size:.66rem;color:#475569;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;"
-                                  title="{{ $e['verificado'] ? 'Arrancó el mes con lo contado' : 'Arrancó el mes sin efectivo contado: se cuenta desde 0' }}">
-                                {{ $e['nombre'] }}@unless($e['verificado']) <span style="color:#d97706">⚠</span>@endunless
-                            </span>
-                            <span style="font-size:.7rem;font-weight:800;font-family:monospace;white-space:nowrap;flex-shrink:0;color:{{ $v < 0 ? '#dc2626' : '#0f766e' }};">{{ $fmt($v) }}</span>
-                        </div>
-                        @empty
-                        <div style="font-size:.66rem;color:#94a3b8;">Nadie tiene efectivo por entregar.</div>
-                        @endforelse
-                    </div>
-                </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;margin-top:1rem;">
 
                 {{-- Tarjeta Cartera Préstamos --}}
                 <div class="bank-card" onclick="verPrestamos()" title="Clic para ver detalle de préstamos" style="border-top-color:#7c3aed; display:flex; flex-direction:column; min-height:165px;">
@@ -1490,13 +1358,33 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
     </div>
 </div>
 
+{{-- Desglose «cómo entró / cómo salió» de los modales de banco y efectivo --}}
+<style>
+.desg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.8rem;padding:.9rem 1.25rem;background:#f8fafc}
+.desg-caja{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.desg-in{border-color:#bbf7d0}.desg-out{border-color:#fecaca}
+.desg-head{display:flex;justify-content:space-between;align-items:baseline;padding:.6rem .85rem;font-size:.8rem;font-weight:700}
+.desg-head b{font-family:monospace;font-size:.95rem}
+.desg-in .desg-head{color:#166534;border-bottom:1px solid #dcfce7}.desg-in .desg-head b{color:#15803d}
+.desg-out .desg-head{color:#991b1b;border-bottom:1px solid #fee2e2}.desg-out .desg-head b{color:#b91c1c}
+.desg-fila{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #f1f5f9;background:#fff;font:inherit;color:inherit;padding:.55rem .85rem}
+.desg-fila:last-child{border-bottom:0}
+button.desg-fila{cursor:pointer}button.desg-fila:hover{background:#f8fafc}
+.desg-fila.activa{background:#eff6ff;box-shadow:inset 3px 0 0 #1d4ed8}
+.desg-linea{display:flex;justify-content:space-between;font-size:.8rem}
+.desg-linea b{font-family:monospace}
+.desg-barra{height:5px;background:#e2e8f0;border-radius:3px;margin-top:.35rem;overflow:hidden}
+.desg-barra span{display:block;height:5px;border-radius:3px}
+.desg-in .desg-barra span{background:#22c55e}.desg-out .desg-barra span{background:#f87171}
+</style>
+
 {{-- Modal Efectivo --}}
 <div id="modalEfectivo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:3vh;overflow-y:auto;">
     <div style="background:#fff;border-radius:18px;width:min(1000px,96vw);box-shadow:0 25px 60px rgba(0,0,0,.22);">
         <div style="background:linear-gradient(135deg,#15803d,#16a34a);border-radius:18px 18px 0 0;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between;">
             <div>
                 <div style="color:#fff;font-weight:800;font-size:1rem;">💵 Movimientos en Efectivo — {{ $mesesEs[$mes] }} {{ $anio }}</div>
-                <div style="color:rgba(255,255,255,.65);font-size:.74rem;margin-top:.15rem;">Facturas cobradas en efectivo · Gastos en efectivo · Cuadres abiertos por asesor</div>
+                <div style="color:rgba(255,255,255,.65);font-size:.74rem;margin-top:.15rem;">Cómo entró, cómo salió y quién lo tiene</div>
             </div>
             <div style="display:flex;align-items:center;gap:.5rem;">
                 @can('gastos.gestionar')
@@ -1505,7 +1393,68 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <button onclick="document.getElementById('modalEfectivo').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
             </div>
         </div>
-        <div id="modalEfectivoSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;padding:.85rem 1.25rem;background:#f0fdf4;border-bottom:1px solid #bbf7d0;"></div>
+        {{-- Cómo entró, cómo salió y quién tiene el efectivo: con las mismas
+             cifras de la tarjeta (FlujoEfectivo), no con las del listado de abajo. --}}
+        @php
+            $efFilas = fn (array $filas, float $total) => collect($filas)->filter(fn ($f) => $f[1] != 0 || ! empty($f[2]))
+                ->map(fn ($f) => [$f[0], $f[1], $total > 0 ? max(0, min(100, round($f[1] * 100 / $total))) : 0]);
+            $efEntro = $efFilas([['Facturación', $efMes->facturas, true], ['Anticipos', $efMes->anticipos, true], ['OPI de incapacidades', $efMes->incapacidades ?? 0]], $efMes->entradas);
+            $efSalio = $efFilas([['Gastos', $efMes->gastos, true], ['Consignado al banco', $efMes->consignaciones, true], ['Retiro del dueño', $efMes->retiros ?? 0]], $efMes->salidas);
+            // En vivo, como $efMes: la foto del cierre no separa lo cobrado de lo recibido.
+            $efPersonas = collect($cierreVivo['efectivo'])
+                ->filter(fn ($e) => $e['inicial'] || $e['entro'] || $e['salio'] || $e['saldo'])
+                ->sortByDesc('saldo');
+        @endphp
+        <div id="modalEfectivoSummary" style="border-bottom:1px solid #e2e8f0;">
+            <div style="padding:.9rem 1.25rem;display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;border-bottom:1px solid #e2e8f0;">
+                <span style="font-size:.78rem;color:#475569;font-weight:600;">{{ ($mes == now()->month && $anio == now()->year) ? 'En caja hoy' : 'En caja al cierre' }}</span>
+                <span style="font-family:monospace;font-size:1.5rem;font-weight:800;color:{{ $efMes->saldo_actual < 0 ? '#dc2626' : '#15803d' }};">{{ $fmt($efMes->saldo_actual) }}</span>
+                <span style="font-size:.78rem;color:#475569;">arrancó el mes con <b style="font-family:monospace;color:#0f172a;">{{ $fmt($efMes->saldo_actual - $efMes->neto) }}</b></span>
+            </div>
+            <div class="desg-grid">
+                @foreach([['Cómo entró', $efMes->entradas, $efEntro, 'in'], ['Cómo salió', $efMes->salidas, $efSalio, 'out']] as [$titulo, $total, $filas, $lado])
+                <div class="desg-caja desg-{{ $lado }}">
+                    <div class="desg-head"><span>{{ $titulo }}</span><b>{{ $fmt($total) }}</b></div>
+                    @foreach($filas as [$nombre, $valor, $pct])
+                    <div class="desg-fila">
+                        <div class="desg-linea"><span>{{ $nombre }}</span><b>{{ $fmt($valor) }}</b></div>
+                        <div class="desg-barra"><span style="width:{{ $pct }}%"></span></div>
+                    </div>
+                    @endforeach
+                </div>
+                @endforeach
+            </div>
+            @if($efPersonas->isNotEmpty())
+            <div style="padding:.2rem 1.25rem 1rem;">
+                <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#475569;margin:.4rem 0 .45rem;">Quién tiene el efectivo</div>
+                <div style="border:1px solid #e2e8f0;border-radius:10px;overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:.78rem;">
+                        <thead><tr style="background:#f8fafc;color:#475569;font-size:.64rem;text-transform:uppercase;">
+                            <th style="text-align:left;padding:.45rem .7rem;">Persona</th>
+                            <th style="text-align:right;padding:.45rem .7rem;">Arrancó</th>
+                            <th style="text-align:right;padding:.45rem .7rem;">Cobró</th>
+                            <th style="text-align:right;padding:.45rem .7rem;">Le entregaron</th>
+                            <th style="text-align:right;padding:.45rem .7rem;">Entregó o gastó</th>
+                            <th style="text-align:right;padding:.45rem .7rem;">Tiene</th>
+                        </tr></thead>
+                        <tbody>
+                        @foreach($efPersonas as $e)
+                        @php $enCaja = \App\Services\Caja\FlujoEfectivo::esCajaEmpresa((int) $aid, (int) $e['id']); $tiene = $e['saldo']; @endphp
+                        <tr style="border-top:1px solid #f1f5f9;">
+                            <td style="padding:.5rem .7rem;font-weight:{{ $enCaja ? 700 : 500 }};">{{ $e['nombre'] }}@if($enCaja) <span style="font-size:.62rem;padding:.1rem .45rem;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;">en caja</span>@endif</td>
+                            <td style="padding:.5rem .7rem;text-align:right;font-family:monospace;">{{ $fmt($e['inicial']) }}</td>
+                            <td style="padding:.5rem .7rem;text-align:right;font-family:monospace;">{{ $fmt($e['cobro']) }}</td>
+                            <td style="padding:.5rem .7rem;text-align:right;font-family:monospace;">{{ $fmt($e['recibidas']) }}</td>
+                            <td style="padding:.5rem .7rem;text-align:right;font-family:monospace;">{{ $fmt($e['salio']) }}</td>
+                            <td style="padding:.5rem .7rem;text-align:right;font-family:monospace;font-weight:800;color:{{ $tiene < 0 ? '#dc2626' : ($tiene > 0 ? '#15803d' : '#64748b') }};">{{ $fmt($tiene) }}</td>
+                        </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            @endif
+        </div>
         <div id="modalEfectivoBody" style="padding:1.25rem;max-height:65vh;overflow-y:auto;font-size:.82rem;color:#475569;">Cargando...</div>
     </div>
 </div>
@@ -1525,7 +1474,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <button onclick="document.getElementById('modalBanco').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
             </div>
         </div>
-        <div id="modalBancoSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:.65rem;padding:.85rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;"></div>
+        <div id="modalBancoSummary" style="border-bottom:1px solid #e2e8f0;"></div>
         <div id="modalBancoBody" style="padding:1.25rem;max-height:62vh;overflow-y:auto;font-size:.82rem;color:#475569;">Cargando...</div>
     </div>
 </div>
@@ -2076,38 +2025,76 @@ function fmtHora(c) {
     return h12+':'+m+' '+ampm;
 }
 
+// Saldo de cada cuenta (con el saldo inicial): el modal lo muestra arriba.
+const _saldosBanco = @json(collect($bancos)->mapWithKeys(fn ($b) => [$b->id => (float) $b->saldo_actual]));
+let _bancoData = null, _bancoFiltro = null;
+const _bancoFiltros = {facturas: 'Facturación', consignaciones: 'Consignaciones', planillas: 'Planillas (seguridad social)', transferencias: 'Transferencias'};
+// Igual que la tarjeta: entrada con factura = facturación; salida pago_planilla = planillas.
+const _esFacturacion = e => Number(e.factura_id) > 0;
+const _esPlanilla    = g => g.tipo === 'pago_planilla';
+
 function verMovimientosBanco(bancoId, label) {
     _bancoActualId = bancoId; _bancoActualLabel = label; _consigMap = {}; _gastosMap = {};
+    _bancoData = null; _bancoFiltro = null;
     const modal = document.getElementById('modalBanco');
     document.getElementById('modalBancoTitulo').textContent = '🏦 ' + label;
-    document.getElementById('modalBancoSub').textContent = 'Consignaciones y salidas del mes';
+    document.getElementById('modalBancoSub').textContent = '{{ $mesesEs[$mes] }} {{ $anio }}';
     document.getElementById('modalBancoSummary').innerHTML = '';
     document.getElementById('modalBancoBody').innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;">Cargando...</div>';
     modal.style.display = 'flex';
 
     fetch(`{{ route('admin.informes.financiero.bancos') }}?banco_id=${bancoId}&mes={{ $mes }}&anio={{ $anio }}`)
         .then(r=>r.json()).then(data=>{
-            const fmtN = v => '$ '+Math.round(Number(v)||0).toLocaleString('es-CO');
-            const totEnt = data.entradas.reduce((s,e)=>s+Number(e.valor||0),0);
-            const totSal = data.salidas.reduce((s,s2)=>s+Number(s2.valor||0),0);
-            const saldo  = totEnt - totSal;
+            _bancoData = data;
+            pintarResumenBanco();
+            pintarListaBanco();
+        }).catch(()=>{
+            document.getElementById('modalBancoBody').innerHTML = '<div style="color:#ef4444;padding:1.5rem;text-align:center;">Error al cargar movimientos.</div>';
+        });
+}
 
-            document.getElementById('modalBancoSummary').innerHTML =
-                '<div style="background:#f0fdf4;border-radius:10px;padding:.65rem .9rem;text-align:center;">'
-                  +'<div style="font-size:.95rem;font-weight:800;color:#16a34a;">'+fmtN(totEnt)+'</div>'
-                  +'<div style="font-size:.68rem;color:#15803d;margin-top:.1rem;">Entradas ('+data.entradas.length+')</div>'
-                +'</div>'
-                +'<div style="background:#fef2f2;border-radius:10px;padding:.65rem .9rem;text-align:center;">'
-                  +'<div style="font-size:.95rem;font-weight:800;color:#dc2626;">'+fmtN(totSal)+'</div>'
-                  +'<div style="font-size:.68rem;color:#b91c1c;margin-top:.1rem;">Salidas ('+data.salidas.length+')</div>'
-                +'</div>'
-                +'<div style="background:'+(saldo>=0?'#eff6ff':'#fff7ed')+';border-radius:10px;padding:.65rem .9rem;text-align:center;">'
-                  +'<div style="font-size:.95rem;font-weight:800;color:'+(saldo>=0?'#2563eb':'#ea580c')+';">'+fmtN(saldo)+'</div>'
-                  +'<div style="font-size:.68rem;color:'+(saldo>=0?'#1d4ed8':'#c2410c')+';margin-top:.1rem;">Neto del mes</div>'
-                +'</div>';
+function filtrarBanco(filtro) {
+    _bancoFiltro = _bancoFiltro === filtro ? null : filtro;
+    pintarResumenBanco();
+    pintarListaBanco();
+}
 
+// Saldo arriba y, debajo, cómo entró (facturación / consignaciones) y cómo
+// salió (planillas / transferencias). Cada línea filtra la lista.
+function pintarResumenBanco() {
+    const d = _bancoData;
+    const fmtN = v => '$ '+Math.round(Number(v)||0).toLocaleString('es-CO');
+    const suma = a => a.reduce((t,x)=>t+Number(x.valor||0),0);
+    const ent = {facturas: suma(d.entradas.filter(_esFacturacion)), consignaciones: suma(d.entradas.filter(e => !_esFacturacion(e)))};
+    const sal = {planillas: suma(d.salidas.filter(_esPlanilla)), transferencias: suma(d.salidas.filter(g => !_esPlanilla(g)))};
+    const totEnt = ent.facturas + ent.consignaciones, totSal = sal.planillas + sal.transferencias;
+    const saldo = _saldosBanco[_bancoActualId] ?? (totEnt - totSal);
+    const caja = (titulo, lado, total, partes) => '<div class="desg-caja desg-'+lado+'">'
+        + '<div class="desg-head"><span>'+titulo+'</span><b>'+fmtN(total)+'</b></div>'
+        + Object.entries(partes).map(([k, v]) => '<button type="button" class="desg-fila'+(_bancoFiltro===k?' activa':'')+'" onclick="filtrarBanco(\''+k+'\')" title="Ver solo estos movimientos">'
+            + '<div class="desg-linea"><span>'+_bancoFiltros[k]+'</span><b>'+fmtN(v)+'</b></div>'
+            + '<div class="desg-barra"><span style="width:'+(total>0 ? Math.round(v*100/total) : 0)+'%"></span></div></button>').join('')
+        + '</div>';
+    document.getElementById('modalBancoSummary').innerHTML =
+        '<div style="padding:.9rem 1.25rem;display:flex;align-items:baseline;gap:.8rem;border-bottom:1px solid #e2e8f0;">'
+            + '<span style="font-size:.78rem;color:#475569;font-weight:600;">Saldo</span>'
+            + '<span style="font-family:monospace;font-size:1.5rem;font-weight:800;color:'+(saldo<0?'#dc2626':'#0d2550')+';">'+fmtN(saldo)+'</span>'
+        + '</div>'
+        + '<div class="desg-grid">'+caja('Cómo entró', 'in', totEnt, ent)+caja('Cómo salió', 'out', totSal, sal)+'</div>';
+}
+
+function pintarListaBanco() {
+    const f = _bancoFiltro;
+    const verEnt = !f || f === 'facturas' || f === 'consignaciones';
+    const verSal = !f || f === 'planillas' || f === 'transferencias';
+    const data = {
+        entradas: _bancoData.entradas.filter(e => !f || !verSal && (f === 'facturas') === _esFacturacion(e)),
+        salidas:  _bancoData.salidas.filter(g => !f || !verEnt && (f === 'planillas') === _esPlanilla(g)),
+    };
+    const fmtN = v => '$ '+Math.round(Number(v)||0).toLocaleString('es-CO');
             let html = '';
 
+            if (verEnt) {
             // ── ENTRADAS ─────────────────────────────────────────────
             html += '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#16a34a;letter-spacing:.04em;margin-bottom:.5rem;">Entradas ('+data.entradas.length+')</div>';
             if (!data.entradas.length) {
@@ -2169,6 +2156,9 @@ function verMovimientosBanco(bancoId, label) {
                 html += '</div>';
             }
 
+            }
+
+            if (verSal) {
             // ── SALIDAS ──────────────────────────────────────────────
             html += '<div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#dc2626;letter-spacing:.04em;margin-bottom:.5rem;">Salidas ('+data.salidas.length+')</div>';
             if (!data.salidas.length) {
@@ -2205,10 +2195,13 @@ function verMovimientosBanco(bancoId, label) {
                 html += '</div>';
             }
 
+            }
+            if (f) {
+                html = '<div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.8rem;font-size:.78rem;">'
+                     + '<span style="background:#eff6ff;color:#1e40af;border-radius:999px;padding:.25rem .7rem;font-weight:700;">Solo '+_bancoFiltros[f].toLowerCase()+'</span>'
+                     + '<button type="button" onclick="filtrarBanco(null)" style="border:0;background:none;color:#1d4ed8;font:inherit;font-weight:600;cursor:pointer;">Ver todos</button></div>' + html;
+            }
             document.getElementById('modalBancoBody').innerHTML = html;
-        }).catch(()=>{
-            document.getElementById('modalBancoBody').innerHTML = '<div style="color:#ef4444;padding:1.5rem;text-align:center;">Error al cargar movimientos.</div>';
-        });
 }
 
 // ── Funciones modal editar consignacion ──────────────────────────────
@@ -2458,7 +2451,6 @@ document.getElementById('modalTraslado').addEventListener('click', function (e) 
 // ── Modal Efectivo ──────────────────────────────────────────────────
 function verMovimientosEfectivo() {
     const modal = document.getElementById('modalEfectivo');
-    document.getElementById('modalEfectivoSummary').innerHTML = '';
     document.getElementById('modalEfectivoBody').innerHTML = '<div style="text-align:center;padding:2rem;color:#94a3b8;">⏳ Cargando movimientos en efectivo…</div>';
     modal.style.display = 'flex';
 
@@ -2467,63 +2459,10 @@ function verMovimientosEfectivo() {
         .then(data => {
             const fmtN = v => '$ ' + Math.round(Number(v) || 0).toLocaleString('es-CO');
 
-            // ── Cards resumen ──
-            const subFacturas  = data.total_facturas  || 0;
-            const subAnticipos = data.total_anticipos || 0;
-            document.getElementById('modalEfectivoSummary').innerHTML = `
-                <div style="background:#f0fdf4;border-radius:10px;padding:.75rem;text-align:center;border:1px solid #bbf7d0;">
-                    <div style="font-weight:800;color:#16a34a;font-size:1.1rem;">${fmtN(data.total_entradas)}</div>
-                    <div style="font-size:.68rem;color:#15803d;font-weight:600;margin-top:.2rem;">↑ Ingresos Efectivo</div>
-                    <div style="font-size:.62rem;color:#94a3b8;">${data.entradas.length} factura(s)${subAnticipos > 0 ? ' + ' + (data.anticipos?.length||0) + ' anticipo(s)' : ''}</div>
-                </div>
-                <div style="background:#fef2f2;border-radius:10px;padding:.75rem;text-align:center;border:1px solid #fecaca;">
-                    <div style="font-weight:800;color:#dc2626;font-size:1.1rem;">${fmtN(data.total_salidas)}</div>
-                    <div style="font-size:.68rem;color:#b91c1c;font-weight:600;margin-top:.2rem;">↓ Salidas Efectivo</div>
-                    <div style="font-size:.62rem;color:#94a3b8;">${data.salidas.length} gasto(s)</div>
-                </div>
-                <div style="background:${data.saldo_efectivo >= 0 ? '#f0fdf4' : '#fef2f2'};border-radius:10px;padding:.75rem;text-align:center;border:1px solid ${data.saldo_efectivo >= 0 ? '#bbf7d0' : '#fecaca'};">
-                    <div style="font-weight:800;color:${data.saldo_efectivo >= 0 ? '#16a34a' : '#dc2626'};font-size:1.1rem;">${fmtN(data.saldo_efectivo)}</div>
-                    <div style="font-size:.68rem;color:${data.saldo_efectivo >= 0 ? '#15803d' : '#b91c1c'};font-weight:600;margin-top:.2rem;">Neto en Efectivo</div>
-                    <div style="font-size:.62rem;color:#94a3b8;">Ingresos − Salidas</div>
-                </div>`;
-
             let html = '';
 
-            // ── Sección: Efectivo por Asesor del mes ──
-            if (data.por_asesor && data.por_asesor.length > 0) {
-                const totalConsignado = data.total_consignaciones || 0;
-                const totalSaldoCaja  = data.por_asesor.reduce((s, c) => s + (c.saldo_caja || 0), 0);
-                html += `<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#15803d;margin-bottom:.5rem;">👤 Efectivo por Asesor — ${data.por_asesor.length} asesor(es)</div>`;
-                html += `<div style="border-radius:10px;overflow:hidden;border:1px solid #bbf7d0;margin-bottom:1.25rem;">`;
-                html += `<div style="display:grid;grid-template-columns:1fr 90px 90px 90px 90px 100px;gap:.3rem;padding:.4rem .75rem;background:#f0fdf4;font-size:.65rem;font-weight:700;text-transform:uppercase;color:#15803d;border-bottom:2px solid #bbf7d0;">
-                    <span>Asesor</span>
-                    <span style="text-align:right;">Facturas</span>
-                    <span style="text-align:right;">Anticipos</span>
-                    <span style="text-align:right;">Gastos</span>
-                    <span style="text-align:right;">Consignado</span>
-                    <span style="text-align:right;">Saldo Caja</span></div>`;
-                data.por_asesor.forEach(c => {
-                    const isOk = c.saldo_caja >= 0;
-                    html += `<div style="display:grid;grid-template-columns:1fr 90px 90px 90px 90px 100px;gap:.3rem;padding:.42rem .75rem;border-bottom:1px solid #f0fdf4;font-size:.76rem;align-items:center;background:${isOk ? '#fff' : '#fef2f2'};">
-                        <span style="font-weight:700;color:#1e293b;">👤 ${c.asesor_nombre || '—'}</span>
-                        <span style="text-align:right;color:#16a34a;font-family:monospace;">${fmtN(c.ingresos_ef)}</span>
-                        <span style="text-align:right;color:#0ea5e9;font-family:monospace;">${c.anticipos_ef > 0 ? fmtN(c.anticipos_ef) : '—'}</span>
-                        <span style="text-align:right;color:#dc2626;font-family:monospace;">${c.gastos_ef > 0 ? '-'+fmtN(c.gastos_ef) : '—'}</span>
-                        <span style="text-align:right;color:#d97706;font-family:monospace;">${c.consignaciones_ef > 0 ? '-'+fmtN(c.consignaciones_ef) : '—'}</span>
-                        <span style="text-align:right;font-weight:800;color:${isOk ? '#15803d' : '#dc2626'};font-family:monospace;">${fmtN(c.saldo_caja)}</span>
-                    </div>`;
-                });
-                html += `<div style="display:grid;grid-template-columns:1fr 90px 90px 90px 90px 100px;gap:.3rem;padding:.45rem .75rem;background:#f0fdf4;font-size:.75rem;font-weight:700;border-top:2px solid #bbf7d0;">
-                    <span style="color:#15803d;">TOTAL ASESORES</span>
-                    <span style="text-align:right;color:#16a34a;font-family:monospace;">${fmtN(data.total_entradas)}</span>
-                    <span></span>
-                    <span style="text-align:right;color:#dc2626;font-family:monospace;">${data.total_salidas > 0 ? '-'+fmtN(data.total_salidas) : '—'}</span>
-                    <span style="text-align:right;color:#d97706;font-family:monospace;">${totalConsignado > 0 ? '-'+fmtN(totalConsignado) : '—'}</span>
-                    <span style="text-align:right;color:#15803d;font-family:monospace;">${fmtN(totalSaldoCaja)}</span></div>`;
-                html += `</div>`;
-            } else {
-                html += `<div style="background:#f0fdf4;border-radius:10px;padding:.7rem 1rem;font-size:.78rem;color:#15803d;margin-bottom:1rem;">Sin movimientos en efectivo en este mes.</div>`;
-            }
+            // El resumen por persona está arriba (Quién tiene el efectivo), con
+            // la regla única; el «por asesor» de antes daba otras cifras.
 
             // ── Sección: Facturas cobradas en efectivo ──
             html += `<div style="font-size:.7rem;font-weight:700;text-transform:uppercase;color:#64748b;margin-bottom:.5rem;">📋 Facturas cobradas en efectivo (${data.entradas.length})</div>`;
