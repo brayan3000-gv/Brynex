@@ -654,6 +654,25 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 ->push(['tipo' => 'recoger', 'id' => null, 'arriba' => 'Efectivo', 'nombre' => 'Por recoger', 'saldo' => (float) collect($porRecoger)->sum(fn ($e) => $e['real'] ?? $e['saldo'])]);
             [$cuentasCero, $cuentasConSaldo] = $cuentasMini->partition(fn ($c) => round($c['saldo']) == 0);
             $cuentasConSaldo = $cuentasConSaldo->sortByDesc('saldo')->values();
+            // Ícono chico con el color e inicial de cada banco (no hay logos en el
+            // proyecto); el que no esté aquí lleva un ícono genérico.
+            $iconoCuenta = function ($c) {
+                if ($c['tipo'] !== 'banco') {
+                    return ['$', '#dcfce7', '#15803d'];
+                }
+                $b = mb_strtoupper((string) $c['arriba']);
+                foreach ([
+                    'NEQUI' => ['N', '#da0081', '#ffffff'], 'DAVIPLATA' => ['DP', '#ed1c24', '#ffffff'],
+                    'DAVIVIENDA' => ['D', '#ed1c24', '#ffffff'], 'BANCOLOMBIA' => ['B', '#fdda24', '#2c2a29'],
+                    'BBVA' => ['BBVA', '#072146', '#ffffff'], 'BOGOTA' => ['BdB', '#00468b', '#ffffff'],
+                    'SCOTIABANK' => ['S', '#ec111a', '#ffffff'],
+                ] as $clave => $icono) {
+                    if (str_contains($b, $clave)) {
+                        return $icono;
+                    }
+                }
+                return null;
+            };
             $clicCuenta = fn ($c) => match ($c['tipo']) {
                 'banco'    => "verMovimientosBanco({$c['id']},'" . addslashes(trim($c['arriba'] . ' · ' . $c['nombre'])) . "')",
                 'efectivo' => 'verMovimientosEfectivo()',
@@ -661,11 +680,15 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             };
         @endphp
         <style>
-            .cuenta-mini{text-align:left;background:#fff;border:1px solid #e2e8f0;border-top:3px solid #1d4ed8;border-radius:12px;padding:.7rem .8rem;font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;gap:.1rem;min-width:0;transition:box-shadow .15s}
-            .cuenta-mini:hover{box-shadow:0 6px 16px rgba(15,23,42,.1)}
-            .cuenta-mini .arriba{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#64748b}
-            .cuenta-mini .nombre{font-size:.76rem;font-weight:700;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-            .cuenta-mini .saldo{font-family:monospace;font-size:1rem;font-weight:800;margin-top:.3rem;white-space:nowrap}
+            .cuenta-mini{text-align:left;background:#fff;border:0;border-top:4px solid #3b82f6;border-radius:14px;padding:1.1rem 1.2rem 1rem;box-shadow:0 2px 10px rgba(0,0,0,.07);font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;min-width:0;min-height:150px;transition:all .2s}
+            .cuenta-mini:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
+            .cuenta-mini .cabeza{display:flex;align-items:center;justify-content:space-between;gap:.4rem}
+            .cuenta-mini .arriba{font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .cuenta-mini .icono{flex-shrink:0;min-width:22px;height:22px;padding:0 .3rem;box-sizing:border-box;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;letter-spacing:0}
+            .cuenta-mini .nombre{font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .cuenta-mini .etq{font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:.55rem}
+            .cuenta-mini .saldo{font-size:1.3rem;font-weight:900;line-height:1.1;margin-top:.2rem;white-space:nowrap}
+            .cuenta-mini .pie{margin-top:auto;padding-top:.6rem;font-size:.66rem;color:#64748b}
             #cuentasCero[hidden]{display:none!important}
             .cuenta-cero-chip{padding:.35rem .65rem;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;font:inherit;font-size:.72rem;color:#334155;cursor:pointer}
         </style>
@@ -674,23 +697,35 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div style="font-size:.72rem;font-weight:700;text-transform:uppercase;color:#94a3b8;">🏦 Bancos y caja</div>
                 <div style="font-size:.74rem;color:#64748b;">Total <b style="font-family:monospace;color:#0d2550;font-size:.85rem;">{{ $fmt($cuentasConSaldo->sum('saldo')) }}</b></div>
             </div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:.6rem;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;">
                 @foreach($cuentasConSaldo as $c)
                 @php $colorTipo = ['banco' => '#1d4ed8', 'efectivo' => '#16a34a', 'recoger' => '#0d9488'][$c['tipo']]; @endphp
                 <button type="button" class="cuenta-mini" onclick="{{ $clicCuenta($c) }}" style="border-top-color:{{ $colorTipo }};"
                         title="{{ $c['tipo'] === 'recoger' ? 'Ver el consolidado de caja del mes' : 'Ver cómo entró y cómo salió' }}">
-                    <span class="arriba">{{ $c['arriba'] }}</span>
+                    @php $icono = $iconoCuenta($c); @endphp
+                    <span class="cabeza">
+                        <span class="arriba">{{ $c['arriba'] }}</span>
+                        @if($icono)
+                        <span class="icono" aria-hidden="true" style="background:{{ $icono[1] }};color:{{ $icono[2] }};">{{ $icono[0] }}</span>
+                        @else
+                        <span class="icono" aria-hidden="true" style="background:#e2e8f0;color:#475569;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6.5L8 3l6 3.5M3 7v5M6.3 7v5M9.7 7v5M13 7v5M2 13.5h12"/></svg></span>
+                        @endif
+                    </span>
                     <span class="nombre" title="{{ $c['nombre'] }}">{{ $c['nombre'] }}</span>
+                    <span class="etq">Saldo</span>
                     <span class="saldo" style="color:{{ $c['saldo'] < 0 ? '#dc2626' : ($c['tipo'] === 'banco' ? '#0d2550' : $colorTipo) }};">{{ $fmt($c['saldo']) }}</span>
+                    <span class="pie">{{ $c['tipo'] === 'recoger' ? 'Ver consolidado →' : 'Cómo entró y salió →' }}</span>
                 </button>
                 @endforeach
                 @if($cuentasCero->isNotEmpty())
                 <button type="button" class="cuenta-mini" aria-expanded="false" aria-controls="cuentasCero"
                         onclick="const v=document.getElementById('cuentasCero');const abrir=v.hidden;v.hidden=!abrir;this.setAttribute('aria-expanded',abrir);this.querySelector('.ver').textContent=abrir?'Ocultar ▴':'Ver cuáles ▾';"
                         style="background:#f8fafc;border:1.5px dashed #94a3b8;">
-                    <span class="arriba">En $0</span>
+                    <span class="cabeza"><span class="arriba">En $0</span></span>
                     <span class="nombre">{{ $cuentasCero->count() }} {{ $cuentasCero->count() === 1 ? 'cuenta' : 'cuentas' }}</span>
-                    <span class="ver" style="font-size:.72rem;color:#64748b;margin-top:.3rem;">Ver cuáles ▾</span>
+                    <span class="etq">Saldo</span>
+                    <span class="saldo" style="color:#64748b;">$ 0</span>
+                    <span class="pie ver">Ver cuáles ▾</span>
                 </button>
                 @endif
             </div>
