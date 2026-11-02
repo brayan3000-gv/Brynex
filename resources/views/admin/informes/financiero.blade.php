@@ -607,9 +607,11 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div style="font-size:.6rem;color:#94a3b8;margin:-.15rem 0 .25rem;">La empresa: todas las cuentas y cajas</div>
                 {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo verificado') !!}
                 {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'La caja de la empresa más lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
-                @if($vieneDe && $vieneDe['sin_ubicar'] > 0)
-                {!! $fila('↪ Anticipos', $vieneDe['anticipos_sin_ubicar'], '#d97706', 600, 'Plata de los anticipos que viene de ' . $vieneDe['mes_nombre'] . ' y todavía no tiene cuenta anotada') !!}
-                {!! $fila('↪ Viene de ' . $vieneDe['mes_nombre'], $vieneDe['resto_sin_ubicar'], '#6d28d9', 600, 'El resto de lo que debió haber al arrancar el mes, sin cuenta anotada todavía') !!}
+                @if($vieneDe && $vieneDe['resto_sin_ubicar'] != 0)
+                {!! $fila('↪ Viene de ' . $vieneDe['mes_nombre'], $vieneDe['resto_sin_ubicar'], '#6d28d9', 600, 'Lo que debió haber al arrancar el mes, aparte de los anticipos, sin cuenta anotada todavía') !!}
+                @endif
+                @if(($pl['anticipos_en_cuentas'] ?? 0) != 0)
+                {!! $fila('− Anticipos (tarjeta aparte)', -$pl['anticipos_en_cuentas'], '#d97706', 600, 'La plata de los anticipos que ya está en las cuentas: es de los clientes y tiene su tarjeta') !!}
                 @endif
                 <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
                 {!! $fila('= Hay', $pl['hay'], '#0f172a', 800) !!}
@@ -686,7 +688,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 return null;
             };
             $pendArranque = $vieneDe
-                ? ['bancos' => $vieneDe['cuentas']->whereNull('inicial')->pluck('id')->all(), 'efectivo' => $vieneDe['personas']->whereNull('inicial')->isNotEmpty()]
+                ? ['bancos' => $vieneDe['cuentas']->where('pendiente', true)->pluck('id')->all(), 'efectivo' => $vieneDe['personas']->where('pendiente', true)->isNotEmpty()]
                 : ['bancos' => [], 'efectivo' => false];
             $sinArranque = fn ($c) => $c['tipo'] === 'banco' ? in_array($c['id'], $pendArranque['bancos'], true) : ($c['tipo'] === 'efectivo' && $pendArranque['efectivo']);
             $clicCuenta = fn ($c) => match ($c['tipo']) {
@@ -1543,10 +1545,10 @@ button.desg-fila{cursor:pointer}button.desg-fila:hover{background:#f8fafc}
                     <input type="hidden" name="anio" value="{{ $vieneDe['anio'] }}">
                     <input type="hidden" name="parcial" value="1">
                     @foreach($vieneDe['personas'] as $p)
-                    <div data-arranque style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem 1rem;padding:.5rem .7rem;border-top:{{ $loop->first ? '0' : '1px solid #f1f5f9' }};font-size:.78rem;background:{{ $p['inicial'] === null ? '#fffbeb' : '#fff' }};">
+                    <div data-arranque style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem 1rem;padding:.5rem .7rem;border-top:{{ $loop->first ? '0' : '1px solid #f1f5f9' }};font-size:.78rem;background:{{ $p['pendiente'] ? '#fffbeb' : '#fff' }};">
                         <span style="font-weight:700;min-width:140px;">{{ $p['nombre'] }}</span>
-                        <span style="color:{{ $p['inicial'] === null ? '#92400e' : '#334155' }};">
-                            {!! $p['inicial'] === null ? '⚠ Falta' : 'Anotado <b style="font-family:monospace;">' . e($fmt($p['inicial'])) . '</b>' !!}
+                        <span style="color:{{ $p['pendiente'] ? '#92400e' : '#334155' }};">
+                            {!! $p['inicial'] === null ? '⚠ Falta' : ($p['pendiente'] ? '⚠ En $0 por ahora' : 'Anotado <b style="font-family:monospace;">' . e($fmt($p['inicial'])) . '</b>') !!}
                         </span>
                         <span style="color:#64748b;font-size:.72rem;">BryNex calculaba {{ $fmt($p['calculaba']) }}</span>
                         @can('informes.cierre_saldos')
@@ -2159,8 +2161,11 @@ function htmlArranqueBanco(id) {
     const fmtN = v => '$ '+Math.round(Number(v)||0).toLocaleString('es-CO');
     const queEs = a.personal ? 'Plata del negocio que siguió en la cuenta' : 'Saldo del extracto';
     const etiqueta = {verificado: 'anotado', manual: 'anotado a mano', arrastre: 'viene del mes anterior (razón social)'}[a.origen];
-    let html = '<div style="padding:.75rem 1.25rem;border-bottom:1px solid #e2e8f0;background:'+(a.inicial === null ? '#fffbeb' : '#fff')+';display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;font-size:.78rem;">'
-        + '<span style="font-weight:700;color:'+(a.inicial === null ? '#92400e' : '#334155')+';">'+(a.inicial === null ? '⚠ Falta el saldo de arranque' : 'Arrancó el mes con <span style="font-family:monospace;">'+fmtN(a.inicial)+'</span> <span style="font-weight:500;color:#64748b;">('+(etiqueta || 'anotado')+')</span>')+'</span>'
+    const estado = a.inicial === null ? '⚠ Falta el saldo de arranque'
+        : a.pendiente ? '⚠ En $0 por ahora: cámbialo cuando revises el extracto'
+        : 'Arrancó el mes con <span style="font-family:monospace;">'+fmtN(a.inicial)+'</span> <span style="font-weight:500;color:#64748b;">('+(etiqueta || 'anotado')+')</span>';
+    let html = '<div style="padding:.75rem 1.25rem;border-bottom:1px solid #e2e8f0;background:'+(a.pendiente ? '#fffbeb' : '#fff')+';display:flex;flex-wrap:wrap;align-items:center;gap:.5rem 1rem;font-size:.78rem;">'
+        + '<span style="font-weight:700;color:'+(a.pendiente ? '#92400e' : '#334155')+';">'+estado+'</span>'
         + '<span style="color:#64748b;font-size:.72rem;">BryNex calculaba '+fmtN(a.calculaba)+' al cierre de '+_arranqueMes.nombre+'</span>';
     if (_arranqueMes.puede && a.origen !== 'manual') {
         html += '<form method="POST" action="{{ route('admin.informes.financiero.cierre.saldos') }}" onsubmit="return enviarArranque(this)" style="display:flex;align-items:center;gap:.4rem;margin-left:auto;">'
@@ -2168,7 +2173,7 @@ function htmlArranqueBanco(id) {
             + '<input type="hidden" name="mes" value="'+_arranqueMes.mes+'"><input type="hidden" name="anio" value="'+_arranqueMes.anio+'"><input type="hidden" name="parcial" value="1">'
             + '<input type="hidden" name="bancos['+id+']" class="arranque-raw">'
             + '<label style="font-size:.7rem;color:#475569;">'+queEs+' al cierre de '+_arranqueMes.nombre
-            + ' <input type="text" inputmode="numeric" class="arranque-valor" required placeholder="$ 0" value="'+(a.inicial === null ? '' : fmtN(a.inicial))+'" oninput="fmtArranque(this)" style="width:130px;padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:monospace;font-weight:700;"></label>'
+            + ' <input type="text" inputmode="numeric" class="arranque-valor" data-vacio="0" placeholder="$ 0" value="'+(a.inicial === null || a.pendiente ? '' : fmtN(a.inicial))+'" oninput="fmtArranque(this)" style="width:130px;padding:.35rem .5rem;border:1px solid #cbd5e1;border-radius:7px;font-family:monospace;font-weight:700;"></label>'
             + '<button type="submit" style="background:#7c3aed;color:#fff;border:0;border-radius:7px;padding:.4rem .75rem;font:inherit;font-size:.74rem;font-weight:700;cursor:pointer;">Guardar</button>'
             + '</form>';
     }
@@ -2181,14 +2186,13 @@ function fmtArranque(inp) {
 }
 // Pasa cada valor escrito a su campo oculto (entero, puede ser negativo).
 function enviarArranque(form) {
-    let ok = true;
     form.querySelectorAll('.arranque-valor').forEach(inp => {
         const n = inp.value.replace(/\D/g, '');
         const raw = inp.closest('[data-arranque]')?.querySelector('.arranque-raw') || form.querySelector('.arranque-raw');
-        if (inp.required && n === '') ok = false;
-        if (raw) raw.value = n === '' ? '' : (inp.value.trim().startsWith('-') ? '-' : '') + n;
+        // Vacía en la casilla de un banco = $0 por ahora (se cambia después).
+        const vacio = inp.dataset.vacio ?? '';
+        if (raw) raw.value = n === '' ? vacio : (inp.value.trim().startsWith('-') ? '-' : '') + n;
     });
-    if (!ok) return false;
     form.querySelector('button[type="submit"]').disabled = true;
     return true;
 }

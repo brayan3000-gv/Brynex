@@ -117,6 +117,10 @@ class CierreMes
 
         $b = [
             ['ss',            'Seguridad social por pagar', 'cobrada para planillas que aún no se pagan', (int) $inf['ss_por_pagar']],
+            // La del mes anterior (canal 3, «Saldo SS anterior») se debe hasta
+            // que se paguen las planillas de este mes: sin esto el mes nuevo
+            // arrancaba sin deberla (nov-2026).
+            ['ss_anterior',   'Seguridad social de ' . $inicio->copy()->subMonth()->locale('es')->monthName . ' por pagar', 'cobrada el mes pasado para las planillas de este mes', (int) ($inf['ss_anterior_por_pagar'] ?? 0)],
             ['anticipos',     'Anticipos sin aplicar', 'pagaron por adelantado; todavía no hay factura', self::anticiposSinAplicar($aliadoId, $corte->toDateString())],
             ['retiros',       'Reserva de retiros', 'apartada de las afiliaciones para pagar retiros', (int) $inf['reserva_retiros']],
             ['asesores',      'Comisiones de asesores por pagar', 'se pagan cuando las piden', (int) $inf['asesores']],
