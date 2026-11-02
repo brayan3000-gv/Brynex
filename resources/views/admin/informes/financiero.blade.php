@@ -605,46 +605,58 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     💰 Cómo está la plata {{ $corteTxt }}
                 </div>
                 <div style="font-size:.6rem;color:#94a3b8;margin:-.15rem 0 .25rem;">La empresa: todas las cuentas y cajas</div>
-                {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo verificado') !!}
-                {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'La caja de la empresa más lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
-                @if($vieneDe && $vieneDe['resto_sin_ubicar'] != 0)
-                {!! $fila('↪ Viene de ' . $vieneDe['mes_nombre'], $vieneDe['resto_sin_ubicar'], '#6d28d9', 600, 'Lo que debió haber al arrancar el mes, aparte de los anticipos, sin cuenta anotada todavía') !!}
+                {{-- Arriba solo dónde está la plata; el cuadre va en una línea que
+                     abre el detalle, y lo prestado está en la tarjeta de Préstamos
+                     (lo pidió el dueño, 2-nov-2026). --}}
+                @php
+                    $antSinUbicar = $vieneDe['anticipos_sin_ubicar'] ?? 0;
+                    $restoSinUbicar = $vieneDe['resto_sin_ubicar'] ?? 0;
+                    $totalPlata = $pl['bancos'] + $pl['efectivo'] + $antSinUbicar + $restoSinUbicar;
+                    $cuadra = $pl['deberia'] !== null && abs($pl['diferencia']) < 1;
+                @endphp
+                {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo anotado') !!}
+                {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'La caja de la empresa más lo que tiene cada persona por entregar') !!}
+                @if($antSinUbicar != 0)
+                {!! $fila('🟡 Anticipos', $antSinUbicar, '#d97706', 600, 'Plata de anticipos de clientes que viene de ' . $vieneDe['mes_nombre'] . ' y todavía no tiene cuenta anotada (el total está en su tarjeta)') !!}
                 @endif
-                @if(($pl['anticipos_en_cuentas'] ?? 0) != 0)
-                {!! $fila('− Anticipos (tarjeta aparte)', -$pl['anticipos_en_cuentas'], '#d97706', 600, 'La plata de los anticipos que ya está en las cuentas: es de los clientes y tiene su tarjeta') !!}
+                @if($restoSinUbicar != 0)
+                {!! $fila('↪ Viene de ' . $vieneDe['mes_nombre'], $restoSinUbicar, '#6d28d9', 600, 'Lo que debió haber al arrancar el mes, aparte de los anticipos, sin cuenta anotada todavía (clic en su tarjeta para ver de qué es)') !!}
                 @endif
                 <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
-                {!! $fila('= Hay', $pl['hay'], '#0f172a', 800) !!}
-                {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 700, 'Plata que está en las cuentas o en efectivo pero es de otros, o que Brygar debe') !!}
-                @foreach($pl['ajeno_detalle'] as [$k, $n, $sub, $v])
-                <div style="display:flex;justify-content:space-between;gap:.4rem;padding-left:.7rem;" title="{{ $sub }}">
-                    <span style="font-size:.62rem;color:#64748b;">└ {{ $n }}</span>
-                    <span style="font-size:.64rem;color:#b45309;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
-                </div>
-                @endforeach
-                {!! $fila('+ Prestado, falta que entre', $pl['cobrar'], '#7c3aed', 700, 'Lo que le deben a Brygar: ya contó como ingreso y falta que llegue la plata') !!}
-                @foreach($pl['cobrar_detalle'] as [$k, $n, $sub, $v])
-                <div style="display:flex;justify-content:space-between;gap:.4rem;padding-left:.7rem;" title="{{ $sub }}">
-                    <span style="font-size:.62rem;color:#64748b;">└ {{ $n }}</span>
-                    <span style="font-size:.64rem;color:#7c3aed;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
-                </div>
-                @endforeach
-                <div style="border-top:1.5px solid #e2e8f0;margin:.15rem 0"></div>
-                {!! $fila('= Es de Brygar', $pl['es'], '#0f172a', 800, 'Lo que hay − lo que no es de Brygar + lo prestado') !!}
+                {!! $fila('= Total', $totalPlata, '#0f172a', 800) !!}
+
                 @if($pl['deberia'] !== null)
-                    {!! $fila('Debería ser', $pl['deberia'], '#64748b', 600, 'Lo que era de Brygar al cierre de '.$pl['mes_anterior'].' + la ganancia del mes − los retiros del dueño') !!}
-                    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:.3rem .4rem;border-radius:6px;background:{{ abs($pl['diferencia']) < 1 ? '#ecfdf5' : '#fef2f2' }};">
-                        <span style="font-size:.7rem;font-weight:800;color:{{ abs($pl['diferencia']) < 1 ? '#065f46' : '#991b1b' }};">{{ abs($pl['diferencia']) < 1 ? '✅ Cuadra' : '⚠️ Diferencia' }}</span>
-                        <span style="font-size:.78rem;font-weight:900;font-family:monospace;color:{{ abs($pl['diferencia']) < 1 ? '#065f46' : '#991b1b' }};">{{ $pl['diferencia'] > 0 ? '+' : '' }}{{ $fmt($pl['diferencia']) }}</span>
+                <button type="button" aria-expanded="false" aria-controls="plataDetalle"
+                        onclick="const d=document.getElementById('plataDetalle');d.hidden=!d.hidden;this.setAttribute('aria-expanded',!d.hidden);this.querySelector('.ver').textContent=d.hidden?'ver detalle ▾':'ocultar ▴';"
+                        style="margin-top:.2rem;display:flex;justify-content:space-between;align-items:baseline;gap:.4rem;padding:.35rem .45rem;border-radius:6px;border:0;cursor:pointer;font:inherit;text-align:left;background:{{ $cuadra ? '#ecfdf5' : '#fef2f2' }};">
+                    <span style="font-size:.7rem;font-weight:800;color:{{ $cuadra ? '#065f46' : '#991b1b' }};">{{ $cuadra ? '✅ Cuadra' : '⚠️ ¿Cuadra?' }} <span class="ver" style="font-weight:600;font-size:.62rem;opacity:.8;">ver detalle ▾</span></span>
+                    <span style="font-size:.78rem;font-weight:900;font-family:monospace;color:{{ $cuadra ? '#065f46' : '#991b1b' }};">{{ $pl['diferencia'] > 0 ? '+' : '' }}{{ $fmt($pl['diferencia']) }}</span>
+                </button>
+                <div id="plataDetalle" hidden style="flex-direction:column;gap:.3rem;padding:.4rem .2rem 0;">
+                    {!! $fila('Total', $totalPlata, '#0f172a', 700) !!}
+                    @if(($pl['anticipos_en_cuentas'] ?? 0) + $antSinUbicar != 0)
+                    {!! $fila('− Anticipos (de los clientes)', -(($pl['anticipos_en_cuentas'] ?? 0) + $antSinUbicar), '#d97706', 600, 'Es plata de los clientes: tiene su tarjeta') !!}
+                    @endif
+                    {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 600, 'Plata que está en las cuentas o en efectivo pero es de otros, o que Brygar debe') !!}
+                    @foreach($pl['ajeno_detalle'] as [$k, $n, $sub, $v])
+                    <div style="display:flex;justify-content:space-between;gap:.4rem;padding-left:.7rem;" title="{{ $sub }}">
+                        <span style="font-size:.62rem;color:#64748b;">└ {{ $n }}</span>
+                        <span style="font-size:.64rem;color:#b45309;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
                     </div>
-                    @if(abs($pl['diferencia']) >= 1)
+                    @endforeach
+                    {!! $fila('+ Prestado (tarjeta Préstamos)', $pl['cobrar'], '#7c3aed', 600, 'Lo que le deben a Brygar: está en la calle, no en las cuentas') !!}
+                    <div style="border-top:1.5px solid #e2e8f0;margin:.15rem 0"></div>
+                    {!! $fila('= Es de Brygar', $pl['es'], '#0f172a', 800, 'Lo que hay − anticipos − lo que no es de Brygar + lo prestado') !!}
+                    {!! $fila('Debería ser', $pl['deberia'], '#64748b', 600, 'Lo que era de Brygar al cierre de '.$pl['mes_anterior'].' + la ganancia del mes − los retiros del dueño') !!}
+                    @if(! $cuadra)
                     <div style="font-size:.6rem;color:#94a3b8;line-height:1.35;">
                         {{ $pl['diferencia'] > 0 ? 'Hay más plata de la que se explica' : 'Falta plata' }}: revisa efectivo sin contar, consignaciones en otra cuenta, gastos o retiros sin anotar.
                         @if($pl['sin_verificar']) {{ $pl['sin_verificar'] }} {{ $pl['sin_verificar'] === 1 ? 'caja o cuenta arrancó' : 'cajas o cuentas arrancaron' }} el mes sin verificar.@endif
                     </div>
                     @endif
+                </div>
                 @else
-                    <div style="font-size:.6rem;color:#94a3b8;line-height:1.35;">Sin foto del cierre de {{ $pl['mes_anterior'] }}: no se puede decir cuánto debería ser.</div>
+                    <div style="font-size:.6rem;color:#94a3b8;line-height:1.35;">Sin foto del cierre de {{ $pl['mes_anterior'] }}: no se puede decir si cuadra.</div>
                 @endif
             </div>
         </div>
@@ -708,6 +720,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             .cuenta-mini .saldo{font-size:1.3rem;font-weight:900;line-height:1.1;margin-top:.2rem;white-space:nowrap}
             .cuenta-mini .pie{margin-top:auto;padding-top:.6rem;font-size:.66rem;color:#64748b}
             #cuentasCero[hidden]{display:none!important}
+            #plataDetalle:not([hidden]){display:flex}
             .cuenta-cero-chip{padding:.35rem .65rem;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;font:inherit;font-size:.72rem;color:#334155;cursor:pointer}
         </style>
         <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
@@ -781,6 +794,23 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                         </div>
                     </div>
 
+                    {{-- Lo que está en la calle (antes iba en «Cómo está la plata»):
+                         préstamos y deudas de clientes que faltan por entrar. --}}
+                    @if($plata['cobrar'] != 0)
+                    <div style="margin-top:.45rem;padding-top:.45rem;border-top:1px dashed #ddd6fe;display:flex;flex-direction:column;gap:.2rem;" title="Ya contó como ingreso y falta que llegue la plata">
+                        @foreach($plata['cobrar_detalle'] as [$k, $n, $sub, $v])
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:.3rem;" title="{{ $sub }}">
+                            <span style="font-size:.6rem;color:#64748b;">{{ $n }}</span>
+                            <span style="font-size:.66rem;color:#6d28d9;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
+                        </div>
+                        @endforeach
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:.62rem;color:#475569;font-weight:700;text-transform:uppercase;">Por cobrar</span>
+                            <span style="font-size:.74rem;font-weight:900;color:#6d28d9;font-family:monospace;">{{ $fmt($plata['cobrar']) }}</span>
+                        </div>
+                    </div>
+                    @endif
+
                     <div style="margin-top:.4rem;padding-top:.4rem;border-top:1px dashed #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
                         <a href="{{ route('admin.prestamos.index') }}" target="_blank"
                            style="font-size:.65rem;color:#7c3aed;font-weight:700;text-decoration:none;"
@@ -815,8 +845,10 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                      no tiene cuenta anotada, aparte de los anticipos (que ya tienen
                      su tarjeta). Ver InformeController::vieneDelMesAnterior(). --}}
                 @if($vieneDe)
-                <div class="bank-card" style="border-top-color:#7c3aed;cursor:default;"
-                     title="Debió haber {{ $fmt($vieneDe['debio_haber']) }} al arrancar {{ mb_strtolower($mesesEs[$mes]) }}; anotado {{ $fmt($vieneDe['ubicado']) }}">
+                <div class="bank-card" style="border-top-color:#7c3aed;" role="button" tabindex="0"
+                     onclick="document.getElementById('modalVieneDe').style.display='flex'"
+                     onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+                     title="Clic para ver de qué es">
                     <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">↪ Viene de {{ $vieneDe['mes_nombre'] }}</div>
                     <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Aparte de los anticipos</div>
                     <div style="margin-top:.6rem;">
@@ -1453,6 +1485,58 @@ button.desg-fila{cursor:pointer}button.desg-fila:hover{background:#f8fafc}
 .desg-barra span{display:block;height:5px;border-radius:3px}
 .desg-in .desg-barra span{background:#22c55e}.desg-out .desg-barra span{background:#f87171}
 </style>
+
+{{-- Modal «Viene de…»: de qué es lo que debió haber aparte de los anticipos --}}
+@if($vieneDe)
+<div id="modalVieneDe" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:6vh;overflow-y:auto;"
+     onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;border-radius:16px;width:min(560px,96vw);box-shadow:0 25px 60px rgba(0,0,0,.22);">
+        <div style="background:#4c1d95;border-radius:16px 16px 0 0;padding:.9rem 1.25rem;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <div style="color:#fff;font-weight:800;font-size:.95rem;">↪ Viene de {{ $vieneDe['mes_nombre'] }}</div>
+                <div style="color:#ddd6fe;font-size:.72rem;margin-top:.1rem;">Lo que debió haber al arrancar {{ mb_strtolower($mesesEs[$mes]) }}, aparte de los anticipos</div>
+            </div>
+            <button type="button" aria-label="Cerrar" onclick="document.getElementById('modalVieneDe').style.display='none'" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem;">✕</button>
+        </div>
+        <div style="padding:1rem 1.25rem;font-size:.8rem;color:#334155;display:flex;flex-direction:column;gap:.35rem;">
+            @foreach($vieneDe['detalle'] as [$nombre, $valor])
+            <div style="display:flex;justify-content:space-between;gap:.6rem;">
+                <span>{{ $valor < 0 ? '− ' : '' }}{{ $nombre }}</span>
+                <span style="font-family:monospace;font-weight:700;white-space:nowrap;color:{{ $valor < 0 ? '#6d28d9' : '#0f172a' }};">{{ $fmt(abs($valor)) }}</span>
+            </div>
+            @endforeach
+            <div style="display:flex;justify-content:space-between;border-top:1px dashed #e2e8f0;padding-top:.35rem;font-weight:800;">
+                <span>Debió haber, aparte de los anticipos</span><span style="font-family:monospace;">{{ $fmt($vieneDe['aparte']) }}</span>
+            </div>
+            @if($vieneDe['pendientes'])
+            @if(min($vieneDe['ubicado'], $vieneDe['aparte']) > 0)
+            <div style="display:flex;justify-content:space-between;">
+                <span>− Ya anotado en cuentas</span><span style="font-family:monospace;font-weight:700;color:#15803d;">{{ $fmt(min($vieneDe['ubicado'], $vieneDe['aparte'])) }}</span>
+            </div>
+            @endif
+            <div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1.5px solid #e2e8f0;padding-top:.4rem;font-weight:900;color:#6d28d9;">
+                <span>= Viene de {{ $vieneDe['mes_nombre'] }}, sin cuenta anotada</span><span style="font-family:monospace;font-size:1rem;">{{ $fmt($vieneDe['resto_sin_ubicar']) }}</span>
+            </div>
+            <div style="margin-top:.6rem;padding-top:.6rem;border-top:1px solid #f1f5f9;">
+                <div style="font-size:.7rem;font-weight:700;color:#b45309;margin-bottom:.4rem;">⚠ Falta el saldo de arranque de:</div>
+                <div style="display:flex;flex-wrap:wrap;gap:.35rem;">
+                    @foreach($vieneDe['cuentas']->where('pendiente', true) as $p)
+                    <button type="button" class="cuenta-cero-chip" style="border-color:#fde68a;background:#fffbeb;color:#92400e;"
+                            onclick="document.getElementById('modalVieneDe').style.display='none';verMovimientosBanco({{ $p['id'] }},'{{ addslashes($p['nombre']) }}')">{{ $p['nombre'] }}</button>
+                    @endforeach
+                    @foreach($vieneDe['personas']->where('pendiente', true) as $p)
+                    <button type="button" class="cuenta-cero-chip" style="border-color:#fde68a;background:#fffbeb;color:#92400e;"
+                            onclick="document.getElementById('modalVieneDe').style.display='none';verMovimientosEfectivo()">Efectivo · {{ $p['nombre'] }}</button>
+                    @endforeach
+                </div>
+            </div>
+            @else
+            <div style="margin-top:.4rem;font-size:.74rem;color:#15803d;font-weight:600;">✅ Todas las cuentas tienen su saldo de arranque: si falta plata, sale en «¿Cuadra?».</div>
+            @endif
+        </div>
+    </div>
+</div>
+@endif
 
 {{-- Modal Efectivo --}}
 <div id="modalEfectivo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:3vh;overflow-y:auto;">

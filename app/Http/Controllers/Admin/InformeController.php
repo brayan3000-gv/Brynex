@@ -2027,10 +2027,22 @@ class InformeController extends Controller
         $sinUbicar   = $pendientes > 0 ? max(0, $debioHaber - $ubicado) : 0;
         $antSinUbicar = min(max(0, $anticipos), $sinUbicar);
 
+        // De qué es lo que debió haber aparte de los anticipos (el modal de la
+        // tarjeta): lo que se debía, lo que era de la empresa y, restando, lo
+        // que está prestado afuera.
+        $mesAnt  = $ant->locale('es')->monthName;
+        $detalle = collect([["Seguridad social de {$mesAnt} por pagar", $ssAnterior]])
+            ->concat($filas->reject(fn ($r) => in_array($r[0], ['ss', 'ss_anterior', 'retiros', 'anticipos'], true))->map(fn ($r) => [$r[1], (int) $r[3]]))
+            ->push(["Plata de Brygar al cierre de {$mesAnt}", $deLaEmpresa])
+            ->push(['Prestado a clientes (está afuera, no en cuentas)', -(int) ($foto['total_c'] ?? 0)])
+            ->filter(fn ($d) => (int) $d[1] !== 0)->values();
+
         return [
             'anio'                 => $ant->year,
             'mes'                  => $ant->month,
-            'mes_nombre'           => $ant->locale('es')->monthName,
+            'mes_nombre'           => $mesAnt,
+            'detalle'              => $detalle,
+            'aparte'               => $debioHaber - $anticipos,
             'debio_haber'          => $debioHaber,
             'ubicado'              => $ubicado,
             'sin_ubicar'           => $sinUbicar,
