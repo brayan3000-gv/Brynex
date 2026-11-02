@@ -140,7 +140,7 @@
                         <th style="text-align: right;">Retiros Informativos</th>
                         <th style="text-align: right; background-color: rgba(13, 148, 136, 0.04); color: #0d9488; font-weight: 800;">Total Activos</th>
                         <th style="text-align: center;">Variación</th>
-                        <th style="text-align: right;">WA (Plan. / Rec.)</th>
+                        <th style="text-align: right;" title="Plantillas de WhatsApp aceptadas en el mes / chats en los que escribió el cliente">WA (Plan. / Rec.)</th>
                         <th style="text-align: right;">🤖 Asistente IA</th>
                     </tr>
                 </thead>
@@ -543,6 +543,15 @@
                         </div>
                         <span style="font-size: 0.7rem; color: #64748b; margin-top: 0.1rem;">Planillas (manuales / reenvíos)</span>
                     </div>
+                    <div style="background: rgba(5, 150, 105, 0.07); border: 1px solid rgba(5, 150, 105, 0.25); padding: 0.75rem 1rem; border-radius: 12px; display: flex; flex-direction: column; gap: 0.25rem;"
+                         title="Todo mensaje de plantilla que WhatsApp aceptó en el mes (enviado, entregado o leído), por fecha de envío. Es el número de la tabla y lo que BryNex factura.">
+                        <span style="font-size: 0.65rem; font-weight: 700; color: #059669; text-transform: uppercase; letter-spacing: 0.05em;">Plantillas del mes</span>
+                        <div style="display: flex; align-items: baseline; gap: 0.4rem;">
+                            <span id="statTotalPlantillas" style="font-size: 1.3rem; font-weight: 800; color: #065f46;">0</span>
+                            <span style="font-size: 0.72rem; color: #64748b;">mensajes</span>
+                        </div>
+                        <span id="statPlantillasDetalle" style="font-size: 0.7rem; color: #64748b; margin-top: 0.1rem;">Incluye cobros individuales, recibos y reabrir chat</span>
+                    </div>
                 </div>
 
                 {{-- Sección 1: Envíos Masivos (Lotes) --}}
@@ -584,7 +593,7 @@
                 <div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem;">
                         <h4 style="margin: 0; font-size: 0.95rem; font-weight: 800; color: #7c3aed; display: flex; align-items: center; gap: 0.5rem;">
-                            <span>💬</span> Conversaciones Iniciadas por Clientes
+                            <span>💬</span> Chats en los que escribió el cliente
                         </h4>
                         <span id="modalWaConvCounter" class="modal-counter" style="background: rgba(124, 58, 237, 0.08); border-color: rgba(124, 58, 237, 0.2); color: #7c3aed;">0 conversaciones</span>
                     </div>
@@ -596,7 +605,7 @@
                                     <th class="col-num">N°</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Cliente</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Número WhatsApp</th>
-                                    <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Fecha Primera Respuesta</th>
+                                    <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem;">Primer mensaje del mes</th>
                                     <th style="padding: 0.5rem 0.75rem; font-size: 0.65rem; text-align: center;">Estado Chat</th>
                                 </tr>
                             </thead>
@@ -606,7 +615,7 @@
                         </table>
                     </div>
                     <div id="modalWaConvNoResults" class="modal-no-results" style="display: none; padding: 1.5rem; text-align: center; color: #64748b; font-size: 0.8rem;">
-                        No se registraron conversaciones iniciadas por clientes este mes.
+                        Ningún cliente escribió por WhatsApp este mes.
                     </div>
                 </div>
 
@@ -1120,6 +1129,10 @@
                 document.getElementById('statCobrosLotes').textContent = data.lotes_cobros_cant;
                 document.getElementById('statCobrosDetalle').textContent = `${new Intl.NumberFormat('es-CO').format(data.lotes_cobros_env)} enviados`;
                 document.getElementById('statIndividuales').textContent = data.individuales_cant;
+                document.getElementById('statTotalPlantillas').textContent = new Intl.NumberFormat('es-CO').format(data.total_enviados);
+                document.getElementById('statPlantillasDetalle').textContent = (data.plantillas || []).length
+                    ? data.plantillas.map(p => `${p.plantilla}: ${new Intl.NumberFormat('es-CO').format(p.total)}`).join(' · ')
+                    : 'Sin plantillas enviadas';
 
                 // 1. Renderizar lotes
                 if (data.lotes && data.lotes.length > 0) {
@@ -1181,7 +1194,8 @@
                     data.conversaciones.forEach((c, i) => {
                         const fecha = c.fecha_primera_respuesta ? new Date(c.fecha_primera_respuesta + 'T00:00:00') : null;
                         const fechaFormateada = fecha ? fecha.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
-                        const numLink = `https://wa.me/${c.wa_contact_id.replace(/\+/g, '')}`;
+                        const numero = c.wa_contact_id || '';
+                        const numLink = `https://wa.me/${numero.replace(/\+/g, '')}`;
                         
                         let badgeColor = '#64748b';
                         let badgeBg = '#f1f5f9';
@@ -1202,13 +1216,13 @@
                                 <td style="padding: 0.6rem 0.75rem; font-weight: 600; color: #1e293b;">${c.nombre_contacto || 'Cliente de WhatsApp'}</td>
                                 <td style="padding: 0.6rem 0.75rem;">
                                     <a href="${numLink}" target="_blank" style="color: #2563eb; font-weight: 600; text-decoration: none; font-family: monospace;">
-                                        ${c.wa_contact_id}
+                                        ${numero || '—'}
                                     </a>
                                 </td>
                                 <td style="padding: 0.6rem 0.75rem; color: #475569; font-weight: 500;">${fechaFormateada}</td>
                                 <td style="text-align: center; padding: 0.6rem 0.75rem;">
                                     <span style="display: inline-block; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.68rem; font-weight: 700; color: ${badgeColor}; background: ${badgeBg}; text-transform: uppercase; letter-spacing: 0.02em;">
-                                        ${c.estado}
+                                        ${c.estado || '—'}
                                     </span>
                                 </td>
                             </tr>

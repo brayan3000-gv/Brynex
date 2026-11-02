@@ -19,199 +19,65 @@ use Illuminate\Support\Facades\Log;
  * Servicio central de cálculo de consumo mensual y gestión de cobros
  * de Brynex hacia sus aliados.
  *
- * Módulos actuales:
- *  1 → administracion   : contratos activos en el mes
- *  2 → afiliaciones     : afiliaciones creadas en el mes (si aplica)
- *  3 → wa_plantillas    : mensajes de plantilla enviados
- *  4 → wa_conversaciones: conversaciones con actividad en el mes
+ * Módulos actuales (1 a 4 con la regla del consolidado, ver ConteoMensualAliado):
+ *  1 → administracion   : contratos con factura del mes que entraron antes
+ *  2 → afiliaciones     : contratos con fecha de ingreso en el mes
+ *  3 → wa_plantillas    : mensajes de plantilla aceptados por WhatsApp
+ *  4 → wa_conversaciones: chats en los que el cliente escribió en el mes
+ *  9 → marketing        : mensajes de campañas
  */
 class BrynexConsumoService
 {
     // ════════════════════════════════════════════════════════════════════════
-    // MÓDULO 1 — Administración (contratos activos)
+    // MÓDULOS 1 a 4 — Administración, afiliaciones y WhatsApp
     // ════════════════════════════════════════════════════════════════════════
 
     /**
-     * Calcula el consumo del módulo Administración.
-     *
-     * Un contrato está activo en el mes si:
-     *   fecha_ingreso <= último día del mes
-     *   AND (fecha_retiro IS NULL OR fecha_retiro >= primer día del mes)
-     *
-     * @return array{
-     *   modulo_id: int,
-     *   modulo_codigo: string,
-     *   modulo_nombre: string,
-     *   cant_unidades: int,
-     *   tarifa_unidad: float|null,
-     *   tarifa_minima: float|null,
-     *   subtotal: float,
-     *   tramo_aplicado: string,
-     *   descripcion: string,
-     *   contratos: Collection
-     * }
+     * Los módulos que se cuentan con las reglas del Resumen Consolidado Mensual
+     * (ConteoMensualAliado), para que el aliado vea en su informe lo mismo que
+     * se le cobra. [modulo_id => [código, nombre, clave del conteo, descripción]].
      */
-    public function calcularAdministracion(int $alidoId, int $mes, int $anio): array
+    private const MODULOS_CONTEO = [
+        1 => ['administracion', 'Administración Mensual', 'admon', 'Contratos con factura del mes que entraron antes del mes'],
+        2 => ['afiliaciones', 'Gestión de Afiliaciones', 'afiliaciones', 'Contratos con fecha de ingreso en el mes'],
+        3 => ['wa_plantillas', 'WhatsApp — Plantillas', 'wa_plantillas', 'Mensajes de plantilla aceptados por WhatsApp en el mes'],
+        4 => ['wa_conversaciones', 'WhatsApp — Conversaciones', 'wa_conversaciones', 'Chats en los que el cliente escribió en el mes'],
+    ];
+
+    /** Conteos del mes con la regla del consolidado (ver ConteoMensualAliado). */
+    public function conteos(int $alidoId, int $mes, int $anio): array
     {
-        $primerDia = Carbon::create($anio, $mes, 1)->startOfDay();
-        $ultimoDia = $primerDia->copy()->endOfMonth();
+        $c = app(ConteoMensualAliado::class)->delMes($alidoId, $mes, $anio);
 
-        $contratos = DB::table('contratos as c')
-            ->join('clientes as cl', 'cl.cedula', '=', 'c.cedula')
-            ->where('c.aliado_id', $alidoId)
-            ->where('c.fecha_ingreso', '<=', $ultimoDia->toDateString())
-            ->where(function ($q) use ($primerDia) {
-                $q->whereNull('c.fecha_retiro')
-                  ->orWhere('c.fecha_retiro', '>=', $primerDia->toDateString());
-            })
-            ->select('c.id', 'c.cedula', DB::raw("LTRIM(RTRIM(cl.primer_nombre + ' ' + ISNULL(cl.segundo_nombre, '') + ' ' + cl.primer_apellido + ' ' + ISNULL(cl.segundo_apellido, ''))) as nombre_completo"), 'c.fecha_ingreso', 'c.fecha_retiro')
-            ->orderBy('c.cedula')
-            ->get();
-
-        $cantidad = $contratos->count();
-        $calculo  = BrynexTramoTarifa::calcularCobro(
-            moduloId: 1,
-            cantidad: $cantidad,
-            alidoId:  $alidoId,
-            fecha:    $ultimoDia->toDateString()
-        );
-
-        return array_merge($calculo, [
-            'modulo_id'     => 1,
-            'modulo_codigo' => 'administracion',
-            'modulo_nombre' => 'Administración Mensual',
-            'descripcion'   => "Contratos activos en {$this->nombreMes($mes)} {$anio}",
-            'contratos'     => $contratos,
-        ]);
+        return [
+            'admon'             => $c['admon'],
+            'afiliaciones'      => $c['afiliaciones']->count(),
+            'clientes_activos'  => $c['total_activos'],
+            'wa_plantillas'     => $c['wa_plantillas'],
+            'wa_conversaciones' => $c['wa_conversaciones'],
+        ];
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // MÓDULO 2 — Afiliaciones creadas en el mes
-    // ════════════════════════════════════════════════════════════════════════
-
     /**
-     * Calcula el consumo del módulo Afiliaciones.
-     * Solo aplica si el aliado tiene el módulo activo y afiliaciones_brynex=true.
+     * Línea de cobro de uno de los módulos 1 a 4 a partir de los conteos del mes.
      */
-    public function calcularAfiliaciones(int $alidoId, int $mes, int $anio): array
+    public function calcularModuloConteo(int $moduloId, array $conteos, int $alidoId, int $mes, int $anio): array
     {
-        $primerDia = Carbon::create($anio, $mes, 1)->startOfDay();
-        $ultimoDia = $primerDia->copy()->endOfMonth();
+        [$codigo, $nombre, $clave, $descripcion] = self::MODULOS_CONTEO[$moduloId];
+        $ultimoDia = Carbon::create($anio, $mes, 1)->endOfMonth();
 
-        // Contar contratos creados en el mes (tipo afiliación = primer ingreso)
-        $afiliaciones = DB::table('contratos as c')
-            ->join('clientes as cl', 'cl.cedula', '=', 'c.cedula')
-            ->where('c.aliado_id', $alidoId)
-            ->whereBetween('c.created_at', [$primerDia, $ultimoDia])
-            ->select('c.id', 'c.cedula', DB::raw("LTRIM(RTRIM(cl.primer_nombre + ' ' + ISNULL(cl.segundo_nombre, '') + ' ' + cl.primer_apellido + ' ' + ISNULL(cl.segundo_apellido, ''))) as nombre_completo"), 'c.fecha_ingreso', 'c.created_at')
-            ->orderBy('c.created_at')
-            ->get();
-
-        $cantidad = $afiliaciones->count();
-        $calculo  = BrynexTramoTarifa::calcularCobro(
-            moduloId: 2,
-            cantidad: $cantidad,
+        $calculo = BrynexTramoTarifa::calcularCobro(
+            moduloId: $moduloId,
+            cantidad: (int) $conteos[$clave],
             alidoId:  $alidoId,
             fecha:    $ultimoDia->toDateString()
         );
 
         return array_merge($calculo, [
-            'modulo_id'     => 2,
-            'modulo_codigo' => 'afiliaciones',
-            'modulo_nombre' => 'Gestión de Afiliaciones',
-            'descripcion'   => "Afiliaciones creadas en {$this->nombreMes($mes)} {$anio}",
-            'contratos'     => $afiliaciones,
-        ]);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    // MÓDULO 3 — WhatsApp Plantillas enviadas
-    // ════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Calcula el consumo del módulo WA Plantillas.
-     * Cuenta mensajes salientes de plantilla (plantilla_id NOT NULL) del mes.
-     * Excluye los que pertenecen a una campaña de marketing (ver calcularMarketing) —
-     * esos se cobran aparte, en su propio módulo, para no facturarlos dos veces.
-     */
-    public function calcularWaPlantillas(int $alidoId, int $mes, int $anio): array
-    {
-        $primerDia = Carbon::create($anio, $mes, 1)->startOfDay();
-        $ultimoDia = $primerDia->copy()->endOfMonth();
-
-        $mensajes = DB::table('whatsapp_mensajes as m')
-            ->leftJoin('whatsapp_plantillas as p', 'p.id', '=', 'm.plantilla_id')
-            ->where('m.aliado_id', $alidoId)
-            ->where('m.direccion', 'saliente')
-            ->whereNotNull('m.plantilla_id')
-            ->whereBetween('m.created_at', [$primerDia, $ultimoDia])
-            ->whereNotExists(function ($q) {
-                $q->select(DB::raw(1))
-                    ->from('whatsapp_envios_masivos_detalle as d')
-                    ->join('whatsapp_envios_masivos as e', 'e.id', '=', 'd.envio_id')
-                    ->whereColumn('d.wa_message_id', 'm.wa_message_id')
-                    ->whereNotNull('e.campana_id');
-            })
-            ->select('m.id', 'm.created_at', 'm.estado', 'p.nombre as plantilla_nombre')
-            ->orderBy('m.created_at')
-            ->get();
-
-        $cantidad = $mensajes->count();
-        $calculo  = BrynexTramoTarifa::calcularCobro(
-            moduloId: 3,
-            cantidad: $cantidad,
-            alidoId:  $alidoId,
-            fecha:    $ultimoDia->toDateString()
-        );
-
-        return array_merge($calculo, [
-            'modulo_id'     => 3,
-            'modulo_codigo' => 'wa_plantillas',
-            'modulo_nombre' => 'WhatsApp — Plantillas',
-            'descripcion'   => "Mensajes de plantilla enviados en {$this->nombreMes($mes)} {$anio}",
-            'contratos'     => $mensajes,
-        ]);
-    }
-
-    // ════════════════════════════════════════════════════════════════════════
-    // MÓDULO 4 — WhatsApp Conversaciones únicas con actividad
-    // ════════════════════════════════════════════════════════════════════════
-
-    /**
-     * Calcula el consumo del módulo WA Conversaciones.
-     * Cuenta conversaciones únicas que tuvieron al menos 1 mensaje en el mes.
-     */
-    public function calcularWaConversaciones(int $alidoId, int $mes, int $anio): array
-    {
-        $primerDia = Carbon::create($anio, $mes, 1)->startOfDay();
-        $ultimoDia = $primerDia->copy()->endOfMonth();
-
-        $conversaciones = DB::table('whatsapp_mensajes as m')
-            ->join('whatsapp_conversaciones as c', 'c.id', '=', 'm.conversacion_id')
-            ->where('m.aliado_id', $alidoId)
-            ->whereBetween('m.created_at', [$primerDia, $ultimoDia])
-            // whatsapp_conversaciones no tiene `numero_cliente` (el número está en
-            // el contacto): con él, toda la página de consumo daba 500.
-            ->select('c.id', 'c.nombre_contacto', DB::raw('COUNT(m.id) as total_mensajes'),
-                     DB::raw('MIN(m.created_at) as primer_mensaje'), DB::raw('MAX(m.created_at) as ultimo_mensaje'))
-            ->groupBy('c.id', 'c.nombre_contacto')
-            ->orderBy('c.id')
-            ->get();
-
-        $cantidad = $conversaciones->count();
-        $calculo  = BrynexTramoTarifa::calcularCobro(
-            moduloId: 4,
-            cantidad: $cantidad,
-            alidoId:  $alidoId,
-            fecha:    $ultimoDia->toDateString()
-        );
-
-        return array_merge($calculo, [
-            'modulo_id'     => 4,
-            'modulo_codigo' => 'wa_conversaciones',
-            'modulo_nombre' => 'WhatsApp — Conversaciones',
-            'descripcion'   => "Conversaciones activas en {$this->nombreMes($mes)} {$anio}",
-            'contratos'     => $conversaciones,
+            'modulo_id'     => $moduloId,
+            'modulo_codigo' => $codigo,
+            'modulo_nombre' => $nombre,
+            'descripcion'   => "{$descripcion} ({$this->nombreMes($mes)} {$anio})",
         ]);
     }
 
@@ -272,6 +138,7 @@ class BrynexConsumoService
      *   anio: int,
      *   periodo: string,
      *   modulos: array,
+     *   conteos: array,
      *   total: float,
      *   cobro_cerrado: BrynexCobroAliado|null
      * }
@@ -289,32 +156,23 @@ class BrynexConsumoService
         $resultados = [];
         $total      = 0.0;
 
-        // Módulo 1 — Administración (siempre incluido para todos los aliados)
+        // Los cuatro conteos se calculan siempre, para mostrarlos aunque el
+        // módulo no se cobre; solo los módulos activos entran al total.
+        $conteos = $this->conteos($alidoId, $mes, $anio);
+
+        // Administración: si el aliado no tiene módulos configurados, aplica.
         if (in_array(1, $modulosActivos) || $this->tieneModuloAdmin($alidoId)) {
-            $r = $this->calcularAdministracion($alidoId, $mes, $anio);
+            $r = $this->calcularModuloConteo(1, $conteos, $alidoId, $mes, $anio);
             $resultados[] = $r;
             $total += $r['subtotal'];
         }
 
-        // Módulo 2 — Afiliaciones
-        if (in_array(2, $modulosActivos)) {
-            $r = $this->calcularAfiliaciones($alidoId, $mes, $anio);
-            $resultados[] = $r;
-            $total += $r['subtotal'];
-        }
-
-        // Módulo 3 — WA Plantillas
-        if (in_array(3, $modulosActivos)) {
-            $r = $this->calcularWaPlantillas($alidoId, $mes, $anio);
-            $resultados[] = $r;
-            $total += $r['subtotal'];
-        }
-
-        // Módulo 4 — WA Conversaciones
-        if (in_array(4, $modulosActivos)) {
-            $r = $this->calcularWaConversaciones($alidoId, $mes, $anio);
-            $resultados[] = $r;
-            $total += $r['subtotal'];
+        foreach ([2, 3, 4] as $moduloId) {
+            if (in_array($moduloId, $modulosActivos)) {
+                $r = $this->calcularModuloConteo($moduloId, $conteos, $alidoId, $mes, $anio);
+                $resultados[] = $r;
+                $total += $r['subtotal'];
+            }
         }
 
         // Módulo 9 — Marketing
@@ -337,6 +195,7 @@ class BrynexConsumoService
             'anio'           => $anio,
             'periodo'        => $this->nombreMes($mes) . ' ' . $anio,
             'modulos'        => $resultados,
+            'conteos'        => $conteos,
             'total'          => $total,
             'cobro_cerrado'  => $cobroCerrado,
         ];

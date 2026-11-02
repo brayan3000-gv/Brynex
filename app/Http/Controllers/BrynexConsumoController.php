@@ -13,6 +13,7 @@ use App\Services\BrynexConsumoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Barryvdh\DomPDF\Facade\Pdf;
 
@@ -43,7 +44,9 @@ class BrynexConsumoController extends Controller
         $mes  = (int) $request->input('mes', now()->month);
         $anio = (int) $request->input('anio', now()->year);
 
+        // BryNex (aliado 1) no se cobra a sí mismo.
         $aliados = Aliado::activos()
+            ->where('id', '<>', 1)
             ->orderBy('nombre')
             ->get();
 
@@ -76,10 +79,14 @@ class BrynexConsumoController extends Controller
                 $total = $cobro->total_cobrado;
                 $estado = $cobro->estado;
                 $cobroId = $cobro->id;
+                // Los clientes activos y los módulos que no se cobran no quedan
+                // en el cierre: se cuentan en vivo.
+                $conteos = $this->service->conteos($aliado->id, $mes, $anio);
             } else {
                 // Cobro abierto, estimar consumo en tiempo real
                 $estimacion = $this->service->resumenAliado($aliado->id, $mes, $anio);
                 $modulosCalculados = collect($estimacion['modulos']);
+                $conteos = $estimacion['conteos'];
                 $total = $estimacion['total'];
                 $estado = 'abierto';
                 $cobroId = null;
@@ -101,6 +108,7 @@ class BrynexConsumoController extends Controller
                 'aliado'          => $aliado,
                 'cobro_id'        => $cobroId,
                 'modulos'         => $modulosCalculados,
+                'conteos'         => $conteos,
                 'total'           => $total,
                 'estado'          => $estado,
                 'saldo_historico' => $saldoHistorico,
@@ -324,6 +332,15 @@ class BrynexConsumoController extends Controller
 
             // 2. Guardar tramos de tarifa personalizados para el aliado
             foreach ($tramosInput as $moduloId => $tramos) {
+                // Los tramos nuevos conservan la vigencia de los que reemplazan: con
+                // la fecha de hoy, una tarifa ajustada en noviembre no le aplicaba al
+                // cobro de octubre, que se cierra en noviembre. Si el módulo no tenía
+                // tramos propios, rigen desde el mes anterior por la misma razón.
+                $vigenteDesde = BrynexTramoTarifa::where('modulo_id', $moduloId)
+                    ->where('aliado_id', $aliado->id)
+                    ->min('vigente_desde')
+                    ?? now()->subMonthNoOverflow()->startOfMonth()->toDateString();
+
                 // Eliminar tramos personalizados existentes para este módulo
                 BrynexTramoTarifa::where('modulo_id', $moduloId)
                     ->where('aliado_id', $aliado->id)
@@ -344,7 +361,7 @@ class BrynexConsumoController extends Controller
                             'hasta_cant'    => $hasta,
                             'tarifa_unidad' => $tarifa,
                             'tarifa_minima' => $minima,
-                            'vigente_desde' => now()->toDateString(),
+                            'vigente_desde' => $vigenteDesde,
                         ]);
                     }
                 }

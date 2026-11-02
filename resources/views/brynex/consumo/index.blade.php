@@ -79,6 +79,7 @@
                 <thead>
                     <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;color:#475569;font-weight:700;text-transform:uppercase;font-size:0.7rem;letter-spacing:0.04em;">
                         <th style="padding:1rem 1.5rem;width:250px;">Aliado</th>
+                        <th style="padding:1rem 0.5rem;text-align:center;" title="Administración + afiliaciones del mes − traslados: el Total Activos del consolidado mensual">Clientes activos</th>
                         <th style="padding:1rem 0.5rem;text-align:center;">Admon (Contratos)</th>
                         <th style="padding:1rem 0.5rem;text-align:center;">Afiliaciones</th>
                         <th style="padding:1rem 0.5rem;text-align:center;">WA Plantillas</th>
@@ -102,38 +103,21 @@
                                 <div style="font-weight:700;color:#0f172a;font-size:0.85rem;">{{ $res['aliado']->nombre }}</div>
                                 <div style="color:#94a3b8;font-size:0.72rem;">NIT: {{ $res['aliado']->nit }}</div>
                             </td>
-                            <td style="padding:1rem 0.5rem;text-align:center;">
-                                @if($admon)
-                                    <div style="font-weight:700;color:#1e3a8a;">{{ number_format($admon['cant_unidades'], 0, ',', '.') }}</div>
-                                    <div style="font-size:0.68rem;color:#64748b;">${{ number_format($admon['subtotal'], 0, ',', '.') }}</div>
-                                @else
-                                    <span style="color:#cbd5e1;">—</span>
-                                @endif
+                            <td style="padding:1rem 0.5rem;text-align:center;font-weight:800;color:#0f172a;">
+                                {{ number_format($res['conteos']['clientes_activos'], 0, ',', '.') }}
                             </td>
-                            <td style="padding:1rem 0.5rem;text-align:center;">
-                                @if($afil)
-                                    <div style="font-weight:700;color:#1e3a8a;">{{ number_format($afil['cant_unidades'], 0, ',', '.') }}</div>
-                                    <div style="font-size:0.68rem;color:#64748b;">${{ number_format($afil['subtotal'], 0, ',', '.') }}</div>
-                                @else
-                                    <span style="color:#cbd5e1;">Inactivo</span>
-                                @endif
-                            </td>
-                            <td style="padding:1rem 0.5rem;text-align:center;">
-                                @if($waPlan)
-                                    <div style="font-weight:700;color:#0d9488;">{{ number_format($waPlan['cant_unidades'], 0, ',', '.') }}</div>
-                                    <div style="font-size:0.68rem;color:#64748b;">${{ number_format($waPlan['subtotal'], 0, ',', '.') }}</div>
-                                @else
-                                    <span style="color:#cbd5e1;">Inactivo</span>
-                                @endif
-                            </td>
-                            <td style="padding:1rem 0.5rem;text-align:center;">
-                                @if($waConv)
-                                    <div style="font-weight:700;color:#0d9488;">{{ number_format($waConv['cant_unidades'], 0, ',', '.') }}</div>
-                                    <div style="font-size:0.68rem;color:#64748b;">${{ number_format($waConv['subtotal'], 0, ',', '.') }}</div>
-                                @else
-                                    <span style="color:#cbd5e1;">Inactivo</span>
-                                @endif
-                            </td>
+                            @foreach([[$admon, 'admon', '#1e3a8a'], [$afil, 'afiliaciones', '#1e3a8a'], [$waPlan, 'wa_plantillas', '#0d9488'], [$waConv, 'wa_conversaciones', '#0d9488']] as [$linea, $clave, $color])
+                                <td style="padding:1rem 0.5rem;text-align:center;">
+                                    @if($linea)
+                                        <div style="font-weight:700;color:{{ $color }};">{{ number_format($linea['cant_unidades'], 0, ',', '.') }}</div>
+                                        <div style="font-size:0.68rem;color:#64748b;">${{ number_format($linea['subtotal'], 0, ',', '.') }}</div>
+                                    @else
+                                        {{-- Módulo sin contratar: se muestra la cantidad, sin cobro --}}
+                                        <div style="font-weight:600;color:#94a3b8;">{{ number_format($res['conteos'][$clave], 0, ',', '.') }}</div>
+                                        <div style="font-size:0.68rem;color:#cbd5e1;">no se cobra</div>
+                                    @endif
+                                </td>
+                            @endforeach
                             <td style="padding:1rem 1rem;text-align:right;font-weight:800;font-size:0.85rem;color:#0f172a;">
                                 $ {{ number_format($res['total'], 0, ',', '.') }}
                             </td>
@@ -174,7 +158,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="9" style="padding:3rem;text-align:center;color:#64748b;">
+                            <td colspan="10" style="padding:3rem;text-align:center;color:#64748b;">
                                 No hay aliados activos registrados en el sistema.
                             </td>
                         </tr>
