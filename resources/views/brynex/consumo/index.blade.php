@@ -87,7 +87,7 @@
                         <th style="padding:1rem 1rem;text-align:right;">Total Período</th>
                         <th style="padding:1rem 1rem;text-align:center;">Estado</th>
                         <th style="padding:1rem 1rem;text-align:right;">Saldo Anterior</th>
-                        <th style="padding:1rem 1.5rem;text-align:center;width:180px;">Acciones</th>
+                        <th style="padding:1rem 1.5rem;text-align:center;width:300px;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody style="color:#334155;">
@@ -154,6 +154,9 @@
                                 <a href="{{ route('brynex.consumo.modulos', $res['aliado']->id) }}" style="background:#f1f5f9;color:#475569;text-decoration:none;padding:0.35rem 0.65rem;border-radius:6px;font-weight:600;font-size:0.75rem;border:1px solid #cbd5e1;transition:all 0.15s;" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
                                     Tarifas
                                 </a>
+                                <button type="button" onclick="abrirCuentaCobro({{ $res['aliado']->id }})" style="background:#0f766e;color:#fff;border:none;padding:0.35rem 0.65rem;border-radius:6px;font-weight:600;font-size:0.75rem;cursor:pointer;white-space:nowrap;">
+                                    Cuenta de cobro
+                                </button>
                             </td>
                         </tr>
                     @empty
@@ -168,5 +171,82 @@
         </div>
     </div>
 </div>
+
+{{-- Cuenta de cobro: renglones prellenados con lo calculado; se pueden corregir o agregar otros --}}
+<div id="modalCuentaCobro" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:1000;align-items:center;justify-content:center;padding:16px;">
+    <form id="formCuentaCobro" method="POST" target="_blank" style="background:#fff;border-radius:14px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;padding:1.5rem;box-shadow:0 20px 50px rgba(0,0,0,0.25);">
+        @csrf
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+            <h3 style="margin:0;font-size:1rem;font-weight:800;color:#0d2550;">Cuenta de cobro · <span id="ccAliado"></span></h3>
+            <button type="button" onclick="cerrarCuentaCobro()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#64748b;">×</button>
+        </div>
+        <label style="font-size:0.75rem;font-weight:700;color:#475569;">Fecha de la cuenta</label>
+        <input type="date" name="fecha" id="ccFecha" required style="display:block;margin:0.25rem 0 1rem;padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.82rem;">
+
+        <div style="font-size:0.75rem;font-weight:700;color:#475569;margin-bottom:0.35rem;">Por concepto de</div>
+        <div id="ccConceptos"></div>
+        <button type="button" onclick="agregarConcepto('', '')" style="margin-top:0.4rem;background:#f1f5f9;border:1px solid #cbd5e1;color:#334155;padding:0.3rem 0.65rem;border-radius:6px;font-size:0.75rem;font-weight:600;cursor:pointer;">+ Agregar concepto</button>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1.25rem;border-top:1px solid #e2e8f0;padding-top:1rem;">
+            <div style="font-weight:800;color:#0f172a;">Total: <span id="ccTotal">$ 0</span></div>
+            <button type="submit" style="background:#1e3a8a;color:#fff;border:none;padding:0.5rem 1rem;border-radius:8px;font-weight:700;font-size:0.82rem;cursor:pointer;">Descargar PDF</button>
+        </div>
+    </form>
+</div>
+
+@php
+    $cuentasCobro = collect($resumenes)->mapWithKeys(fn ($r) => [$r['aliado']->id => [
+        'nombre'    => $r['aliado']->nombre,
+        'url'       => route('brynex.consumo.cuenta_cobro', [$r['aliado']->id, $mes, $anio]),
+        'conceptos' => $r['conceptos_cobro'],
+    ]]);
+    $ccFechaDefecto = \Carbon\Carbon::create($anio, $mes, 1)->endOfMonth()->toDateString();
+@endphp
+<script>
+    const cuentasCobro = @json($cuentasCobro);
+    const ccFechaDefecto = @json($ccFechaDefecto);
+    let ccIndice = 0;
+
+    function abrirCuentaCobro(id) {
+        const cc = cuentasCobro[id];
+        document.getElementById('ccAliado').textContent = cc.nombre;
+        document.getElementById('formCuentaCobro').action = cc.url;
+        document.getElementById('ccFecha').value = ccFechaDefecto;
+        document.getElementById('ccConceptos').innerHTML = '';
+        ccIndice = 0;
+        cc.conceptos.forEach(c => agregarConcepto(c.texto, Math.round(c.valor)));
+        if (!cc.conceptos.length) agregarConcepto('', '');
+        recalcularCuentaCobro();
+        document.getElementById('modalCuentaCobro').style.display = 'flex';
+    }
+
+    function cerrarCuentaCobro() {
+        document.getElementById('modalCuentaCobro').style.display = 'none';
+    }
+
+    function agregarConcepto(texto, valor) {
+        const i = ccIndice++;
+        const fila = document.createElement('div');
+        fila.style.cssText = 'display:flex;gap:0.4rem;margin-bottom:0.4rem;align-items:center;';
+        fila.innerHTML = `
+            <input type="text" name="conceptos[${i}][texto]" placeholder="Concepto" style="flex:1;min-width:0;padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8rem;">
+            <input type="number" name="conceptos[${i}][valor]" placeholder="Valor" step="1" oninput="recalcularCuentaCobro()" style="width:120px;padding:0.35rem 0.5rem;border:1px solid #cbd5e1;border-radius:6px;font-size:0.8rem;text-align:right;">
+            <button type="button" onclick="this.parentElement.remove();recalcularCuentaCobro()" title="Quitar" style="background:none;border:none;color:#ef4444;font-size:1.1rem;cursor:pointer;">×</button>`;
+        fila.querySelector('input[type=text]').value = texto;
+        fila.querySelector('input[type=number]').value = valor;
+        document.getElementById('ccConceptos').appendChild(fila);
+        recalcularCuentaCobro();
+    }
+
+    function recalcularCuentaCobro() {
+        let total = 0;
+        document.querySelectorAll('#ccConceptos input[type=number]').forEach(el => total += Number(el.value || 0));
+        document.getElementById('ccTotal').textContent = '$ ' + new Intl.NumberFormat('es-CO').format(total);
+    }
+
+    document.getElementById('modalCuentaCobro').addEventListener('click', e => {
+        if (e.target.id === 'modalCuentaCobro') cerrarCuentaCobro();
+    });
+</script>
 
 @endsection

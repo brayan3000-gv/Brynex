@@ -106,6 +106,7 @@ class BrynexConsumoController extends Controller
 
             $resumenes[] = [
                 'aliado'          => $aliado,
+                'conceptos_cobro' => $this->conceptosCuentaCobro($modulosCalculados, $mes, $anio),
                 'cobro_id'        => $cobroId,
                 'modulos'         => $modulosCalculados,
                 'conteos'         => $conteos,
@@ -369,6 +370,97 @@ class BrynexConsumoController extends Controller
         });
 
         return redirect()->back()->with('success', 'Módulos y tarifas personalizadas actualizados correctamente.');
+    }
+
+    /** A quién se le paga la cuenta de cobro. */
+    private const CUENTA_COBRO_ACREEDOR = 'BRAYAN HUMBERTO GARCIA VIDAL';
+    private const CUENTA_COBRO_CEDULA   = '1.143.944.458';
+
+    /**
+     * Los renglones de la cuenta de cobro del mes, a partir de los módulos que
+     * se cobran (el cálculo en vivo o el cierre). Solo los que tienen valor, en
+     * el orden de la cuenta que se hacía a mano: afiliaciones, pagos, mensajes.
+     *
+     * @return array<int, array{texto: string, valor: float}>
+     */
+    private function conceptosCuentaCobro($modulos, int $mes, int $anio): array
+    {
+        $nombreMes = mb_strtolower(\Carbon\Carbon::create($anio, $mes, 1)->locale('es')->monthName);
+        $ultimo    = \Carbon\Carbon::create($anio, $mes, 1)->endOfMonth()->day;
+        $periodo   = "en el período del 01 al {$ultimo} de {$nombreMes}";
+        $n         = fn ($c) => number_format((float) $c, 0, ',', '.');
+
+        $orden = ['afiliaciones' => 1, 'administracion' => 2, 'wa_plantillas' => 3, 'wa_conversaciones' => 4, 'marketing' => 5];
+
+        return collect($modulos)
+            ->filter(fn ($m) => (float) $m['subtotal'] > 0)
+            ->sortBy(fn ($m) => $orden[$m['modulo_codigo']] ?? 9)
+            ->map(function ($m) use ($periodo, $nombreMes, $n) {
+                $cant   = (int) $m['cant_unidades'];
+                $tarifa = (float) ($m['tarifa_unidad'] ?? 0);
+
+                $texto = match ($m['modulo_codigo']) {
+                    'afiliaciones'      => "{$n($cant)} afiliaciones realizadas {$periodo}",
+                    'administracion'    => $tarifa > 0
+                        ? "{$n($cant)} pagos realizados {$periodo}"
+                        : "Administración de la plataforma BryNex de {$nombreMes}",
+                    'wa_plantillas'     => "Mensajes de WhatsApp de {$nombreMes}: {$n($cant)}",
+                    'wa_conversaciones' => "Conversaciones de WhatsApp de {$nombreMes}: {$n($cant)}",
+                    'marketing'         => "Mensajes de campañas de marketing de {$nombreMes}: {$n($cant)}",
+                    default             => ($m['modulo_nombre'] ?: 'Servicio')." de {$nombreMes}",
+                };
+                if ($tarifa > 0) {
+                    $texto .= " c/u \${$n($tarifa)}";
+                }
+
+                return ['texto' => $texto, 'valor' => (float) $m['subtotal']];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Cuenta de cobro del mes en PDF, con los renglones que se revisaron en el
+     * listado (se pueden corregir o agregar otros, como planes exequiales). No
+     * guarda nada: para congelar el cobro está «cerrar».
+     */
+    public function cuentaCobro(Request $request, Aliado $aliado, int $mes, int $anio)
+    {
+        $this->checkSuperadminBrynex();
+
+        $datos = $request->validate([
+            'fecha'               => 'required|date',
+            'conceptos'           => 'required|array|min:1',
+            'conceptos.*.texto'   => 'nullable|string|max:300',
+            'conceptos.*.valor'   => 'nullable|numeric',
+        ]);
+
+        $conceptos = collect($datos['conceptos'])
+            ->filter(fn ($c) => trim((string) ($c['texto'] ?? '')) !== '' && (float) ($c['valor'] ?? 0) != 0)
+            ->map(fn ($c) => ['texto' => trim($c['texto']), 'valor' => (float) $c['valor']])
+            ->values();
+
+        if ($conceptos->isEmpty()) {
+            return back()->with('warning', 'La cuenta de cobro necesita al menos un concepto con valor.');
+        }
+
+        $total = $conceptos->sum('valor');
+        $fecha = \Carbon\Carbon::parse($datos['fecha'])->locale('es');
+
+        $pdf = Pdf::loadView('pdf.brynex_cuenta_cobro', [
+            'aliado'      => $aliado,
+            'conceptos'   => $conceptos,
+            'total'       => $total,
+            'totalLetras' => \App\Services\NumeroALetras::convertir($total),
+            'fechaTexto'  => $fecha->day.' de '.$fecha->monthName.' del '.$fecha->year,
+            'acreedor'    => self::CUENTA_COBRO_ACREEDOR,
+            'cedula'      => self::CUENTA_COBRO_CEDULA,
+        ])->setPaper('letter');
+        app(\App\Services\TrazaArchivoService::class)->marcarPdf($pdf);
+
+        $nombre = 'Cuenta_de_cobro_'.preg_replace('/[^A-Za-z0-9]+/', '_', $aliado->nombre).'_'.$anio.'_'.str_pad($mes, 2, '0', STR_PAD_LEFT).'.pdf';
+
+        return $pdf->download($nombre);
     }
 
     /**

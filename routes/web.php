@@ -967,6 +967,7 @@ Route::middleware('auth')->group(function () {
             Route::get('consumo/{aliado}/{mes}/{anio}', [$cx, 'show'])->name('consumo.show');
             Route::get('consumo/{aliado}/modulos', [$cx, 'modulosAliado'])->name('consumo.modulos');
             Route::get('consumo/cobros/{cobro}/pdf', [$cx, 'descargarPdf'])->name('consumo.pdf');
+            Route::post('consumo/{aliado}/{mes}/{anio}/cuenta-cobro', [$cx, 'cuentaCobro'])->name('consumo.cuenta_cobro');
         });
         Route::middleware('permiso:brynex_cobros.gestionar')->group(function () use ($cx) {
             Route::post('consumo/{aliado}/{mes}/{anio}/cerrar', [$cx, 'cerrar'])->name('consumo.cerrar');
