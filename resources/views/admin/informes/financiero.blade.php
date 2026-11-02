@@ -794,22 +794,6 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                         </div>
                     </div>
 
-                    {{-- Lo que está en la calle (antes iba en «Cómo está la plata»):
-                         préstamos y deudas de clientes que faltan por entrar. --}}
-                    @if($plata['cobrar'] != 0)
-                    <div style="margin-top:.45rem;padding-top:.45rem;border-top:1px dashed #ddd6fe;display:flex;flex-direction:column;gap:.2rem;" title="Ya contó como ingreso y falta que llegue la plata">
-                        @foreach($plata['cobrar_detalle'] as [$k, $n, $sub, $v])
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:.3rem;" title="{{ $sub }}">
-                            <span style="font-size:.6rem;color:#64748b;">{{ $n }}</span>
-                            <span style="font-size:.66rem;color:#6d28d9;font-family:monospace;white-space:nowrap;">{{ $fmt($v) }}</span>
-                        </div>
-                        @endforeach
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:.62rem;color:#475569;font-weight:700;text-transform:uppercase;">Por cobrar</span>
-                            <span style="font-size:.74rem;font-weight:900;color:#6d28d9;font-family:monospace;">{{ $fmt($plata['cobrar']) }}</span>
-                        </div>
-                    </div>
-                    @endif
 
                     <div style="margin-top:.4rem;padding-top:.4rem;border-top:1px dashed #f1f5f9;display:flex;justify-content:space-between;align-items:center;">
                         <a href="{{ route('admin.prestamos.index') }}" target="_blank"
@@ -1462,6 +1446,22 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <button onclick="document.getElementById('modalPrestamos').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1.1rem;">✕</button>
             </div>
         </div>
+        {{-- Lo que está en la calle, de todos los meses (no estira la tarjeta) --}}
+        @if($plata['cobrar'] != 0)
+        <div style="padding:.85rem 1.25rem;border-bottom:1px solid #ede9fe;background:#faf5ff;font-size:.8rem;display:flex;flex-direction:column;gap:.3rem;">
+            <div style="font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#6d28d9;">Por cobrar · todos los meses</div>
+            @foreach($plata['cobrar_detalle'] as [$k, $n, $sub, $v])
+            <div style="display:flex;justify-content:space-between;gap:.6rem;" title="{{ $sub }}">
+                <span style="color:#475569;">{{ $n }}</span>
+                <span style="font-family:monospace;font-weight:700;color:#6d28d9;white-space:nowrap;">{{ $fmt($v) }}</span>
+            </div>
+            @endforeach
+            <div style="display:flex;justify-content:space-between;border-top:1px dashed #ddd6fe;padding-top:.3rem;font-weight:800;">
+                <span>Total por cobrar</span>
+                <span style="font-family:monospace;color:#6d28d9;">{{ $fmt($plata['cobrar']) }}</span>
+            </div>
+        </div>
+        @endif
         <div id="modalPrestamosBody" style="padding:1.25rem;max-height:60vh;overflow-y:auto;font-size:.82rem;">Cargando…</div>
     </div>
 </div>
