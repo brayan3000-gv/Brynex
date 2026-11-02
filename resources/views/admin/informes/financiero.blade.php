@@ -607,6 +607,10 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div style="font-size:.6rem;color:#94a3b8;margin:-.15rem 0 .25rem;">La empresa: todas las cuentas y cajas</div>
                 {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo verificado') !!}
                 {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'La caja de la empresa más lo que tiene cada persona por entregar (ver «Efectivo por recoger»)') !!}
+                @if($vieneDe && $vieneDe['sin_ubicar'] > 0)
+                {!! $fila('↪ Anticipos', $vieneDe['anticipos_sin_ubicar'], '#d97706', 600, 'Plata de los anticipos que viene de ' . $vieneDe['mes_nombre'] . ' y todavía no tiene cuenta anotada') !!}
+                {!! $fila('↪ Viene de ' . $vieneDe['mes_nombre'], $vieneDe['resto_sin_ubicar'], '#6d28d9', 600, 'El resto de lo que debió haber al arrancar el mes, sin cuenta anotada todavía') !!}
+                @endif
                 <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
                 {!! $fila('= Hay', $pl['hay'], '#0f172a', 800) !!}
                 {!! $fila('− No es de Brygar', -$pl['ajeno'], '#b45309', 700, 'Plata que está en las cuentas o en efectivo pero es de otros, o que Brygar debe') !!}
@@ -648,11 +652,19 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
              el dueño, 31-oct-2026). Cómo entró y cómo salió está en el modal. --}}
         @php
             $cuentasMini = collect($bancos)
-                ->filter(fn ($b) => $b->saldo_actual != 0 || $b->ing_mes != 0 || $b->sal_mes != 0)
+                ->filter(fn ($b) => $b->saldo_actual != 0 || $b->ing_mes != 0 || $b->sal_mes != 0
+                    || ($vieneDe && $vieneDe['cuentas']->contains(fn ($c) => $c['id'] === (int) $b->id && $c['origen'] !== 'arrastre')))
                 ->map(fn ($b) => ['tipo' => 'banco', 'id' => (int) $b->id, 'arriba' => $b->banco, 'nombre' => $b->nombre, 'saldo' => (float) $b->saldo_actual])
                 ->push(['tipo' => 'efectivo', 'id' => null, 'arriba' => 'Caja', 'nombre' => 'Efectivo', 'saldo' => (float) $efMes->saldo_actual])
                 ->push(['tipo' => 'recoger', 'id' => null, 'arriba' => 'Efectivo', 'nombre' => 'Por recoger', 'saldo' => (float) collect($porRecoger)->sum(fn ($e) => $e['real'] ?? $e['saldo'])]);
-            [$cuentasCero, $cuentasConSaldo] = $cuentasMini->partition(fn ($c) => round($c['saldo']) == 0);
+            // Las cuentas que se usan (movieron plata este mes o venían del
+            // anterior) se ven siempre, aunque estén en $0; las de razón social
+            // en $0 y las que no se usan van juntas.
+            $usadas = collect($bancos)->filter(fn ($b) => ! $b->incapacidad && ($b->ing_mes != 0 || $b->sal_mes != 0))->pluck('id')
+                ->merge($vieneDe ? $vieneDe['cuentas']->reject(fn ($c) => $c['origen'] === 'arrastre')->pluck('id') : [])
+                ->map(fn ($id) => (int) $id)->all();
+            [$cuentasCero, $cuentasConSaldo] = $cuentasMini->partition(fn ($c) => round($c['saldo']) == 0
+                && $c['tipo'] !== 'efectivo' && ! ($c['tipo'] === 'banco' && in_array($c['id'], $usadas, true)));
             $cuentasConSaldo = $cuentasConSaldo->sortByDesc('saldo')->values();
             // Ícono chico con el color e inicial de cada banco (no hay logos en el
             // proyecto); el que no esté aquí lleva un ícono genérico.
@@ -694,7 +706,6 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             .cuenta-mini .saldo{font-size:1.3rem;font-weight:900;line-height:1.1;margin-top:.2rem;white-space:nowrap}
             .cuenta-mini .pie{margin-top:auto;padding-top:.6rem;font-size:.66rem;color:#64748b}
             #cuentasCero[hidden]{display:none!important}
-            @media(max-width:520px){.viene-de{grid-column:auto!important}}
             .cuenta-cero-chip{padding:.35rem .65rem;border:1px solid #e2e8f0;border-radius:999px;background:#f8fafc;font:inherit;font-size:.72rem;color:#334155;cursor:pointer}
         </style>
         <div style="background:#fff;border-radius:14px;padding:1.25rem;box-shadow:0 1px 8px rgba(0,0,0,.06);">
@@ -703,52 +714,6 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <div style="font-size:.74rem;color:#64748b;">Total <b style="font-family:monospace;color:#0d2550;font-size:.85rem;">{{ $fmt($cuentasConSaldo->sum('saldo')) }}</b></div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:.75rem;">
-                {{-- Viene del mes anterior: los compromisos que pasaron contra la
-                     plata ubicada al arrancar (saldos de extracto anotados, efectivo
-                     contado, razón social y lo prestado). Ver vieneDelMesAnterior(). --}}
-                @if($vieneDe)
-                @php
-                    $vd = $vieneDe;
-                    $vdMes = ucfirst($vd['mes_nombre']);
-                    $vdPend = $vd['cuentas']->whereNull('inicial')->map(fn ($c) => ['banco', $c])
-                        ->concat($vd['personas']->whereNull('inicial')->map(fn ($p) => ['efectivo', $p]));
-                @endphp
-                <div class="cuenta-mini viene-de" style="grid-column:span 2;cursor:default;border-top-color:#7c3aed;">
-                    <span class="cabeza"><span class="arriba">Viene de {{ $vd['mes_nombre'] }}</span></span>
-                    <span class="nombre">Compromisos que pasaron a {{ $mesesEs[$mes] }}</span>
-                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.6rem 1.2rem;margin-top:.55rem;font-size:.72rem;">
-                        <div style="display:flex;flex-direction:column;gap:.18rem;color:#475569;">
-                            @foreach($vd['compromisos'] as $cp)
-                            <div style="display:flex;justify-content:space-between;gap:.4rem;"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ $cp['nombre'] }}</span><span style="font-family:monospace;white-space:nowrap;">{{ $fmt($cp['valor']) }}</span></div>
-                            @endforeach
-                            <div style="display:flex;justify-content:space-between;gap:.4rem;border-top:1px dashed #e2e8f0;padding-top:.2rem;font-weight:700;color:#334155;"><span>Tiene que haber</span><span style="font-family:monospace;">{{ $fmt($vd['total']) }}</span></div>
-                        </div>
-                        <div style="display:flex;flex-direction:column;gap:.18rem;color:#475569;">
-                            <div style="display:flex;justify-content:space-between;"><span title="Saldos de extracto y efectivo contado ya anotados, más las cuentas de razón social">Ubicado en cuentas</span><span style="font-family:monospace;color:#0d2550;font-weight:700;">{{ $fmt($vd['ubicado']) }}</span></div>
-                            <div style="display:flex;justify-content:space-between;"><span title="Préstamos y deudas de clientes: es plata de la empresa aunque no esté en caja">Prestado a clientes</span><span style="font-family:monospace;color:#6d28d9;font-weight:700;">{{ $fmt($vd['prestado']) }}</span></div>
-                            <div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px dashed #e2e8f0;padding-top:.3rem;margin-top:auto;">
-                                @if($vd['resultado'] >= 0)
-                                <span style="font-weight:800;color:#15803d;">✅ Cubierto · sobran</span><span style="font-family:monospace;font-size:1.05rem;font-weight:900;color:#15803d;">{{ $fmt($vd['resultado']) }}</span>
-                                @else
-                                <span style="font-weight:800;color:#b91c1c;">Faltan</span><span style="font-family:monospace;font-size:1.05rem;font-weight:900;color:#b91c1c;">{{ $fmt(-$vd['resultado']) }}</span>
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-                    @if($vdPend->isNotEmpty())
-                    <div style="margin-top:.6rem;padding-top:.5rem;border-top:1px solid #f1f5f9;display:flex;flex-wrap:wrap;align-items:center;gap:.35rem;">
-                        <span style="font-size:.66rem;font-weight:700;color:#b45309;">⚠ Falta el saldo de arranque:</span>
-                        @foreach($vdPend as [$tipo, $p])
-                        <button type="button" class="cuenta-cero-chip" style="border-color:#fde68a;background:#fffbeb;color:#92400e;"
-                                onclick="{{ $tipo === 'banco' ? "verMovimientosBanco({$p['id']},'" . addslashes($p['nombre']) . "')" : 'verMovimientosEfectivo()' }}"
-                                title="BryNex calculaba {{ $fmt($p['calculaba']) }}">{{ $tipo === 'banco' ? $p['nombre'] : 'Efectivo · ' . $p['nombre'] }}</button>
-                        @endforeach
-                    </div>
-                    @else
-                    <div style="margin-top:.6rem;padding-top:.5rem;border-top:1px solid #f1f5f9;font-size:.66rem;color:#15803d;font-weight:600;">Todas las cuentas tienen su saldo de arranque.</div>
-                    @endif
-                </div>
-                @endif
                 @foreach($cuentasConSaldo as $c)
                 @php $colorTipo = ['banco' => '#1d4ed8', 'efectivo' => '#16a34a', 'recoger' => '#0d9488'][$c['tipo']]; @endphp
                 <button type="button" class="cuenta-mini" onclick="{{ $clicCuenta($c) }}" style="border-top-color:{{ $colorTipo }};"
@@ -846,6 +811,28 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                         </div>
                     </div>
                 </div>
+
+                {{-- Viene del mes anterior: lo que debió haber al arrancar y todavía
+                     no tiene cuenta anotada, aparte de los anticipos (que ya tienen
+                     su tarjeta). Ver InformeController::vieneDelMesAnterior(). --}}
+                @if($vieneDe)
+                <div class="bank-card" style="border-top-color:#7c3aed;cursor:default;"
+                     title="Debió haber {{ $fmt($vieneDe['debio_haber']) }} al arrancar {{ mb_strtolower($mesesEs[$mes]) }}; anotado {{ $fmt($vieneDe['ubicado']) }}">
+                    <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">↪ Viene de {{ $vieneDe['mes_nombre'] }}</div>
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Aparte de los anticipos</div>
+                    <div style="margin-top:.6rem;">
+                        <div style="font-size:1.25rem;font-weight:900;color:#6d28d9;line-height:1.1;">{{ $fmt($vieneDe['resto_sin_ubicar']) }}</div>
+                        <div style="font-size:.62rem;color:#94a3b8;margin-top:.15rem;">Sin cuenta anotada todavía</div>
+                    </div>
+                    <div style="margin-top:auto;padding-top:.65rem;border-top:1px dashed #ddd6fe;font-size:.65rem;font-weight:600;color:{{ $vieneDe['pendientes'] ? '#b45309' : '#15803d' }};">
+                        @if($vieneDe['pendientes'])
+                        ⚠ {{ $vieneDe['pendientes'] }} {{ $vieneDe['pendientes'] === 1 ? 'cuenta sin saldo de arranque' : 'cuentas sin saldo de arranque' }}
+                        @else
+                        ✅ Todas las cuentas tienen su saldo de arranque
+                        @endif
+                    </div>
+                </div>
+                @endif
 
                 {{-- Tarjeta SS Pendiente de Pago --}}
                 @if(($ssPendientePago ?? 0) > 0 || ($cantPlanillasPendientes ?? 0) > 0)

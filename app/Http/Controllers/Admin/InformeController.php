@@ -1675,7 +1675,14 @@ class InformeController extends Controller
         $efEmpresa  = array_filter($cierreHoy['efectivo'], fn ($e) => \App\Services\Caja\FlujoEfectivo::esCajaEmpresa((int) $aid, (int) $e['id']));
         $porRecoger = array_values(array_filter(array_diff_key($cierreHoy['efectivo'], $efEmpresa), fn ($e) => (int) ($e['real'] ?? $e['saldo']) !== 0));
 
-        $vieneDe = $this->vieneDelMesAnterior((int) $aid, (int) $anio, (int) $mes, $bancos);
+        $vieneDe = $this->vieneDelMesAnterior((int) $aid, (int) $anio, (int) $mes, $bancos, $plata, $cierreVivo);
+        if ($vieneDe && $plata['deberia'] !== null) {
+            // Lo que vino del mes anterior y todavía no tiene cuenta anotada
+            // también es plata que hay: sin esto el mes arrancaba en negativo.
+            $plata['hay']        += $vieneDe['sin_ubicar'];
+            $plata['es']         += $vieneDe['sin_ubicar'];
+            $plata['diferencia'] += $vieneDe['sin_ubicar'];
+        }
 
         return view('admin.informes.financiero', compact(
             'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger', 'efEmpresa', 'vieneDe',
@@ -1928,21 +1935,36 @@ class InformeController extends Controller
     }
 
     /**
-     * La tarjeta «Viene de…»: los compromisos con que terminó el mes anterior
-     * (lo que pasa al siguiente según su foto) contra la plata ubicada al
-     * arrancar este mes: el saldo de extracto anotado de cada cuenta, el
-     * efectivo contado y las de razón social, que siguen con su saldo. Lo
-     * prestado a clientes también cubre, porque es de la empresa aunque no
-     * esté en caja. Nunca usa un saldo calculado (los aliados no anotan
-     * todos los gastos): ese solo sale de referencia, «BryNex calculaba».
+     * «Viene de…»: la plata con que debió arrancar el mes y que todavía no
+     * tiene cuenta anotada. Los aliados no anotan todos los gastos, así que
+     * nunca se usa un saldo calculado de cada cuenta (ese solo sale de
+     * referencia, «BryNex calculaba»): lo que debió haber se saca de lo que era
+     * de la empresa al cierre anterior más lo que debía, menos lo prestado.
+     *
+     *   debió haber = de la empresa al cierre + compromisos que siguen − prestado
+     *   sin ubicar  = debió haber − lo anotado (extractos, efectivo contado y
+     *                 las de razón social, que siguen con su saldo), solo
+     *                 mientras falte alguna cuenta por anotar
+     *
+     * Los compromisos son los de la foto del mes anterior menos la SS y la
+     * reserva de retiros: esas dos el informe las vuelve a contar dentro del
+     * canal de seguridad social del mes nuevo. Lo sin ubicar se parte en la
+     * parte de los anticipos y el resto («aparte de los anticipos»); al anotar
+     * cuentas baja primero el resto.
      *
      * null si el mes anterior no tiene foto del cierre.
      */
-    private function vieneDelMesAnterior(int $aid, int $anio, int $mes, $bancos): ?array
+    private function vieneDelMesAnterior(int $aid, int $anio, int $mes, $bancos, array $plata, array $cierreVivo): ?array
     {
+        // Desde noviembre de 2026 (lo pidió el dueño ese día): los meses de
+        // antes se cerraron con la regla anterior y no se recalculan.
+        if (sprintf('%04d-%02d', $anio, $mes) < '2026-11') {
+            return null;
+        }
+
         $ant  = \Carbon\Carbon::createFromDate($anio, $mes, 1)->subMonth();
         $fila = \App\Models\CierreMes::de($aid, $ant->year, $ant->month);
-        if (! $fila || empty($fila->foto)) {
+        if (! $fila || empty($fila->foto) || $plata['deberia'] === null) {
             return null;
         }
 
@@ -1951,11 +1973,6 @@ class InformeController extends Controller
         $calcB  = collect($foto['bancos'] ?? [])->keyBy('id');
         $calcE  = collect($foto['efectivo'] ?? [])->keyBy('id');
 
-        $compromisos = collect($foto['b'] ?? [])->filter(fn ($r) => (int) $r[3] !== 0)
-            ->map(fn ($r) => ['nombre' => $r[1], 'valor' => (int) $r[3]])->values();
-
-        // Cuentas: la anotada o la de razón social ya cuentan; la que terminó
-        // con plata según BryNex y no se ha anotado queda pendiente.
         $cuentas = collect($bancos)->map(function ($b) use ($calcB) {
             $ubicada = in_array($b->origen_saldo ?? '', ['verificado', 'manual', 'arrastre'], true);
 
@@ -1969,9 +1986,9 @@ class InformeController extends Controller
             ];
         })->filter(fn ($c) => $c['inicial'] !== null || $c['calculaba'] !== 0)->values();
 
-        $nombres  = \App\Models\User::whereIn('id', $calcE->keys()->merge(array_keys($reales['efectivo'] ?? []))->all() ?: [0])->pluck('nombre', 'id');
-        $personas = $calcE->keys()->merge(array_keys($reales['efectivo'] ?? []))->unique()
-            ->map(fn ($uid) => [
+        $ids      = $calcE->keys()->merge(array_keys($reales['efectivo'] ?? []))->unique();
+        $nombres  = \App\Models\User::whereIn('id', $ids->all() ?: [0])->pluck('nombre', 'id');
+        $personas = $ids->map(fn ($uid) => [
                 'id'        => (int) $uid,
                 'nombre'    => $nombres[$uid] ?? "Usuario $uid",
                 'inicial'   => isset($reales['efectivo'][$uid]) ? (int) $reales['efectivo'][$uid] : null,
@@ -1979,22 +1996,30 @@ class InformeController extends Controller
             ])
             ->filter(fn ($p) => $p['inicial'] !== null || $p['calculaba'] !== 0)->values();
 
-        $totalComp = (int) $compromisos->sum('valor');
-        $ubicado   = (int) $cuentas->sum('inicial') + (int) $personas->sum('inicial');
-        $prestado  = (int) ($foto['total_c'] ?? 0);
+        $filas       = collect($foto['b'] ?? []);
+        $compromisos = (int) $filas->reject(fn ($r) => in_array($r[0], ['ss', 'retiros'], true))->sum(fn ($r) => (int) $r[3]);
+        $anticipos   = (int) ($filas->firstWhere(0, 'anticipos')[3] ?? 0);
+        $deLaEmpresa = (int) $plata['deberia'] - (int) $cierreVivo['a']['utilidad'] + (int) $cierreVivo['a']['retiros'];
+        $debioHaber  = $deLaEmpresa + $compromisos - (int) ($foto['total_c'] ?? 0);
+        $ubicado     = (int) $cuentas->sum('inicial') + (int) $personas->sum('inicial');
+        $pendientes  = $cuentas->whereNull('inicial')->count() + $personas->whereNull('inicial')->count();
+        // Solo mientras falten cuentas por anotar: con todas anotadas, lo que
+        // falte es plata que no apareció y debe salir en la diferencia.
+        $sinUbicar   = $pendientes > 0 ? max(0, $debioHaber - $ubicado) : 0;
+        $antSinUbicar = min(max(0, $anticipos), $sinUbicar);
 
         return [
-            'anio'        => $ant->year,
-            'mes'         => $ant->month,
-            'mes_nombre'  => $ant->locale('es')->monthName,
-            'compromisos' => $compromisos,
-            'total'       => $totalComp,
-            'ubicado'     => $ubicado,
-            'prestado'    => $prestado,
-            'resultado'   => $ubicado + $prestado - $totalComp,
-            'cuentas'     => $cuentas,
-            'personas'    => $personas,
-            'pendientes'  => $cuentas->whereNull('inicial')->count() + $personas->whereNull('inicial')->count(),
+            'anio'                 => $ant->year,
+            'mes'                  => $ant->month,
+            'mes_nombre'           => $ant->locale('es')->monthName,
+            'debio_haber'          => $debioHaber,
+            'ubicado'              => $ubicado,
+            'sin_ubicar'           => $sinUbicar,
+            'anticipos_sin_ubicar' => $antSinUbicar,
+            'resto_sin_ubicar'     => $sinUbicar - $antSinUbicar,
+            'cuentas'              => $cuentas,
+            'personas'             => $personas,
+            'pendientes'           => $pendientes,
         ];
     }
 
