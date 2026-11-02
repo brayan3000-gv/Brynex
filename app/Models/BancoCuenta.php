@@ -171,4 +171,26 @@ class BancoCuenta extends BaseModel
             ->orderBy('banco')
             ->get();
     }
+
+    /**
+     * Logo del banco por su nombre (public/img/bancos, 96x96). Se busca por
+     * palabra porque el campo `banco` es texto libre («BANCO DE BOGOTA»,
+     * «NEQUI O BRE-B»…). null si no hay logo (Davivienda y Scotiabank aún no).
+     */
+    public static function logo(?string $banco): ?string
+    {
+        $b = mb_strtoupper(\Illuminate\Support\Str::ascii((string) $banco));
+        foreach ([
+            'DAVIPLATA' => 'daviplata', 'NEQUI' => 'nequi', 'BANCOLOMBIA' => 'bancolombia',
+            'BBVA' => 'bbva', 'BOGOTA' => 'bogota', 'ITAU' => 'itau', 'CAJA SOCIAL' => 'cajasocial',
+            'AGRARIO' => 'agrario', 'CITI' => 'citibank', 'VILLAS' => 'avvillas',
+            'FALABELLA' => 'falabella', 'OCCIDENTE' => 'occidente', 'POPULAR' => 'popular',
+        ] as $clave => $archivo) {
+            if (str_contains($b, $clave)) {
+                return asset("img/bancos/{$archivo}.png");
+            }
+        }
+
+        return null;
+    }
 }

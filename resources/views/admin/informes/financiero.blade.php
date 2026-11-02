@@ -668,8 +668,8 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             [$cuentasCero, $cuentasConSaldo] = $cuentasMini->partition(fn ($c) => round($c['saldo']) == 0
                 && $c['tipo'] !== 'efectivo' && ! ($c['tipo'] === 'banco' && in_array($c['id'], $usadas, true)));
             $cuentasConSaldo = $cuentasConSaldo->sortByDesc('saldo')->values();
-            // Ícono chico con el color e inicial de cada banco (no hay logos en el
-            // proyecto); el que no esté aquí lleva un ícono genérico.
+            // Si el banco no tiene logo (BancoCuenta::logo), un ícono chico con su
+            // color e inicial; el que no esté en ninguno lleva un ícono genérico.
             $iconoCuenta = function ($c) {
                 if ($c['tipo'] !== 'banco') {
                     return ['$', '#dcfce7', '#15803d'];
@@ -723,7 +723,9 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     @php $icono = $iconoCuenta($c); @endphp
                     <span class="cabeza">
                         <span class="arriba">{{ $c['arriba'] }}</span>
-                        @if($icono)
+                        @if($c['tipo'] === 'banco' && ($logo = \App\Models\BancoCuenta::logo($c['arriba'])))
+                        <img class="icono" src="{{ $logo }}" alt="" aria-hidden="true" style="padding:0;width:22px;object-fit:cover;">
+                        @elseif($icono)
                         <span class="icono" aria-hidden="true" style="background:{{ $icono[1] }};color:{{ $icono[2] }};">{{ $icono[0] }}</span>
                         @else
                         <span class="icono" aria-hidden="true" style="background:#e2e8f0;color:#475569;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6.5L8 3l6 3.5M3 7v5M6.3 7v5M9.7 7v5M13 7v5M2 13.5h12"/></svg></span>
