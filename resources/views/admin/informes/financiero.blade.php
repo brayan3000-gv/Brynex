@@ -739,19 +739,14 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     @endif
                 </button>
                 @endforeach
-                @if($cuentasCero->isNotEmpty())
-                <button type="button" class="cuenta-mini" aria-expanded="false" aria-controls="cuentasCero"
-                        onclick="const v=document.getElementById('cuentasCero');const abrir=v.hidden;v.hidden=!abrir;this.setAttribute('aria-expanded',abrir);this.querySelector('.ver').textContent=abrir?'Ocultar ▴':'Ver cuáles ▾';"
-                        style="background:#f8fafc;border:1.5px dashed #94a3b8;">
-                    <span class="cabeza"><span class="arriba">En $0</span></span>
-                    <span class="nombre">{{ $cuentasCero->count() }} {{ $cuentasCero->count() === 1 ? 'cuenta' : 'cuentas' }}</span>
-                    <span class="etq">Saldo</span>
-                    <span class="saldo" style="color:#64748b;">$ 0</span>
-                    <span class="pie ver">Ver cuáles ▾</span>
-                </button>
-                @endif
             </div>
+            {{-- Las de $0 no suman nada: un botón chico en vez de una tarjeta. --}}
             @if($cuentasCero->isNotEmpty())
+            <button type="button" class="cuenta-cero-chip" aria-expanded="false" aria-controls="cuentasCero"
+                    onclick="const v=document.getElementById('cuentasCero');const abrir=v.hidden;v.hidden=!abrir;this.setAttribute('aria-expanded',abrir);this.querySelector('.ver').textContent=abrir?'▴':'▾';"
+                    style="margin-top:.6rem;border-style:dashed;border-color:#94a3b8;color:#475569;">
+                {{ $cuentasCero->count() }} {{ $cuentasCero->count() === 1 ? 'cuenta' : 'cuentas' }} en $0 <span class="ver">▾</span>
+            </button>
             <div id="cuentasCero" hidden style="margin-top:.6rem;padding:.65rem .8rem;border:1px solid #e2e8f0;border-radius:10px;display:flex;flex-wrap:wrap;gap:.45rem;">
                 @foreach($cuentasCero as $c)
                 <button type="button" class="cuenta-cero-chip" onclick="{{ $clicCuenta($c) }}">{{ trim($c['arriba'] . ' · ' . $c['nombre']) }} <b style="font-family:monospace;">$0</b></button>
