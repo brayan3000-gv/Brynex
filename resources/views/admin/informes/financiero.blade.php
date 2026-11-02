@@ -714,7 +714,7 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             .cuenta-mini:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
             .cuenta-mini .cabeza{display:flex;align-items:center;justify-content:space-between;gap:.4rem}
             .cuenta-mini .arriba{font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-            .cuenta-mini .icono{flex-shrink:0;min-width:22px;height:22px;padding:0 .3rem;box-sizing:border-box;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;letter-spacing:0}
+            .cuenta-mini .icono{flex-shrink:0;min-width:32px;height:32px;padding:0 .3rem;box-sizing:border-box;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;letter-spacing:0}
             .cuenta-mini .nombre{font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
             .cuenta-mini .etq{font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:.55rem}
             .cuenta-mini .saldo{font-size:1.3rem;font-weight:900;line-height:1.1;margin-top:.2rem;white-space:nowrap}
@@ -737,11 +737,11 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     <span class="cabeza">
                         <span class="arriba">{{ $c['arriba'] }}</span>
                         @if($c['tipo'] === 'banco' && ($logo = \App\Models\BancoCuenta::logo($c['arriba'])))
-                        <img class="icono" src="{{ $logo }}" alt="" aria-hidden="true" style="padding:0;width:22px;object-fit:cover;">
+                        <img class="icono" src="{{ $logo }}" alt="" aria-hidden="true" style="padding:0;width:32px;object-fit:cover;">
                         @elseif($icono)
                         <span class="icono" aria-hidden="true" style="background:{{ $icono[1] }};color:{{ $icono[2] }};">{{ $icono[0] }}</span>
                         @else
-                        <span class="icono" aria-hidden="true" style="background:#e2e8f0;color:#475569;"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6.5L8 3l6 3.5M3 7v5M6.3 7v5M9.7 7v5M13 7v5M2 13.5h12"/></svg></span>
+                        <span class="icono" aria-hidden="true" style="background:#e2e8f0;color:#475569;"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6.5L8 3l6 3.5M3 7v5M6.3 7v5M9.7 7v5M13 7v5M2 13.5h12"/></svg></span>
                         @endif
                     </span>
                     <span class="nombre" title="{{ $c['nombre'] }}">{{ $c['nombre'] }}</span>
