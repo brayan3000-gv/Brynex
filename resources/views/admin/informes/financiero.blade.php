@@ -712,10 +712,11 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
         <style>
             .cuenta-mini{text-align:left;background:#fff;border:0;border-top:4px solid #3b82f6;border-radius:14px;padding:1.1rem 1.2rem 1rem;box-shadow:0 2px 10px rgba(0,0,0,.07);font:inherit;color:inherit;cursor:pointer;display:flex;flex-direction:column;min-width:0;min-height:150px;transition:all .2s}
             .cuenta-mini:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.12)}
-            .cuenta-mini .cabeza{display:flex;align-items:center;justify-content:space-between;gap:.4rem}
+            .cuenta-mini .cabeza{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+            .cuenta-mini .textos{display:flex;flex-direction:column;min-width:0;line-height:1.2}
             .cuenta-mini .arriba{font-size:.65rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
             .cuenta-mini .icono{flex-shrink:0;min-width:32px;height:32px;padding:0 .3rem;box-sizing:border-box;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-size:.68rem;font-weight:800;letter-spacing:0}
-            .cuenta-mini .nombre{font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+            .cuenta-mini .nombre{font-size:.78rem;font-weight:700;color:#334155;margin-top:.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
             .cuenta-mini .etq{font-size:.6rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.03em;margin-top:.55rem}
             .cuenta-mini .saldo{font-size:1.3rem;font-weight:900;line-height:1.1;margin-top:.2rem;white-space:nowrap}
             .cuenta-mini .pie{margin-top:auto;padding-top:.6rem;font-size:.66rem;color:#64748b}
@@ -734,8 +735,12 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 <button type="button" class="cuenta-mini" onclick="{{ $clicCuenta($c) }}" style="border-top-color:{{ $colorTipo }};"
                         title="{{ $c['tipo'] === 'recoger' ? 'Ver el consolidado de caja del mes' : 'Ver cómo entró y cómo salió' }}">
                     @php $icono = $iconoCuenta($c); @endphp
+                    {{-- Banco y nombre pegados, a la altura del logo --}}
                     <span class="cabeza">
-                        <span class="arriba">{{ $c['arriba'] }}</span>
+                        <span class="textos">
+                            <span class="arriba">{{ $c['arriba'] }}</span>
+                            <span class="nombre" title="{{ $c['nombre'] }}">{{ $c['nombre'] }}</span>
+                        </span>
                         @if($c['tipo'] === 'banco' && ($logo = \App\Models\BancoCuenta::logo($c['arriba'])))
                         <img class="icono" src="{{ $logo }}" alt="" aria-hidden="true" style="padding:0;width:32px;object-fit:cover;">
                         @elseif($icono)
@@ -744,7 +749,6 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                         <span class="icono" aria-hidden="true" style="background:#e2e8f0;color:#475569;"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6.5L8 3l6 3.5M3 7v5M6.3 7v5M9.7 7v5M13 7v5M2 13.5h12"/></svg></span>
                         @endif
                     </span>
-                    <span class="nombre" title="{{ $c['nombre'] }}">{{ $c['nombre'] }}</span>
                     <span class="etq">Saldo</span>
                     <span class="saldo" style="color:{{ $c['saldo'] < 0 ? '#dc2626' : ($c['tipo'] === 'banco' ? '#0d2550' : $colorTipo) }};">{{ $fmt($c['saldo']) }}</span>
                     @if($sinArranque($c))
