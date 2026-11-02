@@ -143,9 +143,14 @@ class GastoAdminController extends Controller
             'observacion'       => 'nullable|string|max:1000',
             'imagen_base64'     => 'nullable|string',   // paste Ctrl+V
             'imagen'            => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'gasto_fijo_id'     => 'nullable|integer',  // registrado desde el aviso de gastos fijos
         ]);
         // Mes al que corresponde (utilidad); la fecha sigue siendo la del pago.
         $data['periodo'] = Gasto::periodoDesdeFormulario($data['periodo'] ?? null, $data['fecha']);
+        if (! empty($data['gasto_fijo_id'])
+            && ! \App\Models\GastoFijo::where('aliado_id', $aid)->whereKey($data['gasto_fijo_id'])->exists()) {
+            $data['gasto_fijo_id'] = null;
+        }
 
         DB::beginTransaction();
         try {

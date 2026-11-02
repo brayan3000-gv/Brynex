@@ -24,6 +24,8 @@ class Gasto extends BaseModel
         // Origen del gasto cuando nace de una incapacidad: permite deshacerlo
         // si se reversa el estado que lo creó, sin adivinar por la descripción.
         'incapacidad_id', 'gestion_incapacidad_id',
+        // El gasto fijo que se reportó con él (aviso «Falta reportar» del financiero).
+        'gasto_fijo_id',
     ];
 
     protected $casts = [

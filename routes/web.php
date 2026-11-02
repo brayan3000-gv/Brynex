@@ -824,6 +824,13 @@ Route::middleware('auth')->group(function () {
                 Route::put('/gastos/{id}', [$ga, 'update'])->name('gastos.update');
                 Route::delete('/gastos/{id}', [$ga, 'destroy'])->name('gastos.destroy');
                 Route::post('/gastos/{id}/imagen', [$ga, 'imagen'])->name('gastos.imagen');
+
+                // Gastos fijos: la lista y el «No aplica este mes» del aviso del financiero
+                $gf = \App\Http\Controllers\Admin\GastoFijoController::class;
+                Route::post('/gastos-fijos', [$gf, 'store'])->name('gastos_fijos.store');
+                Route::put('/gastos-fijos/{id}', [$gf, 'update'])->name('gastos_fijos.update');
+                Route::delete('/gastos-fijos/{id}', [$gf, 'destroy'])->name('gastos_fijos.destroy');
+                Route::post('/gastos-fijos/{id}/omitir', [$gf, 'omitir'])->name('gastos_fijos.omitir');
             });
 
             // ── Comisiones Asesores ──────────────────────────────────────

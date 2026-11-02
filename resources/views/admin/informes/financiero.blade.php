@@ -48,6 +48,9 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
             </select>
             <a href="?mes={{ $mes }}&anio={{ $anio }}&excel=1" style="background:#16a34a;color:#fff;border-radius:8px;padding:.4rem .9rem;font-size:.78rem;font-weight:600;text-decoration:none;">📥 Excel</a>
             <a href="{{ route('admin.informes.gastos.index', ['mes'=>$mes,'anio'=>$anio]) }}" style="background:#7c3aed;color:#fff;border-radius:8px;padding:.4rem .9rem;font-size:.78rem;font-weight:600;text-decoration:none;">💸 Ver Gastos</a>
+            @if($puedeFijos && $hayFijos)
+            <button type="button" onclick="document.getElementById('modalFijos').style.display='flex'" style="background:#fff;color:#7c3aed;border:1.5px solid #c4b5fd;border-radius:8px;padding:.35rem .85rem;font:inherit;font-size:.78rem;font-weight:700;cursor:pointer;">⚙️ Gastos fijos</button>
+            @endif
         </form>
     </div>
 
@@ -57,6 +60,54 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
     @if(session('error'))
     <div style="background:#fee2e2;border:1px solid #fca5a5;color:#991b1b;padding:.6rem 1rem;border-radius:8px;margin-bottom:.8rem;font-size:.83rem">❌ {{ session('error') }}</div>
     @endif
+
+    {{-- Gastos fijos que faltan por reportar en el mes (App\Services\Caja\GastosFijos).
+         En el mes en curso solo los que ya pasaron su día de pago. --}}
+    @if($fijosPendientes->isNotEmpty())
+    @php
+        $ymFijos = sprintf('%04d-%02d', $anio, $mes);
+        $esMesEnCurso = $mes == now()->month && $anio == now()->year;
+        $payloadFijo = function ($p) use ($anio, $mes, $ymFijos, $esMesEnCurso) {
+            $f = $p['fijo'];
+            $ultimo = \Carbon\Carbon::createFromDate($anio, $mes, 1)->endOfMonth()->day;
+            $dia = min($f->dia ?: ($esMesEnCurso ? today()->day : $ultimo), $ultimo, $esMesEnCurso ? today()->day : 31);
+            return [
+                'id' => $f->id, 'concepto' => $f->concepto, 'tipo' => $f->tipo, 'pagado_a' => $f->pagado_a,
+                'valor' => $f->valor, 'forma_pago' => $f->forma_pago, 'banco_origen_id' => $f->banco_origen_id,
+                'fecha' => sprintf('%s-%02d', $ymFijos, $dia), 'periodo' => $ymFijos,
+            ];
+        };
+    @endphp
+    <div style="background:#fffbeb;border:1.5px solid #fcd34d;border-radius:12px;padding:.75rem 1rem;margin-bottom:1rem;">
+        <div style="display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap;margin-bottom:.45rem;">
+            <span style="font-size:.84rem;font-weight:800;color:#92400e;">⚠ Falta reportar en {{ $mesesEs[$mes] }}: {{ $fijosPendientes->count() }} {{ $fijosPendientes->count() === 1 ? 'gasto fijo' : 'gastos fijos' }}</span>
+            <span style="font-size:.78rem;color:#b45309;font-family:monospace;font-weight:700;">{{ $fmt($fijosPendientes->sum('valor')) }}</span>
+            <span style="font-size:.7rem;color:#a16207;">sin esto la utilidad sale más alta de lo real</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:.3rem;">
+            @foreach($fijosPendientes as $p)
+            <div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;background:#fff;border:1px solid #fde68a;border-radius:8px;padding:.4rem .6rem;font-size:.78rem;">
+                <span style="font-weight:700;color:#334155;flex:1 1 200px;">{{ $p['fijo']->concepto }}
+                    @if($p['veces'] > 1)<span style="font-weight:500;color:#64748b;"> · {{ $p['reportados'] }} de {{ $p['veces'] }} reportados</span>@endif
+                </span>
+                <span style="color:#64748b;font-size:.72rem;">{{ $p['fijo']->dia ? 'suele pagarse el día ' . $p['fijo']->dia : 'sin día fijo' }}</span>
+                <span style="font-family:monospace;font-weight:700;color:#92400e;">{{ $fmt($p['valor']) }}</span>
+                @if($puedeFijos)
+                <button type="button" data-fijo="{{ json_encode($payloadFijo($p)) }}" onclick="registrarFijo(JSON.parse(this.dataset.fijo))"
+                        style="background:#d97706;color:#fff;border:0;border-radius:7px;padding:.3rem .7rem;font:inherit;font-size:.72rem;font-weight:700;cursor:pointer;">Registrar</button>
+                <form method="POST" action="{{ route('admin.informes.gastos_fijos.omitir', $p['fijo']->id) }}" style="margin:0;"
+                      onsubmit="return confirm('¿«{{ addslashes($p['fijo']->concepto) }}» no se pagó en {{ mb_strtolower($mesesEs[$mes]) }}?')">
+                    @csrf
+                    <input type="hidden" name="anio" value="{{ $anio }}"><input type="hidden" name="mes" value="{{ $mes }}">
+                    <button type="submit" style="background:#fff;color:#92400e;border:1px solid #fcd34d;border-radius:7px;padding:.3rem .7rem;font:inherit;font-size:.72rem;font-weight:600;cursor:pointer;">No aplica este mes</button>
+                </form>
+                @endif
+            </div>
+            @endforeach
+        </div>
+    </div>
+    @endif
+
 
     {{-- KPIs principales --}}
     <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1rem;margin-bottom:1.5rem;">
@@ -1540,6 +1591,146 @@ button.desg-fila{cursor:pointer}button.desg-fila:hover{background:#f8fafc}
         </div>
     </div>
 </div>
+@endif
+
+{{-- Modal «Gastos fijos»: la lista que usa el aviso de «Falta reportar» --}}
+@if($puedeFijos && $hayFijos)
+@php
+    $gruposFijo = collect(\App\Models\Gasto::TIPOS_GRUPOS)->reject(fn ($c, $g) => str_contains($g, 'Incapacidades') || str_contains($g, 'Movimientos'));
+    $frecFijo = \App\Models\GastoFijo::FRECUENCIAS;
+@endphp
+<div id="modalFijos" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:flex-start;justify-content:center;padding-top:4vh;overflow-y:auto;"
+     onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#fff;border-radius:16px;width:min(860px,96vw);box-shadow:0 25px 60px rgba(0,0,0,.22);margin-bottom:2rem;">
+        <div style="background:#4c1d95;border-radius:16px 16px 0 0;padding:.9rem 1.25rem;display:flex;align-items:center;justify-content:space-between;">
+            <div>
+                <div style="color:#fff;font-weight:800;font-size:.95rem;">⚙️ Gastos fijos</div>
+                <div style="color:#ddd6fe;font-size:.72rem;margin-top:.1rem;">Lo que se paga cada mes: el informe avisa cuál falta reportar</div>
+            </div>
+            <button type="button" aria-label="Cerrar" onclick="document.getElementById('modalFijos').style.display='none'" style="background:rgba(255,255,255,.18);border:none;color:#fff;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem;">✕</button>
+        </div>
+        <div style="padding:1rem 1.25rem;display:flex;flex-direction:column;gap:1rem;font-size:.8rem;">
+
+            {{-- La lista --}}
+            <div style="border:1px solid #e2e8f0;border-radius:10px;overflow-x:auto;">
+                <table style="width:100%;border-collapse:collapse;">
+                    <thead><tr style="background:#f8fafc;color:#475569;font-size:.64rem;text-transform:uppercase;">
+                        <th style="text-align:left;padding:.45rem .6rem;">Concepto</th>
+                        <th style="text-align:left;padding:.45rem .6rem;">Tipo</th>
+                        <th style="text-align:right;padding:.45rem .6rem;">Valor</th>
+                        <th style="text-align:left;padding:.45rem .6rem;">Cada</th>
+                        <th style="text-align:center;padding:.45rem .6rem;">Día</th>
+                        <th style="padding:.45rem .6rem;"></th>
+                    </tr></thead>
+                    <tbody>
+                    @forelse($gastosFijos as $f)
+                    <tr style="border-top:1px solid #f1f5f9;">
+                        <td style="padding:.45rem .6rem;font-weight:700;">{{ $f->concepto }}@if($f->pagado_a)<div style="font-weight:500;color:#64748b;font-size:.7rem;">{{ $f->pagado_a }}</div>@endif</td>
+                        <td style="padding:.45rem .6rem;color:#475569;">{{ \App\Models\Gasto::TIPOS[$f->tipo] ?? $f->tipo }}</td>
+                        <td style="padding:.45rem .6rem;text-align:right;font-family:monospace;font-weight:700;">{{ $fmt($f->valor) }}</td>
+                        <td style="padding:.45rem .6rem;color:#475569;">{{ ['mensual' => 'mes', 'quincenal' => 'quincena', 'bimestral' => '2 meses'][$f->frecuencia] ?? $f->frecuencia }}</td>
+                        <td style="padding:.45rem .6rem;text-align:center;">{{ $f->dia ?: '—' }}</td>
+                        <td style="padding:.45rem .6rem;white-space:nowrap;text-align:right;">
+                            <button type="button" data-fijo="{{ json_encode($f->only(['id', 'concepto', 'tipo', 'pagado_a', 'palabra_clave', 'valor', 'frecuencia', 'dia', 'forma_pago', 'banco_origen_id'])) }}"
+                                    onclick="editarFijo(JSON.parse(this.dataset.fijo))" style="background:#f59e0b;border:0;color:#fff;border-radius:6px;padding:.25rem .55rem;font:inherit;font-size:.7rem;font-weight:700;cursor:pointer;">Editar</button>
+                            <form method="POST" action="{{ route('admin.informes.gastos_fijos.destroy', $f->id) }}" style="display:inline;margin:0;" onsubmit="return confirm('¿Quitar «{{ addslashes($f->concepto) }}» de los gastos fijos?')">
+                                @csrf @method('DELETE')
+                                <button type="submit" style="background:#fff;border:1px solid #fecaca;color:#b91c1c;border-radius:6px;padding:.25rem .55rem;font:inherit;font-size:.7rem;font-weight:600;cursor:pointer;">Quitar</button>
+                            </form>
+                        </td>
+                    </tr>
+                    @empty
+                    <tr><td colspan="6" style="padding:.8rem;color:#94a3b8;text-align:center;">Todavía no hay gastos fijos. Agrega los sugeridos de abajo o uno nuevo.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            {{-- Sugeridos: se repiten en los últimos tres meses y no están en la lista --}}
+            @if($fijosSugeridos->isNotEmpty())
+            <div>
+                <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;color:#6d28d9;margin-bottom:.4rem;">Sugeridos · se repiten en los últimos 3 meses</div>
+                <div style="display:flex;flex-direction:column;gap:.3rem;">
+                    @foreach($fijosSugeridos as $sg)
+                    <form method="POST" action="{{ route('admin.informes.gastos_fijos.store') }}" style="margin:0;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;background:#faf5ff;border:1px solid #ede9fe;border-radius:8px;padding:.4rem .6rem;">
+                        @csrf
+                        @foreach(['concepto', 'tipo', 'pagado_a', 'palabra_clave', 'valor', 'frecuencia', 'dia', 'forma_pago', 'banco_origen_id'] as $campo)
+                        <input type="hidden" name="{{ $campo }}" value="{{ $sg[$campo] }}">
+                        @endforeach
+                        <span style="font-weight:700;flex:1 1 220px;">{{ $sg['concepto'] }}</span>
+                        <span style="color:#64748b;font-size:.72rem;">{{ $sg['meses'] }} de 3 meses · {{ ['mensual' => 'cada mes', 'quincenal' => 'cada quincena', 'bimestral' => 'cada 2 meses'][$sg['frecuencia']] }} · día {{ $sg['dia'] }}</span>
+                        <span style="font-family:monospace;font-weight:700;">{{ $fmt($sg['valor']) }}</span>
+                        <button type="submit" style="background:#7c3aed;color:#fff;border:0;border-radius:7px;padding:.3rem .7rem;font:inherit;font-size:.72rem;font-weight:700;cursor:pointer;">Agregar</button>
+                    </form>
+                    @endforeach
+                </div>
+            </div>
+            @endif
+
+            {{-- Agregar o editar uno --}}
+            <form method="POST" id="formFijo" action="{{ route('admin.informes.gastos_fijos.store') }}" style="border:1px solid #e2e8f0;border-radius:10px;padding:.8rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.6rem;">
+                @csrf
+                <input type="hidden" name="_method" id="formFijoMetodo" value="POST">
+                <div style="grid-column:1/-1;font-size:.72rem;font-weight:800;text-transform:uppercase;color:#475569;" id="formFijoTitulo">Agregar gasto fijo</div>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Concepto
+                    <input name="concepto" required maxlength="150" placeholder="Arriendo oficina" class="inp-g"></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Tipo de gasto
+                    <select name="tipo" required class="inp-g">
+                        @foreach($gruposFijo as $grupo => $claves)
+                        <optgroup label="{{ $grupo }}">@foreach($claves as $cl)<option value="{{ $cl }}">{{ \App\Models\Gasto::TIPOS[$cl] ?? $cl }}</option>@endforeach</optgroup>
+                        @endforeach
+                    </select></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Pagado a
+                    <input name="pagado_a" maxlength="255" placeholder="Opcional" class="inp-g"></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;" title="Con este texto se reconoce el gasto si lo registran a mano (se busca en «pagado a» y en la descripción)">Se reconoce por
+                    <input name="palabra_clave" maxlength="100" placeholder="Ej: arriendo, emcali" class="inp-g"></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Valor (cada vez)
+                    <input name="valor" type="number" min="0" required placeholder="0" class="inp-g"></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Cada cuánto
+                    <select name="frecuencia" class="inp-g">@foreach($frecFijo as $k => $txt)<option value="{{ $k }}">{{ $txt }}</option>@endforeach</select></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Día en que se paga
+                    <input name="dia" type="number" min="1" max="31" placeholder="Opcional" class="inp-g"></label>
+                <label style="display:flex;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Cómo se paga
+                    <select name="forma_pago" class="inp-g" onchange="this.form.banco_origen_id.closest('label').style.display=this.value==='transferencia_bancaria'?'flex':'none'">
+                        <option value="">—</option><option value="efectivo">Efectivo</option><option value="transferencia_bancaria">Transferencia</option>
+                    </select></label>
+                <label style="display:none;flex-direction:column;gap:.2rem;font-size:.7rem;color:#475569;">Desde la cuenta
+                    <select name="banco_origen_id" class="inp-g"><option value="">—</option>@foreach($bancos as $b)<option value="{{ $b->id }}">{{ trim($b->banco . ' ' . $b->nombre) }}</option>@endforeach</select></label>
+                <div style="grid-column:1/-1;display:flex;gap:.5rem;justify-content:flex-end;">
+                    <button type="button" id="formFijoCancelar" onclick="nuevoFijo()" style="display:none;background:#fff;border:1px solid #cbd5e1;color:#334155;border-radius:8px;padding:.4rem .9rem;font:inherit;font-size:.76rem;cursor:pointer;">Cancelar</button>
+                    <button type="submit" id="formFijoBoton" style="background:#7c3aed;color:#fff;border:0;border-radius:8px;padding:.4rem .9rem;font:inherit;font-size:.76rem;font-weight:700;cursor:pointer;">Agregar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+function editarFijo(f) {
+    const form = document.getElementById('formFijo');
+    form.action = '{{ route('admin.informes.gastos_fijos.update', '_X_') }}'.replace('_X_', f.id);
+    document.getElementById('formFijoMetodo').value = 'PUT';
+    ['concepto', 'tipo', 'pagado_a', 'palabra_clave', 'valor', 'frecuencia', 'dia', 'forma_pago', 'banco_origen_id']
+        .forEach(k => { if (form[k]) form[k].value = f[k] ?? ''; });
+    form.forma_pago.dispatchEvent(new Event('change'));
+    document.getElementById('formFijoTitulo').textContent = 'Editar «' + f.concepto + '»';
+    document.getElementById('formFijoBoton').textContent = 'Guardar cambios';
+    document.getElementById('formFijoCancelar').style.display = '';
+    form.scrollIntoView({behavior: 'smooth', block: 'center'});
+}
+function nuevoFijo() {
+    const form = document.getElementById('formFijo');
+    form.reset();
+    form.action = '{{ route('admin.informes.gastos_fijos.store') }}';
+    document.getElementById('formFijoMetodo').value = 'POST';
+    form.forma_pago.dispatchEvent(new Event('change'));
+    document.getElementById('formFijoTitulo').textContent = 'Agregar gasto fijo';
+    document.getElementById('formFijoBoton').textContent = 'Agregar';
+    document.getElementById('formFijoCancelar').style.display = 'none';
+}
+@if(session('ver_fijos'))
+document.addEventListener('DOMContentLoaded', () => { document.getElementById('modalFijos').style.display = 'flex'; });
+@endif
+</script>
 @endif
 
 {{-- Modal Efectivo --}}
@@ -3429,6 +3620,7 @@ function abrirModalGasto() {
     const form = document.getElementById('modal-gasto-form');
     if (form) {
         form.reset();
+        form.querySelector('input[name="gasto_fijo_id"]')?.remove();
         
         // Limpiar _method si existe
         const mp = form.querySelector('input[name="_method"]');
@@ -3467,6 +3659,28 @@ function abrirModalGasto() {
         gasto_periodoCargar('modal-gasto', null);
     }
     document.getElementById('modal-gasto').style.display = 'flex';
+}
+
+// Registrar un gasto fijo desde el aviso «Falta reportar»: el formulario de
+// gasto de siempre, lleno con lo del fijo y ligado a él (gasto_fijo_id).
+function registrarFijo(f) {
+    abrirModalGasto();
+    const id = 'modal-gasto', form = document.getElementById(id + '-form');
+    form.fecha.value = f.fecha;
+    form.tipo.value = f.tipo;
+    gasto_onTipoChange(id);
+    form.descripcion.value = f.concepto;
+    if (form.pagado_a) form.pagado_a.value = f.pagado_a || '';
+    form.valor.value = f.valor || '';
+    if (f.forma_pago && f.tipo !== 'efectivo_banco') {
+        form.forma_pago.value = f.forma_pago;
+        gasto_actualizarBancos(id);
+        if (f.banco_origen_id && form.banco_origen_id) form.banco_origen_id.value = f.banco_origen_id;
+    }
+    gasto_periodoOpciones(id, f.periodo);
+    const oculto = document.createElement('input');
+    oculto.type = 'hidden'; oculto.name = 'gasto_fijo_id'; oculto.value = f.id;
+    form.appendChild(oculto);
 }
 
 function abrirEditarGasto(id) {

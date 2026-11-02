@@ -1695,7 +1695,18 @@ class InformeController extends Controller
         $plata['anticipos_en_cuentas'] = $antTotal - ($vieneDe['anticipos_sin_ubicar'] ?? 0);
         $plata['hay'] -= $antTotal;
 
+        // Gastos fijos: lo que falta reportar del mes, la lista y lo que se
+        // repite en los últimos meses sin estar en ella (App\Services\Caja\GastosFijos).
+        $fijosPendientes = \App\Services\Caja\GastosFijos::pendientes((int) $aid, (int) $anio, (int) $mes);
+        $puedeFijos      = Auth::user()->can('gastos.gestionar');
+        $hayFijos        = \App\Services\Caja\GastosFijos::hayTablas();
+        $gastosFijos     = $puedeFijos && $hayFijos
+            ? \App\Models\GastoFijo::where('aliado_id', $aid)->where('activo', true)->orderBy('dia')->orderBy('concepto')->get()
+            : collect();
+        $fijosSugeridos  = $puedeFijos ? \App\Services\Caja\GastosFijos::sugeridos((int) $aid) : collect();
+
         return view('admin.informes.financiero', compact(
+            'fijosPendientes', 'puedeFijos', 'hayFijos', 'gastosFijos', 'fijosSugeridos',
             'cierre', 'cierreVivo', 'cierreHoy', 'plata', 'porRecoger', 'efEmpresa', 'vieneDe',
             'mes','anio','ingresos','egresos','utilidad',
             'usuarios', 'esAdmin',
