@@ -118,7 +118,7 @@
                                     @endif
                                 </td>
                             @endforeach
-                            <td style="padding:1rem 1rem;text-align:right;font-weight:800;font-size:0.85rem;color:#0f172a;">
+                            <td style="padding:1rem 1rem;text-align:right;white-space:nowrap;font-weight:800;font-size:0.85rem;color:#0f172a;">
                                 $ {{ number_format($res['total'], 0, ',', '.') }}
                             </td>
                             <td style="padding:1rem 1rem;text-align:center;">
@@ -140,7 +140,7 @@
                                     </span>
                                 @endif
                             </td>
-                            <td style="padding:1rem 1rem;text-align:right;font-weight:500;color:#ef4444;">
+                            <td style="padding:1rem 1rem;text-align:right;white-space:nowrap;font-weight:500;color:#ef4444;">
                                 @if($res['saldo_historico'] > 0)
                                     $ {{ number_format($res['saldo_historico'], 0, ',', '.') }}
                                 @else
