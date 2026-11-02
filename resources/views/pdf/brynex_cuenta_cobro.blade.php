@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <title>Cuenta de cobro {{ $aliado->nombre }}</title>
     @php
-        $logo = 'data:image/png;base64,'.base64_encode(file_get_contents(public_path('img/logo-brynex-claro.png')));
+        $logo  = 'data:image/png;base64,'.base64_encode(file_get_contents(public_path('img/logo-brynex-claro.png')));
+        // Membrete con franjas diagonales en los colores de BryNex (carta a 200 dpi).
+        $fondo = 'data:image/png;base64,'.base64_encode(file_get_contents(public_path('img/cuenta-cobro-fondo.png')));
     @endphp
     <style>
         @page { margin: 0; }
@@ -15,36 +17,33 @@
             line-height: 1.45;
             margin: 0;
         }
-        /* Franjas de color en las esquinas, como el membrete de la plantilla */
-        .franja { position: absolute; }
-        .franja-1 { top: 0; right: 0; width: 330px; height: 26px; background: #1d4ed8; }
-        .franja-2 { top: 26px; right: 0; width: 210px; height: 10px; background: #60a5fa; }
-        .franja-3 { bottom: 0; left: 0; width: 330px; height: 26px; background: #1d4ed8; }
-        .franja-4 { bottom: 26px; left: 0; width: 210px; height: 10px; background: #60a5fa; }
-        .pagina { padding: 70px 80px 0 80px; }
+        /* DomPDF pinta lo posicionado encima del flujo normal: el fondo va detrás
+           con z-index y la página, posicionada, encima. */
+        .fondo { position: absolute; top: 0; left: 0; width: 8.5in; height: 11in; z-index: -1; }
+        .pagina { position: relative; z-index: 1; padding: 70px 80px 0 80px; }
         .logo { width: 210px; }
         .fecha { margin-top: 50px; font-weight: bold; }
         .centro { text-align: center; }
-        .titulo { margin-top: 45px; font-size: 15px; font-weight: bold; letter-spacing: 0.5px; }
+        .titulo { margin-top: 45px; font-size: 16px; font-weight: bold; letter-spacing: 2px; color: #1e3a8a; }
+        .titulo-linea { width: 70px; height: 3px; background: #2563eb; margin: 8px auto 0; }
         .aliado { margin-top: 22px; font-size: 14px; }
         .bloque { margin-top: 32px; }
-        .bloque-titulo { font-weight: bold; }
+        .bloque-titulo { font-weight: bold; color: #1e3a8a; }
         .conceptos { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        .conceptos td { padding: 3px 0; vertical-align: top; }
+        .conceptos td { padding: 5px 0; vertical-align: top; }
         .conceptos .valor { text-align: right; white-space: nowrap; padding-left: 18px; }
-        .conceptos .total td { border-top: 1px solid #9ca3af; padding-top: 6px; font-weight: bold; }
+        .conceptos tr td { border-bottom: 1px solid #e5e7eb; }
+        .conceptos .total td { border-bottom: none; border-top: 2px solid #2563eb; padding-top: 6px; font-weight: bold; color: #1e3a8a; }
         .firma { margin-top: 70px; }
         .pie {
-            position: absolute; bottom: 55px; left: 80px;
-            font-size: 11.5px; color: #374151;
+            position: absolute; bottom: 60px; left: 80px;
+            font-size: 11.5px; color: #374151; line-height: 1.9;
         }
+        .punto { display: inline-block; width: 8px; height: 8px; border-radius: 4px; background: #2563eb; margin-right: 7px; }
     </style>
 </head>
 <body>
-    <div class="franja franja-1"></div>
-    <div class="franja franja-2"></div>
-    <div class="franja franja-3"></div>
-    <div class="franja franja-4"></div>
+    <img src="{{ $fondo }}" class="fondo" alt="">
 
     <div class="pagina">
         <img src="{{ $logo }}" class="logo" alt="BryNex">
@@ -52,6 +51,7 @@
         <div class="fecha">Santiago de Cali, {{ $fechaTexto }}</div>
 
         <div class="centro titulo">CUENTA DE COBRO</div>
+        <div class="titulo-linea"></div>
         <div class="centro aliado">{{ mb_strtoupper($aliado->nombre) }}@if($aliado->nit)<br>NIT {{ $aliado->nit }}@endif</div>
 
         <div class="centro bloque">
@@ -91,7 +91,8 @@
     </div>
 
     <div class="pie">
-        300 156 3615 &nbsp;·&nbsp; brynex.co
+        <span class="punto"></span>300 156 3615<br>
+        <span class="punto"></span>brynex.co
     </div>
 </body>
 </html>
