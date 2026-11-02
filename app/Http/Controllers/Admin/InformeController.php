@@ -188,20 +188,21 @@ class InformeController extends Controller
         // egresos, utilidad, saldos) es solo de superadmin y contable.
         $esFinanciero = Auth::user()->can('informes.financiero');
         if ($esFinanciero) {
-            // Misma regla que el informe financiero de abajo, que es la buena:
-            // `otros` (Otros planilla) es un gasto de seguridad social que el
-            // aliado solo recauda, no un ingreso suyo; el ingreso es
-            // `otros_admon`. Este KPI los tenía al revés y por eso el tablero y
-            // el informe daban cifras distintas para el mismo mes.
-            // Excepción: en 'otro_ingreso' (trámites) `otros` SÍ es el valor
-            // cobrado, así que ahí sigue contando.
-            $ingresosDe = fn (int $m, int $a) => (float) DB::table('facturas')
-                ->where('aliado_id',$aid)->whereNull('deleted_at')
-                ->where('mes',$m)->where('anio',$a)
-                ->whereIn('estado',['pagada','abono'])
-                ->sum(DB::raw("admon + seguro + afiliacion + mensajeria + iva + retiro
-                               + ISNULL(otros_admon,0)
-                               + CASE WHEN tipo = 'otro_ingreso' THEN otros ELSE 0 END"));
+            // El mismo número del estado financiero (ingresos por fecha de
+            // pago, 2-nov-2026). Antes sumaba las facturas DEL mes aunque se
+            // pagaran en otro, y la tarjeta no cuadraba con el informe (nov:
+            // $771.000 de facturas pagadas en octubre contra $0). Un mes
+            // cerrado sale de su foto; el resto se arma como el informe y se
+            // guarda 5 minutos para no volver lento el tablero.
+            $ingresosDe = function (int $m, int $a) use ($aid) {
+                $foto = \App\Models\CierreMes::de($aid, $a, $m)?->foto;
+                if (isset($foto['a']['total_ingresos'])) {
+                    return (float) $foto['a']['total_ingresos'];
+                }
+
+                return (float) \Illuminate\Support\Facades\Cache::remember("hub-ingresos:{$aid}:{$a}-{$m}", 300,
+                    fn () => self::cierreVivoDe($this, $a, $m)['a']['total_ingresos']);
+            };
             $kpis['ingresos_mes'] = $ingresosDe($mes, $anio);
             $kpis['ingresos_mes_anterior'] = $ingresosDe($mesAnterior, $anioAnterior);
         }
