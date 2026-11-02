@@ -190,9 +190,11 @@ class BrynexConsumoService
             ->join('whatsapp_conversaciones as c', 'c.id', '=', 'm.conversacion_id')
             ->where('m.aliado_id', $alidoId)
             ->whereBetween('m.created_at', [$primerDia, $ultimoDia])
-            ->select('c.id', 'c.numero_cliente', DB::raw('COUNT(m.id) as total_mensajes'),
+            // whatsapp_conversaciones no tiene `numero_cliente` (el número está en
+            // el contacto): con él, toda la página de consumo daba 500.
+            ->select('c.id', 'c.nombre_contacto', DB::raw('COUNT(m.id) as total_mensajes'),
                      DB::raw('MIN(m.created_at) as primer_mensaje'), DB::raw('MAX(m.created_at) as ultimo_mensaje'))
-            ->groupBy('c.id', 'c.numero_cliente')
+            ->groupBy('c.id', 'c.nombre_contacto')
             ->orderBy('c.id')
             ->get();
 
