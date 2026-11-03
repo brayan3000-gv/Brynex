@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\TipoModalidad;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
@@ -197,12 +198,20 @@ class ListadosMesExcelService
      * expresión SQL de fecha, p. ej. `'2026-07-01'` o una columna). El de mes
      * vencido se retira en la planilla del mes anterior, así que a julio le
      * tocan sus retiros de junio. Una sola regla para "Retirados del mes", la
-     * hoja Retiros del Excel y el Resumen Consolidado Mensual.
+     * hoja Retiros del Excel, el Resumen Consolidado Mensual y el Centro de
+     * Informes.
+     *
+     * Gestión ARL y Seguros no van en planilla: su retiro es del mes de su
+     * fecha aunque el contrato diga `paga_mes_actual = 0` (todos los de
+     * Gestión ARL lo dicen). Contados como mes vencido, los retirados en
+     * octubre de 2026 salían como 58 retiros de noviembre en Brygar.
      */
     public static function sqlRetiroDelMes(string $c, string $ini): string
     {
-        return "(($c.paga_mes_actual = 1 AND $c.fecha_retiro >= $ini AND $c.fecha_retiro < DATEADD(month, 1, $ini))"
-            ." OR ($c.paga_mes_actual = 0 AND $c.fecha_retiro >= DATEADD(month, -1, $ini) AND $c.fecha_retiro < $ini))";
+        $sinPlanilla = "ISNULL($c.tipo_modalidad_id, 0) IN (".implode(',', TipoModalidad::IDS_SIN_SEGURIDAD_SOCIAL).')';
+
+        return "((($c.paga_mes_actual = 1 OR $sinPlanilla) AND $c.fecha_retiro >= $ini AND $c.fecha_retiro < DATEADD(month, 1, $ini))"
+            ." OR ($c.paga_mes_actual = 0 AND NOT $sinPlanilla AND $c.fecha_retiro >= DATEADD(month, -1, $ini) AND $c.fecha_retiro < $ini))";
     }
 
     /** SQL: lo que costó en seguridad social el retiro de `$c`, según su factura de retiro. */

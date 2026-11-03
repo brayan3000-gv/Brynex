@@ -69,20 +69,14 @@ class InformeController extends Controller
         $mesAnterior  = $mes === 1 ? 12 : $mes - 1;
         $anioAnterior = $mes === 1 ? $anio - 1 : $anio;
 
-        // Retirados del mes: la regla del informe "Retirados del mes" (el de
-        // mes vencido se retira en la planilla del mes anterior). Se calcula
-        // también para el mes anterior, que es la referencia de la tarjeta.
+        // Retirados del mes: la regla del informe "Retirados del mes"
+        // (ListadosMesExcelService::sqlRetiroDelMes). Se calcula también para
+        // el mes anterior, que es la referencia de la tarjeta.
         $retirosDe = function (int $m, int $a) use ($aid) {
-            $mAnt = $m === 1 ? 12 : $m - 1;
-            $aAnt = $m === 1 ? $a - 1 : $a;
-
             return DB::table('contratos AS c')
                 ->where('c.aliado_id', $aid)
                 ->where('c.estado', 'retirado')
-                ->where(function ($q) use ($m, $a, $mAnt, $aAnt) {
-                    $q->where(fn ($q1) => $q1->where('c.paga_mes_actual', 1)->whereMonth('c.fecha_retiro', $m)->whereYear('c.fecha_retiro', $a))
-                        ->orWhere(fn ($q2) => $q2->where('c.paga_mes_actual', 0)->whereMonth('c.fecha_retiro', $mAnt)->whereYear('c.fecha_retiro', $aAnt));
-                });
+                ->whereRaw(\App\Services\ListadosMesExcelService::sqlRetiroDelMes('c', sprintf("CAST('%04d-%02d-01' AS date)", $a, $m)));
         };
         $retirosBaseQuery = $retirosDe($mes, $anio);
         $retirosTotal = (clone $retirosBaseQuery)->count();
@@ -371,8 +365,6 @@ class InformeController extends Controller
         $aid  = $this->aliadoId();
         $mes  = (int)$request->input('mes', now()->month);
         $anio = (int)$request->input('anio', now()->year);
-        $mesAnterior  = $mes  === 1 ? 12 : $mes  - 1;
-        $anioAnterior = $mes  === 1 ? $anio - 1 : $anio;
 
         $afiliaciones = DB::table('contratos AS c')
             ->leftJoin('motivos_afiliacion AS ma','ma.id','=','c.motivo_afiliacion_id')
@@ -385,17 +377,7 @@ class InformeController extends Controller
         $retiros = DB::table('contratos AS c')
             ->leftJoin('motivos_retiro AS mr','mr.id','=','c.motivo_retiro_id')
             ->where('c.aliado_id',$aid)->where('c.estado','retirado')
-            ->where(function ($q) use ($mes, $anio, $mesAnterior, $anioAnterior) {
-                $q->where(function ($q1) use ($mes, $anio) {
-                    $q1->where('c.paga_mes_actual', 1)
-                       ->whereMonth('c.fecha_retiro', $mes)
-                       ->whereYear('c.fecha_retiro', $anio);
-                })->orWhere(function ($q2) use ($mesAnterior, $anioAnterior) {
-                    $q2->where('c.paga_mes_actual', 0)
-                    ->whereMonth('c.fecha_retiro', $mesAnterior)
-                    ->whereYear('c.fecha_retiro', $anioAnterior);
-                });
-            })
+            ->whereRaw(\App\Services\ListadosMesExcelService::sqlRetiroDelMes('c', sprintf("CAST('%04d-%02d-01' AS date)", $anio, $mes)))
             ->groupBy('mr.id','mr.nombre')
             ->select('mr.nombre AS motivo', DB::raw('COUNT(*) AS total'))
             ->orderByDesc('total')->get();
