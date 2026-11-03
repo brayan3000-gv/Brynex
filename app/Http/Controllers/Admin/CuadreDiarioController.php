@@ -340,6 +340,9 @@ class CuadreDiarioController extends Controller
         if ($cuadreDia) {
             return back()->with('error', 'Ese día ya fue cuadrado; no se pueden registrar más gastos.');
         }
+        if (Gasto::envioRepetido($aliadoId, $request->input('envio_id'))) {
+            return back()->with('success', 'El gasto ya había quedado registrado; el clic repetido no se guardó otra vez.');
+        }
 
         DB::beginTransaction();
         try {

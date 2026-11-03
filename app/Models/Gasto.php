@@ -229,6 +229,22 @@ class Gasto extends BaseModel
     }
 
     /**
+     * true si este envío del formulario ya se procesó. El modal de gasto manda un
+     * `envio_id` único por carga de página: con la imagen pegada el envío tarda y
+     * la gente vuelve a pulsar, y cada clic llegaba como un gasto nuevo (Fecop,
+     * 26-oct-2026: el arriendo quedó tres veces). Sin envio_id no se frena nada.
+     */
+    public static function envioRepetido($aliadoId, ?string $envioId): bool
+    {
+        if (! $envioId) {
+            return false;
+        }
+
+        return ! \Illuminate\Support\Facades\Cache::add(
+            "gasto_envio:{$aliadoId}:" . substr($envioId, 0, 64), true, now()->addHours(12));
+    }
+
+    /**
      * Normaliza el «Mes al que corresponde» del formulario ('2026-08') al día 1.
      * Si es el mismo mes de la fecha se guarda vacío: así, si después se corrige
      * la fecha, el mes la sigue.

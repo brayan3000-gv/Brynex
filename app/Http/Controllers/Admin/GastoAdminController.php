@@ -151,6 +151,9 @@ class GastoAdminController extends Controller
             && ! \App\Models\GastoFijo::where('aliado_id', $aid)->whereKey($data['gasto_fijo_id'])->exists()) {
             $data['gasto_fijo_id'] = null;
         }
+        if (Gasto::envioRepetido($aid, $request->input('envio_id'))) {
+            return redirect()->back()->with('success', 'El gasto ya había quedado registrado; el clic repetido no se guardó otra vez.');
+        }
 
         DB::beginTransaction();
         try {

@@ -39,8 +39,10 @@
         {{-- Form --}}
         <form method="POST" action="{{ $formAction }}" enctype="multipart/form-data"
               style="padding:1.2rem;display:flex;flex-direction:column;gap:.9rem"
-              id="{{ $modalId }}-form">
+              id="{{ $modalId }}-form" onsubmit="return gasto_alEnviar(this)">
             @csrf
+            {{-- Identifica este envío: el servidor ignora el mismo envio_id dos veces (doble clic) --}}
+            <input type="hidden" name="envio_id" value="{{ \Illuminate\Support\Str::uuid() }}">
             @if($imagenPaste)
             <input type="hidden" name="imagen_base64" id="{{ $modalId }}-base64">
             @endif
@@ -230,6 +232,25 @@ function gasto_onTipoChange(id) {
         gasto_actualizarBancos(id);
     }
 }
+
+// Con la imagen pegada el envío tarda un par de segundos y se volvía a pulsar:
+// cada clic creaba otro gasto. Se bloquea el botón hasta que cargue la respuesta.
+function gasto_alEnviar(form) {
+    if (form.dataset.enviando) return false;
+    form.dataset.enviando = '1';
+    const btn = form.querySelector('button[type="submit"]');
+    if (btn) { btn.dataset.texto = btn.textContent; btn.disabled = true; btn.style.opacity = '.6'; btn.textContent = 'Guardando…'; }
+    return true;
+}
+// Al volver con «Atrás» el navegador puede restaurar la página con el botón bloqueado.
+window.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    document.querySelectorAll('form[onsubmit^="return gasto_alEnviar"]').forEach(function (f) {
+        delete f.dataset.enviando;
+        const btn = f.querySelector('button[type="submit"]');
+        if (btn) { btn.disabled = false; btn.style.opacity = ''; if (btn.dataset.texto) btn.textContent = btn.dataset.texto; }
+    });
+});
 
 function gasto_seleccionarUsuario(id) {
     const sel  = document.getElementById(id+'-sel-usuario');
