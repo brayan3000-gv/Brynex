@@ -54,8 +54,15 @@ class VerificarPermiso
             ->map(fn ($p) => PermisoService::describir($p))
             ->join(' o ');
 
+        // Al superadmin no le sirve "pídeselo al superadministrador": si le
+        // falta algo es porque es restringido, y se lo otorga él mismo.
+        $esSuper = $request->user()->hasRole('superadmin')
+            && collect($requeridos)->contains(fn ($p) => PermisoService::esRestringido($p));
+
         $mensaje = "No tienes permiso para «{$descripcion}». "
-                 .'Pídeselo a un administrador o al superadministrador de tu empresa.';
+                 .($esSuper
+                     ? 'Es un permiso restringido que ni el superadministrador trae por su rol: otórgatelo en Usuarios → Permisos.'
+                     : 'Pídeselo a un administrador o al superadministrador de tu empresa.');
 
         Bitacora::registrar(
             'acceso_denegado',

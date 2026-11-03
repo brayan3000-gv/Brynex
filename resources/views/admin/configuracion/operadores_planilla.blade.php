@@ -63,6 +63,8 @@
 .op-cred-estado.vencida { color:#dc2626; }
 .op-cred-vence { font-weight:600;color:#94a3b8;font-size:.68rem }
 .op-cred-acciones { display:flex;gap:.4rem;flex-wrap:wrap;align-items:center; }
+.op-cred-sin-permiso { font-size:.68rem;color:#64748b;line-height:1.4;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:.45rem .6rem; }
+.op-cred-sin-permiso a { color:#6d28d9;font-weight:700; }
 .op-btn {
     padding:.35rem .7rem;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;
     display:inline-flex;align-items:center;gap:.25rem;white-space:nowrap;
@@ -209,6 +211,19 @@
                 </div>
             @endif
 
+            {{-- El permiso es restringido: ni el superadmin lo trae por rol.
+                 Sin él, guardar daba un 403 después de llenar el formulario. --}}
+            @cannot('operadores_planilla.credenciales')
+                <div class="op-cred-sin-permiso">
+                    🔒 Para configurarlas hace falta el permiso «Ver y editar credenciales».
+                    @if(auth()->user()->hasRole('superadmin'))
+                        Ni el superadministrador lo trae por su rol: otórgatelo en
+                        <a href="{{ route('admin.usuarios.permisos.edit', auth()->user()) }}">Usuarios → Permisos</a>.
+                    @else
+                        Pídeselo al superadministrador de tu empresa.
+                    @endif
+                </div>
+            @else
             <div class="op-cred-acciones">
                 <button type="button" class="op-btn morado"
                         onclick="abrirModalCred({{ $op->id }}, @js($op->nombre), {{ $cred ? 'true' : 'false' }}, @js($cred?->usuario), @js(optional($cred?->clave_secreta_expira_at)->format('Y-m-d')))">
@@ -227,6 +242,7 @@
                 </form>
                 @endif
             </div>
+            @endcannot
         </div>
         @endif
     </div>
