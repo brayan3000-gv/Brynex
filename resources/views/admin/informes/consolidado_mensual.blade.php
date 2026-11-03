@@ -41,7 +41,7 @@
                 @else
                     <span class="trend-badge trend-neutral">■ 0</span>
                 @endif
-                <span style="font-size:0.75rem;color:#94a3b8;">variación neta vs anterior</span>
+                <span style="font-size:0.75rem;color:#94a3b8;">{{ $kpisActual['aproximado'] ? 'variación aproximada vs anterior (vigentes hoy)' : 'variación neta vs anterior' }}</span>
             </div>
         </div>
 
@@ -171,8 +171,13 @@
                             </div>
                         </td>
                         <td style="text-align: right; font-weight: 800; color: #0d9488; background-color: rgba(13, 148, 136, 0.04); font-size: 0.95rem;">
-                            {{ number_format($mes['total_activos'], 0, ',', '.') }}
-                            @if($mes['traslados'] > 0)
+                            {{ $mes['aproximado'] ? '≈ ' : '' }}{{ number_format($mes['total_activos'], 0, ',', '.') }}
+                            @if($mes['aproximado'])
+                                <div style="font-size: 0.68rem; font-weight: 600; color: #64748b; margin-top: 0.15rem; white-space: nowrap;"
+                                     title="El mes no se ha terminado de facturar: mientras corre, el total son los contratos vigentes hoy con ficha de cliente. Al cerrar el mes se cuenta lo facturado.">
+                                    vigentes al {{ now()->day }} {{ mb_strtolower(mb_substr($mes['label'], 0, 3)) }}
+                                </div>
+                            @elseif($mes['traslados'] > 0)
                                 <div style="font-size: 0.68rem; font-weight: 600; color: #b45309; margin-top: 0.15rem; white-space: nowrap;"
                                      title="Personas que se retiraron antes del mes y entraron con otro contrato este mes: estaban en Admon (factura del mes anterior) y en Afiliaciones. Se cuentan una sola vez.">
                                     −{{ number_format($mes['traslados'], 0, ',', '.') }} por traslados

@@ -4341,6 +4341,7 @@ class InformeController extends Controller
                 'retiros_definitivos' => $retirosDefinitivos,
                 'total_retiros'    => $totalRetiros,
                 'total_activos'    => $totalActivos,
+                'aproximado'       => false,
                 'traslados'        => $traslados,
                 'neto_periodo'     => $totalActivos - $totalRetiros,
                 'wa_enviados'        => (int) $waEnviados,
@@ -4349,6 +4350,20 @@ class InformeController extends Controller
                 'ia_valor_mensual' => (float) $iaValorMensual,
             ];
         }
+
+        // El mes en curso no se ha terminado de facturar: con las primeras
+        // facturas sus activos daban casi cero (Brygar al 2-nov-2026: 29 contra
+        // 536 de octubre, ▼ −507). Mientras corre, el total es un aproximado:
+        // los contratos vigentes hoy con ficha de cliente. Solo cambia lo que
+        // se muestra; el consumo de BryNex sigue contando lo facturado.
+        $vigentesHoy = DB::table('contratos as c')
+            ->where('c.aliado_id', $aid)
+            ->where('c.estado', 'vigente')
+            ->whereExists($conFicha)
+            ->count();
+        $meses[0]['total_activos'] = $vigentesHoy;
+        $meses[0]['aproximado'] = true;
+        $meses[0]['neto_periodo'] = $vigentesHoy - $meses[0]['total_retiros'];
 
         // Calcular la variación para los primeros 6 meses sobre Total Activos
         for ($k = 0; $k < 6; $k++) {
