@@ -998,6 +998,28 @@ class InformeController extends Controller
             ->whereMonth('fecha_pago', $mes)->whereYear('fecha_pago', $anio)
             ->sum('total_ss');
 
+        // Factura cuya planilla ya tiene su pago_planilla registrado antes de
+        // $antesDe. La factura del mes N suele ir en la planilla del mes N-1
+        // (ver «Período de factura por modalidad»): lo cobrado por adelantado
+        // se gasta en la planilla del mismo mes en que entró, no en el siguiente.
+        $inicioMes = \Carbon\Carbon::createFromDate($anio, $mes, 1)->startOfMonth()->toDateString();
+        $inicioMesSig = \Carbon\Carbon::createFromDate($anioSig, $mesSig, 1)->startOfMonth()->toDateString();
+        $planillaPagadaAntes = fn ($q, string $antesDe) => $q->whereExists(fn ($s) => $s
+            ->select(DB::raw(1))
+            ->from('planos as pp')
+            ->join('gastos as gp', function ($j) use ($aid) {
+                $j->on('gp.numero_planilla', '=', 'pp.numero_planilla')
+                    ->where('gp.aliado_id', $aid)
+                    ->where('gp.tipo', 'pago_planilla');
+            })
+            ->whereColumn('pp.factura_id', 'facturas.id')
+            ->whereNull('pp.deleted_at')
+            ->where('gp.fecha', '<', $antesDe));
+
+        // Lo cobrado el mes anterior para este período, menos lo que ya se fue
+        // en una planilla pagada ese mismo mes: esa plata ya la gastó la tarjeta
+        // del mes anterior y aquí se contaba otra vez (aliado 2, nov-2026:
+        // $5,6M de $6,35M ya pagados en octubre inflaban el saldo de planillas).
         $ssMesAnteriorParaActual = (float) DB::table('facturas')
             ->where('aliado_id', $aid)->whereNull('deleted_at')
             ->whereIn('estado', ['pagada', 'abono', 'prestamo'])
@@ -1006,7 +1028,24 @@ class InformeController extends Controller
             ->whereMonth('fecha_pago', $mesAnt)->whereYear('fecha_pago', $anioAnt)
             ->where('numero_factura', '>', 0)
             ->where('mes', $mes)->where('anio', $anio)
+            ->whereNot(fn ($q) => $planillaPagadaAntes($q, $inicioMes))
             ->sum('total_ss');
+
+        // Y al revés en este mes: lo cobrado para un período futuro cuya planilla
+        // ya se pagó no pasa al próximo mes, se queda pagando el gasto de este.
+        // Los préstamos del mes siguiente ya se restan aparte ($ssPrestamosMesSiguiente).
+        $ssFuturasYaPagadas = (float) DB::table('facturas')
+            ->where('aliado_id', $aid)->whereNull('deleted_at')
+            ->whereIn('estado', ['pagada', 'abono', 'prestamo'])
+            ->where('es_prestamo', 0)
+            ->whereNotNull('fecha_pago')
+            ->whereMonth('fecha_pago', $mes)->whereYear('fecha_pago', $anio)
+            ->where('numero_factura', '>', 0)
+            ->where('tipo', 'planilla')
+            ->where(fn ($q) => $q->where('anio', '>', $anio)
+                ->orWhere(fn ($q2) => $q2->where('anio', $anio)->where('mes', '>', $mes)))
+            ->where(fn ($q) => $planillaPagadaAntes($q, $inicioMesSig))
+            ->sum(DB::raw('total_ss + otros'));
 
         $facturasData = DB::table('facturas')
             ->where('aliado_id', $aid)->whereNull('deleted_at')
@@ -1071,7 +1110,7 @@ class InformeController extends Controller
             'total_ss'     => (float)($facturasData->recaudo_ss ?? 0),
             'ss_actuales'  => (float)($facturasData->ss_actuales ?? 0),
             'ss_anteriores'=> $ssMesAnteriorParaActual,
-            'ss_futuras'   => (float)($facturasData->ss_futuras ?? 0),
+            'ss_futuras'   => max(0.0, (float)($facturasData->ss_futuras ?? 0) - $ssFuturasYaPagadas),
             'retiro_campo' => (float)($facturasData->retiro_campo ?? 0),
         ];
 
