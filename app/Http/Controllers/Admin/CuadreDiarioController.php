@@ -535,10 +535,17 @@ class CuadreDiarioController extends Controller
         return back()->with('success', $mov->tipoLabel() . ' quitado.');
     }
 
+    /** Marca la entrega que se crea al cuadrar el día, para quitarla al reabrirlo. */
+    const ENTREGA_AL_CUADRAR = 'Entregó el efectivo al cuadrar el día';
+
     /**
      * Marca un día como cuadrado (solo superadmin). Crea la fila en `cuadres`
      * con fecha_inicio = fecha_fin = el día, y engancha los gastos sueltos de
      * ese día para dejar la trazabilidad completa.
+     *
+     * Con «Me entregó el efectivo» registra además la entrega de lo pendiente
+     * por pasar a quien cuadra: sin eso la plata seguía «por recoger» aunque
+     * ya estuviera en su mano (5-nov-2026).
      */
     public function cerrarDia(Request $request)
     {
@@ -552,6 +559,7 @@ class CuadreDiarioController extends Controller
             'fecha'       => 'required|date',
             'usuario_id'  => 'required|integer',
             'observacion' => 'nullable|string',
+            'entrego'     => 'nullable|boolean',
         ]);
 
         $fecha     = \Carbon\Carbon::parse($datos['fecha'])->toDateString();
@@ -572,8 +580,27 @@ class CuadreDiarioController extends Controller
             $this->facturasDelDia($aliadoId, $usuarioId, $fecha)
         );
 
+        $yo      = (int) Auth::id();
+        $entrega = ! empty($datos['entrego']) && $usuarioId !== $yo ? (int) $resumen['pendiente_por_pasar'] : 0;
+        if ($entrega > 0 && $this->cuadreDelDia($aliadoId, $yo, $fecha)) {
+            return back()->with('error', 'Tu día ya está cuadrado: reábrelo primero para recibir la entrega.');
+        }
+
         DB::beginTransaction();
         try {
+            if ($entrega > 0) {
+                CajaMovimiento::create([
+                    'aliado_id'          => $aliadoId,
+                    'fecha'              => $fecha,
+                    'tipo'               => CajaMovimiento::TIPO_ENTREGA,
+                    'usuario_origen_id'  => $usuarioId,
+                    'usuario_destino_id' => $yo,
+                    'valor'              => $entrega,
+                    'observacion'        => self::ENTREGA_AL_CUADRAR,
+                    'registrado_por'     => $yo,
+                ]);
+            }
+
             $cuadre = Cuadre::create([
                 'aliado_id'      => $aliadoId,
                 'usuario_id'     => $usuarioId,
@@ -599,7 +626,8 @@ class CuadreDiarioController extends Controller
         }
 
         return back()->with('success',
-            'Día cuadrado. Saldo: $' . number_format($resumen['saldo_esperado'], 0, ',', '.'));
+            'Día cuadrado. Saldo: $' . number_format($resumen['saldo_esperado'], 0, ',', '.')
+            . ($entrega > 0 ? '. Entrega a tu caja: $' . number_format($entrega, 0, ',', '.') . '.' : ''));
     }
 
     /** Reabre un día ya cuadrado (solo superadmin). */
@@ -623,6 +651,14 @@ class CuadreDiarioController extends Controller
         DB::beginTransaction();
         try {
             Gasto::where('cuadre_id', $cuadre->id)->update(['cuadre_id' => null]);
+            // La entrega que se registró al cuadrar vuelve a quedar por pasar.
+            CajaMovimiento::where('aliado_id', $aliadoId)
+                ->where('tipo', CajaMovimiento::TIPO_ENTREGA)
+                ->where('usuario_origen_id', $cuadre->usuario_id)
+                ->where('usuario_destino_id', $cuadre->cerrado_por)
+                ->whereDate('fecha', $cuadre->fecha_inicio->toDateString())
+                ->where('observacion', self::ENTREGA_AL_CUADRAR)
+                ->delete();
             $cuadre->delete();
             DB::commit();
         } catch (\Exception $e) {

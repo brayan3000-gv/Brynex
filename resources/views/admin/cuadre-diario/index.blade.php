@@ -818,6 +818,12 @@ function abrirModalCaja(tipo) {
                 @csrf
                 <input type="hidden" name="fecha" value="{{ $fecha }}">
                 <input type="hidden" name="usuario_id" value="{{ $usuarioId }}">
+                @if((int) $usuarioId !== (int) auth()->id() && ($resumen['pendiente_por_pasar'] ?? 0) > 0)
+                <label style="display:flex;gap:.5rem;align-items:flex-start;font-size:.82rem;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:.6rem .7rem;cursor:pointer">
+                    <input type="checkbox" name="entrego" value="1" checked style="margin-top:.15rem">
+                    <span><strong>Me entregó el efectivo</strong> ({{ $fmt($resumen['pendiente_por_pasar']) }}): pasa a tu caja y deja de salir por recoger.</span>
+                </label>
+                @endif
                 <div>
                     <label style="font-size:.76rem;font-weight:600;color:#374151;display:block;margin-bottom:.3rem">Observación</label>
                     <textarea name="observacion" rows="3" placeholder="Ej: Efectivo entregado a caja principal"
