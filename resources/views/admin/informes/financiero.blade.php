@@ -667,11 +667,11 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 @endphp
                 {!! $fila('🏦 En bancos', $pl['bancos'], '#1d4ed8', 600, 'Saldo de todas las cuentas: cada una arranca el mes con lo anotado') !!}
                 {!! $fila('💵 En efectivo', $pl['efectivo'], '#16a34a', 600, 'La caja de la empresa más lo que tiene cada persona por entregar') !!}
-                @if($antSinUbicar != 0)
-                {!! $fila('🟡 Anticipos', $antSinUbicar, '#d97706', 600, 'Plata de anticipos de clientes que viene de ' . $vieneDe['mes_nombre'] . ' y todavía no tiene cuenta anotada (el total está en su tarjeta)') !!}
-                @endif
-                @if($restoSinUbicar != 0)
-                {!! $fila('↪ Viene de ' . $vieneDe['mes_nombre'], $restoSinUbicar, '#6d28d9', 600, 'Lo que debió haber al arrancar el mes, aparte de los anticipos, sin cuenta anotada todavía (clic en su tarjeta para ver de qué es)') !!}
+                {{-- Una sola línea: es plata del cierre anterior que aún no tiene
+                     cuenta anotada, no anticipos por gastar (se confundía con la
+                     tarjeta de anticipos; lo pidió el dueño, 5-nov-2026). --}}
+                @if($antSinUbicar + $restoSinUbicar != 0)
+                {!! $fila('↪ Falta anotar (viene de ' . $vieneDe['mes_nombre'] . ')', $antSinUbicar + $restoSinUbicar, '#6d28d9', 600, 'Lo que había al cierre de ' . $vieneDe['mes_nombre'] . ' y todavía no tiene cuenta anotada: baja a $0 al anotar el saldo de arranque de cada cuenta y caja') !!}
                 @endif
                 <div style="border-top:1px dashed #e2e8f0;margin:.1rem 0"></div>
                 {!! $fila('= Total', $totalPlata, '#0f172a', 800) !!}
