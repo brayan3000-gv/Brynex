@@ -861,14 +861,32 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                 {{-- Tarjeta Anticipos Disponibles --}}
                 <div class="bank-card" onclick="window.location='{{ route('admin.anticipos.informe') }}'" title="Ver informe de anticipos" style="border-top-color:#d97706;">
                     <div style="font-size:.65rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.04em;">🟡 Anticipos</div>
+                    {{-- Con el cierre del mes anterior, arriba va lo que había al
+                         arrancar el mes: es la plata que se debe tener aunque ya se
+                         haya usado en facturas (lo pidió el dueño, 5-nov-2026). --}}
+                    @if($vieneDe)
+                    <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Al iniciar {{ mb_strtolower($mesesEs[$mes]) }}</div>
+
+                    <div style="margin-top:.6rem;">
+                        <div style="font-size:1.25rem;font-weight:900;color:#d97706;line-height:1.1;">{{ $fmt($vieneDe['anticipos']) }}</div>
+                        <div style="font-size:.62rem;color:#94a3b8;margin-top:.15rem;">Lo que se debe tener de los clientes</div>
+                    </div>
+                    @else
                     <div style="font-size:.78rem;font-weight:700;color:#334155;margin-top:.1rem;">Disponibles</div>
 
                     <div style="margin-top:.6rem;">
                         <div style="font-size:1.25rem;font-weight:900;color:#d97706;line-height:1.1;">{{ $fmt($totalAnticiposDisponibles) }}</div>
                         <div style="font-size:.62rem;color:#94a3b8;margin-top:.15rem;">Sin aplicar a factura</div>
                     </div>
+                    @endif
 
                     <div style="margin-top:auto;padding-top:.65rem;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:.28rem;">
+                        @if($vieneDe)
+                        <div style="display:flex;justify-content:space-between;align-items:center;" title="Anticipos sin aplicar a factura hoy (incluye los que entraron este mes)">
+                            <span style="font-size:.65rem;color:#64748b;font-weight:600;">Disponibles hoy</span>
+                            <span style="font-size:.72rem;font-weight:700;color:#d97706;font-family:monospace;">{{ $fmt($totalAnticiposDisponibles) }}</span>
+                        </div>
+                        @endif
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <span style="font-size:.65rem;color:#64748b;font-weight:600;">Anticipos activos</span>
                             <span style="font-size:.72rem;font-weight:700;color:#d97706;font-family:monospace;">{{ $cantAnticiposDisponibles }}</span>
