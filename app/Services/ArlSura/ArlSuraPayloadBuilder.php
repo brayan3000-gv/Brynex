@@ -333,8 +333,13 @@ class ArlSuraPayloadBuilder
             $cliente->direccion_vivienda,
             $rs->dir_formulario ?: $rs->direccion ?: $contrato->aliado?->direccion
         );
-        $municipio = $this->municipio((string) $cliente->departamento_id, (string) $cliente->municipio_id);
-        $geo       = $this->api->estandarizarDireccion($direccion, (string) $cliente->municipio_id);
+        // BryNex guarda el DANE como número: Antioquia es 5 y Medellín 5001.
+        // Sura los quiere con sus ceros (05 / 05001); con «5» su catálogo
+        // trae municipios de otros departamentos y Medellín no aparece.
+        $departamentoDane = str_pad((string) $cliente->departamento_id, 2, '0', STR_PAD_LEFT);
+        $municipioDane    = str_pad((string) $cliente->municipio_id, 5, '0', STR_PAD_LEFT);
+        $municipio = $this->municipio($departamentoDane, $municipioDane);
+        $geo       = $this->api->estandarizarDireccion($direccion, $municipioDane);
 
         return [
             'tipoId'    => self::tipoDocumento($cliente->tipo_doc),
@@ -364,7 +369,7 @@ class ArlSuraPayloadBuilder
             ],
             'departamento' => [
                 'nombreDepartamento' => $municipio['departamento']['nombreProvincia'] ?? null,
-                'cdDepartamento'     => (string) $cliente->departamento_id,
+                'cdDepartamento'     => $departamentoDane,
             ],
             'municipio' => [
                 'poblacion'       => $municipio['poblacion'],
