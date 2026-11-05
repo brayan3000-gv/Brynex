@@ -4124,6 +4124,16 @@ class FacturacionController extends Controller
                 ->whereNotNull('saldo_proximo')
                 ->whereNull('deleted_at')
                 ->sum('saldo_proximo');
+
+            // Igual que facturar(): lo que el aliado ya dio por consumido
+            // (SaldoAjuste) no se ofrece como anticipo. Sin esto el modal
+            // descontaba un saldo que facturar() no reconoce y rechazaba la
+            // factura por "faltan $100" (empresa 20 del aliado 2, nov-2026).
+            // Un ajuste solo baja saldo a favor, nunca crea cartera.
+            if ($saldoNeto > 0) {
+                $saldoNeto = max(0, $saldoNeto
+                    - \App\Models\SaldoAjuste::totalDeEmpresa($aliadoId, (int) $empresaId));
+            }
         } else {
             // Fallback: sumar por contratos individuales si no hay empresa_id
             foreach ($contratoIds as $cId) {
