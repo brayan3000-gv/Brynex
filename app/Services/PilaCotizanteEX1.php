@@ -113,6 +113,23 @@ class PilaCotizanteEX1
     }
 
     /**
+     * El cargo que lleva un mes de `$dias` cotizados, con la regla de
+     * FacturacionController::facturar(): completo desde 30 días y si no
+     * prorrateado a la centena de arriba. Lo usan los cálculos que estiman el
+     * cobro antes de facturar (cobros, WhatsApp, bot, visita), que sin él
+     * anunciaban $9.500 menos de lo que después se facturaba.
+     */
+    public static function otrosParaDias(?int $tipoModalidadId, int $dias): int
+    {
+        if (! self::llevaOtros($tipoModalidadId)) {
+            return 0;
+        }
+        $mes = self::otrosPlanilla();
+
+        return $dias >= 30 ? $mes : (int) (ceil($mes * max(0, $dias) / 30 / 100) * 100);
+    }
+
+    /**
      * Ajusta lo que la rama general ya calculó. Para EPS+ARL y EPS+ARL+CCF no
      * toca nada: la planilla que el operador acepta es la que el motor ya hace.
      */

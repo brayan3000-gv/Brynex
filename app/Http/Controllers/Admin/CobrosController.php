@@ -515,7 +515,8 @@ class CobrosController extends Controller
                 $vPen  = ($plan?->incluye_pension) ? $r100($ibc * $pctPen / 100 * $diasAct / 30) : 0;
                 $vCaja = ($plan?->incluye_caja)   ? $r100($ibc * $pctCaj / 100 * $diasAct / 30) : 0;
                 $vSS   = $vEps + $vArl + $vPen + $vCaja;
-                $totalEstimado = $vSS + (int)($c->administracion ?? 0) + (int)($c->seguro ?? 0) + (int)($c->costo_afiliacion ?? 0);
+                $totalEstimado = $vSS + \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasAct)
+                    + (int)($c->administracion ?? 0) + (int)($c->seguro ?? 0) + (int)($c->costo_afiliacion ?? 0);
             } elseif ($esAfil) {
                 $vEps = $vArl = $vPen = $vCaja = $vSS = 0;
                 $totalEstimado = (int)(($c->costo_afiliacion ?? 0) + ($c->seguro ?? 0));
@@ -575,7 +576,12 @@ class CobrosController extends Controller
                     }
                 }
                 $vSS   = $vEps + $vArl + $vPen + $vCaja;
-                $totalEstimado = $vSS + (int)($c->administracion ?? 0) + (int)($c->seguro ?? 0);
+                // Cargo de planilla de Tipo E - X1: facturar() lo cobra aparte, en
+                // `otros`. Sin él la lista y el WhatsApp de cobro decían $90.300 a
+                // quien se le facturaba $99.800 (nov-2026). Fuera de $vSS: la mora
+                // se calcula sobre la seguridad social.
+                $vOtros = \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasCotizar);
+                $totalEstimado = $vSS + $vOtros + (int)($c->administracion ?? 0) + (int)($c->seguro ?? 0);
             }
 
             $vSsPorContrato[$c->id]   = $vSS;

@@ -83,7 +83,9 @@ class VisitaCobroService
             'periodo' => ReciboVisitaService::periodo($mes, $anio),
             'tipo' => $calc['tipo'],
             'desglose' => [
-                'ss' => (int) $calc['ss'],
+                // El cargo de planilla de la X1 el cliente lo ve como seguridad
+                // social, igual que en el cotizador; ya viene en total_mes.
+                'ss' => (int) $calc['ss'] + (int) ($calc['otros'] ?? 0),
                 'admon' => (int) $calc['admon'],
                 'seguro' => (int) $calc['seguro'],
                 'afiliacion' => (int) $calc['afiliacion'],
