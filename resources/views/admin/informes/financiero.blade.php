@@ -869,15 +869,6 @@ $fmt=fn($v)=>'$ '.number_format($v,0,',','.');
                     </div>
 
                     <div style="margin-top:auto;padding-top:.65rem;border-top:1px dashed #fde68a;display:flex;flex-direction:column;gap:.28rem;">
-                        {{-- Con el cierre del mes anterior, cuánto había al arrancar el
-                             mes: lo que falta ya se usó en facturas (SS por pagar y
-                             administración). Lo pidió el dueño, 5-nov-2026. --}}
-                        @if($vieneDe)
-                        <div style="display:flex;justify-content:space-between;align-items:center;" title="Anticipos sin aplicar al cierre de {{ $vieneDe['mes_nombre'] }}; lo que ya no está se usó en facturas de este mes">
-                            <span style="font-size:.65rem;color:#64748b;font-weight:600;">Al iniciar {{ mb_strtolower($mesesEs[$mes]) }}</span>
-                            <span style="font-size:.72rem;font-weight:700;color:#d97706;font-family:monospace;">{{ $fmt($vieneDe['anticipos']) }}</span>
-                        </div>
-                        @endif
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <span style="font-size:.65rem;color:#64748b;font-weight:600;">Anticipos activos</span>
                             <span style="font-size:.72rem;font-weight:700;color:#d97706;font-family:monospace;">{{ $cantAnticiposDisponibles }}</span>

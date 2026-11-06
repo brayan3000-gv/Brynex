@@ -2075,7 +2075,6 @@ class InformeController extends Controller
             'mes_nombre'           => $mesAnt,
             'detalle'              => $detalle,
             'aparte'               => $debioHaber - $anticipos,
-            'anticipos'            => $anticipos,
             'debio_haber'          => $debioHaber,
             'ubicado'              => $ubicado,
             'sin_ubicar'           => $sinUbicar,
