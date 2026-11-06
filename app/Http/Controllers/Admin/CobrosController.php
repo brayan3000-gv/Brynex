@@ -473,6 +473,22 @@ class CobrosController extends Controller
         $arlPorNit = \App\Models\Arl::whereIn('nit', $arlNitsFallback)
             ->get()->keyBy('nit');
 
+        // IVA por cédula en 2 queries (no aplicaContrato() por contrato, que es N+1).
+        $ivaPorCedula = \App\Services\IvaService::mapaPorCedulas($aliadoId, $contratos->pluck('cedula'));
+        // Administración completa del mes: la del aliado + la del asesor, más el IVA
+        // sobre ellas y la afiliación, como lo cobra facturar(). La lista y el
+        // WhatsApp de cobro dejaban por fuera las dos últimas (nov-2026: 508
+        // contratos vigentes con admon del asesor anunciaban menos de lo facturado).
+        $cargosAdmon = function ($c, bool $conAdmon, int $afiliacion) use ($ivaPorCedula): array {
+            $admon  = $conAdmon ? (int) ($c->administracion ?? 0) : 0;
+            $asesor = $conAdmon ? (int) ($c->admon_asesor ?? 0) : 0;
+            $iva = \App\Services\IvaService::deFactura(
+                (bool) ($ivaPorCedula[$c->cedula] ?? false), $admon, $asesor, $afiliacion
+            );
+
+            return ['admon' => $admon + $asesor, 'iva' => $iva, 'total' => $admon + $asesor + $afiliacion + $iva];
+        };
+
         // Primera pasada: calcular vSS y flags por contrato sin tocar BD
         $vSsPorContrato = [];
         $flagsPorContrato = []; // [esAfil, esIndActPrimerMes, totalEstimado, ...]
@@ -500,6 +516,7 @@ class CobrosController extends Controller
             $esIndep = $c->tipoModalidad?->esIndependiente() ?? false;
             $ibc     = (float)($c->salario ?? 0);
             $plan    = $c->plan;
+            $vOtros = $vAdmon = $vIva = 0;
 
             if ($esSoloSeguro) {
                 $vEps = $vArl = $vPen = $vCaja = $vSS = 0;
@@ -515,11 +532,15 @@ class CobrosController extends Controller
                 $vPen  = ($plan?->incluye_pension) ? $r100($ibc * $pctPen / 100 * $diasAct / 30) : 0;
                 $vCaja = ($plan?->incluye_caja)   ? $r100($ibc * $pctCaj / 100 * $diasAct / 30) : 0;
                 $vSS   = $vEps + $vArl + $vPen + $vCaja;
-                $totalEstimado = $vSS + \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasAct)
-                    + (int)($c->administracion ?? 0) + (int)($c->seguro ?? 0) + (int)($c->costo_afiliacion ?? 0);
+                $vOtros = \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasAct);
+                $cargos = $cargosAdmon($c, true, (int)($c->costo_afiliacion ?? 0));
+                [$vAdmon, $vIva] = [$cargos['admon'], $cargos['iva']];
+                $totalEstimado = $vSS + $vOtros + $cargos['total'] + (int)($c->seguro ?? 0);
             } elseif ($esAfil) {
                 $vEps = $vArl = $vPen = $vCaja = $vSS = 0;
-                $totalEstimado = (int)(($c->costo_afiliacion ?? 0) + ($c->seguro ?? 0));
+                $cargos = $cargosAdmon($c, false, (int)($c->costo_afiliacion ?? 0));
+                $vIva = $cargos['iva'];
+                $totalEstimado = $cargos['total'] + (int)($c->seguro ?? 0);
             } elseif ($esArl) {
                 // ARL fuera de su mes de ARL → cobro es 0, no paga planilla
                 $vEps = $vArl = $vPen = $vCaja = $vSS = 0;
@@ -581,13 +602,16 @@ class CobrosController extends Controller
                 // quien se le facturaba $99.800 (nov-2026). Fuera de $vSS: la mora
                 // se calcula sobre la seguridad social.
                 $vOtros = \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasCotizar);
-                $totalEstimado = $vSS + $vOtros + (int)($c->administracion ?? 0) + (int)($c->seguro ?? 0);
+                $cargos = $cargosAdmon($c, true, 0);
+                [$vAdmon, $vIva] = [$cargos['admon'], $cargos['iva']];
+                $totalEstimado = $vSS + $vOtros + $cargos['total'] + (int)($c->seguro ?? 0);
             }
 
             $vSsPorContrato[$c->id]   = $vSS;
             $flagsPorContrato[$c->id] = compact(
                 'esAfil', 'esIndActPrimerMes', 'esIndep',
-                'vEps', 'vArl', 'vPen', 'vCaja', 'vSS', 'totalEstimado'
+                'vEps', 'vArl', 'vPen', 'vCaja', 'vSS', 'totalEstimado',
+                'vOtros', 'vAdmon', 'vIva'
             );
         }
 
@@ -903,6 +927,10 @@ class CobrosController extends Controller
             $c->v_pen            = $vPen;
             $c->v_caja           = $vCaja;
             $c->v_ss             = $vSS ?? 0;
+            // Lo que la cuenta de cobro desglosa además de la SS (ver $cargosAdmon).
+            $c->v_otros          = $flags['vOtros'] ?? 0;
+            $c->v_admon_total    = $flags['vAdmon'] ?? 0;
+            $c->v_iva            = $flags['vIva'] ?? 0;
             $c->total_estimado   = $totalEstimado;
             $c->mora_estimada    = $moraEst;
             $c->mora_dias        = $morasDiasPorContrato[$c->id] ?? 0;

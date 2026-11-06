@@ -935,7 +935,9 @@ $rowClass = $esRetiro ? 'fila-retiro' : ($esRetiroPosterior ? 'fila-retpost' : (
             data-v-arl="{{ $c->v_arl ?? 0 }}"
             data-v-afp="{{ $c->v_pen ?? 0 }}"
             data-v-caja="{{ $c->v_caja ?? 0 }}"
-            data-v-admon="{{ (int)($c->administracion ?? 0) }}"
+            data-v-admon="{{ (int)($c->v_admon_total ?? $c->administracion ?? 0) }}"
+            data-v-otros="{{ (int)($c->v_otros ?? 0) }}"
+            data-v-iva="{{ (int)($c->v_iva ?? 0) }}"
             data-v-total="{{ $c->total_estimado ?? 0 }}"
             data-mora-val="{{ $c->mora_estimada ?? 0 }}"
             data-mora-dias="{{ $c->mora_dias ?? 0 }}"
@@ -1359,6 +1361,8 @@ document.addEventListener('click', function(e) {
         vAfp:      parseInt(btn.dataset.vAfp)  || 0,
         vCaja:     parseInt(btn.dataset.vCaja) || 0,
         vAdmon:    parseInt(btn.dataset.vAdmon)|| 0,
+        vOtros:    parseInt(btn.dataset.vOtros)|| 0,
+        vIva:      parseInt(btn.dataset.vIva)  || 0,
         vTotal:    parseInt(btn.dataset.vTotal)|| 0,
         moraVal:   parseInt(btn.dataset.moraVal)  || 0,
         moraDias:  parseInt(btn.dataset.moraDias) || 0,
@@ -1515,7 +1519,9 @@ function ccRenderizar() {
                 ${card('🦺','#fffbeb','ARL – Riesgos',    d.arl,  d.nArl,d.vArl,  true)}
                 ${card('🏦','#f0fdf4','AFP – Pensión',    d.afp,  null,  d.vAfp,  true)}
                 ${card('🏛️','#eff6ff','Caja – Bienestar', d.caja, null,  d.vCaja, true)}
+                ${d.vOtros > 0 ? card('🧾','#fff7ed','Otros – Planilla', 'Planilla',null,d.vOtros,true) : ''}
                 ${d.vAdmon > 0 ? card('⚙️','#f5f3ff','Administración',   'Administración',null,d.vAdmon,true) : ''}
+                ${d.vIva > 0 ? card('🧮','#f8fafc','IVA',                'IVA',null,d.vIva,true) : ''}
             </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;align-items:stretch;">
