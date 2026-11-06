@@ -271,8 +271,10 @@ $meses = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','
                     @if($varios)
                         <button type="button" class="btn-sm btn-ver" onclick="togglePeriodos('{{ $gid }}', event)">📅 Períodos</button>
                         {{-- Una sola consignación para todos sus meses: se reparte del más antiguo al más nuevo. --}}
+                        {{-- Acepta un valor menor que el total: se llamaba «Pagar todo» y no se veía que sirve para abonar. --}}
                         <button type="button" class="btn-sm btn-abono"
-                                onclick="abrirAbonar({{ $f1->id }}, {{ $c->saldo }}, @js($c->nombre), @js(['ids' => $c->facturas->pluck('id')->values(), 'periodos' => $c->facturas->map(fn ($f) => $meses[$f->mes] . ' ' . $f->anio)->values()]))">💰 Pagar todo</button>
+                                title="Un solo comprobante para todo o para una parte: se reparte del período más antiguo al más nuevo"
+                                onclick="abrirAbonar({{ $f1->id }}, {{ $c->saldo }}, @js($c->nombre), @js(['ids' => $c->facturas->pluck('id')->values(), 'periodos' => $c->facturas->map(fn ($f) => $meses[$f->mes] . ' ' . $f->anio)->values()]))">💰 Pagar / abonar varios</button>
                     @else
                         <a href="{{ route('admin.prestamos.show', $f1->id) }}" class="btn-sm btn-ver">👁 Ver</a>
                         <button onclick="abrirAbonar({{ $f1->id }}, {{ $f1->saldo_pendiente_prestamo }}, @js($c->nombre))"

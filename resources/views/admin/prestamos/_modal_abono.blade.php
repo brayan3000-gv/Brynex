@@ -205,7 +205,7 @@
         $('ab-varios').classList.toggle('on', !!variosIds);
         $('ab-varios').innerHTML = variosIds
             ? '📅 <b>Pago de ' + variosIds.length + ' períodos:</b> ' + (varios.periodos || []).join(', ')
-              + '.<br>Se reparte del más antiguo al más nuevo y queda un abono en cada uno, con un solo recibo.'
+              + '.<br>Puedes poner menos del total: se reparte del más antiguo al más nuevo y queda un abono en cada uno, con un solo recibo.'
             : '';
         $('ab-id').value = id;
         $('ab-nombre').textContent = nombre ? '👤 ' + nombre : 'Préstamo #' + id;
