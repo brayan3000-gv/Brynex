@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Aliado;
 use App\Models\RazonSocial;
 use App\Models\Tarea;
 use App\Services\ArlSura\ArlConciliacionService;
@@ -73,6 +74,7 @@ class ArlConciliar extends Command
             }
 
             $vistas = [];
+            $motivos = [];
             $nuevas = 0;
 
             // Los que rotaron a otra empresa del mismo cliente van juntos: son
@@ -93,13 +95,37 @@ class ArlConciliar extends Command
                     $caso['contrato_id'] ?? null);
             }
 
-            foreach ($r['faltan'] as $caso) {
+            // Póliza vacía en Sura con gente vigente en BryNex: no son N personas
+            // por afiliar, es la póliza la que hay que revisar (se canceló, se
+            // retiró a todos o la clave ya no la ve). Pasó con WORK AT HOME el
+            // 30-sep-2026: 26 tareas de «afiliar» a gente que Sura retiró ese día.
+            $polizaVacia = $r['en_sura'] === 0 && $r['en_brynex'] > 0;
+
+            if ($polizaVacia) {
+                $nuevas += $this->abrirPolizaVacia($tareas, $empresa, $r['faltan'], $vistas);
+
+                foreach ($r['faltan'] as $caso) {
+                    $motivos[$this->llave($empresa->nit, $caso['documento'])] =
+                        'ARL Sura muestra la póliza '.$empresa->arl_poliza.' vacía: se revisa en una sola tarea de la póliza.';
+                }
+            }
+
+            foreach ($polizaVacia ? [] : $r['faltan'] as $caso) {
                 // A una afiliación recién hecha hay que darle tiempo de llegar
                 // al portal: sin esto, todo el que ingresa esta semana sale como
                 // si estuviera sin cobertura.
                 $desde = $caso['desde'] ? Carbon::createFromFormat('d/m/Y', $caso['desde']) : null;
 
                 if ($desde && $desde->greaterThan(now()->subDays(self::DIAS_DE_GRACIA))) {
+                    continue;
+                }
+
+                // La afiliación ya está en la cola de radicados: quien la
+                // tiene allá es quien la hace, y una tarea más solo la duplica.
+                if ($caso['en_tramite'] ?? false) {
+                    $motivos[$this->llave($empresa->nit, $caso['documento'])] =
+                        'La afiliación a la ARL sigue en la cola de radicados: se gestiona desde allá.';
+
                     continue;
                 }
 
@@ -112,7 +138,7 @@ class ArlConciliar extends Command
                     $caso['contrato_id'] ?? null);
             }
 
-            $cerradas = $this->cerrarResueltas($tareas, $empresa->nit, $vistas);
+            $cerradas = $this->cerrarResueltas($tareas, $empresa->nit, $vistas, $motivos);
 
             $this->info("  {$r['en_sura']} en Sura · {$r['en_brynex']} vigentes en BryNex · "
                 .count($r['sobran']).' sobra(n) · '.count($r['faltan']).' falta(n) · '
@@ -193,6 +219,51 @@ class ArlConciliar extends Command
         ]) ? 1 : 0;
     }
 
+    /**
+     * Una sola tarea cuando Sura no muestra a nadie en la póliza.
+     *
+     * Queda en el aliado de la póliza: es un asunto de la empresa con la ARL,
+     * no de cada trabajador. La lista dice de qué aliado es cada uno.
+     */
+    private function abrirPolizaVacia(TareaAutomaticaService $tareas, $empresa, array $faltan, array &$vistas): int
+    {
+        $llave = self::PREFIJO.":{$empresa->nit}:poliza-vacia";
+        $vistas[] = $llave;
+
+        $lista = collect($faltan)
+            ->map(fn ($c) => '· '.$c['documento'].' '.$c['nombre'].($c['aliado'] ? ' ('.$c['aliado'].')' : ''))
+            ->implode("\n");
+
+        $texto = 'Revisar la póliza '.$empresa->arl_poliza.' en ARL Sura: aparece sin afiliados y en BryNex hay '
+            .count($faltan).' contrato(s) vigente(s).';
+        $observacion = "El portal de ARL Sura no muestra afiliados ni centros de trabajo en la póliza de {$empresa->razon_social}. "
+            .'Puede que la póliza se haya cancelado, que hayan retirado a todos o que la clave ya no la vea. '
+            ."Mientras tanto, estos contratos están vigentes en BryNex:\n\n".$lista;
+
+        if ($ya = $tareas->activaPorLlave((int) $empresa->aliado_id, $llave)) {
+            if (! $this->option('simular') && trim((string) $ya->observacion) !== trim($observacion)) {
+                $tareas->anotar($ya, '🤖 '.$observacion, 'nota');
+            }
+
+            return 0;
+        }
+
+        if ($this->option('simular') || ! $faltan) {
+            return $faltan ? 1 : 0;
+        }
+
+        return $tareas->abrir([
+            'aliado_id' => (int) $empresa->aliado_id,
+            'tipo' => 'otros',
+            'cedula' => $faltan[0]['documento'],
+            'razon_social_id' => $empresa->id,
+            'entidad' => 'ARL SURA',
+            'tarea' => $texto,
+            'observacion' => $observacion,
+            'llave_auto' => $llave,
+        ]) ? 1 : 0;
+    }
+
     /** Deja la sesión del portal lista antes de consultar. */
     private function asegurarSesion($empresa): void
     {
@@ -207,14 +278,26 @@ class ArlConciliar extends Command
         sleep(3);
     }
 
-    /** Abre la tarea de ese desfase, si no estaba ya. */
+    /**
+     * Abre la tarea de ese desfase, si no estaba ya.
+     *
+     * Va al aliado dueño del contrato, no al de la póliza: las razones sociales
+     * se comparten, así que en la póliza de BRYGAR hay trabajadores de Fecop,
+     * INTEGRA y otros. Abierta en BRYGAR, la tarea quedaba sin contrato ni
+     * nombre y nadie allá encontraba a la persona. Solo si no hay contrato
+     * (alguien que está en Sura y nunca estuvo en BryNex) queda en el aliado
+     * de la póliza.
+     */
     private function abrir(TareaAutomaticaService $tareas, $empresa, array $caso, array &$vistas, string $texto, string $observacion, ?int $contratoId): int
     {
         $documento = ltrim(preg_replace('/\D/', '', (string) $caso['documento']), '0');
-        $llave = self::PREFIJO.":{$empresa->nit}:{$documento}";
+        $llave = $this->llave($empresa->nit, $documento);
         $vistas[] = $llave;
+        $aliadoId = (int) (($contratoId ? ($caso['aliado_id'] ?? null) : null) ?: $empresa->aliado_id);
 
-        if ($tareas->activaPorLlave((int) $empresa->aliado_id, $llave)) {
+        $this->cerrarEnOtroAliado($tareas, $llave, $aliadoId, $caso['aliado'] ?? null);
+
+        if ($tareas->activaPorLlave($aliadoId, $llave)) {
             return 0;
         }
 
@@ -223,11 +306,13 @@ class ArlConciliar extends Command
         }
 
         return $tareas->abrir([
-            'aliado_id' => (int) $empresa->aliado_id,
+            'aliado_id' => $aliadoId,
             'tipo' => 'otros',
             'cedula' => $documento,
             'contrato_id' => $contratoId,
-            'razon_social_id' => $empresa->id,
+            // Con contrato, la razón social es la de ese contrato (la copia de
+            // la empresa en su aliado); sin él, la de la póliza.
+            'razon_social_id' => $contratoId ? null : $empresa->id,
             'entidad' => 'ARL SURA',
             'tarea' => $texto,
             'observacion' => $observacion,
@@ -235,7 +320,38 @@ class ArlConciliar extends Command
         ]) ? 1 : 0;
     }
 
-    private function cerrarResueltas(TareaAutomaticaService $tareas, string $nit, array $vistas): int
+    /**
+     * Cierra la tarea de ese mismo hallazgo que quedó abierta en otro aliado.
+     *
+     * Hasta nov-2026 todas se abrían en BRYGAR, también las de gente de otros
+     * aliados; así se pasan solas a donde corresponden en la siguiente corrida.
+     */
+    private function cerrarEnOtroAliado(TareaAutomaticaService $tareas, string $llave, int $aliadoId, ?string $aliadoNombre): void
+    {
+        if ($this->option('simular')) {
+            return;
+        }
+
+        $nombre = $aliadoNombre ?: (Aliado::whereKey($aliadoId)->value('nombre') ?? "aliado {$aliadoId}");
+
+        foreach (Tarea::where('llave_auto', $llave)->where('aliado_id', '<>', $aliadoId)
+            ->whereIn('estado', Tarea::ESTADOS_ACTIVOS)->get() as $tarea) {
+            $tareas->cerrar($tarea, "Esta persona es de {$nombre}: la tarea se pasó a ese aliado.");
+        }
+    }
+
+    private function llave(string $nit, string $documento): string
+    {
+        return self::PREFIJO.":{$nit}:".ltrim(preg_replace('/\D/', '', $documento), '0');
+    }
+
+    /**
+     * Cierra las tareas cuyo hallazgo ya no aparece.
+     *
+     * @param  array<string, string>  $motivos  por llave, por qué se cierra cuando no es
+     *                                          que ya coincidan (p. ej., sigue en radicados)
+     */
+    private function cerrarResueltas(TareaAutomaticaService $tareas, string $nit, array $vistas, array $motivos = []): int
     {
         $cerradas = 0;
 
@@ -251,7 +367,12 @@ class ArlConciliar extends Command
                 continue;
             }
 
-            if ($tareas->cerrar($tarea, 'BryNex y ARL Sura ya coinciden en esta persona el '.now()->format('d/m/Y').'.')) {
+            // Sin motivo propio no se afirma que ya coincidan: también desaparece
+            // el hallazgo cuando el contrato era del aliado de pruebas.
+            $motivo = $motivos[$tarea->llave_auto]
+                ?? 'La revisión del '.now()->format('d/m/Y').' ya no encuentra este desfase entre BryNex y ARL Sura.';
+
+            if ($tareas->cerrar($tarea, $motivo)) {
                 $cerradas++;
             }
         }

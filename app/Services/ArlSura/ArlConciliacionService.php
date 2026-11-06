@@ -5,6 +5,7 @@ namespace App\Services\ArlSura;
 use App\Models\ArlCentroTrabajo;
 use App\Models\Cliente;
 use App\Models\Contrato;
+use App\Models\Radicado;
 use App\Models\RazonSocial;
 use Illuminate\Support\Collection;
 
@@ -27,6 +28,14 @@ class ArlConciliacionService
 
     /** Tope de seguridad: ninguna póliza del aliado se acerca, pero evita un bucle infinito. */
     private const MAXIMO = 2000;
+
+    /**
+     * El aliado BryNex es donde se prueba: tiene sus propias copias de las
+     * empresas, con el mismo NIT, llenas de contratos y gente falsa. Si entra
+     * al cruce, cada persona inventada sale como «sin cobertura» y abre una
+     * tarea real de afiliar a alguien que no existe.
+     */
+    private const ALIADO_PRUEBAS = 1;
 
     public function __construct(private ArlSuraApiService $api) {}
 
@@ -73,7 +82,8 @@ class ArlConciliacionService
     }
 
     /**
-     * Los contratos vigentes de esa empresa en BryNex, de todos los aliados.
+     * Los contratos vigentes de esa empresa en BryNex, de todos los aliados
+     * menos el de pruebas.
      *
      * Se dejan fuera los planes sin ARL: un contrato de solo salud no tiene por
      * qué aparecer en el portal, y contarlo como faltante sería ruido.
@@ -84,6 +94,7 @@ class ArlConciliacionService
 
         return Contrato::whereIn('razon_social_id', $razones)
             ->where('estado', 'vigente')
+            ->where('aliado_id', '<>', self::ALIADO_PRUEBAS)
             ->with(['plan:id,nombre,incluye_arl', 'aliado:id,nombre', 'razonSocial:id,razon_social,nit'])
             ->get()
             ->filter(fn ($c) => $c->plan?->incluye_arl)
@@ -109,6 +120,7 @@ class ArlConciliacionService
             // POR QUÉ no cuadra —está retirada, o está vigente pero en otra
             // razón social, que es un desfase distinto y se resuelve distinto—.
             $contrato = Contrato::where('cedula', $doc)
+                ->where('aliado_id', '<>', self::ALIADO_PRUEBAS)
                 ->with(['razonSocial:id,razon_social,nit', 'aliado:id,nombre'])
                 ->orderByRaw("CASE WHEN estado = 'vigente' THEN 0 ELSE 1 END")
                 ->latest('id')
@@ -128,6 +140,7 @@ class ArlConciliacionService
                 },
                 'otra_empresa' => $mismaEmpresa ? null : $contrato?->razonSocial?->razon_social,
                 'contrato_id'  => $contrato?->id,
+                'aliado_id'    => $contrato ? (int) $contrato->aliado_id : null,
                 'aliado'       => $contrato?->aliado?->nombre,
             ];
         })->values()->all();
@@ -138,11 +151,20 @@ class ArlConciliacionService
             $c       = $brynex[$doc];
             $cliente = Cliente::where('cedula', $doc)->where('aliado_id', $c->aliado_id)->first();
 
+            // Si la afiliación a la ARL sigue en la cola de radicados, ya hay
+            // quien la esté haciendo: avisar aparte solo la duplica.
+            $radicado = Radicado::where('contrato_id', $c->id)
+                ->where('tipo', Radicado::TIPO_ARL)
+                ->latest('id')
+                ->value('estado');
+
             return [
                 'documento'   => $doc,
                 'nombre'      => trim(($cliente?->primer_nombre ?? '').' '.($cliente?->primer_apellido ?? '')) ?: '(sin cliente)',
                 'contrato_id' => $c->id,
+                'aliado_id'   => (int) $c->aliado_id,
                 'aliado'      => $c->aliado?->nombre,
+                'en_tramite'  => in_array($radicado, [Radicado::ESTADO_PENDIENTE, Radicado::ESTADO_TRAMITE], true),
                 'plan'        => $c->plan?->nombre,
                 'riesgo'      => $c->n_arl,
                 'desde'       => $c->fecha_ingreso?->format('d/m/Y'),
