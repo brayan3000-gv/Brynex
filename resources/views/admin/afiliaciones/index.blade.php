@@ -978,6 +978,12 @@ function sortClass($col, $currSort, $currDir) {
                     onclick="cajaComfandiDesdeRadicado()">
                     🏢 Afiliar a Comfandi
                 </button>
+                {{-- Datos en vivo de Comfandi por API (trabajador + beneficiarios + subsidios), sin extensión --}}
+                <button id="btnDatosComfandiApi" type="button"
+                    style="display:none;align-items:center;gap:0.35rem;padding:0.3rem 0.85rem;background:linear-gradient(135deg,#0e7490,#0891b2);color:#fff;border:none;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(8,145,178,0.3);"
+                    onclick="datosComfandiApi(this._ctx)">
+                    📊 Datos Comfandi (API)
+                </button>
                 {{-- Portal Boxalud (Emssanar): Ingreso de afiliación con la extensión --}}
                 <button id="btnBoxalud" type="button"
                     style="display:none;align-items:center;gap:0.35rem;padding:0.3rem 0.85rem;background:linear-gradient(135deg,#4d7c0f,#65a30d);color:#fff;border:none;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(101,163,13,0.3);"
@@ -1975,6 +1981,12 @@ function abrirModalRadicado(radId, radData, ctx = {}, contratoId = null, tieneFo
     btnCajaCfd.style.display = (PUEDE_AUTOMATIZAR && esComfandi && radData.estado !== 'ok') ? 'inline-flex' : 'none';
     btnCajaCfd._contratoId = contratoId || ctx.id || null;
 
+    // Datos en vivo de Comfandi por API: disponible para cualquier caja Comfandi
+    // (afiliado o no), para ver trabajador + beneficiarios + subsidios.
+    const btnDatosCfd = document.getElementById('btnDatosComfandiApi');
+    btnDatosCfd.style.display = (PUEDE_AUTOMATIZAR && esComfandi) ? 'inline-flex' : 'none';
+    btnDatosCfd._ctx = { ...ctx, id: contratoId || ctx.id || null };
+
     // Portal Boxalud (Emssanar), mientras no esté en OK. El correo queda como plan B dentro del modal.
     const btnBox = document.getElementById('btnBoxalud');
     const boxEps = (radData.tipo === 'eps') ? BOXALUD_EPS.find(c => c.patron.test(ctx.eps || '')) : null;
@@ -2174,6 +2186,54 @@ function cajaComfandiDesdeRadicado() {
     if (!btn._contratoId) { alert('No se pudo identificar el contrato.'); return; }
     cerrarModal('modalRadicado');
     abrirCajaComfandi(btn._contratoId);
+}
+
+// Datos en vivo de Comfandi por API (sin extensión): trabajador + beneficiarios
+// + subsidios de los últimos 12 meses, traídos por el gestor único.
+async function datosComfandiApi(ctx) {
+    const contratoId = ctx && ctx.id;
+    if (!contratoId) { alert('No se pudo identificar el contrato.'); return; }
+    const url = @json(route('admin.afiliaciones.caja-comfandi.datos-api', ['contrato' => '__ID__'])).replace('__ID__', contratoId);
+
+    let m = document.getElementById('modalDatosCfd');
+    if (!m) {
+        m = document.createElement('div'); m.id = 'modalDatosCfd';
+        m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        m.onclick = (e) => { if (e.target === m) m.style.display = 'none'; };
+        document.body.appendChild(m);
+    }
+    const cerrar = `<button onclick="document.getElementById('modalDatosCfd').style.display='none'" style="border:none;background:none;font-size:1.2rem;cursor:pointer;color:#94a3b8;">&times;</button>`;
+    m.style.display = 'flex';
+    m.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:680px;width:100%;padding:1.4rem;text-align:center;color:#0891b2;">⏳ Consultando Comfandi por API… (puede tardar 1–2 min)</div>`;
+
+    try {
+        const r = await fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '' } });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.ok) throw new Error(d.error || 'No se pudo consultar Comfandi.');
+
+        const t = d.titular || {}, p = t.DatosPersona || {};
+        const benef = (d.beneficiarios || []).map(b => {
+            const bp = b.DatosPersona || {};
+            return `<li>${[bp.PrimerNombre, bp.PrimerApellido, bp.SegundoApellido].filter(Boolean).join(' ')} — ${b.Parentesco || ''} <span style="color:#94a3b8;">(${bp.NumeroDocumento || ''})</span></li>`;
+        }).join('') || '<li style="color:#94a3b8;">Sin beneficiarios</li>';
+        const etiqueta = { BLOQUEO: '🔴 Bloqueo', PAGO: '🟢 Pago', RETIRO: '💵 Retiro' };
+        const subs = (d.subsidios || []).map(s => {
+            const b = (s.beneficiaries || [{}])[0] || {};
+            return `<tr><td style="padding:.2rem .4rem;">${etiqueta[s.movementType] || s.movementType || ''}</td><td style="padding:.2rem .4rem;">${s.period || ''}</td><td style="padding:.2rem .4rem;">${s.date || ''}</td><td style="padding:.2rem .4rem;">$${Number(s.amount || 0).toLocaleString('es-CO')}</td><td style="padding:.2rem .4rem;">${s.blockReason || b.name || ''}</td></tr>`;
+        }).join('') || '<tr><td colspan="5" style="color:#94a3b8;padding:.4rem;">Sin movimientos</td></tr>';
+
+        m.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:700px;width:100%;max-height:85vh;overflow:auto;padding:1.2rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;"><h3 style="margin:0;color:#0e7490;font-size:1rem;">📊 Comfandi (API)</h3>${cerrar}</div>
+            <div style="font-weight:800;color:#0f172a;">${[p.PrimerNombre, p.SegundoNombre, p.PrimerApellido, p.SegundoApellido].filter(Boolean).join(' ') || '—'}</div>
+            <div style="font-size:.78rem;color:#475569;">CC ${p.NumeroDocumento || ''} · Ingreso ${t.FechaIngreso || '—'} · Afiliación ${t.FechaAfiliacion || '—'}</div>
+            <h4 style="margin:.9rem 0 .3rem;font-size:.85rem;color:#334155;">Beneficiarios</h4>
+            <ul style="margin:0;padding-left:1.1rem;font-size:.82rem;">${benef}</ul>
+            <h4 style="margin:.9rem 0 .3rem;font-size:.85rem;color:#334155;">Subsidios (últimos 12 meses)</h4>
+            <table style="width:100%;border-collapse:collapse;font-size:.78rem;"><thead><tr style="text-align:left;color:#64748b;border-bottom:1px solid #e2e8f0;"><th style="padding:.2rem .4rem;">Tipo</th><th style="padding:.2rem .4rem;">Periodo</th><th style="padding:.2rem .4rem;">Fecha</th><th style="padding:.2rem .4rem;">Monto</th><th style="padding:.2rem .4rem;">Detalle</th></tr></thead><tbody>${subs}</tbody></table>
+        </div>`;
+    } catch (e) {
+        m.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;padding:1.2rem;"><div style="color:#b91c1c;">❌ ${e.message}</div><div style="text-align:right;margin-top:.8rem;"><button onclick="document.getElementById('modalDatosCfd').style.display='none'" style="padding:.4rem 1rem;border:1px solid #cbd5e1;border-radius:7px;background:#fff;cursor:pointer;">Cerrar</button></div></div>`;
+    }
 }
 
 function boxaludDesdeRadicado() {

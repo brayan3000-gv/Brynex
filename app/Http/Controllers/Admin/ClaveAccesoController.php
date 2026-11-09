@@ -89,6 +89,7 @@ class ClaveAccesoController extends Controller
             // Se conserva si hay o no clave guardada (el usuario necesita saber
             // que existe para pedirla), pero no su contenido.
             $c->contrasena = $c->contrasena ? '__oculta__' : null;
+            $c->totp_secret = $c->totp_secret ? '__oculta__' : null;
         });
     }
 
@@ -287,6 +288,7 @@ class ClaveAccesoController extends Controller
             'entidad'          => 'required|string|max:150',
             'usuario'          => 'nullable|string|max:150',
             'contrasena'       => 'nullable|string|max:200',
+            'totp_secret'      => 'nullable|string|max:120',
             'link_acceso'      => 'nullable|string|max:350',
             'correo_entidad'   => 'nullable|string|max:150',
             'observacion'      => 'nullable|string|max:300',
@@ -299,7 +301,7 @@ class ClaveAccesoController extends Controller
 
     private function limpiarNulos(array $data): array
     {
-        foreach (['cedula', 'razon_social_id', 'empresa_id', 'usuario', 'contrasena', 'link_acceso', 'correo_entidad', 'observacion'] as $campo) {
+        foreach (['cedula', 'razon_social_id', 'empresa_id', 'usuario', 'contrasena', 'totp_secret', 'link_acceso', 'correo_entidad', 'observacion'] as $campo) {
             if (isset($data[$campo]) && $data[$campo] === '') {
                 $data[$campo] = null;
             }

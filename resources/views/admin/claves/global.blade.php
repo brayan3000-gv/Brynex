@@ -638,6 +638,13 @@
                                 title="Mostrar/Ocultar">👁</button>
                     </div>
                 </div>
+                {{-- Secreto 2FA (TOTP): solo para portales con Authenticator, como
+                     el gestor único de Comfandi. La automatización lo usa para
+                     generar el código de 6 dígitos. --}}
+                <div>
+                    <label class="ca-lbl">Secreto 2FA (Authenticator)</label>
+                    <input type="text" id="glb-ca-f-totp" class="ca-inp" placeholder="Solo si el portal pide Authenticator">
+                </div>
                 {{-- Link --}}
                 <div style="grid-column:span 2;">
                     <label class="ca-lbl">Link / URL de acceso</label>
@@ -721,6 +728,7 @@ function abrirModalClaveGlobal(clave = null) {
         document.getElementById('glb-ca-f-entidad').value           = clave.entidad || ''; EntidadClave.refrescar('glb-ca-f-entidad');
         document.getElementById('glb-ca-f-usuario').value           = clave.usuario || '';
         document.getElementById('glb-ca-f-contrasena').value        = clave.contrasena || '';
+        document.getElementById('glb-ca-f-totp').value              = clave.totp_secret || '';
         document.getElementById('glb-ca-f-link').value              = clave.link_acceso || '';
         document.getElementById('glb-ca-f-correo').value            = clave.correo_entidad || '';
         document.getElementById('glb-ca-f-obs').value               = clave.observacion || '';
@@ -733,6 +741,7 @@ function abrirModalClaveGlobal(clave = null) {
         document.getElementById('glb-ca-f-entidad').value          = ''; EntidadClave.refrescar('glb-ca-f-entidad');
         document.getElementById('glb-ca-f-usuario').value          = '';
         document.getElementById('glb-ca-f-contrasena').value       = '';
+        document.getElementById('glb-ca-f-totp').value             = '';
         document.getElementById('glb-ca-f-link').value             = '';
         document.getElementById('glb-ca-f-correo').value           = '';
         document.getElementById('glb-ca-f-obs').value              = '';
@@ -761,6 +770,7 @@ function guardarClaveGlobal() {
         entidad:         entidad,
         usuario:         document.getElementById('glb-ca-f-usuario').value.trim(),
         contrasena:      document.getElementById('glb-ca-f-contrasena').value,
+        totp_secret:     document.getElementById('glb-ca-f-totp').value.trim(),
         link_acceso:     document.getElementById('glb-ca-f-link').value.trim(),
         correo_entidad:  document.getElementById('glb-ca-f-correo').value.trim(),
         observacion:     document.getElementById('glb-ca-f-obs').value.trim(),

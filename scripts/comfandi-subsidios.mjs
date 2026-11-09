@@ -26,11 +26,28 @@
  * Imprime en stdout {ok, nit, empresa, movimientos[], revisados[], errores[]}.
  * Las credenciales entran por stdin y nunca se escriben en el log.
  */
-import { rmSync } from 'node:fs';
+import { rmSync, mkdirSync } from 'node:fs';
+import { createHmac } from 'node:crypto';
 import puppeteer from 'puppeteer-core';
 
 const HOST = 'https://afiliaciones.sucursalcomfandi.com';
 const BASE = `${HOST}/sakaar`;
+const RIA = 'https://ria.sucursalcomfandi.com';
+
+/**
+ * Código del Authenticator (TOTP) que Comfandi ahora obliga en el login. Keycloak
+ * usa el estándar: HMAC-SHA1, 6 dígitos, ventana de 30 s, y la clave son los
+ * bytes crudos del secreto (el QR que muestra es base32 de esos mismos bytes).
+ * El secreto se configura una vez por empresa y se guarda en BryNex.
+ */
+const totpCodigo = (secreto, t = Date.now()) => {
+  const contador = Buffer.alloc(8);
+  contador.writeBigUInt64BE(BigInt(Math.floor(t / 1000 / 30)));
+  const h = createHmac('sha1', Buffer.from(secreto, 'utf8')).update(contador).digest();
+  const o = h[h.length - 1] & 0x0f;
+  const num = ((h[o] & 0x7f) << 24 | h[o + 1] << 16 | h[o + 2] << 8 | h[o + 3]) % 1_000_000;
+  return String(num).padStart(6, '0');
+};
 
 const CHROME_CANDIDATOS = [
   process.env.CHROME_PATH,
@@ -82,10 +99,27 @@ const usuario = String(entrada.usuario || '').replace(/\D/g, '');
 const contrasena = String(entrada.contrasena || '');
 const documentos = (entrada.documentos || []).map(d => String(d).replace(/\D/g, '')).filter(Boolean);
 const meses = Math.max(1, Math.min(12, parseInt(entrada.meses) || 4));
+// Secreto del Authenticator (vacío si la cuenta aún no lo tiene configurado; en
+// ese caso el 2FA hay que hacerlo/omitirlo a mano la 1.ª vez).
+const totpSecret = String(entrada.totpSecret || '').trim();
+
+// Vía 'api': en vez de raspar el DOM, se llama la API JSON del portal con fetch
+// desde dentro del navegador (lo único que pasa Akamai). Devuelve el JSON crudo
+// de cada endpoint; el mapeo de formas se hace en PHP. nit/companyId: la empresa
+// sobre la que se opera (x-company-id sale de company-context). desde/hasta:
+// rango AAAA-MM-DD para subsidios.
+const via = entrada.via === 'api' ? 'api' : 'dom';
+// Tipo de documento del login: las empresas entran por NIT; el usuario gestor
+// (vía API) entra por CC (cédula), que además es el valor por defecto del combo.
+const tipoLogin = String(entrada.tipoLogin || (via === 'api' ? 'CC' : 'NIT')).toUpperCase();
+const nit = String(entrada.nit || '').replace(/\D/g, '');
+const companyId = String(entrada.companyId || '').trim();
+const desde = String(entrada.desde || '').trim();
+const hasta = String(entrada.hasta || '').trim();
 
 if (!usuario || !contrasena) salir({ ok: false, error: 'Faltan usuario o contraseña.' });
 const modo = entrada.modo === 'listado' ? 'listado' : 'subsidios';
-if (modo === 'subsidios' && !documentos.length) salir({ ok: false, error: 'No llegó ninguna cédula para consultar.' });
+if (via === 'dom' && modo === 'subsidios' && !documentos.length) salir({ ok: false, error: 'No llegó ninguna cédula para consultar.' });
 
 // Comfandi tiene Akamai delante y le contesta "Access Denied" a la IP del
 // servidor (datacenter fuera de Colombia): sin proxy colombiano el login no
@@ -118,9 +152,23 @@ if (!ejecutable) salir({ ok: false, error: 'No se encontró Chrome. Instálalo o
 // El portal solo atiende a un navegador con ventana. En el servidor la ventana
 // la da Xvfb (un display virtual), asi que Chrome corre normal, sin pantalla
 // donde dibujar. Ver ComfandiSubsidiosHeadless.
+// Perfil persistente por empresa: Comfandi ofrece "No volver a preguntar en 60
+// días" ligado al navegador+cookies, así que guardando el perfil el 2FA solo se
+// pide una vez cada 60 días (o si se borra el perfil). Es una carpeta fija por
+// usuario, no el temporal de puppeteer, así que el borrado de abajo no la toca.
+let perfilDir = null;
+if (usuario) {
+  perfilDir = `${process.cwd()}/storage/app/comfandi-perfiles/${usuario}`;
+  try { mkdirSync(perfilDir, { recursive: true }); } catch {}
+  // Si una corrida anterior murió, Chrome deja un lock que impide reabrir el
+  // perfil: se quita para no quedar tumbado por un cierre sucio.
+  try { rmSync(`${perfilDir}/SingletonLock`, { force: true }); } catch {}
+}
+
 const navegador = await puppeteer.launch({
   executablePath: ejecutable,
   headless: entrada.visible ? false : 'new',
+  ...(perfilDir ? { userDataDir: perfilDir } : {}),
   args: [
     '--no-sandbox',
     '--disable-dev-shm-usage',
@@ -280,8 +328,38 @@ const escogerEmpresa = async (pagina) => {
   return !!elegida;
 };
 
+/**
+ * Elige la empresa del gestor cuyo nombre coincide (para la vía API: varias
+ * empresas y hay que entrar en la que toca, porque algunos datos —subsidios—
+ * solo salen con la empresa seleccionada en la sesión, no basta el header).
+ */
+const escogerEmpresaPorNombre = async (pagina, nombre) => {
+  const clave = String(nombre || '').toUpperCase().replace(/\s+/g, ' ').slice(0, 15);
+  if (!clave) return false;
+
+  for (const b of await pagina.$$('button,[role=button],div[class*=select]')) {
+    const t = await b.evaluate(e => (e.offsetParent ? (e.innerText || '') : '')).catch(() => '');
+    if (/selecciona tu empresa/i.test(t)) { await b.click().catch(() => null); break; }
+  }
+  await esperar(900);
+
+  let elegida = null;
+  for (const o of [...await pagina.$$('[class*=option]'), ...await pagina.$$('li'), ...await pagina.$$('button,[role=button]')]) {
+    const t = await o.evaluate(e => (e.offsetParent ? (e.innerText || '').trim() : '')).catch(() => '');
+    if (t && t.toUpperCase().replace(/\s+/g, ' ').includes(clave)) { elegida = o; break; }
+  }
+  if (elegida) { await elegida.click().catch(() => null); await esperar(700); }
+
+  for (const b of await pagina.$$('button,[role=button],input[type=submit]')) {
+    const t = await b.evaluate(e => (e.offsetParent ? (e.innerText || e.value || '') : '')).catch(() => '');
+    if (/^\s*aceptar\s*$/i.test((t || '').trim())) { await b.click().catch(() => null); break; }
+  }
+  await esperar(2500);
+  return !!elegida;
+};
+
 /** Los bloqueos de un trabajador, o null si no se pudo llegar a su pantalla. */
-const bloqueosDe = async (pagina, documento) => {
+const bloqueosDe = async (pagina, documento, tipoBusqueda = 'Bloqueos de subsidio') => {
   // La pantalla del filtro, hasta que esté de verdad.
   //
   // Se vuelve por el menú, no por la URL: el portal es un Next.js y una
@@ -374,7 +452,7 @@ const bloqueosDe = async (pagina, documento) => {
 
   if (!listo) return 'no cargó la pantalla de subsidio monetario';
 
-  if (!await elegirCombo(pagina, 'Bloqueos de subsidio')) return `no se pudo elegir "Bloqueos de subsidio" (${ultimoComboVisto})`;
+  if (!await elegirCombo(pagina, tipoBusqueda)) return `no se pudo elegir "${tipoBusqueda}" (${ultimoComboVisto})`;
 
   await esperar(600);
 
@@ -479,9 +557,40 @@ try {
   await pagina.setViewport({ width: 1400, height: 900 });
   if (proxy?.usuario) await pagina.authenticate({ username: proxy.usuario, password: proxy.clave });
 
+  // Vía API: capturar el token Bearer y el x-company-id desde el lado de Node
+  // (con page.on('request')). Esto sobrevive a las navegaciones del login/2FA,
+  // cosa que un hook dentro de la página no hace: cada documento es un contexto
+  // nuevo y el token capturado se perdía al navegar.
+  let apiToken = null;
+  let apiCompanyId = null;
+  const apiUrls = [];
+  if (via === 'api') {
+    pagina.on('request', (req) => {
+      try {
+        // Solo el token de las peticiones a la API (ria): Keycloak emite varios
+        // y los demás la API los rechaza con "no permisos" aunque sean válidos.
+        if (! /ria\.sucursalcomfandi/.test(req.url())) return;
+        apiUrls.push(req.method() + ' ' + req.url().split('?')[0]);
+        const h = req.headers() || {};
+        const a = h.authorization || h.Authorization;
+        if (a && /^bearer /i.test(a)) apiToken = a;
+        const c = h['x-company-id'] || h['X-Company-Id'];
+        if (c) apiCompanyId = c;
+      } catch { /* */ }
+    });
+  }
+
   // ── Entrar ────────────────────────────────────────────────────────────────
   await pagina.goto(`${BASE}/guest`, { waitUntil: 'networkidle2', timeout: 60000 });
 
+  // Con el perfil persistente la sesión puede seguir viva (confianza de 60 días):
+  // si ya se está dentro, el formulario de login no existe y hay que saltárselo,
+  // o si no el script se quedaba buscando el campo de tipo de documento.
+  const yaDentro0 = await pagina.evaluate(() =>
+    /cerrar sesi[oó]n|actualmente est[aá]s en|¿qu[eé] quieres hacer hoy|selecciona tu empresa/i.test(document.body.innerText || '')
+  ).catch(() => false);
+
+  if (!yaDentro0) {
   await insistir(pagina, () => {
     const b = [...document.querySelectorAll('button,a')].find(e => /iniciar sesi/i.test(e.innerText || ''));
     if (!b) return false;
@@ -526,7 +635,9 @@ try {
   // cuatro empresas aqui. Entre escribir y elegir se puede perder el foco —y
   // con el la lista—, y el clic de Puppeteer no siempre prende en el <li>, que
   // a veces escucha en un hijo.
-  let tipoOk = false;
+  // El gestor entra por CC, que es el valor por defecto del combo: no se toca.
+  // Solo las empresas (NIT) necesitan cambiarlo, con el typeahead de abajo.
+  let tipoOk = tipoLogin === 'CC';
 
   for (let intento = 0; intento < 4 && ! tipoOk; intento++) {
     // Hay que vaciarlo antes: el campo llega con "CC - Cédula de ciudadanía"
@@ -598,15 +709,20 @@ try {
     btn.click();
     return true;
   }, [usuario, contrasena], 20000);
+  }
 
   // Las pantallas que el portal encadena después de Entrar, hasta quedar dentro.
-  const hasta = Date.now() + 150000;
+  const finLogin = Date.now() + 150000;
   let empresa = null;
 
-  while (Date.now() < hasta && !empresa) {
+  while (Date.now() < finLogin && !empresa) {
     await esperar(1500);
 
-    const paso = await pagina.evaluate((nit) => {
+    // Código fresco cada vuelta: si uno vence a mitad del envío, el siguiente
+    // intento ya trae otro (la ventana TOTP es de 30 s y el bucle corre cada 1,5).
+    const codigo = totpSecret ? totpCodigo(totpSecret) : null;
+
+    const paso = await pagina.evaluate((nit, codigo) => {
       const golpe = (e) => ['pointerdown', 'mousedown', 'mouseup', 'click']
         .forEach(t => e.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })));
       const texto = document.body.innerText || '';
@@ -618,6 +734,31 @@ try {
 
       const botones = [...document.querySelectorAll('button,a,input[type=submit],[role=button]')]
         .filter(e => (e.innerText || e.value || '').trim());
+
+      // 2FA del Authenticator (lo que reemplazó al viejo "Omitir"). Si hay una
+      // pantalla de código —6 casillas o un solo campo— se llena con el TOTP que
+      // llega de Node y se pulsa Verificar. Antes, la pantalla que pregunta cómo
+      // verificar: se toma el camino del QR/aplicación, que lleva al código.
+      if (codigo) {
+        const esCampo = (e) => ['text', 'tel', 'number', 'password'].includes(e.type);
+        const campos = [...document.querySelectorAll('input')].filter(esCampo);
+        const pideCodigo = /ingresa (tu|el) c[oó]digo|c[oó]digo de verificaci[oó]n|c[oó]digo [uú]nico|verificar c[oó]digo|c[oó]digo del? authenticator/i.test(texto);
+        if (pideCodigo || campos.length >= 6) {
+          const set = (el, val) => {
+            Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, val);
+            ['input', 'change', 'keyup'].forEach(t => el.dispatchEvent(new Event(t, { bubbles: true })));
+          };
+          const cajas = campos.filter(e => e.maxLength === 1 || /otp|totp|code|digit/i.test(e.name || e.id || ''));
+          if (cajas.length >= 6) { for (let i = 0; i < 6; i++) { cajas[i].focus(); set(cajas[i], codigo[i]); } }
+          else if (campos[0]) { campos[0].focus(); set(campos[0], codigo); }
+          const hid = document.querySelector('input[name=totp],input[name=otp]');
+          if (hid) set(hid, codigo);
+          const verificar = botones.find(e => /verificar|continuar|ingresar/i.test(e.innerText || e.value || ''));
+          if (verificar) { golpe(verificar); return { paso: '2fa-codigo' }; }
+        }
+        const metodo = botones.find(e => /escanear c[oó]digo qr|authenticator|aplicaci[oó]n de autenticaci[oó]n/i.test(e.innerText || ''));
+        if (metodo && /c[oó]mo quieres verificar|verificar tu identidad/i.test(texto)) { golpe(metodo); return { paso: '2fa-metodo' }; }
+      }
 
       const omitir = botones.find(e => /omitir|m[aá]s tarde|ahora no|despu[eé]s/i.test(e.innerText || e.value || ''));
       if (omitir) { golpe(omitir); return { paso: '2fa-omitir' }; }
@@ -637,11 +778,167 @@ try {
       if (tarjetas.length) { golpe(tarjetas[tarjetas.length - 1]); return { paso: 'tarjeta' }; }
 
       return { paso: 'esperando' };
-    }, usuario).catch(() => ({ paso: 'cargando' }));
+    }, usuario, codigo).catch(() => ({ paso: 'cargando' }));
 
     if (paso?.fin === 'clave') salir({ ok: false, error: 'Comfandi rechazó el usuario o la clave guardada en BryNex.' });
     if (paso?.fin === 'dentro') empresa = paso.empresa;
-    if (paso?.paso === 'empresa') await escogerEmpresa(pagina);
+    // En la vía API no se elige empresa en la UI (el gestor ve varias): basta
+    // estar dentro con el token capturado para llamar la API por x-company-id.
+    if (via === 'api') {
+      // Con el token ya capturado (de alguna petición del portal) se puede
+      // llamar la API; no hace falta elegir empresa en la UI.
+      if (apiToken) break;
+    } else if (paso?.paso === 'empresa') {
+      await escogerEmpresa(pagina);
+    }
+  }
+
+  // ── Vía API: llamar la API JSON del portal con fetch (corre dentro del
+  // navegador real, así que pasa Akamai). Devuelve el JSON crudo de cada
+  // endpoint; el mapeo de formas y NIT→x-company-id se resuelve en PHP.
+  if (via === 'api') {
+    // El token lo capturó page.on('request'). Si aún no ha llegado, se espera un
+    // poco y se fuerza una navegación a Afiliaciones, que dispara company-context.
+    for (let i = 0; i < 20 && !apiToken; i++) {
+      if (i === 4) await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
+      await esperar(500);
+    }
+    const token = apiToken;
+    if (!token) salir({ ok: false, error: 'Entró al portal pero no se capturó el token de la API (ninguna llamada autenticada).' });
+
+    // El token (JWT) trae las empresas del gestor en el claim `companies`: de
+    // ahí sale el mapa NIT → x-company-id (el `id` es el GUID). No se usa
+    // company-context, que para el gestor responde 403.
+    let empresas = [];
+    try {
+      const jwt = token.replace(/^bearer /i, '');
+      const payload = JSON.parse(Buffer.from(jwt.split('.')[1], 'base64').toString('utf8'));
+      empresas = Array.isArray(payload.companies) ? payload.companies : [];
+    } catch { /* si no se decodifica, empresas queda vacío */ }
+
+    const apiRia = (path, cid) => pagina.evaluate(async (base, ruta, tk, companyId) => {
+      // getMovements exige el header Accept (sin él da 400); los demás endpoints
+      // no lo piden, pero ponerlo no estorba.
+      const headers = { Authorization: tk, Accept: 'application/json, text/plain, */*' };
+      if (companyId) headers['x-company-id'] = companyId;
+      try {
+        const r = await fetch(base + ruta, { headers });
+        const t = await r.text();
+        let j = null; try { j = JSON.parse(t); } catch { /* texto plano */ }
+        return { status: r.status, body: j !== null ? j : t.slice(0, 2000) };
+      } catch (e) { return { status: 0, error: String(e) }; }
+    }, RIA, path, apiToken, cid || null).catch((e) => ({ status: 0, error: String(e) }));
+
+    const soloDigitos = (s) => String(s || '').replace(/\D/g, '');
+    const empresaDe = (unNit) => empresas.find((e) => {
+      const a = soloDigitos(e.identification), b = soloDigitos(unNit);
+      return a === b || a.startsWith(b) || b.startsWith(a);
+    });
+
+    const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const salida = { ok: true, via: 'api' };
+    // El mapa de empresas del gestor (NIT → GUID), para que PHP lo use o guarde.
+    salida.empresas = empresas.map((e) => ({ id: e.id, nit: e.identification, nombre: e.name, afiliada: e.is_affiliated, roles: e.roles }));
+
+    const emp = empresaDe(nit);
+    const cid = companyId || emp?.id || null;
+    // affiliateNit va CON dígito de verificación (9021031841, no 902103184); el
+    // token lo trae en `identification` ("902103184-1").
+    const nitDv = soloDigitos(emp?.identification || nit);
+    salida.companyId = cid;
+
+    // Subsidios solo salen con la empresa seleccionada en la sesión (no basta el
+    // x-company-id). Se selecciona la del NIT pedido; apiRia ya usa el token más
+    // nuevo (apiToken se re-captura con las llamadas que dispara la selección).
+    if (emp && emp.name) {
+      await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
+      await esperar(1500);
+      salida.empresaElegida = await escogerEmpresaPorNombre(pagina, emp.name);
+      await esperar(1500);
+    }
+
+    if (cid && nit) {
+      if (modo === 'listado') {
+        salida.listado = await apiRia(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=2000`, cid);
+      } else if (documentos.length) {
+        salida.trabajadores = {};
+        salida.subsidios = {};
+        for (const doc of documentos) {
+          salida.trabajadores[doc] = await apiRia(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=1&documentType=CO1C&documentNumber=${doc}`, cid);
+          if (desde && hasta) {
+            // getMovements no se puede replicar por fetch (da 400 fuera de la
+            // sesión del portal); se maneja la pantalla de Subsidio monetario con
+            // "Búsqueda general" (trae pagos, retiros y bloqueos) y se captura la
+            // RESPUESTA JSON que devuelve el portal, en vez de raspar el DOM.
+            // La app dispara getMovements al abrir la pantalla; se captura el
+            // TOKEN y el x-company-id de ESA llamada (los del portal, que sí
+            // sirven), más las respuestas que lleguen. Luego se re-ejecuta
+            // getMovements con ese token para el rango completo, sin depender del
+            // datepicker (que es lo frágil).
+            const mov = [];
+            const respuestas = [];
+            let gmAuth = null, gmCid = null;
+            const onReq = (req) => {
+              try {
+                if (! /monetary-subsidy\/getMovements/.test(req.url())) return;
+                const h = req.headers() || {};
+                if (h.authorization) gmAuth = h.authorization;
+                if (h['x-company-id']) gmCid = h['x-company-id'];
+              } catch { /* */ }
+            };
+            const onResp = async (r) => {
+              try {
+                if (! /monetary-subsidy\/getMovements/.test(r.url())) return;
+                let n = 0;
+                if (r.status() === 200) {
+                  const j = await r.json().catch(() => null);
+                  // Los movimientos vienen en data.movements (data es {total, movements}).
+                  const arr = j && j.data && Array.isArray(j.data.movements) ? j.data.movements : null;
+                  if (arr) { n = arr.length; if (n) mov.push(...arr); }
+                }
+                const u = new URL(r.url());
+                respuestas.push({ status: r.status(), fi: u.searchParams.get('fechaInicio'), ff: u.searchParams.get('fechaFin'), n });
+              } catch { /* */ }
+            };
+            pagina.on('request', onReq);
+            pagina.on('response', onResp);
+            let errSub = null;
+            try {
+              const res = await bloqueosDe(pagina, doc, 'B[uú]squeda general');
+              if (typeof res === 'string' && res !== 'no-esta') errSub = res;
+            } catch (e) { errSub = String(e).slice(0, 150); }
+            await esperar(2000);
+
+            // Re-ejecutar con el token de getMovements para el rango completo.
+            let replay = null;
+            if (gmAuth) {
+              replay = await pagina.evaluate(async (base, auth, cid, d, h, docu) => {
+                try {
+                  const r = await fetch(`${base}/monetary-subsidy/getMovements?movementType=GENERAL&fechaInicio=${d}&fechaFin=${h}&offset=0&limit=100&employeeIdType=CC&employeeIdNumber=${docu}`,
+                    { headers: { Authorization: auth, 'x-company-id': cid, Accept: 'application/json, text/plain, */*' } });
+                  const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch { /* */ }
+                  return { status: r.status, data: (j && j.data && Array.isArray(j.data.movements)) ? j.data.movements : null };
+                } catch (e) { return { status: 0, err: String(e) }; }
+              }, RIA, gmAuth, gmCid, desde, hasta, doc).catch((e) => ({ status: 0, err: String(e) }));
+            }
+            pagina.off('request', onReq);
+            pagina.off('response', onResp);
+
+            const delReplay = replay && replay.status === 200 && Array.isArray(replay.data) ? replay.data : null;
+            salida.subsidios[doc] = {
+              movimientos: delReplay || mov,
+              fuente: delReplay ? 'replay' : 'respuesta',
+              replayStatus: replay ? replay.status : null,
+              respuestas,
+              ...(errSub ? { error: errSub } : {}),
+            };
+          }
+        }
+      }
+    } else if (nit) {
+      salida.aviso = `El gestor no tiene la empresa ${nit} entre sus ${empresas.length} empresas de Comfandi.`;
+    }
+    salir(salida);
   }
 
   if (!empresa) empresa = await empresaAbierta(pagina);

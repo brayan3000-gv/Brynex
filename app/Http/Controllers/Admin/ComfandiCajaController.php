@@ -248,6 +248,46 @@ class ComfandiCajaController extends Controller
         return response()->json(Cache::get($this->claveEstado()) ?? ['corriendo' => false, 'vacio' => true]);
     }
 
+    /**
+     * Datos en vivo del trabajador en Comfandi, por API (trabajador +
+     * beneficiarios + subsidios de los últimos 12 meses). Reemplaza el raspado:
+     * lo trae el gestor único con `ComfandiApi`. Ver docs/comfandi-api.md.
+     */
+    public function datosApi(int $contratoId, \App\Services\Caja\ComfandiApi $api)
+    {
+        $contrato = $this->contrato($contratoId);
+        $contrato->loadMissing('razonSocial');
+
+        $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
+        $cedula = preg_replace('/\D/', '', (string) $contrato->cedula);
+
+        if (! $nit || ! $cedula) {
+            return response()->json(['ok' => false, 'error' => 'El contrato no tiene NIT de la razón social o cédula.'], 422);
+        }
+
+        if (! $api->disponible()) {
+            return response()->json(['ok' => false, 'error' => 'Falta configurar el gestor de Comfandi (clave + secreto 2FA en el módulo de claves).'], 422);
+        }
+
+        $datos = $api->datos(
+            $nit,
+            $cedula,
+            now()->subMonths(12)->startOfMonth()->format('Y-m-d'),
+            now()->format('Y-m-d'),
+        );
+
+        if (! ($datos['ok'] ?? false)) {
+            return response()->json(['ok' => false, 'error' => $datos['error'] ?? 'No se pudo consultar Comfandi.'], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'titular' => $datos['titular'],
+            'beneficiarios' => $datos['titular']['PACS'] ?? [],
+            'subsidios' => $datos['movimientos'] ?? [],
+        ])->header('Cache-Control', 'no-store');
+    }
+
     /** La corrida consolidada de BryNex no se mezcla con la de cada aliado. */
     private function claveEstado(): string
     {

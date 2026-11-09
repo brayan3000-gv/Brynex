@@ -18,6 +18,7 @@ class ClaveAcceso extends BaseModel
         'entidad',
         'usuario',
         'contrasena',
+        'totp_secret',
         'link_acceso',
         'correo_entidad',
         'observacion',
@@ -92,9 +93,9 @@ class ClaveAcceso extends BaseModel
                 'usuario_nuevo' => $clave->usuario,
                 'contrasena_nueva' => $clave->contrasena,
                 // El resto, tal cual: activo, link, correo, observación…
-                'otros_cambios' => $cambios->except(['usuario', 'contrasena'])->isEmpty()
+                'otros_cambios' => $cambios->except(['usuario', 'contrasena', 'totp_secret'])->isEmpty()
                     ? null
-                    : json_encode($cambios->except(['usuario', 'contrasena']), JSON_UNESCAPED_UNICODE),
+                    : json_encode($cambios->except(['usuario', 'contrasena', 'totp_secret']), JSON_UNESCAPED_UNICODE),
                 'created_at' => now(),
             ]);
         });
