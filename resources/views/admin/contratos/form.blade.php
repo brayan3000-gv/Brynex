@@ -613,6 +613,109 @@
         @if($esEdicion && $contrato->caja_id && collect($cajas)->contains('id', (int)$contrato->caja_id))
         {!! $badgeEstado($rPT->get('caja')) !!}
         @endif
+        @php
+          $cajaCtrl = $esEdicion ? collect($cajas)->firstWhere('id', (int) $contrato->caja_id) : null;
+          $comfandiApi = $cajaCtrl && stripos((string) $cajaCtrl->nombre, 'COMFANDI') !== false
+                         && $contrato->razonSocial?->nit && $contrato->cedula;
+        @endphp
+        @if($comfandiApi)
+        {{-- Comfandi por API: certificado con beneficiarios + consulta de subsidios.
+             Solo aparece cuando la caja del contrato es Comfandi. --}}
+        <div style="margin-top:0.45rem;" @keydown.escape.window="$data.open=false" x-data="{
+              open:false, cargando:'', error:'', datos:null,
+              async subsidios(){
+                this.error=''; this.datos=null; this.cargando='subsidios';
+                try{
+                  const r = await fetch('{{ route('admin.afiliaciones.caja-comfandi.datos-api', $contrato->id) }}', {headers:{'Accept':'application/json'}});
+                  const d = await r.json().catch(()=>({}));
+                  if(!r.ok || !d.ok) throw new Error(d.error || 'No se pudo consultar Comfandi.');
+                  this.datos = d;
+                }catch(e){ this.error = e.message; }
+                this.cargando='';
+              },
+              async certificado(){
+                this.error=''; this.cargando='certificado';
+                try{
+                  const r = await fetch('{{ route('admin.afiliaciones.caja-comfandi.certificado', $contrato->id) }}', {headers:{'Accept':'application/pdf'}});
+                  if(!r.ok){ let m='No se pudo obtener el certificado.'; try{ m=(await r.json()).error||m; }catch(e){} throw new Error(m); }
+                  const blob = await r.blob();
+                  window.open(URL.createObjectURL(blob), '_blank');
+                }catch(e){ this.error = e.message; }
+                this.cargando='';
+              }
+            }">
+          <button type="button" @click="open=true"
+              style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#1d4ed8;border-radius:7px;padding:0.3rem 0.75rem;font-size:0.72rem;font-weight:700;cursor:pointer;">
+            📊 Comfandi (API)
+          </button>
+
+          <template x-teleport="body">
+            <div x-show="open" x-cloak @click.self="open=false"
+                 style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;">
+              <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:660px;max-height:88vh;overflow:auto;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.9rem 1.2rem;border-bottom:1px solid #e5e7eb;">
+                  <div>
+                    <div style="font-weight:800;color:#0e7490;font-size:0.95rem;">📊 Comfandi (API)</div>
+                    <div style="font-size:0.74rem;color:#64748b;">{{ trim(($cliente->primer_nombre ?? '').' '.($cliente->primer_apellido ?? '')) }} · CC {{ $contrato->cedula }} · {{ $contrato->razonSocial?->razon_social }}</div>
+                  </div>
+                  <button type="button" @click="open=false" style="background:none;border:none;font-size:1.4rem;color:#94a3b8;cursor:pointer;line-height:1;">&times;</button>
+                </div>
+                <div style="padding:1.1rem 1.2rem;">
+                  <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
+                    <button type="button" @click="certificado()" :disabled="cargando"
+                        style="flex:1;min-width:210px;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:600;cursor:pointer;" :style="cargando?'opacity:.6;cursor:wait':''">
+                      <span x-show="cargando!=='certificado'">📄 Certificado con beneficiarios</span>
+                      <span x-show="cargando==='certificado'" x-cloak>⏳ Generando… (puede tardar)</span>
+                    </button>
+                    <button type="button" @click="subsidios()" :disabled="cargando"
+                        style="flex:1;min-width:210px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#1d4ed8;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:700;cursor:pointer;" :style="cargando?'opacity:.6;cursor:wait':''">
+                      <span x-show="cargando!=='subsidios'">💰 Consultar subsidios y beneficiarios</span>
+                      <span x-show="cargando==='subsidios'" x-cloak>⏳ Consultando… (puede tardar)</span>
+                    </button>
+                  </div>
+                  <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;">La consulta entra al portal de Comfandi; puede tardar 1–3 minutos.</div>
+
+                  <div x-show="error" x-cloak x-text="error" style="margin-top:0.8rem;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:0.5rem 0.7rem;font-size:0.78rem;"></div>
+
+                  <template x-if="datos">
+                    <div style="margin-top:0.9rem;">
+                      <template x-if="datos.titular">
+                        <div style="font-size:0.8rem;color:#334155;margin-bottom:0.3rem;">
+                          <strong x-text="[(datos.titular.DatosPersona||{}).PrimerNombre,(datos.titular.DatosPersona||{}).SegundoNombre,(datos.titular.DatosPersona||{}).PrimerApellido,(datos.titular.DatosPersona||{}).SegundoApellido].filter(Boolean).join(' ')"></strong>
+                          · Afiliación <span x-text="datos.titular.FechaAfiliacion || '—'"></span>
+                        </div>
+                      </template>
+                      <h4 style="margin:0.6rem 0 0.3rem;font-size:0.8rem;color:#334155;">Beneficiarios</h4>
+                      <ul style="margin:0;padding-left:1.1rem;font-size:0.78rem;color:#475569;">
+                        <template x-for="(b,i) in (datos.beneficiarios||[])" :key="i">
+                          <li><span x-text="[(b.DatosPersona||{}).PrimerNombre,(b.DatosPersona||{}).PrimerApellido,(b.DatosPersona||{}).SegundoApellido].filter(Boolean).join(' ')"></span> — <span x-text="b.Parentesco||''"></span> <span style="color:#94a3b8;" x-text="'('+((b.DatosPersona||{}).NumeroDocumento||'')+')'"></span></li>
+                        </template>
+                        <template x-if="!(datos.beneficiarios||[]).length"><li style="color:#94a3b8;">Sin beneficiarios</li></template>
+                      </ul>
+                      <h4 style="margin:0.8rem 0 0.3rem;font-size:0.8rem;color:#334155;">Subsidios (últimos 12 meses)</h4>
+                      <table style="width:100%;border-collapse:collapse;font-size:0.76rem;">
+                        <thead><tr style="text-align:left;color:#64748b;border-bottom:1px solid #e2e8f0;"><th style="padding:0.2rem 0.4rem;">Tipo</th><th style="padding:0.2rem 0.4rem;">Periodo</th><th style="padding:0.2rem 0.4rem;">Fecha</th><th style="padding:0.2rem 0.4rem;">Monto</th><th style="padding:0.2rem 0.4rem;">Detalle</th></tr></thead>
+                        <tbody>
+                          <template x-for="(s,i) in (datos.subsidios||[])" :key="i">
+                            <tr>
+                              <td style="padding:0.2rem 0.4rem;" x-text="({BLOQUEO:'🔴 Bloqueo',PAGO:'🟢 Pago',RETIRO:'💵 Retiro'})[s.movementType]||s.movementType||''"></td>
+                              <td style="padding:0.2rem 0.4rem;" x-text="s.period||''"></td>
+                              <td style="padding:0.2rem 0.4rem;" x-text="s.date||''"></td>
+                              <td style="padding:0.2rem 0.4rem;" x-text="'$'+Number(s.amount||0).toLocaleString('es-CO')"></td>
+                              <td style="padding:0.2rem 0.4rem;" x-text="s.blockReason||''"></td>
+                            </tr>
+                          </template>
+                          <template x-if="!(datos.subsidios||[]).length"><tr><td colspan="5" style="color:#94a3b8;padding:0.4rem;">Sin movimientos</td></tr></template>
+                        </tbody>
+                      </table>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+        @endif
         <div id="aviso-caja-rs" style="display:none;font-size:0.66rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:0.2rem 0.4rem;margin-top:0.25rem;line-height:1.3;"></div>
       </div>
     </div>

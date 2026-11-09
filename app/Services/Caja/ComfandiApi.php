@@ -224,6 +224,37 @@ class ComfandiApi
         ];
     }
 
+    /**
+     * El certificado de afiliación a la caja (PDF) de un trabajador, con o sin
+     * beneficiarios. Lo baja por `/certificate/new-create-affiliation` (código
+     * BEN = con beneficiarios). Devuelve el PDF en base64.
+     *
+     * @return array{ok:bool, base64?:string, contentType?:string, error?:string}
+     */
+    public function certificado(string $nit, string $cedula, string $tipoDoc = 'CO1C', bool $conBeneficiarios = true): array
+    {
+        $cedula = preg_replace('/\D/', '', $cedula);
+
+        $r = $this->ejecutar([
+            'modo' => 'certificado',
+            'nit' => preg_replace('/\D/', '', $nit),
+            'documentos' => [$cedula],
+            'tipoDocTrab' => $tipoDoc,
+            'certCodigo' => $conBeneficiarios ? 'BEN' : 'TRA',
+        ], self::SEGUNDOS_BASE + self::SEGUNDOS_POR_DOC);
+
+        if (! ($r['ok'] ?? false)) {
+            return ['ok' => false, 'error' => $r['error'] ?? 'No se pudo consultar.'];
+        }
+
+        $c = $r['certificados'][$cedula] ?? null;
+        if (! $c || (int) ($c['status'] ?? 0) !== 200 || empty($c['base64'])) {
+            return ['ok' => false, 'error' => 'Comfandi no devolvió el certificado (estado '.($c['status'] ?? '?').').'];
+        }
+
+        return ['ok' => true, 'base64' => $c['base64'], 'contentType' => $c['contentType'] ?? 'application/pdf'];
+    }
+
     /** El listado de trabajadores de una empresa. */
     public function listado(string $nit): array
     {

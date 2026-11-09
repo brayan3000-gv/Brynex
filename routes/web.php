@@ -1220,6 +1220,7 @@ Route::middleware('auth')->group(function () {
             Route::post('/{contrato}/caja-comfandi/credencial', [$cfd, 'credencial'])->name('caja-comfandi.credencial');
             Route::post('/{contrato}/caja-comfandi/aplicar', [$cfd, 'aplicar'])->name('caja-comfandi.aplicar');
             Route::get('/{contrato}/caja-comfandi/datos-api', [$cfd, 'datosApi'])->name('caja-comfandi.datos-api');
+            Route::get('/{contrato}/caja-comfandi/certificado', [$cfd, 'certificadoApi'])->name('caja-comfandi.certificado');
             Route::post('/caja-comfandi/conciliar', [$cfd, 'conciliar'])->name('caja-comfandi.conciliar');
             Route::get('/caja-comfandi/conciliar/estado', [$cfd, 'estado'])->name('caja-comfandi.conciliar.estado');
             // Revisión de subsidios bloqueados: la extensión pide a quién

@@ -116,9 +116,13 @@ const nit = String(entrada.nit || '').replace(/\D/g, '');
 const companyId = String(entrada.companyId || '').trim();
 const desde = String(entrada.desde || '').trim();
 const hasta = String(entrada.hasta || '').trim();
+// Certificado: el código del certificado (BEN = con beneficiarios; TRA = solo el
+// trabajador) y el tipo de documento del trabajador (CO1C = cédula).
+const certCodigo = String(entrada.certCodigo || 'BEN').trim().toUpperCase();
+const tipoDocTrab = String(entrada.tipoDocTrab || 'CO1C').trim().toUpperCase();
 
 if (!usuario || !contrasena) salir({ ok: false, error: 'Faltan usuario o contraseña.' });
-const modo = entrada.modo === 'listado' ? 'listado' : 'subsidios';
+const modo = ['listado', 'certificado'].includes(entrada.modo) ? entrada.modo : 'subsidios';
 if (via === 'dom' && modo === 'subsidios' && !documentos.length) salir({ ok: false, error: 'No llegó ninguna cédula para consultar.' });
 
 // Comfandi tiene Akamai delante y le contesta "Access Denied" a la IP del
@@ -816,18 +820,29 @@ try {
       empresas = Array.isArray(payload.companies) ? payload.companies : [];
     } catch { /* si no se decodifica, empresas queda vacío */ }
 
-    const apiRia = (path, cid) => pagina.evaluate(async (base, ruta, tk, companyId) => {
+    // opts: { method, body, binario }. Con `binario` lee la respuesta como bytes
+    // y la devuelve en base64 (para el certificado, que es un PDF). Los GET de
+    // siempre no pasan opts y se comportan igual que antes.
+    const apiRia = (path, cid, opts = {}) => pagina.evaluate(async (base, ruta, tk, companyId, o) => {
       // getMovements exige el header Accept (sin él da 400); los demás endpoints
       // no lo piden, pero ponerlo no estorba.
       const headers = { Authorization: tk, Accept: 'application/json, text/plain, */*' };
       if (companyId) headers['x-company-id'] = companyId;
+      const init = { method: o.method || 'GET', headers };
+      if (o.body != null) { headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(o.body); }
       try {
-        const r = await fetch(base + ruta, { headers });
+        const r = await fetch(base + ruta, init);
+        const ct = r.headers.get('content-type') || '';
+        if (o.binario) {
+          const buf = new Uint8Array(await r.arrayBuffer());
+          let bin = ''; for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+          return { status: r.status, contentType: ct, base64: btoa(bin) };
+        }
         const t = await r.text();
         let j = null; try { j = JSON.parse(t); } catch { /* texto plano */ }
-        return { status: r.status, body: j !== null ? j : t.slice(0, 2000) };
+        return { status: r.status, contentType: ct, body: j !== null ? j : t.slice(0, 2000) };
       } catch (e) { return { status: 0, error: String(e) }; }
-    }, RIA, path, apiToken, cid || null).catch((e) => ({ status: 0, error: String(e) }));
+    }, RIA, path, apiToken, cid || null, opts).catch((e) => ({ status: 0, error: String(e) }));
 
     const soloDigitos = (s) => String(s || '').replace(/\D/g, '');
     const empresaDe = (unNit) => empresas.find((e) => {
@@ -863,6 +878,21 @@ try {
     if (cid && nit) {
       if (modo === 'listado') {
         salida.listado = await apiRia(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=2000`, cid);
+      } else if (modo === 'certificado' && documentos.length) {
+        // Certificado por API: POST a /certificate/new-create-affiliation.
+        // certificateCode BEN = con beneficiarios; companyDocNum va CON dígito de
+        // verificación (ej. 901709476-5). La respuesta es el PDF (binario → base64).
+        salida.certificados = {};
+        for (const doc of documentos) {
+          salida.certificados[doc] = await apiRia('/certificate/new-create-affiliation', cid, {
+            method: 'POST', binario: true,
+            body: {
+              workerDocType: tipoDocTrab, workerDocNum: doc,
+              companyDocType: 'CO1N', companyDocNum: emp?.identification || nit,
+              certificateCode: certCodigo,
+            },
+          });
+        }
       } else if (documentos.length) {
         salida.trabajadores = {};
         salida.subsidios = {};

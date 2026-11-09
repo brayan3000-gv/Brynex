@@ -255,6 +255,10 @@ class ComfandiCajaController extends Controller
      */
     public function datosApi(int $contratoId, \App\Services\Caja\ComfandiApi $api)
     {
+        // La consulta entra al portal con el robot y tarda 1–3 min: sin esto PHP
+        // mataría la petición en su max_execution_time (30–60 s).
+        set_time_limit(0);
+
         $contrato = $this->contrato($contratoId);
         $contrato->loadMissing('razonSocial');
 
@@ -286,6 +290,52 @@ class ComfandiCajaController extends Controller
             'beneficiarios' => $datos['titular']['PACS'] ?? [],
             'subsidios' => $datos['movimientos'] ?? [],
         ])->header('Cache-Control', 'no-store');
+    }
+
+    /**
+     * El certificado de afiliación a la caja (PDF, con beneficiarios) del
+     * trabajador del contrato, por API. Lo entrega para verlo/descargarlo.
+     */
+    public function certificadoApi(int $contratoId, \App\Services\Caja\ComfandiApi $api)
+    {
+        set_time_limit(0); // el robot tarda 1–3 min; ver datosApi().
+
+        $contrato = $this->contrato($contratoId);
+        $contrato->loadMissing('razonSocial');
+
+        $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
+        $cedula = preg_replace('/\D/', '', (string) $contrato->cedula);
+
+        if (! $nit || ! $cedula) {
+            return response()->json(['ok' => false, 'error' => 'El contrato no tiene NIT de la razón social o cédula.'], 422);
+        }
+
+        if (! $api->disponible()) {
+            return response()->json(['ok' => false, 'error' => 'Falta configurar el gestor de Comfandi (clave + secreto 2FA en el módulo de claves).'], 422);
+        }
+
+        // Tipo de documento del trabajador en código Comfandi (CC → CO1C, etc.).
+        $tipos = ['CC' => 'CO1C', 'CE' => 'CO1E', 'TI' => 'CO1T', 'PT' => 'CO1Y', 'PPT' => 'CO1Y', 'PE' => 'CO1Y'];
+        $tipoCliente = strtoupper((string) \App\Models\Cliente::where('cedula', $cedula)
+            ->where('aliado_id', $contrato->aliado_id)->value('tipo_doc'));
+        $tipoDoc = $tipos[$tipoCliente] ?? 'CO1C';
+
+        $r = $api->certificado($nit, $cedula, $tipoDoc, true);
+
+        if (! ($r['ok'] ?? false)) {
+            return response()->json(['ok' => false, 'error' => $r['error'] ?? 'No se pudo obtener el certificado de Comfandi.'], 422);
+        }
+
+        $pdf = base64_decode((string) $r['base64'], true);
+        if ($pdf === false || strncmp($pdf, '%PDF', 4) !== 0) {
+            return response()->json(['ok' => false, 'error' => 'Comfandi devolvió un certificado ilegible.'], 422);
+        }
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="certificado-comfandi-'.$cedula.'.pdf"',
+            'Cache-Control' => 'no-store',
+        ]);
     }
 
     /** La corrida consolidada de BryNex no se mezcla con la de cada aliado. */
