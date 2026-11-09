@@ -10,6 +10,7 @@ use App\Services\AlertaOperativaService;
 use App\Services\PlanoPilaTxtService;
 use App\Services\SuaporteApiService;
 use Illuminate\Console\Command;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -68,6 +69,8 @@ class PlanillaVigilarSubtipo4 extends Command
         {--medir-cada= : Segundos entre sondeos mientras la ventana está abierta}
         {--medir-max= : Minutos máximos midiendo una ventana abierta}
         {--sin-medir : No se queda midiendo cuando la ventana se abre}
+        {--sin-liquidar : Detecta y avisa, pero no liquida las tandas en espera}
+        {--simular-ventana : Dispara la liquidación aunque el hueco no esté abierto (prueba)}
         {--sin-aviso : Sondea y registra, pero no manda WhatsApp}';
 
     protected $description = 'Sondea si el operador ya deja pasar el subtipo 03/04 y avisa por WhatsApp cuando sí';
@@ -121,6 +124,30 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private const CONFIG_RS_REF = 'vigia_subtipo4_rs_ref';
 
+    /**
+     * Si el vigía liquida solo cuando encuentra el hueco (1) o solo avisa (0).
+     *
+     * El 9-nov-2026 el hueco de las 11:00 ya estaba cerrado a las 11:03, y de
+     * los tres medidos hasta esa fecha dos cayeron de noche —viernes 8 p. m. y
+     * domingo 1 a. m.—. Un hueco de menos de tres minutos a esas horas no lo
+     * alcanza nadie a mano: cuando llega el WhatsApp ya pasó. El vigía, en
+     * cambio, acaba de hablar con el operador y liquida en segundos.
+     */
+    private const CONFIG_LIQUIDAR = 'vigia_subtipo4_liquidar';
+
+    /**
+     * Las tandas que están esperando el hueco, en JSON:
+     *
+     *   [{"etiqueta":"Yuly","aliado":2,"rs":28,"mes":11,"anio":2026,
+     *     "n_plano":2,"mods":[-14]}, …]
+     *
+     * Van en configuración y no en el código porque la lista cambia cada mes y
+     * el hueco no espera un despliegue. `mes`/`anio` son el período de **pago**
+     * —el plano es el mes de servicio—, y cada familia de modalidades va en su
+     * propio archivo, así que una razón social con X1 y X1 TP14 son dos tandas.
+     */
+    private const CONFIG_TANDAS = 'vigia_subtipo4_tandas';
+
     public function handle(AlertaOperativaService $alertas): int
     {
         $mes = (int) ($this->option('mes') ?: now()->month);
@@ -142,6 +169,19 @@ class PlanillaVigilarSubtipo4 extends Command
 
         $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
 
+        // Antes del aviso y antes de medir: los dos se llevan segundos que el
+        // hueco puede no tener, y medir además le toma la sesión al operador.
+        //
+        // `--simular-ventana` es para probar este camino a mano: la liquidación
+        // automática solo se ejecuta de verdad cuando el hueco se abre, y el
+        // hueco aparece una vez al día y dura minutos, así que sin esto la
+        // primera ejecución de la vida sería a ciegas y de madrugada. El
+        // archivo que sale es el real: si el hueco está cerrado el operador lo
+        // rechaza con 2.655 y no se crea ninguna planilla.
+        $liquidadas = ($limpias || $this->option('simular-ventana'))
+            ? $this->liquidarPendientes()
+            : [];
+
         if ($limpias && ! $this->option('sin-aviso')) {
             // Una vez cada 6 h: si la ventana dura, no conviene repetir el aviso
             // cada media hora, pero sí recordarlo si sigue abierta un rato después.
@@ -151,7 +191,9 @@ class PlanillaVigilarSubtipo4 extends Command
                 "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
                 .'Cédulas que pasaron limpias: '.implode(', ', $limpias)."\n"
                 ."Período {$mes}/{$anio}.\n\n"
-                .'Entra a liquidar ahora: la ventana puede cerrarse.',
+                .($liquidadas
+                    ? "Liquidación automática:\n".implode("\n", $liquidadas)
+                    : 'Entra a liquidar ahora: la ventana puede cerrarse.'),
                 360
             );
             $this->info('Aviso enviado por WhatsApp.');
@@ -188,6 +230,125 @@ class PlanillaVigilarSubtipo4 extends Command
         }
 
         return now()->minute % $cada === 0;
+    }
+
+    /**
+     * Liquida las tandas que estaban esperando el hueco, en el mismo instante
+     * en que el sondeo lo encuentra.
+     *
+     * Pasa por `PlanillaApiController::liquidar`, el mismo camino que el botón
+     * del panel: ahí viven el rechazo de la tanda mezclada, el filtro por
+     * aliado, la validación del operador y de la credencial, y el registro del
+     * número de planilla en los planos. Insertar la planilla a mano se saltaría
+     * todo eso.
+     *
+     * **No duplica.** El controlador responde 409 cuando la tanda ya tiene
+     * planilla liquidada y aquí nunca se manda `reliquidar`, así que si el
+     * hueco dura y el vigía vuelve a entrar un minuto después, la segunda
+     * corrida se topa con el 409 y no crea nada. Es la única barrera que
+     * importa: lo demás son sondeos con freno que no liquidan jamás.
+     *
+     * @return string[] una línea por tanda, para el aviso
+     */
+    private function liquidarPendientes(): array
+    {
+        if ($this->option('sin-liquidar')) {
+            return [];
+        }
+
+        if (! (int) ConfiguracionBrynex::obtener(self::CONFIG_LIQUIDAR, 0)) {
+            $this->line(now()->format('d-m H:i:s').'  (liquidación automática apagada)');
+
+            return [];
+        }
+
+        $tandas = json_decode((string) ConfiguracionBrynex::obtener(self::CONFIG_TANDAS, ''), true);
+
+        if (! is_array($tandas) || ! $tandas) {
+            $this->warn('Liquidación automática prendida pero sin tandas en '.self::CONFIG_TANDAS.'.');
+
+            return [];
+        }
+
+        $lineas = [];
+
+        foreach ($tandas as $t) {
+            if (! is_array($t) || empty($t['aliado']) || empty($t['rs'])) {
+                continue;
+            }
+
+            $etiqueta = (string) ($t['etiqueta'] ?? ('rs '.$t['rs']));
+            $lineas[] = $etiqueta.': '.$this->liquidarTanda($t, $etiqueta);
+        }
+
+        return $lineas;
+    }
+
+    /**
+     * Una tanda. Devuelve el texto que va al aviso y al registro.
+     *
+     * @param  array<string, mixed>  $t
+     */
+    private function liquidarTanda(array $t, string $etiqueta): string
+    {
+        $sello = now()->format('d-m H:i:s');
+
+        try {
+            // El controlador lee el aliado de la sesión, igual que con un
+            // usuario en el navegador, y de ahí sale el filtro multi-tenant.
+            session(['aliado_id_activo' => (int) $t['aliado']]);
+
+            $req = Request::create('/admin/planilla-api/liquidar', 'POST', [
+                'razon_social_id' => (int) $t['rs'],
+                'operador_planilla_id' => (int) ($t['operador'] ?? 6),   // Simple
+                'mes' => (int) ($t['mes'] ?? now()->month),
+                'anio' => (int) ($t['anio'] ?? now()->year),
+                'n_plano' => (int) ($t['n_plano'] ?? 1),
+                'tipos_modalidad' => array_map('intval', (array) ($t['mods'] ?? [])),
+            ]);
+            $req->setLaravelSession(app('session.store'));
+            $req->setUserResolver(fn () => Auth::user());
+
+            $resp = app(\App\Http\Controllers\Admin\PlanillaApiController::class)->liquidar($req);
+            $data = json_decode($resp->getContent(), true) ?: [];
+            $http = $resp->getStatusCode();
+
+            $planilla = $data['numero_planilla']
+                ?? ($data['planilla']['numero_planilla'] ?? null);
+
+            if (($data['success'] ?? false) && ($data['liquidada'] ?? false) && $planilla) {
+                $texto = "planilla {$planilla}";
+                Log::warning('vigia-subtipo4: liquidó en la ventana', [
+                    'tanda' => $etiqueta, 'planilla' => $planilla,
+                ]);
+            } elseif ($http === 409) {
+                $texto = 'ya tenía planilla '.($planilla ?: '').' (409), no se tocó';
+            } else {
+                // El caso que importa entender después: el operador contestó
+                // bien pero no liquidó, casi siempre porque el hueco se cerró
+                // entre el sondeo y el archivo. Las reglas lo dicen.
+                $reglas = collect(array_merge(
+                    $data['errores_cotizante'] ?? [], $data['errores_empresa'] ?? []
+                ))->pluck('idRegla')->filter()->unique()->take(6)->implode(' ');
+
+                $texto = "NO liquidó · http {$http} · "
+                    .substr((string) ($data['message'] ?? '(sin mensaje)'), 0, 140)
+                    .($reglas ? " · {$reglas}" : '');
+
+                Log::error('vigia-subtipo4: la ventana se abrió y la liquidación falló', [
+                    'tanda' => $etiqueta, 'http' => $http, 'respuesta' => $data,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            $texto = 'ERROR '.get_class($e).' :: '.substr($e->getMessage(), 0, 160);
+            Log::error('vigia-subtipo4: excepción liquidando en la ventana', [
+                'tanda' => $etiqueta, 'error' => $e->getMessage(),
+            ]);
+        }
+
+        $this->line("{$sello}  >> {$etiqueta} → {$texto}");
+
+        return $texto;
     }
 
     /**
