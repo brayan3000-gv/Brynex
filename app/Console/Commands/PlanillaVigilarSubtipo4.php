@@ -65,8 +65,8 @@ class PlanillaVigilarSubtipo4 extends Command
         {--credencial= : Id de la credencial de Simple con la que entra (pisa la configurada)}
         {--cada= : Minutos entre sondeos programados (pisa la configuración)}
         {--programado : Lo pone el planificador: respeta la cadencia configurada}
-        {--medir-cada=30 : Segundos entre sondeos mientras la ventana está abierta}
-        {--medir-max=30 : Minutos máximos midiendo una ventana abierta}
+        {--medir-cada= : Segundos entre sondeos mientras la ventana está abierta}
+        {--medir-max= : Minutos máximos midiendo una ventana abierta}
         {--sin-medir : No se queda midiendo cuando la ventana se abre}
         {--sin-aviso : Sondea y registra, pero no manda WhatsApp}';
 
@@ -101,6 +101,18 @@ class PlanillaVigilarSubtipo4 extends Command
      * el comportamiento viejo.
      */
     private const CONFIG_CREDENCIAL = 'vigia_subtipo4_credencial_id';
+
+    /**
+     * Cuánto se queda midiendo una ventana abierta.
+     *
+     * Mientras mide, el vigía tiene tomada la sesión del operador —una sola
+     * por usuario—, así que una medición larga le bloquea el paso a la
+     * liquidación que la ventana venía a permitir. Vive en configuración para
+     * poder acortarla cuando hay planillas esperando, sin desplegar.
+     */
+    private const CONFIG_MEDIR_CADA = 'vigia_subtipo4_medir_cada_seg';
+
+    private const CONFIG_MEDIR_MAX = 'vigia_subtipo4_medir_max_min';
 
     /**
      * Aportante con el que se sondea: tiene que ser uno viejo y bien
@@ -223,8 +235,10 @@ class PlanillaVigilarSubtipo4 extends Command
         int $anio,
         array $primeras
     ): void {
-        $cadaSeg = max(5, (int) $this->option('medir-cada'));
-        $maxMin = max(1, (int) $this->option('medir-max'));
+        $cadaSeg = max(5, (int) ($this->option('medir-cada')
+            ?: ConfiguracionBrynex::obtener(self::CONFIG_MEDIR_CADA, 30)));
+        $maxMin = max(1, (int) ($this->option('medir-max')
+            ?: ConfiguracionBrynex::obtener(self::CONFIG_MEDIR_MAX, 30)));
 
         $abrio = now();
         $ultimaLimpia = $abrio;
