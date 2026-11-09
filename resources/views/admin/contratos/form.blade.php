@@ -621,38 +621,52 @@
         @if($comfandiApi)
         {{-- Comfandi por API: certificado con beneficiarios + consulta de subsidios.
              Solo aparece cuando la caja del contrato es Comfandi. --}}
-        <div style="margin-top:0.45rem;" @keydown.escape.window="$data.open=false" x-data="{
+        <div style="display:inline-block;margin-left:0.35rem;vertical-align:middle;" @keydown.escape.window="open=false" x-data="{
               open:false, cargando:'', error:'', datos:null,
+              csrf: document.querySelector('meta[name=csrf-token]')?.content || '',
+              async lanzar(tipo){
+                const r = await fetch('{{ route('admin.afiliaciones.caja-comfandi.api-lanzar', $contrato->id) }}', {method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':this.csrf}, body:JSON.stringify({tipo})});
+                const d = await r.json().catch(()=>({}));
+                if(!r.ok || !d.ok) throw new Error(d.error || 'No se pudo lanzar la consulta.');
+                return d.token;
+              },
+              async sondear(token){
+                const base='{{ route('admin.afiliaciones.caja-comfandi.api-estado', '__T__') }}';
+                for(let i=0;i<70;i++){
+                  await new Promise(res=>setTimeout(res,5000));
+                  const r = await fetch(base.replace('__T__', token), {headers:{'Accept':'application/json'}});
+                  if(r.status===404) continue;
+                  const d = await r.json().catch(()=>({}));
+                  if(d.estado==='listo') return d;
+                  if(d.estado==='error') throw new Error(d.error||'La consulta falló.');
+                }
+                throw new Error('La consulta tardó demasiado; intenta de nuevo.');
+              },
               async subsidios(){
                 this.error=''; this.datos=null; this.cargando='subsidios';
-                try{
-                  const r = await fetch('{{ route('admin.afiliaciones.caja-comfandi.datos-api', $contrato->id) }}', {headers:{'Accept':'application/json'}});
-                  const d = await r.json().catch(()=>({}));
-                  if(!r.ok || !d.ok) throw new Error(d.error || 'No se pudo consultar Comfandi.');
-                  this.datos = d;
-                }catch(e){ this.error = e.message; }
+                try{ const t=await this.lanzar('datos'); this.datos=await this.sondear(t); }
+                catch(e){ this.error=e.message; }
                 this.cargando='';
               },
               async certificado(){
                 this.error=''; this.cargando='certificado';
                 try{
-                  const r = await fetch('{{ route('admin.afiliaciones.caja-comfandi.certificado', $contrato->id) }}', {headers:{'Accept':'application/pdf'}});
-                  if(!r.ok){ let m='No se pudo obtener el certificado.'; try{ m=(await r.json()).error||m; }catch(e){} throw new Error(m); }
-                  const blob = await r.blob();
-                  window.open(URL.createObjectURL(blob), '_blank');
-                }catch(e){ this.error = e.message; }
+                  const t=await this.lanzar('certificado'); const d=await this.sondear(t);
+                  const bin=atob(d.base64); const bytes=new Uint8Array(bin.length);
+                  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+                  const url=URL.createObjectURL(new Blob([bytes],{type:d.contentType||'application/pdf'}));
+                  const a=document.createElement('a'); a.href=url; a.download='certificado-comfandi-{{ $contrato->cedula }}.pdf'; document.body.appendChild(a); a.click(); a.remove();
+                  setTimeout(()=>URL.revokeObjectURL(url), 10000);
+                }catch(e){ this.error=e.message; }
                 this.cargando='';
               }
             }">
-          <button type="button" @click="open=true"
-              style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#1d4ed8;border-radius:7px;padding:0.3rem 0.75rem;font-size:0.72rem;font-weight:700;cursor:pointer;">
-            📊 Comfandi (API)
-          </button>
+          <button type="button" @click="open=true" title="Comfandi (API): certificado y subsidios"
+              style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);border-radius:7px;padding:0.15rem 0.4rem;font-size:0.95rem;line-height:1;cursor:pointer;">📊</button>
 
-          <template x-teleport="body">
-            <div x-show="open" x-cloak @click.self="open=false"
-                 style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;">
-              <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:660px;max-height:88vh;overflow:auto;">
+          <div x-show="open" x-cloak @click.self="open=false"
+               style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;">
+            <div @click.stop style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:660px;max-height:88vh;overflow:auto;text-align:left;">
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:0.9rem 1.2rem;border-bottom:1px solid #e5e7eb;">
                   <div>
                     <div style="font-weight:800;color:#0e7490;font-size:0.95rem;">📊 Comfandi (API)</div>
@@ -713,7 +727,6 @@
                 </div>
               </div>
             </div>
-          </template>
         </div>
         @endif
         <div id="aviso-caja-rs" style="display:none;font-size:0.66rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:0.2rem 0.4rem;margin-top:0.25rem;line-height:1.3;"></div>

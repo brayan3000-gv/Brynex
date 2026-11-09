@@ -338,6 +338,53 @@ class ComfandiCajaController extends Controller
         ]);
     }
 
+    /**
+     * Lanza en segundo plano la consulta Comfandi (datos o certificado) y
+     * devuelve un token. El robot tarda 1–3 min, así que no se espera en la
+     * petición: el modal sondea `comfandiApiEstado($token)`. Ver el Job.
+     */
+    public function comfandiApiLanzar(int $contratoId, Request $request, \App\Services\Caja\ComfandiApi $api)
+    {
+        $tipo = $request->input('tipo') === 'certificado' ? 'certificado' : 'datos';
+
+        $contrato = $this->contrato($contratoId);
+        $contrato->loadMissing('razonSocial');
+
+        $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
+        $cedula = preg_replace('/\D/', '', (string) $contrato->cedula);
+
+        if (! $nit || ! $cedula) {
+            return response()->json(['ok' => false, 'error' => 'El contrato no tiene NIT de la razón social o cédula.'], 422);
+        }
+
+        if (! $api->disponible()) {
+            return response()->json(['ok' => false, 'error' => 'Falta configurar el gestor de Comfandi (clave + secreto 2FA en el módulo de claves).'], 422);
+        }
+
+        $tipos = ['CC' => 'CO1C', 'CE' => 'CO1E', 'TI' => 'CO1T', 'PT' => 'CO1Y', 'PPT' => 'CO1Y', 'PE' => 'CO1Y'];
+        $tipoCliente = strtoupper((string) \App\Models\Cliente::where('cedula', $cedula)
+            ->where('aliado_id', $contrato->aliado_id)->value('tipo_doc'));
+        $tipoDoc = $tipos[$tipoCliente] ?? 'CO1C';
+
+        $token = \Illuminate\Support\Str::random(24);
+        Cache::put(\App\Jobs\ComfandiConsultaApiJob::clave($token), ['estado' => 'corriendo'], now()->addMinutes(15));
+        \App\Jobs\ComfandiConsultaApiJob::dispatch($token, $tipo, $nit, $cedula, $tipoDoc);
+
+        return response()->json(['ok' => true, 'token' => $token]);
+    }
+
+    /** Estado/resultado de una consulta Comfandi lanzada por comfandiApiLanzar. */
+    public function comfandiApiEstado(string $token)
+    {
+        $r = Cache::get(\App\Jobs\ComfandiConsultaApiJob::clave($token));
+
+        if (! $r) {
+            return response()->json(['estado' => 'desconocido'], 404)->header('Cache-Control', 'no-store');
+        }
+
+        return response()->json($r)->header('Cache-Control', 'no-store');
+    }
+
     /** La corrida consolidada de BryNex no se mezcla con la de cada aliado. */
     private function claveEstado(): string
     {

@@ -978,12 +978,8 @@ function sortClass($col, $currSort, $currDir) {
                     onclick="cajaComfandiDesdeRadicado()">
                     🏢 Afiliar a Comfandi
                 </button>
-                {{-- Datos en vivo de Comfandi por API (trabajador + beneficiarios + subsidios), sin extensión --}}
-                <button id="btnDatosComfandiApi" type="button"
-                    style="display:none;align-items:center;gap:0.35rem;padding:0.3rem 0.85rem;background:linear-gradient(135deg,#0e7490,#0891b2);color:#fff;border:none;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(8,145,178,0.3);"
-                    onclick="datosComfandiApi(this._ctx)">
-                    📊 Datos Comfandi (API)
-                </button>
+                {{-- La consulta de datos/certificado de Comfandi por API vive ahora
+                     en la ficha del contrato (botón 📊 junto a la Caja). --}}
                 {{-- Portal Boxalud (Emssanar): Ingreso de afiliación con la extensión --}}
                 <button id="btnBoxalud" type="button"
                     style="display:none;align-items:center;gap:0.35rem;padding:0.3rem 0.85rem;background:linear-gradient(135deg,#4d7c0f,#65a30d);color:#fff;border:none;border-radius:7px;font-size:0.75rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(101,163,13,0.3);"
@@ -1980,12 +1976,6 @@ function abrirModalRadicado(radId, radData, ctx = {}, contratoId = null, tieneFo
     const esComfandi = (radData.tipo === 'caja') && /COMFANDI/i.test(ctx.caja || '');
     btnCajaCfd.style.display = (PUEDE_AUTOMATIZAR && esComfandi && radData.estado !== 'ok') ? 'inline-flex' : 'none';
     btnCajaCfd._contratoId = contratoId || ctx.id || null;
-
-    // Datos en vivo de Comfandi por API: disponible para cualquier caja Comfandi
-    // (afiliado o no), para ver trabajador + beneficiarios + subsidios.
-    const btnDatosCfd = document.getElementById('btnDatosComfandiApi');
-    btnDatosCfd.style.display = (PUEDE_AUTOMATIZAR && esComfandi) ? 'inline-flex' : 'none';
-    btnDatosCfd._ctx = { ...ctx, id: contratoId || ctx.id || null };
 
     // Portal Boxalud (Emssanar), mientras no esté en OK. El correo queda como plan B dentro del modal.
     const btnBox = document.getElementById('btnBoxalud');

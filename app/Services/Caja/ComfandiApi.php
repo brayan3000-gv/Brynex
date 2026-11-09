@@ -88,21 +88,38 @@ class ComfandiApi
             'visible' => $visible,
         ], $opciones), JSON_UNESCAPED_UNICODE);
 
-        $resultado = Process::path(base_path())
-            ->timeout($segundos ?? self::SEGUNDOS_BASE)
-            ->input($entrada)
-            ->run($this->comando());
+        // El robot abre un perfil de Chrome único por gestor (SingletonLock): dos
+        // corridas a la vez chocan y una queda tumbada (fue lo que colgó una
+        // consulta). Se serializan con un lock por usuario; si hay otra en curso,
+        // espera su turno y si no lo alcanza, avisa sin tumbar nada.
+        $segs = $segundos ?? self::SEGUNDOS_BASE;
+        $lock = \Illuminate\Support\Facades\Cache::lock('comfandi-robot:'.$g['usuario'], $segs + 60);
 
-        $salida = json_decode(trim($resultado->output()), true) ?: [];
-
-        if (! ($salida['ok'] ?? false)) {
-            return [
-                'ok' => false,
-                'error' => $salida['error'] ?? (trim($resultado->errorOutput()) ?: 'El portal no respondió.'),
-            ];
+        try {
+            $lock->block($segs + 40);
+        } catch (\Throwable) {
+            return ['ok' => false, 'error' => 'Hay otra consulta de Comfandi en curso; intenta de nuevo en un momento.'];
         }
 
-        return $salida;
+        try {
+            $resultado = Process::path(base_path())
+                ->timeout($segs)
+                ->input($entrada)
+                ->run($this->comando());
+
+            $salida = json_decode(trim($resultado->output()), true) ?: [];
+
+            if (! ($salida['ok'] ?? false)) {
+                return [
+                    'ok' => false,
+                    'error' => $salida['error'] ?? (trim($resultado->errorOutput()) ?: 'El portal no respondió.'),
+                ];
+            }
+
+            return $salida;
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
