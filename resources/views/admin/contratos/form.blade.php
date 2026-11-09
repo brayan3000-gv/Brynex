@@ -664,8 +664,10 @@
           <button type="button" @click="open=true" title="Comfandi (API): certificado y subsidios"
               style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);border-radius:7px;padding:0.15rem 0.4rem;font-size:0.95rem;line-height:1;cursor:pointer;">📊</button>
 
-          <div x-show="open" x-cloak @click.self="open=false"
-               style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;padding:1rem;">
+          {{-- :style en vez de x-show: x-show pisaba el display:flex y el modal
+               quedaba en block, pegado arriba-izquierda. --}}
+          <div x-cloak @click.self="open=false"
+               :style="'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:1rem;display:'+(open?'flex':'none')">
             <div @click.stop style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:660px;max-height:88vh;overflow:auto;text-align:left;">
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:0.9rem 1.2rem;border-bottom:1px solid #e5e7eb;">
                   <div>
