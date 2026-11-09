@@ -854,7 +854,10 @@ try {
       await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
       await esperar(1500);
       salida.empresaElegida = await escogerEmpresaPorNombre(pagina, emp.name);
-      await esperar(1500);
+      // La sesión necesita un respiro tras elegir la empresa: si el /sap sale
+      // enseguida a veces vuelve vacío (arranque en frío). ComfandiApi reintenta
+      // la corrida completa si pasa, pero este margen hace que casi nunca pase.
+      await esperar(2800);
     }
 
     if (cid && nit) {

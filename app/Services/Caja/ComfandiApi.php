@@ -105,6 +105,30 @@ class ComfandiApi
         return $salida;
     }
 
+    /**
+     * Como ejecutar(), pero si vuelve «ok» sin titular para esa cédula reintenta
+     * UNA vez. Esa es la firma del arranque en frío del robot: entra y saca el
+     * token, pero recién elegida la empresa la sesión aún no asienta y el /sap
+     * —y con él los subsidios— vuelve vacío. En la segunda corrida el perfil ya
+     * está caliente y trae los datos, así que un arranque en frío no se confunde
+     * con «no está en la caja». Un titular presente pero sin movimientos sí es
+     * real (está afiliado, sin subsidios) y no gatilla el reintento.
+     */
+    private function ejecutarConTitular(array $opciones, string $cedula, ?int $segundos = null): array
+    {
+        $r = $this->ejecutar($opciones, $segundos);
+
+        $sinTitular = fn (array $x): bool => ($x['ok'] ?? false)
+            && ($x['trabajadores'][$cedula]['body']['Titular'][0] ?? null) === null;
+
+        if ($sinTitular($r)) {
+            $r = $this->ejecutar($opciones, $segundos);
+            $r['reintento'] = true;
+        }
+
+        return $r;
+    }
+
     /** Las empresas del gestor con su x-company-id (del token). */
     public function empresas(): array
     {
@@ -121,11 +145,11 @@ class ComfandiApi
     public function trabajador(string $nit, string $cedula): array
     {
         $cedula = preg_replace('/\D/', '', $cedula);
-        $r = $this->ejecutar([
+        $r = $this->ejecutarConTitular([
             'modo' => 'subsidios', // el modo con documentos: trae /sap del trabajador
             'nit' => preg_replace('/\D/', '', $nit),
             'documentos' => [$cedula],
-        ]);
+        ], $cedula);
 
         if (! ($r['ok'] ?? false)) {
             return ['ok' => false, 'error' => $r['error'] ?? 'No se pudo consultar.'];
@@ -151,14 +175,14 @@ class ComfandiApi
         $cedula = preg_replace('/\D/', '', $cedula);
         $meses = $this->mesesEntre($desde, $hasta);
 
-        $r = $this->ejecutar([
+        $r = $this->ejecutarConTitular([
             'modo' => 'subsidios',
             'nit' => preg_replace('/\D/', '', $nit),
             'documentos' => [$cedula],
             'desde' => $desde,
             'hasta' => $hasta,
             'meses' => $meses,
-        ], self::SEGUNDOS_BASE + self::SEGUNDOS_POR_DOC + 30);
+        ], $cedula, self::SEGUNDOS_BASE + self::SEGUNDOS_POR_DOC + 30);
 
         if (! ($r['ok'] ?? false)) {
             return ['ok' => false, 'error' => $r['error'] ?? 'No se pudo consultar.'];
@@ -179,14 +203,14 @@ class ComfandiApi
     {
         $cedula = preg_replace('/\D/', '', $cedula);
 
-        $r = $this->ejecutar([
+        $r = $this->ejecutarConTitular([
             'modo' => 'subsidios',
             'nit' => preg_replace('/\D/', '', $nit),
             'documentos' => [$cedula],
             'desde' => $desde,
             'hasta' => $hasta,
             'meses' => $this->mesesEntre($desde, $hasta),
-        ], self::SEGUNDOS_BASE + self::SEGUNDOS_POR_DOC + 30);
+        ], $cedula, self::SEGUNDOS_BASE + self::SEGUNDOS_POR_DOC + 30);
 
         if (! ($r['ok'] ?? false)) {
             return ['ok' => false, 'error' => $r['error'] ?? 'No se pudo consultar.'];
