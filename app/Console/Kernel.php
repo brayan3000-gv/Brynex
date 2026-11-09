@@ -223,6 +223,23 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping(45)
             ->appendOutputTo(storage_path('logs/vigia-subtipo4.log'));
 
+        // Vigía de la ficha del aportante en Simple.
+        //
+        // Si el permiso de los pagos sin pensión vive en la configuración del
+        // aportante —la hipótesis de [[mega-tech-simple-sin-pension]]—, el día
+        // que un tercero mueva un interruptor ahí no avisa nadie: la ficha
+        // queda distinta y punto. Esto guarda copia y compara.
+        //
+        // Una vez al día alcanza (los pagos se concentran antes del 25) y así
+        // casi no le quita la sesión de Simple al vigía de subtipo 4, que
+        // comparte credencial.
+        $schedule->command('aportante:vigilar-ficha')
+            ->dailyAt('06:40')
+            ->timezone('America/Bogota')
+            ->name('vigia-fichas')
+            ->withoutOverlapping(20)
+            ->appendOutputTo(storage_path('logs/vigia-fichas.log'));
+
         $schedule->command('corridas:resumen --horas=12')
             ->dailyAt('07:30')
             ->timezone('America/Bogota')
