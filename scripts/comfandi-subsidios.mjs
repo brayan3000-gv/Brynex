@@ -26,8 +26,9 @@
  * Imprime en stdout {ok, nit, empresa, movimientos[], revisados[], errores[]}.
  * Las credenciales entran por stdin y nunca se escriben en el log.
  */
-import { rmSync, mkdirSync } from 'node:fs';
+import { rmSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
+import { createServer } from 'node:http';
 import puppeteer from 'puppeteer-core';
 
 const HOST = 'https://afiliaciones.sucursalcomfandi.com';
@@ -88,9 +89,20 @@ const insistir = async (pagina, fn, args = [], limite = 25000) => {
   return null;
 };
 
+// El daemon se arranca "desprendido" (detached) desde PHP, donde pasar la clave
+// por argv la dejaría visible en `ps`. Por eso la entrada va en un archivo
+// (--entrada-file=ruta) que se lee y se borra enseguida. En las corridas de un
+// disparo sigue llegando por argv[2] o stdin, como siempre.
 let entrada;
 try {
-  entrada = JSON.parse(process.argv[2] || await leerStdin() || '{}');
+  const arg = (process.argv.slice(2).find((a) => a.startsWith('--entrada-file=')) || '').slice('--entrada-file='.length);
+  if (arg) {
+    const crudo = readFileSync(arg, 'utf8');
+    try { unlinkSync(arg); } catch { /* ya no está */ }
+    entrada = JSON.parse(crudo || '{}');
+  } else {
+    entrada = JSON.parse((process.argv[2] && !process.argv[2].startsWith('--') ? process.argv[2] : '') || await leerStdin() || '{}');
+  }
 } catch {
   salir({ ok: false, error: 'Entrada JSON inválida.' });
 }
@@ -120,6 +132,14 @@ const hasta = String(entrada.hasta || '').trim();
 // trabajador) y el tipo de documento del trabajador (CO1C = cédula).
 const certCodigo = String(entrada.certCodigo || 'BEN').trim().toUpperCase();
 const tipoDocTrab = String(entrada.tipoDocTrab || 'CO1C').trim().toUpperCase();
+// Modo servicio ("sesión caliente"): tras entrar, queda vivo atendiendo consultas
+// por HTTP local reusando la misma sesión; se apaga tras `inactividadMs` sin uso.
+const servidor = entrada.servidor === true && via === 'api';
+const inactividadMs = Math.max(60, Math.min(1800, parseInt(entrada.inactividadSeg) || 720)) * 1000;
+// Latido de mantenimiento: cada tanto el daemon refresca el token por dentro
+// (una navegación liviana) para que no caduque entre huecos de consultas. Debe
+// ser más corto que la vida del token de acceso. No es un login.
+const latidoMs = Math.max(30, Math.min(600, parseInt(entrada.latidoSeg) || 100)) * 1000;
 
 if (!usuario || !contrasena) salir({ ok: false, error: 'Faltan usuario o contraseña.' });
 const modo = ['listado', 'certificado'].includes(entrada.modo) ? entrada.modo : 'subsidios';
@@ -589,10 +609,24 @@ try {
 
   // Con el perfil persistente la sesión puede seguir viva (confianza de 60 días):
   // si ya se está dentro, el formulario de login no existe y hay que saltárselo,
-  // o si no el script se quedaba buscando el campo de tipo de documento.
-  const yaDentro0 = await pagina.evaluate(() =>
-    /cerrar sesi[oó]n|actualmente est[aá]s en|¿qu[eé] quieres hacer hoy|selecciona tu empresa/i.test(document.body.innerText || '')
-  ).catch(() => false);
+  // o si no el script se quedaba buscando el campo de tipo de documento. El panel
+  // se hidrata después de networkidle2, así que un chequeo único llegaba temprano
+  // y creía que NO estaba dentro (y luego fallaba al no hallar el formulario). Se
+  // sondea hasta que la página se define: o el panel de "ya dentro", o el login.
+  let yaDentro0 = false;
+  for (let i = 0; i < 20; i++) {
+    const estado = await pagina.evaluate(() => {
+      const t = document.body.innerText || '';
+      return {
+        dentro: /cerrar sesi[oó]n|actualmente est[aá]s en|¿qu[eé] quieres hacer hoy|selecciona tu empresa/i.test(t),
+        login: !!document.querySelector('input[name=password]') || !!document.querySelector('input.documentTypeSearchInput')
+          || [...document.querySelectorAll('button,a')].some(x => /iniciar sesi/i.test(x.innerText || '')),
+      };
+    }).catch(() => ({ dentro: false, login: false }));
+    if (estado.dentro) { yaDentro0 = true; break; }
+    if (estado.login) { yaDentro0 = false; break; }
+    await esperar(500);
+  }
 
   if (!yaDentro0) {
   await insistir(pagina, () => {
@@ -851,127 +885,218 @@ try {
     });
 
     const hoy = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const salida = { ok: true, via: 'api' };
     // El mapa de empresas del gestor (NIT → GUID), para que PHP lo use o guarde.
-    salida.empresas = empresas.map((e) => ({ id: e.id, nit: e.identification, nombre: e.name, afiliada: e.is_affiliated, roles: e.roles }));
+    const empresasMap = empresas.map((e) => ({ id: e.id, nit: e.identification, nombre: e.name, afiliada: e.is_affiliated, roles: e.roles }));
 
-    const emp = empresaDe(nit);
-    const cid = companyId || emp?.id || null;
-    // affiliateNit va CON dígito de verificación (9021031841, no 902103184); el
-    // token lo trae en `identification` ("902103184-1").
-    const nitDv = soloDigitos(emp?.identification || nit);
-    salida.companyId = cid;
-
-    // Subsidios solo salen con la empresa seleccionada en la sesión (no basta el
-    // x-company-id). Se selecciona la del NIT pedido; apiRia ya usa el token más
-    // nuevo (apiToken se re-captura con las llamadas que dispara la selección).
-    if (emp && emp.name) {
+    // Re-login suave: el token de acceso vive pocos minutos; una navegación al
+    // portal hace que la app pida uno nuevo (NextAuth lo refresca) y
+    // page.on('request') lo recaptura. Si la sesión SSO ya murió del todo no
+    // refresca, y ahí el daemon reporta el fallo (PHP lo relanza con login
+    // completo). No pide 2FA por la confianza de 60 días.
+    const reLoguear = async () => {
+      const antes = apiToken;
       await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
-      await esperar(1500);
-      salida.empresaElegida = await escogerEmpresaPorNombre(pagina, emp.name);
-      // La sesión necesita un respiro tras elegir la empresa: si el /sap sale
-      // enseguida a veces vuelve vacío (arranque en frío). ComfandiApi reintenta
-      // la corrida completa si pasa, pero este margen hace que casi nunca pase.
-      await esperar(2800);
-    }
+      for (let i = 0; i < 16 && apiToken === antes; i++) await esperar(500);
+      return !!apiToken && apiToken !== antes;
+    };
 
-    if (cid && nit) {
-      if (modo === 'listado') {
-        salida.listado = await apiRia(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=2000`, cid);
-      } else if (modo === 'certificado' && documentos.length) {
-        // Certificado por API: POST a /certificate/new-create-affiliation.
-        // certificateCode BEN = con beneficiarios; companyDocNum va CON dígito de
-        // verificación (ej. 901709476-5). La respuesta es el PDF (binario → base64).
-        salida.certificados = {};
-        for (const doc of documentos) {
-          salida.certificados[doc] = await apiRia('/certificate/new-create-affiliation', cid, {
-            method: 'POST', binario: true,
-            body: {
-              workerDocType: tipoDocTrab, workerDocNum: doc,
-              companyDocType: 'CO1N', companyDocNum: emp?.identification || nit,
-              certificateCode: certCodigo,
-            },
-          });
-        }
-      } else if (documentos.length) {
-        salida.trabajadores = {};
-        salida.subsidios = {};
-        for (const doc of documentos) {
-          salida.trabajadores[doc] = await apiRia(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=1&documentType=CO1C&documentNumber=${doc}`, cid);
-          if (desde && hasta) {
-            // getMovements no se puede replicar por fetch (da 400 fuera de la
-            // sesión del portal); se maneja la pantalla de Subsidio monetario con
-            // "Búsqueda general" (trae pagos, retiros y bloqueos) y se captura la
-            // RESPUESTA JSON que devuelve el portal, en vez de raspar el DOM.
-            // La app dispara getMovements al abrir la pantalla; se captura el
-            // TOKEN y el x-company-id de ESA llamada (los del portal, que sí
-            // sirven), más las respuestas que lleguen. Luego se re-ejecuta
-            // getMovements con ese token para el rango completo, sin depender del
-            // datepicker (que es lo frágil).
-            const mov = [];
-            const respuestas = [];
-            let gmAuth = null, gmCid = null;
-            const onReq = (req) => {
-              try {
-                if (! /monetary-subsidy\/getMovements/.test(req.url())) return;
-                const h = req.headers() || {};
-                if (h.authorization) gmAuth = h.authorization;
-                if (h['x-company-id']) gmCid = h['x-company-id'];
-              } catch { /* */ }
-            };
-            const onResp = async (r) => {
-              try {
-                if (! /monetary-subsidy\/getMovements/.test(r.url())) return;
-                let n = 0;
-                if (r.status() === 200) {
-                  const j = await r.json().catch(() => null);
-                  // Los movimientos vienen en data.movements (data es {total, movements}).
-                  const arr = j && j.data && Array.isArray(j.data.movements) ? j.data.movements : null;
-                  if (arr) { n = arr.length; if (n) mov.push(...arr); }
-                }
-                const u = new URL(r.url());
-                respuestas.push({ status: r.status(), fi: u.searchParams.get('fechaInicio'), ff: u.searchParams.get('fechaFin'), n });
-              } catch { /* */ }
-            };
-            pagina.on('request', onReq);
-            pagina.on('response', onResp);
-            let errSub = null;
-            try {
-              const res = await bloqueosDe(pagina, doc, 'B[uú]squeda general');
-              if (typeof res === 'string' && res !== 'no-esta') errSub = res;
-            } catch (e) { errSub = String(e).slice(0, 150); }
-            await esperar(2000);
+    // apiRia con reintento tras re-login si la respuesta es 401 (sesión caduca).
+    const apiRiaAuth = async (path, cid, opts = {}) => {
+      let r = await apiRia(path, cid, opts);
+      if (r && r.status === 401 && await reLoguear()) r = await apiRia(path, cid, opts);
+      return r;
+    };
 
-            // Re-ejecutar con el token de getMovements para el rango completo.
-            let replay = null;
-            if (gmAuth) {
-              replay = await pagina.evaluate(async (base, auth, cid, d, h, docu) => {
+    // Una consulta: selecciona la empresa del NIT en la sesión y hace el dispatch
+    // (sap/listado/certificado/subsidios). Devuelve la salida de ESA consulta.
+    // En modo servidor se llama una vez por request; en un disparo, una sola vez.
+    const atender = async (op) => {
+      const unNit = String(op.nit || '').replace(/\D/g, '');
+      const docs = (op.documentos || []).map((d) => String(d).replace(/\D/g, '')).filter(Boolean);
+      const unModo = ['listado', 'certificado'].includes(op.modo) ? op.modo : 'subsidios';
+      const opDesde = String(op.desde || '').trim();
+      const opHasta = String(op.hasta || '').trim();
+      const opTipoDoc = String(op.tipoDocTrab || 'CO1C').trim().toUpperCase();
+      const opCert = String(op.certCodigo || 'BEN').trim().toUpperCase();
+
+      const salida = { ok: true, via: 'api', empresas: empresasMap };
+      const emp = empresaDe(unNit);
+      // affiliateNit va CON dígito de verificación (9021031841); el token lo trae
+      // en `identification` ("902103184-1").
+      const cid = String(op.companyId || '').trim() || emp?.id || null;
+      const nitDv = soloDigitos(emp?.identification || unNit);
+      salida.companyId = cid;
+
+      // Subsidios solo salen con la empresa seleccionada en la sesión (no basta el
+      // x-company-id). Se selecciona la del NIT pedido.
+      if (emp && emp.name) {
+        await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
+        await esperar(1500);
+        salida.empresaElegida = await escogerEmpresaPorNombre(pagina, emp.name);
+        // La sesión necesita un respiro tras elegir la empresa: si el /sap sale
+        // enseguida a veces vuelve vacío (arranque en frío).
+        await esperar(2800);
+      }
+
+      if (cid && unNit) {
+        if (unModo === 'listado') {
+          salida.listado = await apiRiaAuth(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=2000`, cid);
+        } else if (unModo === 'certificado' && docs.length) {
+          // Certificado por API: POST a /certificate/new-create-affiliation.
+          // certificateCode BEN = con beneficiarios; companyDocNum va CON dígito de
+          // verificación. La respuesta es el PDF (binario → base64).
+          salida.certificados = {};
+          for (const doc of docs) {
+            salida.certificados[doc] = await apiRiaAuth('/certificate/new-create-affiliation', cid, {
+              method: 'POST', binario: true,
+              body: {
+                workerDocType: opTipoDoc, workerDocNum: doc,
+                companyDocType: 'CO1N', companyDocNum: emp?.identification || unNit,
+                certificateCode: opCert,
+              },
+            });
+          }
+        } else if (docs.length) {
+          salida.trabajadores = {};
+          salida.subsidios = {};
+          for (const doc of docs) {
+            salida.trabajadores[doc] = await apiRiaAuth(`/sap?affilationDate=${hoy}&affiliateTypeDoc=CO1N&affiliateNit=${nitDv}&page=1&maxLength=1&documentType=CO1C&documentNumber=${doc}`, cid);
+            if (opDesde && opHasta) {
+              // getMovements no se puede replicar por fetch fuera de la sesión (da
+              // 400): se abre la pantalla de Subsidio monetario con "Búsqueda
+              // general", se captura el TOKEN + x-company-id de ESA llamada y sus
+              // respuestas, y se re-ejecuta getMovements con ese token para el
+              // rango completo (sin depender del datepicker, que es lo frágil).
+              const mov = [];
+              const respuestas = [];
+              let gmAuth = null, gmCid = null;
+              const onReq = (rq) => {
                 try {
-                  const r = await fetch(`${base}/monetary-subsidy/getMovements?movementType=GENERAL&fechaInicio=${d}&fechaFin=${h}&offset=0&limit=100&employeeIdType=CC&employeeIdNumber=${docu}`,
-                    { headers: { Authorization: auth, 'x-company-id': cid, Accept: 'application/json, text/plain, */*' } });
-                  const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch { /* */ }
-                  return { status: r.status, data: (j && j.data && Array.isArray(j.data.movements)) ? j.data.movements : null };
-                } catch (e) { return { status: 0, err: String(e) }; }
-              }, RIA, gmAuth, gmCid, desde, hasta, doc).catch((e) => ({ status: 0, err: String(e) }));
-            }
-            pagina.off('request', onReq);
-            pagina.off('response', onResp);
+                  if (! /monetary-subsidy\/getMovements/.test(rq.url())) return;
+                  const h = rq.headers() || {};
+                  if (h.authorization) gmAuth = h.authorization;
+                  if (h['x-company-id']) gmCid = h['x-company-id'];
+                } catch { /* */ }
+              };
+              const onResp = async (rp) => {
+                try {
+                  if (! /monetary-subsidy\/getMovements/.test(rp.url())) return;
+                  let n = 0;
+                  if (rp.status() === 200) {
+                    const j = await rp.json().catch(() => null);
+                    const arr = j && j.data && Array.isArray(j.data.movements) ? j.data.movements : null;
+                    if (arr) { n = arr.length; if (n) mov.push(...arr); }
+                  }
+                  const u = new URL(rp.url());
+                  respuestas.push({ status: rp.status(), fi: u.searchParams.get('fechaInicio'), ff: u.searchParams.get('fechaFin'), n });
+                } catch { /* */ }
+              };
+              pagina.on('request', onReq);
+              pagina.on('response', onResp);
+              let errSub = null;
+              try {
+                const res = await bloqueosDe(pagina, doc, 'B[uú]squeda general');
+                if (typeof res === 'string' && res !== 'no-esta') errSub = res;
+              } catch (e) { errSub = String(e).slice(0, 150); }
+              await esperar(2000);
 
-            const delReplay = replay && replay.status === 200 && Array.isArray(replay.data) ? replay.data : null;
-            salida.subsidios[doc] = {
-              movimientos: delReplay || mov,
-              fuente: delReplay ? 'replay' : 'respuesta',
-              replayStatus: replay ? replay.status : null,
-              respuestas,
-              ...(errSub ? { error: errSub } : {}),
-            };
+              let replay = null;
+              if (gmAuth) {
+                replay = await pagina.evaluate(async (base, auth, cid2, d, h, docu) => {
+                  try {
+                    const r = await fetch(`${base}/monetary-subsidy/getMovements?movementType=GENERAL&fechaInicio=${d}&fechaFin=${h}&offset=0&limit=100&employeeIdType=CC&employeeIdNumber=${docu}`,
+                      { headers: { Authorization: auth, 'x-company-id': cid2, Accept: 'application/json, text/plain, */*' } });
+                    const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch { /* */ }
+                    return { status: r.status, data: (j && j.data && Array.isArray(j.data.movements)) ? j.data.movements : null };
+                  } catch (e) { return { status: 0, err: String(e) }; }
+                }, RIA, gmAuth, gmCid, opDesde, opHasta, doc).catch((e) => ({ status: 0, err: String(e) }));
+              }
+              pagina.off('request', onReq);
+              pagina.off('response', onResp);
+
+              const delReplay = replay && replay.status === 200 && Array.isArray(replay.data) ? replay.data : null;
+              salida.subsidios[doc] = {
+                movimientos: delReplay || mov,
+                fuente: delReplay ? 'replay' : 'respuesta',
+                replayStatus: replay ? replay.status : null,
+                respuestas,
+                ...(errSub ? { error: errSub } : {}),
+              };
+            }
           }
         }
+      } else if (unNit) {
+        salida.aviso = `El gestor no tiene la empresa ${unNit} entre sus ${empresas.length} empresas de Comfandi.`;
       }
-    } else if (nit) {
-      salida.aviso = `El gestor no tiene la empresa ${nit} entre sus ${empresas.length} empresas de Comfandi.`;
+      return salida;
+    };
+
+    if (servidor) {
+      // ── Modo servicio (sesión caliente) ──────────────────────────────────
+      // Queda vivo atendiendo consultas por HTTP local (127.0.0.1) reusando esta
+      // sesión. Las consultas se serializan (una sola página) con una cadena de
+      // promesas; un reaper lo apaga tras `inactividadMs` sin uso.
+      let cola = Promise.resolve();
+      let timer = null;
+      let latidoTimer = null;
+      let ocupado = false; // una consulta real está en curso
+      const apagar = (motivo) => {
+        try { if (perfilDir) unlinkSync(`${perfilDir}/daemon.json`); } catch { /* */ }
+        if (latidoTimer) clearInterval(latidoTimer);
+        console.error('daemon-cerrado: ' + motivo);
+        navegador.close().catch(() => null).finally(() => process.exit(0));
+        setTimeout(() => process.exit(0), 4000);
+      };
+      // El reaper mide la inactividad desde la última consulta REAL (los latidos
+      // de mantenimiento no cuentan): así la sesión se autolimpia cuando de
+      // verdad nadie consulta, aunque el latido la mantenga caliente mientras.
+      const reiniciarReaper = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => apagar('inactividad'), inactividadMs); };
+
+      // Latido: si no hay consulta en vuelo, encola un refresco liviano del token
+      // para que no caduque entre huecos. No reinicia el reaper (no es actividad
+      // real) ni es un login (no toca la clave): sin riesgo de bloqueo.
+      const latir = () => {
+        if (ocupado) return; // una consulta real ya mantiene la sesión caliente
+        cola = cola.then(async () => {
+          if (ocupado) return;
+          try { await reLoguear(); console.error('daemon-latido'); } catch { /* */ }
+        }, () => {});
+      };
+
+      const srv = createServer((req, res) => {
+        if (req.url === '/health') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ ready: true, pid: process.pid })); return; }
+        if (req.method !== 'POST') { res.writeHead(405); res.end(); return; }
+        let cuerpo = '';
+        req.on('data', (c) => { cuerpo += c; if (cuerpo.length > 2e6) req.destroy(); });
+        req.on('end', () => {
+          let op = {};
+          try { op = JSON.parse(cuerpo || '{}'); } catch { /* */ }
+          reiniciarReaper(); // solo las consultas reales reinician el reaper
+          ocupado = true;
+          cola = cola.then(async () => {
+            let salida;
+            try { salida = await atender(op); } catch (e) { salida = { ok: false, error: String(e?.message || e).slice(0, 300) }; }
+            ocupado = false;
+            reiniciarReaper();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(salida));
+          }, () => { ocupado = false; });
+        });
+      });
+
+      srv.listen(0, '127.0.0.1', () => {
+        const puerto = srv.address().port;
+        try { if (perfilDir) writeFileSync(`${perfilDir}/daemon.json`, JSON.stringify({ puerto, pid: process.pid, desde: new Date().toISOString() })); } catch { /* */ }
+        console.error('daemon-listo puerto=' + puerto + ' pid=' + process.pid);
+        reiniciarReaper();
+        latidoTimer = setInterval(latir, latidoMs);
+      });
+
+      // Queda vivo: el proceso no sale aquí; lo apaga el reaper con process.exit().
+      await new Promise(() => {});
     }
-    salir(salida);
+
+    salir(await atender({ modo, nit, documentos, desde, hasta, tipoDocTrab, certCodigo }));
   }
 
   if (!empresa) empresa = await empresaAbierta(pagina);

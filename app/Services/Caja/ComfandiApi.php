@@ -75,19 +75,6 @@ class ComfandiApi
             return ['ok' => false, 'error' => 'No hay clave del gestor de Comfandi en el módulo (usuario '.config('comfandi.gestor_usuario').').'];
         }
 
-        $visible = $this->hayXvfb(); // Comfandi exige ventana; en el servidor la da Xvfb.
-
-        $entrada = json_encode(array_merge([
-            'via' => 'api',
-            'usuario' => $g['usuario'],
-            'contrasena' => $g['clave'],
-            'totpSecret' => $g['totp'],
-            // El navegador real desde netcup pasa Akamai sin proxy (lo que rechaza
-            // es el cliente sin ventana, no la IP).
-            'proxy' => null,
-            'visible' => $visible,
-        ], $opciones), JSON_UNESCAPED_UNICODE);
-
         // El robot abre un perfil de Chrome único por gestor (SingletonLock): dos
         // corridas a la vez chocan y una queda tumbada (fue lo que colgó una
         // consulta). Se serializan con un lock por usuario; si hay otra en curso,
@@ -102,24 +89,56 @@ class ComfandiApi
         }
 
         try {
-            $resultado = Process::path(base_path())
-                ->timeout($segs)
-                ->input($entrada)
-                ->run($this->comando());
-
-            $salida = json_decode(trim($resultado->output()), true) ?: [];
-
-            if (! ($salida['ok'] ?? false)) {
-                return [
-                    'ok' => false,
-                    'error' => $salida['error'] ?? (trim($resultado->errorOutput()) ?: 'El portal no respondió.'),
-                ];
+            // Primero el daemon (sesión caliente): si está vivo —o se puede
+            // levantar— reusa la sesión y la consulta sale rápido. Si por lo que
+            // sea no se puede usar, cae al robot de un disparo (abre Chrome, entra
+            // y consulta una vez). Así la función siempre responde.
+            $r = $this->porDaemon($g, $opciones);
+            if ($r !== null) {
+                return $r;
             }
 
-            return $salida;
+            return $this->unDisparo($g, $opciones, $segs);
         } finally {
             $lock->release();
         }
+    }
+
+    /** La entrada base del robot (credenciales del gestor + vía API). */
+    private function entradaBase(array $g): array
+    {
+        return [
+            'via' => 'api',
+            'usuario' => $g['usuario'],
+            'contrasena' => $g['clave'],
+            'totpSecret' => $g['totp'],
+            // El navegador real desde netcup pasa Akamai sin proxy (lo que rechaza
+            // es el cliente sin ventana, no la IP).
+            'proxy' => null,
+            'visible' => $this->hayXvfb(), // Comfandi exige ventana; en el servidor la da Xvfb.
+        ];
+    }
+
+    /** Corre la consulta con el robot de un disparo (abre Chrome, entra, consulta, sale). */
+    private function unDisparo(array $g, array $opciones, int $segs): array
+    {
+        $entrada = json_encode(array_merge($this->entradaBase($g), $opciones), JSON_UNESCAPED_UNICODE);
+
+        $resultado = Process::path(base_path())
+            ->timeout($segs)
+            ->input($entrada)
+            ->run($this->comando());
+
+        $salida = json_decode(trim($resultado->output()), true) ?: [];
+
+        if (! ($salida['ok'] ?? false)) {
+            return [
+                'ok' => false,
+                'error' => $salida['error'] ?? (trim($resultado->errorOutput()) ?: 'El portal no respondió.'),
+            ];
+        }
+
+        return $salida;
     }
 
     /**
@@ -311,5 +330,142 @@ class ComfandiApi
         static $hay = null;
 
         return $hay ??= is_executable('/usr/bin/xvfb-run');
+    }
+
+    // ─── Daemon de sesión caliente ──────────────────────────────────────────
+    // En vez de abrir Chrome + login por cada consulta (~1–2 min), un daemon deja
+    // la sesión viva ~12 min atendiendo consultas por HTTP local. La 1ª consulta
+    // lo levanta (paga el login); las siguientes salen en segundos.
+
+    /** La carpeta del perfil persistente del gestor (ahí vive el statefile del daemon). */
+    private function perfilDir(array $g): string
+    {
+        return storage_path('app/comfandi-perfiles/'.$g['usuario']);
+    }
+
+    /**
+     * Intenta resolver la consulta por el daemon: lo reusa si está vivo o lo
+     * levanta si no. Devuelve la salida, o null si el daemon no se pudo usar
+     * (para que ejecutar() caiga al robot de un disparo).
+     */
+    private function porDaemon(array $g, array $opciones): ?array
+    {
+        $dir = $this->perfilDir($g);
+
+        $estado = $this->daemonVivo($dir) ?: $this->levantarDaemon($g, $dir);
+        if (! $estado) {
+            return null;
+        }
+
+        return $this->enviarAlDaemon((int) $estado['puerto'], $opciones);
+    }
+
+    /** El daemon vivo (statefile + pid + health), o null. */
+    private function daemonVivo(string $dir): ?array
+    {
+        $f = $dir.'/daemon.json';
+        if (! is_file($f)) {
+            return null;
+        }
+
+        $j = json_decode((string) @file_get_contents($f), true);
+        if (! is_array($j) || empty($j['puerto']) || empty($j['pid'])) {
+            return null;
+        }
+
+        if (! $this->pidVivo((int) $j['pid'])) {
+            @unlink($f); // statefile huérfano de un daemon muerto
+
+            return null;
+        }
+
+        return $this->daemonHealth((int) $j['puerto']) ? $j : null;
+    }
+
+    /** Lanza el daemon desprendido y espera a que entre y levante el servidor. */
+    private function levantarDaemon(array $g, string $dir): ?array
+    {
+        @mkdir($dir, 0775, true);
+
+        // La entrada va en un archivo (no por argv) para no dejar la clave en `ps`;
+        // el robot lo lee y lo borra. 0600 por si acaso.
+        $entradaFile = $dir.'/.daemon-entrada-'.bin2hex(random_bytes(6)).'.json';
+        // inactividadSeg: la sesión viva se mantiene hasta 15 min desde la última
+        // consulta REAL (los latidos de mantenimiento no cuentan); después se
+        // autolimpia. El latido (default 100s en el robot) refresca el token
+        // —que vive 5 min— para que no caduque en los huecos.
+        @file_put_contents($entradaFile, json_encode(array_merge($this->entradaBase($g), ['servidor' => true, 'inactividadSeg' => 900]), JSON_UNESCAPED_UNICODE));
+        @chmod($entradaFile, 0600);
+
+        $node = ArlSuraSesionService::binarioNode().' scripts/comfandi-subsidios.mjs --entrada-file='.escapeshellarg($entradaFile);
+        $cmd = $this->hayXvfb()
+            ? 'xvfb-run -a --server-args="-screen 0 1400x900x24" '.$node
+            : $node;
+
+        // Desprendido (setsid) para que sobreviva a esta petición PHP.
+        $inner = 'cd '.escapeshellarg(base_path()).' && '.$cmd.' >> '.escapeshellarg($dir.'/daemon.log').' 2>&1';
+        @exec('setsid bash -c '.escapeshellarg($inner).' >/dev/null 2>&1 &');
+
+        // El daemon escribe daemon.json cuando ya entró y levantó el servidor
+        // (login ~1–2 min). Se sondea hasta ~3 min.
+        for ($i = 0; $i < 120; $i++) {
+            usleep(1_500_000);
+            if ($est = $this->daemonVivo($dir)) {
+                return $est;
+            }
+        }
+
+        return null;
+    }
+
+    /** Manda la consulta al daemon por HTTP y devuelve la salida (null si no respondió). */
+    private function enviarAlDaemon(int $puerto, array $opciones): ?array
+    {
+        if (! function_exists('curl_init')) {
+            return null;
+        }
+
+        $ch = curl_init('http://127.0.0.1:'.$puerto.'/');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($opciones, JSON_UNESCAPED_UNICODE),
+            CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_TIMEOUT => 200, // una consulta reusando la sesión: holgado
+        ]);
+        $resp = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+
+        if ($resp === false || $err !== '') {
+            return null; // el daemon no respondió → ejecutar() cae al robot de un disparo
+        }
+
+        $salida = json_decode($resp, true);
+
+        // Respondió (aunque sea con error de negocio): es un resultado real, no un
+        // fallo del daemon, así que se devuelve tal cual (nada de fallback).
+        return is_array($salida) ? $salida : ['ok' => false, 'error' => 'El daemon devolvió una respuesta inválida.'];
+    }
+
+    /** ¿El proceso (pid) sigue vivo? */
+    private function pidVivo(int $pid): bool
+    {
+        if ($pid < 1) {
+            return false;
+        }
+
+        return function_exists('posix_kill') ? @posix_kill($pid, 0) : is_dir('/proc/'.$pid);
+    }
+
+    /** ¿El daemon responde en su puerto de health? */
+    private function daemonHealth(int $puerto): bool
+    {
+        $r = @file_get_contents('http://127.0.0.1:'.$puerto.'/health', false, stream_context_create([
+            'http' => ['method' => 'GET', 'timeout' => 2, 'ignore_errors' => true],
+        ]));
+
+        return is_string($r) && str_contains($r, 'ready');
     }
 }
