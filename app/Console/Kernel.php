@@ -203,18 +203,24 @@ class Kernel extends ConsoleKernel
         // persona, y lo reparte el Ministerio de Salud (lo dijo Aportes en
         // Línea con su error 9132).
         //
-        // Pasa a cada hora: sigue sirviendo de centinela por si la lista
-        // cambia, y deja libre la sesión del operador, que admite **una sola
-        // por usuario** y cada media hora atropellaba cualquier trabajo manual
-        // en Simple.
+        // Pasa cada minuto, pero solo sondea cuando le toca por la cadencia de
+        // `vigia_subtipo4_cada_min` (5 minutos por defecto): así se aprieta a 1
+        // minuto, o se suelta, cambiando una fila de configuración en vez de
+        // desplegar. Ojo: cada sondeo toma la sesión del operador, que admite
+        // **una sola por usuario**, así que cuanto más apretada la cadencia más
+        // atropella el trabajo manual en Simple con esa misma credencial. El
+        // arreglo de fondo es un usuario de Simple propio para los robots,
+        // pineado en `vigia_subtipo4_credencial_id`.
         //
         // No liquida nada —el archivo lleva freno— y el aviso por WhatsApp sale
-        // una vez cada 6 h.
-        $schedule->command('planilla:vigilar-subtipo4')
-            ->hourly()
+        // una vez cada 6 h. Cuando la ventana se abre, el propio comando se
+        // queda sondeando cada 30 s hasta que se cierra, para medir cuánto
+        // duró: el 9-nov-2026 el aviso llegó con la ventana muerta hacía rato.
+        $schedule->command('planilla:vigilar-subtipo4 --programado')
+            ->everyMinute()
             ->timezone('America/Bogota')
             ->name('vigia-subtipo4')
-            ->withoutOverlapping(25)
+            ->withoutOverlapping(45)
             ->appendOutputTo(storage_path('logs/vigia-subtipo4.log'));
 
         $schedule->command('corridas:resumen --horas=12')

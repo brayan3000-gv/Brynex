@@ -62,6 +62,12 @@ class PlanillaVigilarSubtipo4 extends Command
         {--anio= : Año de pago a sondear (por defecto, el actual)}
         {--cedulas= : Cédulas a sondear, separadas por coma (pisa las configuradas)}
         {--rs-ref= : Razón social con la que se sondea (pisa la configurada)}
+        {--credencial= : Id de la credencial de Simple con la que entra (pisa la configurada)}
+        {--cada= : Minutos entre sondeos programados (pisa la configuración)}
+        {--programado : Lo pone el planificador: respeta la cadencia configurada}
+        {--medir-cada=30 : Segundos entre sondeos mientras la ventana está abierta}
+        {--medir-max=30 : Minutos máximos midiendo una ventana abierta}
+        {--sin-medir : No se queda midiendo cuando la ventana se abre}
         {--sin-aviso : Sondea y registra, pero no manda WhatsApp}';
 
     protected $description = 'Sondea si el operador ya deja pasar el subtipo 03/04 y avisa por WhatsApp cuando sí';
@@ -74,6 +80,27 @@ class PlanillaVigilarSubtipo4 extends Command
 
     /** Cédulas que se vigilan siempre, aunque no tengan plano pendiente. */
     private const CONFIG_CEDULAS = 'vigia_subtipo4_cedulas';
+
+    /**
+     * Minutos entre sondeos programados. Vive en configuración y no en el
+     * planificador para poder apretar la cadencia —de 5 a 1 minuto— sin
+     * desplegar, que en este proyecto significa tocar producción.
+     */
+    private const CONFIG_CADA = 'vigia_subtipo4_cada_min';
+
+    private const CADA_POR_DEFECTO = 5;
+
+    /**
+     * Credencial de Simple con la que entra el vigía.
+     *
+     * El operador admite **una sola sesión por usuario**, así que si el robot
+     * entra con el mismo usuario que la gente, cada sondeo le tumba la sesión
+     * a quien esté trabajando en el portal —y cuanto más apretada la cadencia,
+     * peor—. Con un usuario propio para los robots son dos sesiones y no se
+     * estorban. Sin configurar, toma la primera credencial del aliado, que es
+     * el comportamiento viejo.
+     */
+    private const CONFIG_CREDENCIAL = 'vigia_subtipo4_credencial_id';
 
     /**
      * Aportante con el que se sondea: tiene que ser uno viejo y bien
@@ -89,6 +116,10 @@ class PlanillaVigilarSubtipo4 extends Command
 
         Auth::loginUsingId(2);   // ver [[feedback-usuario-brynex-comandos]]
 
+        if (! $this->tocaSondear()) {
+            return self::SUCCESS;
+        }
+
         $cedulas = $this->cedulasAVigilar($mes, $anio);
 
         if (! $cedulas) {
@@ -97,20 +128,7 @@ class PlanillaVigilarSubtipo4 extends Command
             return self::SUCCESS;
         }
 
-        $resultado = $this->sondear($cedulas, $mes, $anio);
-        $limpias = [];
-        $sello = now()->format('d-m H:i');
-
-        foreach ($resultado as $cedula => $errores) {
-            $paso = ! in_array(self::REGLA_UGPP, $errores, true);
-
-            $this->line(sprintf('%s  CC %-12s → %s', $sello, $cedula,
-                $errores ? implode(' ', $errores) : 'LIMPIO'));
-
-            if ($paso) {
-                $limpias[] = $cedula;
-            }
-        }
+        $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
 
         if ($limpias && ! $this->option('sin-aviso')) {
             // Una vez cada 6 h: si la ventana dura, no conviene repetir el aviso
@@ -127,7 +145,137 @@ class PlanillaVigilarSubtipo4 extends Command
             $this->info('Aviso enviado por WhatsApp.');
         }
 
+        if ($limpias && ! $this->option('sin-medir')) {
+            $this->medirVentana($alertas, $cedulas, $mes, $anio, $limpias);
+        }
+
         return self::SUCCESS;
+    }
+
+    /**
+     * Si la corrida viene del planificador, solo sondea cuando le toca por la
+     * cadencia configurada. El planificador lo llama cada minuto y este if es
+     * el que decide, así que apretar o soltar la cadencia es cambiar una fila
+     * de configuración, no desplegar.
+     *
+     * Ojo con subirla: cada sondeo toma la sesión del operador, que admite
+     * **una sola por usuario**, así que a un minuto el vigía atropella
+     * cualquier trabajo manual en Simple hecho con esa misma credencial.
+     */
+    private function tocaSondear(): bool
+    {
+        if (! $this->option('programado')) {
+            return true;   // a mano, siempre
+        }
+
+        $cada = (int) ($this->option('cada')
+            ?: ConfiguracionBrynex::obtener(self::CONFIG_CADA, self::CADA_POR_DEFECTO));
+
+        if ($cada < 1 || $cada > 60 || 60 % $cada !== 0) {
+            $cada = self::CADA_POR_DEFECTO;
+        }
+
+        return now()->minute % $cada === 0;
+    }
+
+    /**
+     * Un sondeo con su línea en el registro por cada cédula.
+     *
+     * @param  string[]  $cedulas
+     * @return string[] las cédulas que pasaron sin la regla de la UGPP
+     */
+    private function sondeoConLog(array $cedulas, int $mes, int $anio): array
+    {
+        $resultado = $this->sondear($cedulas, $mes, $anio);
+        $limpias = [];
+        $sello = now()->format('d-m H:i:s');
+
+        foreach ($resultado as $cedula => $errores) {
+            $this->line(sprintf('%s  CC %-12s → %s', $sello, $cedula,
+                $errores ? implode(' ', $errores) : 'LIMPIO'));
+
+            if (! in_array(self::REGLA_UGPP, $errores, true)) {
+                $limpias[] = $cedula;
+            }
+        }
+
+        return $limpias;
+    }
+
+    /**
+     * Mientras la ventana siga abierta, vuelve a sondear cada pocos segundos
+     * para saber cuánto dura.
+     *
+     * El 9-nov-2026 el aviso de la corrida de las 11:00 llegó con la ventana ya
+     * cerrada: a las 11:03 las tres cédulas volvían a salir con `2.655`, y
+     * cinco sondas seguidas lo confirmaron. Las tres a la vez y solo en esa
+     * corrida: lo que falla es la consulta de Simple a la lista de la UGPP, y
+     * su validador **falla abierto**. Sin esto el registro dice que pasó, pero
+     * no cuánto duró, que es justo el dato que decide si se puede aprovechar.
+     *
+     * @param  string[]  $cedulas
+     * @param  string[]  $primeras
+     */
+    private function medirVentana(
+        AlertaOperativaService $alertas,
+        array $cedulas,
+        int $mes,
+        int $anio,
+        array $primeras
+    ): void {
+        $cadaSeg = max(5, (int) $this->option('medir-cada'));
+        $maxMin = max(1, (int) $this->option('medir-max'));
+
+        $abrio = now();
+        $ultimaLimpia = $abrio;
+        $sondeos = 1;
+        $cerrada = false;
+
+        $this->line($abrio->format('d-m H:i:s')
+            ."  >> ventana ABIERTA, midiendo cada {$cadaSeg}s (máx {$maxMin} min)");
+
+        while ($abrio->diffInMinutes(now()) < $maxMin) {
+            sleep($cadaSeg);
+            $sondeos++;
+
+            if (! $this->sondeoConLog($cedulas, $mes, $anio)) {
+                $cerrada = true;
+                break;
+            }
+
+            $ultimaLimpia = now();
+        }
+
+        $duracion = $this->duracion($abrio, $ultimaLimpia);
+
+        $this->line(now()->format('d-m H:i:s').'  << ventana '
+            .($cerrada ? 'CERRADA' : 'SIGUE ABIERTA')
+            ." · duró {$duracion} · {$sondeos} sondeos");
+
+        if ($this->option('sin-aviso')) {
+            return;
+        }
+
+        $alertas->enviarUnaVez(
+            'vigia-subtipo4-duracion-'.$abrio->format('YmdHi'),
+            'Vigía subtipo 4',
+            ($cerrada
+                ? "⏱️ La ventana del subtipo 03/04 se cerró. Duró {$duracion}.\n\n"
+                : "⏱️ La ventana del subtipo 03/04 lleva {$duracion} abierta y sigue.\n\n")
+            .'Abrió a las '.$abrio->format('H:i:s')
+            .', último sondeo limpio a las '.$ultimaLimpia->format('H:i:s').".\n"
+            .'Cédulas: '.implode(', ', $primeras)."\n"
+            ."Período {$mes}/{$anio} · {$sondeos} sondeos cada {$cadaSeg}s.",
+            60
+        );
+    }
+
+    /** "4 min 30 s", o "45 s" si no alcanza el minuto. */
+    private function duracion(\Carbon\Carbon $desde, \Carbon\Carbon $hasta): string
+    {
+        $s = max(0, $hasta->diffInSeconds($desde));
+
+        return $s < 60 ? "{$s} s" : intdiv($s, 60).' min '.($s % 60).' s';
     }
 
     /**
@@ -185,12 +333,29 @@ class PlanillaVigilarSubtipo4 extends Command
         }
 
         $rs = DB::table('razones_sociales')->where('id', $rsRef)->first();
-        $cred = OperadorCredencial::where('aliado_id', $rs->aliado_id)
-            ->where('operador_planilla_id', 6)   // Simple: el único que liquida X1
+        $credId = (int) ($this->option('credencial')
+            ?: ConfiguracionBrynex::obtener(self::CONFIG_CREDENCIAL, 0));
+
+        $cred = OperadorCredencial::where('operador_planilla_id', 6)   // Simple: el único que liquida X1
+            ->when($credId, fn ($q) => $q->where('id', $credId))
+            ->when(! $credId, fn ($q) => $q->where('aliado_id', $rs->aliado_id))
             ->first();
 
         if (! $cred) {
-            $this->warn("El aliado {$rs->aliado_id} no tiene credencial de Simple.");
+            $this->warn($credId
+                ? "La credencial de Simple {$credId} no existe."
+                : "El aliado {$rs->aliado_id} no tiene credencial de Simple.");
+
+            return [];
+        }
+
+        // Una credencial pineada que no sea del aportante de referencia manda
+        // el archivo con un usuario que no lo representa: el operador responde
+        // errores de permisos y el sondeo informa basura en vez de decir si la
+        // persona pasa.
+        if ($credId && (int) $cred->aliado_id !== (int) $rs->aliado_id) {
+            $this->warn("La credencial {$credId} es del aliado {$cred->aliado_id}, "
+                ."pero la razón social de referencia es del {$rs->aliado_id}.");
 
             return [];
         }
