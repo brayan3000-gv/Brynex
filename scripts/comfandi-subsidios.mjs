@@ -998,6 +998,40 @@ try {
             const cc = salida.certificados[doc] || {};
             console.error('CERT doc=' + doc + ' status=' + cc.status + ' ct=' + (cc.contentType || '')
               + ' b64len=' + String(cc.base64 || '').length + ' pdf=' + /^JVBER/.test(String(cc.base64 || '')));
+
+            // El endpoint a veces responde JSON (no el PDF directo): el portal sí
+            // baja el PDF, así que viene adentro del JSON como base64. Si el cuerpo
+            // no es ya un PDF, se parsea el JSON y se busca el campo base64 que
+            // empieza en "JVBER" (= «%PDF»); si aparece, ese es el certificado. Se
+            // loguea la FORMA del JSON (claves y tipos, sin valores) para entender
+            // el flujo cuando no venga el PDF embebido.
+            if (cc.base64 && !/^JVBER/.test(cc.base64)) {
+              try {
+                const txt = Buffer.from(cc.base64, 'base64').toString('utf8');
+                const j = JSON.parse(txt);
+                const buscarPdf = (o, prof = 0) => {
+                  if (prof > 5 || o == null) return null;
+                  if (typeof o === 'string') return (/^JVBER[A-Za-z0-9+/=]+$/.test(o) && o.length > 200) ? o : null;
+                  if (Array.isArray(o)) { for (const x of o) { const p = buscarPdf(x, prof + 1); if (p) return p; } return null; }
+                  if (typeof o === 'object') { for (const k of Object.keys(o)) { const p = buscarPdf(o[k], prof + 1); if (p) return p; } return null; }
+                  return null;
+                };
+                const forma = (o, prof = 0) => {
+                  if (prof > 3 || o == null) return o === null ? 'null' : typeof o;
+                  if (typeof o === 'string') return 'str[' + o.length + ']' + (/^JVBER/.test(o) ? '<<PDF' : '');
+                  if (Array.isArray(o)) return 'arr[' + o.length + ']' + (o.length ? ':' + forma(o[0], prof + 1) : '');
+                  if (typeof o === 'object') { const r = {}; for (const k of Object.keys(o)) r[k] = forma(o[k], prof + 1); return r; }
+                  return typeof o;
+                };
+                const pdf = buscarPdf(j);
+                console.error('CERTJSON doc=' + doc + ' forma=' + JSON.stringify(forma(j)).slice(0, 600) + ' pdfEmbebido=' + !!pdf);
+                if (pdf) {
+                  salida.certificados[doc] = { status: cc.status, contentType: 'application/pdf', base64: pdf };
+                }
+              } catch (e) {
+                console.error('CERTJSON doc=' + doc + ' cuerpo-no-json: ' + String(e?.message || e).slice(0, 80));
+              }
+            }
           }
         } else if (docs.length) {
           salida.trabajadores = {};
