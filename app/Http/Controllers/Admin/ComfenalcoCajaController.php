@@ -273,6 +273,42 @@ class ComfenalcoCajaController extends Controller
         return response()->json(Cache::get($this->claveEstado()) ?? ['corriendo' => false, 'vacio' => true]);
     }
 
+    /**
+     * Lanza en segundo plano la consulta de bloqueos de subsidio (mora/inexactitud)
+     * del trabajador en Comfenalco. El robot entra por empresa y tarda 1–2 min; el
+     * modal sondea subsidiosEstado. Ver ComfenalcoSubsidiosJob.
+     */
+    public function subsidiosLanzar(int $contratoId)
+    {
+        $contrato = $this->contrato($contratoId);
+        $contrato->loadMissing('razonSocial');
+
+        $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
+        $cedula = preg_replace('/\D/', '', (string) $contrato->cedula);
+
+        if (! $nit || ! $cedula) {
+            return response()->json(['ok' => false, 'error' => 'El contrato no tiene NIT de la razón social o cédula.'], 422);
+        }
+
+        $token = \Illuminate\Support\Str::random(24);
+        Cache::put(\App\Jobs\ComfenalcoSubsidiosJob::clave($token),
+            ['estado' => 'corriendo', 'paso' => 'En cola, esperando turno en el servidor'], now()->addMinutes(15));
+        \App\Jobs\ComfenalcoSubsidiosJob::dispatch($token, $nit, $cedula);
+
+        return response()->json(['ok' => true, 'token' => $token]);
+    }
+
+    /** Estado/resultado de una consulta de subsidios lanzada por subsidiosLanzar. */
+    public function subsidiosEstado(string $token)
+    {
+        $r = Cache::get(\App\Jobs\ComfenalcoSubsidiosJob::clave($token));
+        if (! $r) {
+            return response()->json(['estado' => 'desconocido'], 404)->header('Cache-Control', 'no-store');
+        }
+
+        return response()->json($r)->header('Cache-Control', 'no-store');
+    }
+
     /** La corrida consolidada de BryNex no se mezcla con la de cada aliado. */
     private function claveEstado(): string
     {
