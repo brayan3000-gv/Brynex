@@ -148,6 +148,17 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private const CONFIG_TANDAS = 'vigia_subtipo4_tandas';
 
+    /**
+     * Reintentos de la liquidación dentro de un mismo hueco, y la espera entre
+     * ellos. El hueco del 10-nov duró 36 s y se cayó al autorizar: 4 intentos
+     * cada 3 s caben de sobra en esa ventana y le dan varias oportunidades al
+     * backend de responder. No es insistir contra el validador —una rechazada
+     * por regla corta el reintento—, es aguantar un tropiezo de red.
+     */
+    private const CONFIG_INTENTOS = 'vigia_subtipo4_intentos';
+
+    private const CONFIG_INTENTO_ESPERA = 'vigia_subtipo4_intento_espera_seg';
+
     public function handle(AlertaOperativaService $alertas): int
     {
         $mes = (int) ($this->option('mes') ?: now()->month);
@@ -291,8 +302,48 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private function liquidarTanda(array $t, string $etiqueta): string
     {
-        $sello = now()->format('d-m H:i:s');
+        // El 10-nov-2026 el hueco de las 12:51 duró 36 s y la liquidación se
+        // cayó con "Empty reply from server" al autorizarse sobre el aportante:
+        // el hueco se abre PORQUE el backend de Simple está caído, que es justo
+        // cuando autorizar y liquidar también fallan. Un reintento rápido —la
+        // ventana sigue abierta unos segundos— puede entrar donde el primero
+        // tropezó. Acotado y corto: es manejo de un error transitorio, no
+        // insistir contra una puerta que el validador ya cerró con 2.655.
+        $intentos = max(1, (int) ConfiguracionBrynex::obtener(self::CONFIG_INTENTOS, 4));
+        $esperaSeg = max(1, (int) ConfiguracionBrynex::obtener(self::CONFIG_INTENTO_ESPERA, 3));
 
+        $texto = '(sin intento)';
+
+        for ($i = 1; $i <= $intentos; $i++) {
+            [$estado, $texto] = $this->intentarLiquidar($t, $etiqueta);
+
+            $sello = now()->format('d-m H:i:s');
+            $this->line("{$sello}  >> {$etiqueta} (intento {$i}/{$intentos}) → {$texto}");
+
+            // Solo se reintenta el tropiezo del backend. Liquidó, ya estaba, o
+            // el validador la rechazó por regla (hueco cerrado): en los tres no
+            // hay nada que reintentar.
+            if ($estado !== 'transitorio' || $i === $intentos) {
+                break;
+            }
+
+            sleep($esperaSeg);
+        }
+
+        return $texto;
+    }
+
+    /**
+     * Un intento de liquidar una tanda. Devuelve [estado, texto].
+     *
+     * estado: 'liquidada' | 'ya' (409) | 'rechazada' (regla, hueco cerrado) |
+     *         'transitorio' (el backend se cayó; vale la pena reintentar).
+     *
+     * @param  array<string, mixed>  $t
+     * @return array{0: string, 1: string}
+     */
+    private function intentarLiquidar(array $t, string $etiqueta): array
+    {
         try {
             // El controlador lee el aliado de la sesión, igual que con un
             // usuario en el navegador, y de ahí sale el filtro multi-tenant.
@@ -317,38 +368,49 @@ class PlanillaVigilarSubtipo4 extends Command
                 ?? ($data['planilla']['numero_planilla'] ?? null);
 
             if (($data['success'] ?? false) && ($data['liquidada'] ?? false) && $planilla) {
-                $texto = "planilla {$planilla}";
                 Log::warning('vigia-subtipo4: liquidó en la ventana', [
                     'tanda' => $etiqueta, 'planilla' => $planilla,
                 ]);
-            } elseif ($http === 409) {
-                $texto = 'ya tenía planilla '.($planilla ?: '').' (409), no se tocó';
-            } else {
-                // El caso que importa entender después: el operador contestó
-                // bien pero no liquidó, casi siempre porque el hueco se cerró
-                // entre el sondeo y el archivo. Las reglas lo dicen.
-                $reglas = collect(array_merge(
-                    $data['errores_cotizante'] ?? [], $data['errores_empresa'] ?? []
-                ))->pluck('idRegla')->filter()->unique()->take(6)->implode(' ');
 
-                $texto = "NO liquidó · http {$http} · "
-                    .substr((string) ($data['message'] ?? '(sin mensaje)'), 0, 140)
-                    .($reglas ? " · {$reglas}" : '');
-
-                Log::error('vigia-subtipo4: la ventana se abrió y la liquidación falló', [
-                    'tanda' => $etiqueta, 'http' => $http, 'respuesta' => $data,
-                ]);
+                return ['liquidada', "planilla {$planilla}"];
             }
+
+            if ($http === 409) {
+                return ['ya', 'ya tenía planilla '.($planilla ?: '').' (409), no se tocó'];
+            }
+
+            $reglas = collect(array_merge(
+                $data['errores_cotizante'] ?? [], $data['errores_empresa'] ?? []
+            ))->pluck('idRegla')->filter()->unique()->values();
+
+            $mensaje = (string) ($data['message'] ?? '(sin mensaje)');
+
+            // El validador respondió y rechazó por regla: el hueco ya se cerró,
+            // reintentar no cambia nada.
+            if ($reglas->isNotEmpty()) {
+                Log::error('vigia-subtipo4: la ventana se cerró antes de liquidar', [
+                    'tanda' => $etiqueta, 'reglas' => $reglas->all(),
+                ]);
+
+                return ['rechazada', "rechazada · {$reglas->take(6)->implode(' ')}"];
+            }
+
+            // Ni planilla ni reglas: el backend tropezó (autorizar vacío, 5xx…).
+            // Eso sí vale la pena reintentarlo mientras el hueco siga abierto.
+            Log::error('vigia-subtipo4: tropiezo del backend al liquidar en la ventana', [
+                'tanda' => $etiqueta, 'http' => $http, 'respuesta' => $data,
+            ]);
+
+            return ['transitorio', "backend caído · http {$http} · ".substr($mensaje, 0, 120)];
         } catch (\Throwable $e) {
-            $texto = 'ERROR '.get_class($e).' :: '.substr($e->getMessage(), 0, 160);
+            // cURL 52 (Empty reply) y compañía llegan como excepción: también
+            // es el backend cayéndose, también se reintenta.
             Log::error('vigia-subtipo4: excepción liquidando en la ventana', [
                 'tanda' => $etiqueta, 'error' => $e->getMessage(),
             ]);
+
+            return ['transitorio', 'backend caído · '.substr($e->getMessage(), 0, 120)];
         }
-
-        $this->line("{$sello}  >> {$etiqueta} → {$texto}");
-
-        return $texto;
     }
 
     /**
