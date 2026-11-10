@@ -1217,6 +1217,8 @@ Route::middleware('auth')->group(function () {
             // Subsidios on-demand (bloqueos de mora/inexactitud) por job + sondeo.
             Route::post('/{contrato}/caja-comfenalco/subsidios-lanzar', [$ccc, 'subsidiosLanzar'])->name('caja-comfenalco.subsidios-lanzar');
             Route::get('/caja-comfenalco/subsidios-estado/{token}', [$ccc, 'subsidiosEstado'])->whereAlphaNumeric('token')->name('caja-comfenalco.subsidios-estado');
+            Route::post('/{contrato}/caja-comfenalco/certificado-lanzar', [$ccc, 'certificadoLanzar'])->name('caja-comfenalco.certificado-lanzar');
+            Route::get('/caja-comfenalco/certificado-estado/{token}', [$ccc, 'certificadoEstado'])->whereAlphaNumeric('token')->name('caja-comfenalco.certificado-estado');
             // Caja Comfandi: afiliación por su Sucursal Virtual Empresas con la extensión.
             $cfd = \App\Http\Controllers\Admin\ComfandiCajaController::class;
             Route::get('/{contrato}/caja-comfandi/precheck', [$cfd, 'precheck'])->name('caja-comfandi.precheck');

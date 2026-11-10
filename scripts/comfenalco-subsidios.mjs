@@ -35,6 +35,24 @@ const HOST = 'https://virtual.comfenalcovalle.com.co';
 const BASE = `${HOST}/ServiciosWebRyA`;
 const LOGIN = 'https://authcomfeempresasprod.web.app/login?app_id=comfenalco.sucursalvirtual.empresas.app&tipo=E';
 
+// Quién NO pasa por el proxy colombiano. Solo el portal SWRYA
+// (virtual.comfenalcovalle.com.co) lo bloquea el WAF por IP; el login de
+// AuthComfe es Firebase/Google, que no está geobloqueado y de día se cae con
+// auth/network-request-failed cuando sale por el proxy residencial. Así que el
+// login y todo el SDK de Firebase salen DIRECTO; el portal sigue por el proxy.
+const DIRECTO = [
+  'authcomfeempresasprod.web.app',
+  '*.web.app',
+  '*.firebaseapp.com',
+  '*.firebaseio.com',
+  'identitytoolkit.googleapis.com',
+  'securetoken.googleapis.com',
+  '*.googleapis.com',
+  'apis.google.com',
+  '*.google.com',
+  '*.gstatic.com',
+].join(';');
+
 const CHROME_CANDIDATOS = [
   process.env.CHROME_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -130,7 +148,7 @@ const navegador = await puppeteer.launch({
     '--disable-dev-shm-usage',
     '--disable-blink-features=AutomationControlled',
     '--window-size=1400,900',
-    ...(proxy ? [`--proxy-server=${proxy.servidor}`] : []),
+    ...(proxy ? [`--proxy-server=${proxy.servidor}`, `--proxy-bypass-list=${DIRECTO}`] : []),
     ...(mapa.length ? [`--host-rules=${mapa.join(',')}`, '--disable-quic'] : []),
   ],
 });
@@ -210,6 +228,168 @@ const afiliadosDeLaEmpresa = async (pagina) => {
   return { ok: true, nit: empresa.nit, empresa: empresa.razon, filas: filas.datos, completa: true };
 };
 
+/**
+ * El certificado de afiliación de un trabajador (certificacionAfiliacionTrabajador.html).
+ *
+ * En vez de reconstruir los parámetros frágiles del back (tipoUsuario,
+ * DIRECCION_IP, el cupo diario), se maneja la propia pantalla: se escoge el tipo
+ * y número de documento del trabajador y se pulsa «Consultar». La página corre
+ * su lógica —valida el cupo con CmndConsultaMaximoCertif y, si hay, pide el PDF
+ * con CmndGenerarAfiliadosPersona— y nosotros solo escuchamos esa respuesta: el
+ * PDF viene en base64 dentro de `respuesta.encodedString`. Así respetamos el
+ * cupo y los datos de la empresa de la sesión sin tocarlos.
+ *
+ * Devuelve {ok, empresa, encodedString, namePdf} o {ok:false, motivo, error}
+ * con motivo 'cupo' (máximo del día) o 'no_afiliado' (el trabajador no se puede
+ * certificar todavía).
+ */
+const certificadoAfiliacion = async (pagina, entrada) => {
+  const tipoTexto = {
+    CC: 'ciudadania', CE: 'extranjeria', PA: 'pasaporte', PAS: 'pasaporte',
+    PT: 'proteccion temporal', PPT: 'proteccion temporal', RC: 'registro civil',
+  }[String(entrada.tipoDocTrabajador || '').toUpperCase()] || null;
+  const numDoc = String(entrada.numDocTrabajador || '').replace(/\D/g, '');
+
+  if (!tipoTexto) return { ok: false, error: `Tipo de documento no soportado para el certificado: ${entrada.tipoDocTrabajador}.` };
+  if (!numDoc) return { ok: false, error: 'Falta el número de documento del trabajador para el certificado.' };
+
+  // Se escucha la respuesta del PDF y la del cupo ANTES de disparar nada.
+  let pdfResp = null;
+  let cupoResp = null;
+  pagina.on('response', async (rp) => {
+    try {
+      const u = rp.url();
+      if (/CmndGenerarAfiliadosPersona/i.test(u)) pdfResp = await rp.text().catch(() => null);
+      else if (/CmndConsultaMaximoCertif/i.test(u)) cupoResp = await rp.text().catch(() => null);
+    } catch { /* */ }
+  });
+
+  // domcontentloaded, no networkidle2: esta pantalla trae Google Analytics
+  // pingueando sin parar y la red nunca queda "quieta". Se espera a mano a que
+  // el formulario y las opciones del combo (que cargan async) estén listos.
+  await pagina.goto(`${BASE}/certificacionAfiliacionTrabajador.html`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+  const listo = await insistir(pagina, () => {
+    const sel = document.getElementById('cmbTipoDocumento');
+    return !!document.getElementById('btnConsultar')
+      && !!document.getElementById('txtNumDocumento')
+      && !!sel && sel.options.length > 1;
+  }, [], 40000);
+  if (!listo) return { ok: false, error: 'No cargó la pantalla de certificación de afiliación (o no cargaron los tipos de documento).' };
+
+  await esperar(1500);
+
+  const empresa = await pagina.evaluate(() => {
+    try { return (JSON.parse(localStorage.getItem('empresa') || 'null') || {}).razonSocial || null; } catch { return null; }
+  }).catch(() => null);
+
+  // Tipo de documento: el combo es Chosen, hay que avisarle o sigue en lo viejo.
+  const tipoOk = await pagina.evaluate((txt) => {
+    const sel = document.getElementById('cmbTipoDocumento');
+    if (!sel) return false;
+    const opt = [...sel.options].find((o) => (o.text || '').toLowerCase().includes(txt));
+    if (!opt) return false;
+    sel.value = opt.value;
+    if (window.$) window.$(sel).trigger('change').trigger('chosen:updated');
+    else sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }, tipoTexto);
+  if (!tipoOk) return { ok: false, error: `El portal no ofrece el tipo de documento «${tipoTexto}» para el certificado.` };
+
+  await pagina.evaluate((n) => {
+    const i = document.getElementById('txtNumDocumento');
+    if (i) { i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }
+  }, numDoc);
+
+  await esperar(600);
+
+  // El certificado es en dos pasos:
+  //   1) «Consultar Beneficiarios» (btnConsultarBenefi) → CmndConsultarTrabajador
+  //      llena la tabla #tableBeneficiario con el trabajador y sus beneficiarios
+  //      (columnas Identificación, Nombre, Parentesco, Acc.). Si el trabajador no
+  //      tiene vínculo laboral con la empresa, el portal lo dice en un modal.
+  //   2) En la columna «Acc.» de la fila de cada persona está la acción que pide
+  //      el PDF (CmndConsultaMaximoCertif + CmndGenerarAfiliadosPersona).
+  await pagina.evaluate(() => document.getElementById('btnConsultarBenefi')?.click());
+
+  let listaLista = false;
+  const limiteConsulta = Date.now() + 45000;
+  while (Date.now() < limiteConsulta && !listaLista) {
+    await esperar(1500);
+    const e = await pagina.evaluate(() => {
+      const visible = (n) => !!(n && (n.offsetWidth || n.offsetHeight));
+      const msg = [...document.querySelectorAll('.jconfirm-content, .jconfirm .content')].filter(visible)
+        .map((n) => (n.innerText || '').replace(/\s+/g, ' ').trim()).join(' | ').slice(0, 250);
+      return { filas: document.querySelectorAll('#tableBeneficiario tbody tr').length, msg };
+    }).catch(() => ({ filas: 0, msg: '' }));
+
+    if (e.msg && /no tiene informaci|sin informaci|no.*(afili|encontr|activ|existe|registr)|no.*labor/i.test(e.msg)) {
+      return { ok: false, motivo: 'no_afiliado', error: `Comfenalco no certifica a este trabajador todavía: ${e.msg}` };
+    }
+    if (e.filas > 0) listaLista = true;
+  }
+
+  if (!listaLista) {
+    return { ok: false, motivo: 'no_afiliado', error: 'El portal no listó al trabajador tras la consulta (puede no tener vínculo laboral activo con la empresa en la caja).' };
+  }
+
+  await esperar(800);
+  // La acción del certificado está en la columna «Acc.» de la fila del trabajador.
+  // El click genérico cubre botón/ícono/enlace, cualquiera que sea el elemento.
+  const clic = await pagina.evaluate((doc) => {
+    const tr = [...document.querySelectorAll('#tableBeneficiario tbody tr')]
+      .find((r) => r.innerText.replace(/\D/g, '').includes(doc));
+    if (!tr) return 'sin-fila';
+    const el = tr.querySelector('td:last-child button, td:last-child a, td:last-child i, td:last-child [onclick]');
+    if (!el) return 'sin-accion';
+    el.click();
+    return 'ok';
+  }, numDoc).catch(() => 'error');
+
+  if (clic !== 'ok') {
+    return { ok: false, error: `No se encontró la acción para generar el certificado del trabajador en la tabla (${clic}).` };
+  }
+
+  // Se espera el PDF, el cupo agotado o un mensaje del portal (hasta 90 s).
+  const limite = Date.now() + 90000;
+  while (Date.now() < limite && !pdfResp) {
+    await esperar(1500);
+
+    if (cupoResp) {
+      try {
+        const r = JSON.parse(JSON.parse(cupoResp).respuesta || '{}');
+        if (r.consultas_realizadas != null && parseInt(r.consultas_realizadas, 10) >= parseInt(r.consulta_permitidas, 10)) {
+          return { ok: false, motivo: 'cupo', error: `Comfenalco no deja más certificados por hoy para esta empresa (${r.consultas_realizadas}/${r.consulta_permitidas}). Reintentar mañana.` };
+        }
+      } catch { /* */ }
+    }
+
+    const msg = await pagina.evaluate(() => {
+      const visible = (e) => !!(e && (e.offsetWidth || e.offsetHeight));
+      const d = [...document.querySelectorAll('.jconfirm-content, .jconfirm .content')].filter(visible)
+        .map((e) => (e.innerText || '').replace(/\s+/g, ' ').trim()).join(' ');
+      return d.slice(0, 300);
+    }).catch(() => '');
+    if (msg && /no.*(afili|encontr|activ|existe|registr)|sin informaci|no se encontr|no tiene/i.test(msg)) {
+      return { ok: false, motivo: 'no_afiliado', error: `Comfenalco no certifica a este trabajador todavía: ${msg}` };
+    }
+  }
+
+  if (!pdfResp) return { ok: false, error: 'El portal de Comfenalco no devolvió el certificado a tiempo (90 s).' };
+
+  let encodedString = null;
+  let namePdf = null;
+  try {
+    const inner = JSON.parse(JSON.parse(pdfResp).respuesta);
+    encodedString = inner.encodedString || null;
+    namePdf = inner.namePdf || null;
+  } catch { /* */ }
+
+  if (!encodedString) return { ok: false, error: 'La respuesta de Comfenalco no trae el PDF del certificado.' };
+
+  return { ok: true, empresa, encodedString, namePdf: namePdf || `certificado_afiliacion_${numDoc}.pdf` };
+};
+
 let pagina;
 try {
   pagina = await navegador.newPage();
@@ -266,14 +446,24 @@ try {
   const limite = Date.now() + 180000;
   let dentro = false;
   let ultimoIntento = Date.now();
+  let reintentosRed = 0;
 
   while (Date.now() < limite && !dentro) {
     await esperar(2500);
 
     dentro = await pagina.evaluate(() =>
       /comfenalcovalle/.test(location.host) && !!localStorage.getItem('usuario')).catch(() => false);
+    if (dentro) continue;
 
-    if (dentro || Date.now() - ultimoIntento < 30000) continue;
+    // auth/network-request-failed es un fallo de RED del login de Firebase, no
+    // de la clave. Con --proxy-bypass-list ya no debería aparecer; si aún así
+    // sale, se reintenta con backoff corto (5s, 10s, 20s) en vez de esperar los
+    // 30s del reintento normal.
+    const errRed = await pagina.evaluate(() =>
+      /network-request-failed/i.test(document.body.innerText || '')).catch(() => false);
+
+    const espera = errRed ? Math.min(5000 * 2 ** reintentosRed, 20000) : 30000;
+    if (Date.now() - ultimoIntento < espera) continue;
 
     const reintentado = await pagina.evaluate(() => {
       const clave = document.querySelector('input[type=password]');
@@ -288,7 +478,10 @@ try {
       return true;
     }).catch(() => false);
 
-    if (reintentado) ultimoIntento = Date.now();
+    if (reintentado) {
+      ultimoIntento = Date.now();
+      if (errRed) reintentosRed++;
+    }
   }
 
   if (!dentro) {
@@ -325,6 +518,10 @@ try {
 
   if (entrada.modo === 'trabajadores') {
     salir(await afiliadosDeLaEmpresa(pagina));
+  }
+
+  if (entrada.modo === 'certificado') {
+    salir(await certificadoAfiliacion(pagina, entrada));
   }
 
   // ── La consulta, una por sucursal ─────────────────────────────────────────

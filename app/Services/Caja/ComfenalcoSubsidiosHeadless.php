@@ -107,6 +107,45 @@ class ComfenalcoSubsidiosHeadless
     }
 
     /**
+     * El certificado de afiliación de un trabajador, en PDF (base64).
+     *
+     * Misma entrada al portal que los morosos —login por empresa, salida
+     * colombiana— pero otra pantalla: certificacionAfiliacionTrabajador.html. El
+     * robot maneja la pantalla y escucha la respuesta de CmndGenerarAfiliadosPersona,
+     * donde el PDF viene en `encodedString`. No se guarda nada aquí: esto solo
+     * trae el base64; el disco y el DocumentoCliente los pone ComfenalcoCertificadoService.
+     *
+     * @return array{ok:bool, empresa?:?string, encodedString?:string, namePdf?:string, motivo?:string, error?:string}
+     */
+    public function certificado(string $nit, string $tipoDocTrabajador, string $numDocTrabajador): array
+    {
+        $clave = $this->credencial($nit);
+
+        if (! $clave) {
+            return ['ok' => false, 'error' => "La empresa {$nit} no tiene la clave de Comfenalco en el módulo de claves."];
+        }
+
+        $salida = $this->correr([
+            'usuario' => $clave['usuario'],
+            'contrasena' => $clave['contrasena'],
+            'modo' => 'certificado',
+            'tipoDocTrabajador' => $tipoDocTrabajador,
+            'numDocTrabajador' => preg_replace('/\D/', '', $numDocTrabajador),
+        ]);
+
+        if (! ($salida['ok'] ?? false)) {
+            Log::warning('Comfenalco: no se pudo generar el certificado de afiliación', [
+                'nit' => $nit,
+                'documento' => $numDocTrabajador,
+                'motivo' => $salida['motivo'] ?? null,
+                'error' => $salida['error'] ?? null,
+            ]);
+        }
+
+        return $salida;
+    }
+
+    /**
      * Las filas del portal, en el formato que entiende SubsidioTareasService.
      *
      * El motivo se redacta aquí y no en el portal: de él depende si la tarea

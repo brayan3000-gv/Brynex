@@ -309,6 +309,43 @@ class ComfenalcoCajaController extends Controller
         return response()->json($r)->header('Cache-Control', 'no-store');
     }
 
+    /**
+     * Lanza, en segundo plano, la generación del certificado de afiliación a la
+     * caja Comfenalco del trabajador del contrato. El robot entra por empresa y
+     * tarda 1–2 min; el modal sondea certificadoEstado. Ver ComfenalcoCertificadoJob.
+     */
+    public function certificadoLanzar(int $contratoId)
+    {
+        $contrato = $this->contrato($contratoId);
+        $contrato->loadMissing('razonSocial', 'cliente');
+
+        $nit = preg_replace('/\D/', '', (string) $contrato->razonSocial?->nit);
+        $cedula = preg_replace('/\D/', '', (string) $contrato->cedula);
+        $tipoDoc = strtoupper(trim((string) $contrato->cliente?->tipo_doc)) ?: 'CC';
+
+        if (! $nit || ! $cedula) {
+            return response()->json(['ok' => false, 'error' => 'El contrato no tiene NIT de la razón social o cédula.'], 422);
+        }
+
+        $token = \Illuminate\Support\Str::random(24);
+        Cache::put(\App\Jobs\ComfenalcoCertificadoJob::clave($token),
+            ['estado' => 'corriendo', 'paso' => 'En cola, esperando turno en el servidor'], now()->addMinutes(15));
+        \App\Jobs\ComfenalcoCertificadoJob::dispatch($token, (int) $contrato->aliado_id, $nit, $tipoDoc, $cedula, Auth::id());
+
+        return response()->json(['ok' => true, 'token' => $token]);
+    }
+
+    /** Estado/resultado de un certificado lanzado por certificadoLanzar. */
+    public function certificadoEstado(string $token)
+    {
+        $r = Cache::get(\App\Jobs\ComfenalcoCertificadoJob::clave($token));
+        if (! $r) {
+            return response()->json(['estado' => 'desconocido'], 404)->header('Cache-Control', 'no-store');
+        }
+
+        return response()->json($r)->header('Cache-Control', 'no-store');
+    }
+
     /** La corrida consolidada de BryNex no se mezcla con la de cada aliado. */
     private function claveEstado(): string
     {

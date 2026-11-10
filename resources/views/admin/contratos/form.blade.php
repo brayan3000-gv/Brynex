@@ -849,6 +849,82 @@
             </div>
           </div>
         </div>
+
+        {{-- Comfenalco: certificado de afiliación del trabajador, generado por el
+             servidor (job + sondeo). El robot entra por empresa, trae el PDF en
+             base64 y lo guarda como documento del cliente. --}}
+        <div style="flex:none;" @keydown.escape.window="open=false" x-data="{
+              open:false, cargando:false, error:'', motivo:'', datos:null, seg:0, paso:'', reloj_:null,
+              csrf: document.querySelector('meta[name=csrf-token]')?.content || '',
+              reloj(s){ return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); },
+              async generar(){
+                this.error=''; this.motivo=''; this.datos=null; this.cargando=true; this.seg=0; this.paso='Enviando la solicitud';
+                const t0=Date.now(); this.reloj_=setInterval(()=>{ this.seg=Math.floor((Date.now()-t0)/1000); },1000);
+                try{
+                  const r=await fetch('{{ route('admin.afiliaciones.caja-comfenalco.certificado-lanzar', $contrato->id) }}', {method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':this.csrf}});
+                  const d=await r.json().catch(()=>({}));
+                  if(!r.ok || !d.ok) throw new Error(d.error || 'No se pudo lanzar la generación.');
+                  const base='{{ route('admin.afiliaciones.caja-comfenalco.certificado-estado', '__T__') }}';
+                  for(const fin=Date.now()+300000; Date.now()<fin;){
+                    await new Promise(res=>setTimeout(res,2500));
+                    const e=await fetch(base.replace('__T__', d.token), {headers:{'Accept':'application/json'}});
+                    if(e.status===404) continue;
+                    const j=await e.json().catch(()=>({}));
+                    if(j.paso) this.paso=j.paso;
+                    if(j.estado==='listo'){ this.datos=j; break; }
+                    if(j.estado==='error'){ this.motivo=j.motivo||''; throw new Error(j.error||'No se pudo generar el certificado.'); }
+                  }
+                  if(!this.datos) throw new Error('La generación tardó demasiado; intenta de nuevo.');
+                }catch(e){ this.error=e.message; }
+                clearInterval(this.reloj_); this.cargando=false;
+              }
+            }">
+          <button type="button" @click="open=true" title="Comfenalco: certificado de afiliación" class="chip-ss"
+              style="width:30px;padding:0;background:rgba(2,132,199,0.15);border:1px solid rgba(2,132,199,0.35);font-size:0.72rem;cursor:pointer;">📄</button>
+
+          <div x-cloak @click.self="open=false"
+               :style="'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:1rem;display:'+(open?'flex':'none')">
+            <div @click.stop style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:100%;max-width:560px;max-height:88vh;overflow:auto;text-align:left;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0.9rem 1.2rem;border-bottom:1px solid #e5e7eb;">
+                  <div>
+                    <div style="font-weight:800;color:#0369a1;font-size:0.95rem;">📄 Comfenalco Valle — certificado de afiliación</div>
+                    <div style="font-size:0.74rem;color:#64748b;">{{ trim(($cliente->primer_nombre ?? '').' '.($cliente->primer_apellido ?? '')) }} · CC {{ $contrato->cedula }} · {{ $contrato->razonSocial?->razon_social }}</div>
+                  </div>
+                  <button type="button" @click="open=false" style="background:none;border:none;font-size:1.4rem;color:#94a3b8;cursor:pointer;line-height:1;">&times;</button>
+                </div>
+                <div style="padding:1.1rem 1.2rem;">
+                  <button type="button" @click="generar()" :disabled="cargando"
+                      style="width:100%;background:rgba(2,132,199,0.15);border:1px solid rgba(2,132,199,0.4);color:#0369a1;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:700;cursor:pointer;" :style="cargando?{opacity:.6,cursor:'wait'}:{}">
+                    <span x-show="!cargando">📄 Generar certificado de afiliación</span>
+                    <span x-show="cargando" x-cloak>⏳ Generando… (puede tardar)</span>
+                  </button>
+                  <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;">Entra al portal de Comfenalco con la clave de la empresa; tarda 1–2 minutos. El PDF queda guardado en los documentos del cliente.</div>
+
+                  <div x-show="cargando" x-cloak style="margin-top:0.8rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:0.6rem 0.75rem;display:flex;align-items:center;gap:0.5rem;">
+                    <span style="flex:none;width:14px;height:14px;border:2px solid #bae6fd;border-top-color:#0284c7;border-radius:50%;animation:cfd-gira .8s linear infinite;"></span>
+                    <strong style="flex:1;font-size:0.8rem;color:#075985;" x-text="paso+'…'"></strong>
+                    <span style="font-size:0.85rem;font-weight:700;color:#0369a1;font-variant-numeric:tabular-nums;" x-text="reloj(seg)"></span>
+                  </div>
+
+                  <template x-if="error">
+                    <div x-cloak :style="'margin-top:0.8rem;border-radius:7px;padding:0.5rem 0.7rem;font-size:0.78rem;'+(motivo==='cupo'?'color:#b45309;background:#fffbeb;border:1px solid #fde68a;':(motivo==='no_afiliado'?'color:#92400e;background:#fff7ed;border:1px solid #fed7aa;':'color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;'))">
+                      <span x-text="(motivo==='cupo'?'🚦 ':(motivo==='no_afiliado'?'⏳ ':'⚠️ '))+error"></span>
+                    </div>
+                  </template>
+
+                  <template x-if="datos">
+                    <div style="margin-top:0.9rem;background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:0.7rem 0.8rem;">
+                      <div style="font-size:0.8rem;color:#155e75;font-weight:700;margin-bottom:0.4rem;">✅ Certificado generado y guardado en los documentos del cliente.</div>
+                      <template x-if="datos.documento_id">
+                        <a :href="'{{ route('admin.documentos.download', '__D__') }}'.replace('__D__', datos.documento_id)" target="_blank"
+                           style="display:inline-block;background:#0284c7;color:#fff;border-radius:7px;padding:0.4rem 0.8rem;font-size:0.78rem;font-weight:700;text-decoration:none;">⬇️ Descargar PDF</a>
+                      </template>
+                    </div>
+                  </template>
+                </div>
+            </div>
+          </div>
+        </div>
         @endif
         </div>
         <div id="aviso-caja-rs" style="display:none;font-size:0.66rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:0.2rem 0.4rem;margin-top:0.25rem;line-height:1.3;"></div>
