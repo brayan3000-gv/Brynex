@@ -31,10 +31,12 @@ class ComfandiConsultaApiJob implements ShouldQueue
 
     public function __construct(
         public string $token,
-        public string $tipo,          // 'datos' | 'certificado'
+        public string $tipo,          // 'datos' | 'certificado' | 'afiliar'
         public string $nit,
         public string $cedula,
         public string $tipoDoc = 'CO1C',
+        public ?int $contratoId = null, // para 'afiliar'
+        public ?int $usuarioId = null,  // quién lanzó (para la bitácora del radicado)
     ) {}
 
     public function handle(ComfandiApi $api): void
@@ -45,6 +47,26 @@ class ComfandiConsultaApiJob implements ShouldQueue
         $avisar = fn (string $paso) => Cache::put($clave, ['estado' => 'corriendo', 'paso' => $paso], now()->addMinutes(15));
         $avisar('Preparando la consulta');
         $api->alAvanzar($avisar);
+
+        if ($this->tipo === 'afiliar') {
+            $avisar('Entrando al portal y radicando la afiliación (puede tardar)');
+            $contrato = \App\Models\Contrato::findOrFail($this->contratoId);
+            $r = $api->afiliarIndividual($contrato, true);
+
+            if (($r['ok'] ?? false) && ! empty($r['numero'])) {
+                app(\App\Services\Caja\ComfandiCajaService::class)
+                    ->aplicar($contrato, ['numero' => $r['numero'], 'texto' => $r['texto'] ?? '', 'error' => null], $this->usuarioId);
+                Cache::put($clave, ['estado' => 'listo', 'afiliado' => true, 'numero' => $r['numero'],
+                    'mensaje' => 'Afiliación radicada en Comfandi con el N° '.$r['numero'].' (queda En proceso en Radicados).'], now()->addMinutes(15));
+            } elseif ($r['yaAfiliado'] ?? false) {
+                Cache::put($clave, ['estado' => 'listo', 'yaAfiliado' => true,
+                    'mensaje' => 'El trabajador ya está afiliado en Comfandi'.(! empty($r['desde']) ? ' desde '.$r['desde'] : '').'.'], now()->addMinutes(15));
+            } else {
+                Cache::put($clave, ['estado' => 'error', 'error' => $r['error'] ?? 'No se pudo radicar la afiliación.'], now()->addMinutes(15));
+            }
+
+            return;
+        }
 
         if ($this->tipo === 'certificado') {
             $r = $api->certificado($this->nit, $this->cedula, $this->tipoDoc, true);

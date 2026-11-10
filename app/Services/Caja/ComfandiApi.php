@@ -329,6 +329,31 @@ class ComfandiApi
         return ['ok' => true, 'base64' => $c['base64'], 'contentType' => $c['contentType'] ?? 'application/pdf'];
     }
 
+    /**
+     * Afilia (radica) a un trabajador por el formulario individual del portal,
+     * reusando la sesión del gestor del daemon (DOM, no API). Con $finalizar=false
+     * solo llena y devuelve el estado (dry-run, para revisar). El robot cambia a la
+     * empresa del contrato y ABORTA si no es la correcta. Lo llama
+     * ComfandiConsultaApiJob (worker), no una petición web: tarda 1–3 min.
+     *
+     * @return array{ok:bool, numero?:string, texto?:string, yaAfiliado?:bool, desde?:string, error?:string}
+     */
+    public function afiliarIndividual(\App\Models\Contrato $contrato, bool $finalizar = false): array
+    {
+        $prep = app(ComfandiCajaService::class)->preparar($contrato);
+        if (! empty($prep['problemas'])) {
+            return ['ok' => false, 'error' => implode(' ', $prep['problemas'])];
+        }
+        if (empty($prep['portal'])) {
+            return ['ok' => false, 'error' => 'No se pudo preparar la afiliación de Comfandi.'];
+        }
+
+        return $this->ejecutar(
+            array_merge(['modo' => 'afiliarIndividual', 'finalizar' => $finalizar], $prep['portal']),
+            self::SEGUNDOS_BASE + 150,
+        );
+    }
+
     /** El listado de trabajadores de una empresa. */
     public function listado(string $nit): array
     {

@@ -68,6 +68,10 @@ class ComfandiCajaService
         'horas' => '8',
         'tipoSalario' => '02',   // Fijo
         'ocupacion' => 'OTRAS OCUPACIONES ELEMENTALES',
+        // El robot de servidor radica sin una persona que llene estos dos, que el
+        // portal exige y BryNex no guarda. La extensión los deja a la persona.
+        'estadoCivil' => '1',    // Soltero
+        'tipoContrato' => '02',  // Indefinido
     ];
 
     /**

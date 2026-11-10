@@ -75,6 +75,15 @@
         <button class="cfd-btn" id="cfdBtnIniciar" style="display:none" onclick="iniciarCajaComfandi()">🔎 Consultar al trabajador y llenar</button>
         <div id="cfdPasos" style="display:none"></div>
 
+        {{-- Alternativa: radicar desde el servidor (netcup), sin extensión ni abrir
+             el portal. Corre en un worker (no en esta petición) reusando la sesión
+             del gestor; tarda 1–3 min y usa los datos de BryNex de arriba. --}}
+        <div id="cfdRobot" style="display:none;margin-top:.8rem;border-top:1px dashed #cbd5e1;padding-top:.7rem">
+          <div style="font-size:.72rem;color:#475569;margin-bottom:.4rem">O radícala desde el <strong>servidor</strong>, sin extensión ni abrir el portal (tarda 1–3 min; usa los datos de arriba):</div>
+          <button class="cfd-btn sec" id="cfdBtnRobot" onclick="afiliarPorServidor()">🤖 Afiliar por el servidor</button>
+          <div id="cfdRobotPasos" class="cfd-texto" style="display:none"></div>
+        </div>
+
         <div id="cfdRadicado" style="display:none">
           <div class="cfd-info" id="cfdRadicadoInfo"></div>
           <div class="cfd-texto" id="cfdRadicadoTexto" style="display:none"></div>
@@ -95,6 +104,7 @@ let cfdContratoId = null, cfdPrep = {}, cfdReloj = null, cfdFinal = null, cfdAvi
 let cfdEnviado = false;
 
 const CFD_CSRF = document.querySelector('meta[name="csrf-token"]')?.content || '';
+const CFD_ESTADO_URL = @json(route('admin.afiliaciones.caja-comfandi.api-estado', '__TOKEN__'));
 const cfdEsc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cfdEl = id => document.getElementById(id);
 const cfdFmt = iso => iso ? iso.split('-').reverse().join('/') : '—';
@@ -145,7 +155,7 @@ function cfdOpciones(sel, lista, porDefecto) {
 
 async function abrirCajaComfandi(contratoId) {
     cfdContratoId = contratoId; cfdFinal = null; cfdEnviado = false; clearInterval(cfdReloj);
-    ['cfdContenido', 'cfdResultado', 'cfdPasos', 'cfdRadicado', 'cfdBtnAbrir', 'cfdBtnIniciar', 'cfdAvisos'].forEach(id => cfdEl(id).style.display = 'none');
+    ['cfdContenido', 'cfdResultado', 'cfdPasos', 'cfdRadicado', 'cfdBtnAbrir', 'cfdBtnIniciar', 'cfdAvisos', 'cfdRobot'].forEach(id => cfdEl(id).style.display = 'none');
     cfdEl('cfdCargando').style.display = 'block';
     cfdEl('cfdModal').classList.add('open');
 
@@ -187,6 +197,7 @@ async function abrirCajaComfandi(contratoId) {
 
     if (problemas.length) { cfdEl('cfdDatos').style.display = 'none'; cfdEl('cfdSesion').style.display = 'none'; return; }
     cfdEl('cfdSesion').style.display = 'block';
+    cfdEl('cfdRobot').style.display = 'block';
     await revisarSesionComfandi();
     cfdReloj = setInterval(() => { if (cfdEl('cfdPasos').style.display !== 'block') revisarSesionComfandi(); }, 3000);
 }
@@ -407,6 +418,46 @@ async function rechazoCajaComfandi() {
     if (motivo === null) return;
     const r = await cfdPedir('aplicar', 'POST', { error: motivo || 'El portal no radicó la afiliación.', texto: cfdFinal?.texto || '' });
     cfdTerminar(`⛔ ${cfdEsc(r.mensaje || r.error || '')}`);
+}
+
+// Afiliación por el SERVIDOR (worker): lanza el job y sondea su estado. No usa la
+// extensión ni abre el portal; corre en netcup reusando la sesión del gestor.
+async function afiliarPorServidor() {
+    const btn = cfdEl('cfdBtnRobot');
+    const pasos = cfdEl('cfdRobotPasos');
+    if (!confirm('Se radicará la afiliación en Comfandi desde el servidor, con los datos de BryNex de arriba. ¿Continuar?')) return;
+    const antes = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳ Radicando en el servidor…';
+    pasos.style.display = 'block'; pasos.textContent = 'Enviando al servidor…';
+
+    let token;
+    try {
+        const r = await cfdPedir('api-lanzar', 'POST', { tipo: 'afiliar' });
+        if (!r.ok || !r.token) { pasos.innerHTML = '❌ ' + cfdEsc(r.error || 'No se pudo lanzar la afiliación.'); btn.disabled = false; btn.textContent = antes; return; }
+        token = r.token;
+    } catch (e) { pasos.innerHTML = '❌ No se pudo lanzar la afiliación.'; btn.disabled = false; btn.textContent = antes; return; }
+
+    const url = CFD_ESTADO_URL.replace('__TOKEN__', token);
+    const desde = Date.now();
+    clearInterval(cfdReloj);
+    cfdReloj = setInterval(async () => {
+        if (Date.now() - desde > 6 * 60 * 1000) {
+            clearInterval(cfdReloj);
+            pasos.innerHTML += '<br>⚠️ Está tardando más de lo normal; revísalo en la pestaña Radicados del portal.';
+            btn.disabled = false; btn.textContent = antes;
+            return;
+        }
+        let e;
+        try { e = await (await fetch(url, { headers: { 'Accept': 'application/json' } })).json(); } catch (err) { return; }
+        if (e.estado === 'corriendo') { pasos.innerHTML = '⏳ ' + cfdEsc(e.paso || 'Procesando…'); return; }
+        clearInterval(cfdReloj);
+        btn.disabled = false; btn.textContent = antes;
+        if (e.estado === 'listo') {
+            cfdTerminar('✅ ' + cfdEsc(e.mensaje || 'Afiliación radicada por el servidor.'));
+        } else {
+            pasos.innerHTML = '❌ ' + cfdEsc(e.error || 'No se pudo radicar la afiliación.');
+        }
+    }, 3000);
 }
 
 function cfdTerminar(html) {

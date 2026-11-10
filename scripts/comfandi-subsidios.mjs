@@ -30,6 +30,7 @@ import { rmSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node
 import { createHmac } from 'node:crypto';
 import { createServer } from 'node:http';
 import puppeteer from 'puppeteer-core';
+import { afiliarIndividual } from './comfandi-afiliar.mjs';
 
 const HOST = 'https://afiliaciones.sucursalcomfandi.com';
 const BASE = `${HOST}/sakaar`;
@@ -923,6 +924,8 @@ try {
     // (sap/listado/certificado/subsidios). Devuelve la salida de ESA consulta.
     // En modo servidor se llama una vez por request; en un disparo, una sola vez.
     const atender = async (op) => {
+      // Afiliación individual por robot: reusa la sesión del gestor (DOM), no el API.
+      if (op.modo === 'afiliarIndividual') return afiliarIndividual(pagina, op, esperar, BASE);
       const unNit = String(op.nit || '').replace(/\D/g, '');
       const docs = (op.documentos || []).map((d) => String(d).replace(/\D/g, '')).filter(Boolean);
       const unModo = ['listado', 'certificado'].includes(op.modo) ? op.modo : 'subsidios';

@@ -345,7 +345,7 @@ class ComfandiCajaController extends Controller
      */
     public function comfandiApiLanzar(int $contratoId, Request $request, \App\Services\Caja\ComfandiApi $api)
     {
-        $tipo = $request->input('tipo') === 'certificado' ? 'certificado' : 'datos';
+        $tipo = in_array($request->input('tipo'), ['certificado', 'afiliar'], true) ? $request->input('tipo') : 'datos';
 
         $contrato = $this->contrato($contratoId);
         $contrato->loadMissing('razonSocial');
@@ -366,9 +366,18 @@ class ComfandiCajaController extends Controller
             ->where('aliado_id', $contrato->aliado_id)->value('tipo_doc'));
         $tipoDoc = $tipos[$tipoCliente] ?? 'CO1C';
 
+        // Afiliar radica de verdad: se validan los problemas antes de encolar para
+        // avisarlos enseguida (el contrato vigente, caja Comfandi, NIT real, etc.).
+        if ($tipo === 'afiliar') {
+            $prep = $this->servicio->preparar($contrato);
+            if (! empty($prep['problemas'])) {
+                return response()->json(['ok' => false, 'error' => implode(' ', $prep['problemas'])], 422);
+            }
+        }
+
         $token = \Illuminate\Support\Str::random(24);
         Cache::put(\App\Jobs\ComfandiConsultaApiJob::clave($token), ['estado' => 'corriendo', 'paso' => 'En cola, esperando turno en el servidor'], now()->addMinutes(15));
-        \App\Jobs\ComfandiConsultaApiJob::dispatch($token, $tipo, $nit, $cedula, $tipoDoc);
+        \App\Jobs\ComfandiConsultaApiJob::dispatch($token, $tipo, $nit, $cedula, $tipoDoc, $contrato->id, Auth::id());
 
         return response()->json(['ok' => true, 'token' => $token]);
     }
