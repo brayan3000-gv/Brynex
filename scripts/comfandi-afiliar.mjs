@@ -90,7 +90,7 @@ export function pCfdLlenar(d) {
  * `pagina` es la página del daemon ya logueado; `op` es el array `portal` de
  * `ComfandiCajaService::preparar` + `finalizar`. `esperar`/`BASE` vienen del .mjs.
  */
-export async function afiliarIndividual(pagina, op, esperar, BASE) {
+export async function afiliarIndividual(pagina, op, esperar, BASE, progreso = () => {}) {
   const ev = (fn, ...a) => pagina.evaluate(fn, ...a).catch(() => null);
   const esperarQue = async (fn, args = [], timeout = 30000) => { const lim = Date.now() + timeout; while (Date.now() < lim) { const r = await pagina.evaluate(fn, ...args).catch(() => null); if (r) return r; await esperar(600); } return null; };
   const activa = () => pagina.evaluate(() => (document.body.innerText.match(/actualmente est[aá]s en:\s*\n+\s*([^\n]+)/i) || [])[1] || '').catch(() => '');
@@ -158,6 +158,7 @@ export async function afiliarIndividual(pagina, op, esperar, BASE) {
   };
 
   // ── Flujo ──────────────────────────────────────────────────────────────────
+  progreso('Verificando la empresa');
   await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
   await esperar(2000);
   await cambiarEmpresa(dest);
@@ -185,6 +186,7 @@ export async function afiliarIndividual(pagina, op, esperar, BASE) {
   const emp2 = await activa();
   if (!emp2.toUpperCase().includes(dest)) return { ok: false, error: `La empresa cambió antes de llenar («${emp2}»).` };
 
+  progreso('Llenando el formulario');
   await pagina.evaluate(pCfdLlenar, d);
   await esperar(1500);
   const r = await pagina.evaluate(pCfdLlenar, d);
@@ -194,6 +196,7 @@ export async function afiliarIndividual(pagina, op, esperar, BASE) {
   const emp3 = await activa();
   if (!emp3.toUpperCase().includes(dest)) return { ok: false, error: `La empresa cambió antes de Finalizar («${emp3}»).` };
 
+  progreso('Radicando en el portal');
   const clickBtn = (re) => esperarQue((pat) => { const b = [...document.querySelectorAll('button,input[type=submit]')].find((e) => e.offsetParent && new RegExp(pat, 'i').test((e.innerText || e.value || '').trim())); if (!b || b.disabled) return false; b.click(); return true; }, [re], 25000);
   if (!await clickBtn('^\\s*finalizar')) return { ok: false, error: 'No se encontró el botón Finalizar.' };
   if (!await clickBtn('^\\s*confirmar\\s*$')) { const p = await ev(() => (document.body.innerText || '').replace(/\s+/g, ' ').slice(0, 300)); return { ok: false, error: 'Se pulsó Finalizar pero el portal no pidió confirmar el sueldo. ' + (p || '') }; }

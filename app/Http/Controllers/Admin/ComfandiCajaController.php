@@ -29,11 +29,16 @@ class ComfandiCajaController extends Controller
         $this->middleware('auth');
     }
 
-    public function precheck(int $contratoId)
+    public function precheck(int $contratoId, \App\Services\Caja\ComfandiApi $api)
     {
-        $prep = $this->servicio->preparar($this->contrato($contratoId));
+        $contrato = $this->contrato($contratoId);
+        $prep = $this->servicio->preparar($contrato);
 
-        return response()->json(['ok' => ! $prep['problemas'], 'listas' => [
+        // ¿El gestor único administra esta empresa? Si sí, el servidor la puede
+        // afiliar; si no (null=aún no se sabe), el modal ofrece la extensión.
+        $nit = preg_replace('/\D/', '', (string) ($prep['portal']['nit'] ?? $contrato->razonSocial?->nit ?? ''));
+
+        return response()->json(['ok' => ! $prep['problemas'], 'servidor_disponible' => $nit ? $api->servidorPuedeAfiliar($nit) : null, 'listas' => [
             'estados_civil' => ComfandiCajaService::ESTADOS_CIVIL,
             'contratos' => ComfandiCajaService::CONTRATOS,
             'salarios' => ComfandiCajaService::SALARIOS,
@@ -373,6 +378,7 @@ class ComfandiCajaController extends Controller
             if (! empty($prep['problemas'])) {
                 return response()->json(['ok' => false, 'error' => implode(' ', $prep['problemas'])], 422);
             }
+            @mkdir(storage_path('app/comfandi-prog'), 0775, true); // donde el daemon escribe el progreso
         }
 
         $token = \Illuminate\Support\Str::random(24);
@@ -389,6 +395,18 @@ class ComfandiCajaController extends Controller
 
         if (! $r) {
             return response()->json(['estado' => 'desconocido'], 404)->header('Cache-Control', 'no-store');
+        }
+
+        // Mientras corre, el paso en vivo lo escribe el daemon en un archivo: el job
+        // está bloqueado en la llamada al robot y no puede actualizar la caché.
+        if (($r['estado'] ?? '') === 'corriendo') {
+            $f = \App\Jobs\ComfandiConsultaApiJob::progresoFile($token);
+            if (is_file($f)) {
+                $p = json_decode((string) @file_get_contents($f), true);
+                if (! empty($p['paso'])) {
+                    $r['paso'] = $p['paso'];
+                }
+            }
         }
 
         return response()->json($r)->header('Cache-Control', 'no-store');

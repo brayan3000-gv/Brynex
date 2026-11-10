@@ -123,14 +123,49 @@ class ComfandiApi
             // sea no se puede usar, cae al robot de un disparo (abre Chrome, entra
             // y consulta una vez). Así la función siempre responde.
             $r = $this->porDaemon($g, $opciones);
-            if ($r !== null) {
-                return $r;
+            if ($r === null) {
+                $r = $this->unDisparo($g, $opciones, $segs);
             }
 
-            return $this->unDisparo($g, $opciones, $segs);
+            // Toda respuesta trae `empresas` (del token del gestor): se cachean sus
+            // NITs para saber, sin esperar, qué empresas puede afiliar el servidor.
+            $this->recordarEmpresasDelGestor($r);
+
+            return $r;
         } finally {
             $lock->release();
         }
+    }
+
+    /** Cachea los NITs de las empresas del gestor (del token), para decidir rápido. */
+    private function recordarEmpresasDelGestor(array $r): void
+    {
+        if (empty($r['empresas']) || ! is_array($r['empresas'])) {
+            return;
+        }
+        $nits = collect($r['empresas'])
+            ->map(fn ($e) => preg_replace('/\D/', '', (string) ($e['nit'] ?? '')))
+            ->filter()->unique()->values()->all();
+        if ($nits) {
+            \Illuminate\Support\Facades\Cache::put('comfandi:gestor-nits', $nits, now()->addDays(30));
+        }
+    }
+
+    /** Los NITs de las empresas del gestor único (cacheados), o null si aún no se sabe. */
+    public function empresasDelGestor(): ?array
+    {
+        return \Illuminate\Support\Facades\Cache::get('comfandi:gestor-nits');
+    }
+
+    /** ¿El servidor puede afiliar esta empresa? true/false si se sabe, null si aún no. */
+    public function servidorPuedeAfiliar(string $nit): ?bool
+    {
+        $nits = $this->empresasDelGestor();
+        if ($nits === null) {
+            return null;
+        }
+
+        return in_array(preg_replace('/\D/', '', $nit), $nits, true);
     }
 
     /** La entrada base del robot (credenciales del gestor + vía API). */
@@ -338,7 +373,7 @@ class ComfandiApi
      *
      * @return array{ok:bool, numero?:string, texto?:string, yaAfiliado?:bool, desde?:string, error?:string}
      */
-    public function afiliarIndividual(\App\Models\Contrato $contrato, bool $finalizar = false): array
+    public function afiliarIndividual(\App\Models\Contrato $contrato, bool $finalizar = false, ?string $progresoFile = null): array
     {
         $prep = app(ComfandiCajaService::class)->preparar($contrato);
         if (! empty($prep['problemas'])) {
@@ -348,10 +383,12 @@ class ComfandiApi
             return ['ok' => false, 'error' => 'No se pudo preparar la afiliación de Comfandi.'];
         }
 
-        return $this->ejecutar(
-            array_merge(['modo' => 'afiliarIndividual', 'finalizar' => $finalizar], $prep['portal']),
-            self::SEGUNDOS_BASE + 150,
-        );
+        $op = ['modo' => 'afiliarIndividual', 'finalizar' => $finalizar];
+        if ($progresoFile) {
+            $op['progresoFile'] = $progresoFile; // el daemon escribe aquí el paso actual
+        }
+
+        return $this->ejecutar(array_merge($op, $prep['portal']), self::SEGUNDOS_BASE + 150);
     }
 
     /** El listado de trabajadores de una empresa. */

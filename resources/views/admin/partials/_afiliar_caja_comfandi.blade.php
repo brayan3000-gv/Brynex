@@ -30,6 +30,12 @@
 .cfd-input { width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:7px;padding:.35rem .5rem;font-size:.8rem;font-family:inherit }
 .cfd-fila { display:grid;grid-template-columns:1fr 1fr;gap:.5rem }
 .cfd-texto { font-size:.7rem;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;border-radius:7px;padding:.45rem .55rem;max-height:130px;overflow-y:auto;margin:.4rem 0;line-height:1.45 }
+.cfd-link { background:none;border:none;color:#1d4ed8;font-size:.76rem;font-weight:600;cursor:pointer;padding:.3rem 0;display:block;text-align:left }
+.cfd-prog { margin-top:.6rem;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;padding:.6rem .7rem }
+.cfd-prog-head { display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:#1e3a8a;font-weight:700;margin-bottom:.45rem }
+.cfd-reloj { font-variant-numeric:tabular-nums;color:#2563eb }
+.cfd-prog-barra { height:6px;background:#dbeafe;border-radius:99px;overflow:hidden }
+.cfd-prog-barra>div { height:100%;width:25%;background:linear-gradient(90deg,#3b82f6,#2563eb);border-radius:99px;transition:width .5s ease }
 </style>
 
 <div class="cfd-bg" id="cfdModal">
@@ -45,43 +51,56 @@
         <div class="cfd-prob" id="cfdProblemas" style="display:none"><strong>No se puede afiliar todavía:</strong><ul id="cfdProblemasLista"></ul></div>
         <div class="cfd-aviso" id="cfdAvisos" style="display:none"></div>
 
-        <div id="cfdDatos">
-          <div class="cfd-fila">
-            <div><label class="cfd-campo" for="cfdGenero">Género</label><select id="cfdGenero" class="cfd-input"></select></div>
-            <div><label class="cfd-campo" for="cfdEstadoCivil">Estado civil</label><select id="cfdEstadoCivil" class="cfd-input"></select></div>
-          </div>
-          <div class="cfd-fila">
-            <div><label class="cfd-campo" for="cfdContrato">Tipo de contrato</label><select id="cfdContrato" class="cfd-input"></select></div>
-            <div><label class="cfd-campo" for="cfdSalario">Tipo de salario</label><select id="cfdSalario" class="cfd-input"></select></div>
-          </div>
-          <div class="cfd-fila">
-            <div><label class="cfd-campo" for="cfdHoras">Horas diarias</label><select id="cfdHoras" class="cfd-input"></select></div>
-            <div><label class="cfd-campo" for="cfdNivel">Nivel académico</label><select id="cfdNivel" class="cfd-input"></select></div>
-          </div>
-          <label class="cfd-campo" for="cfdOcupacion">Ocupación (se busca en la lista CIUO del portal)</label>
-          <input id="cfdOcupacion" class="cfd-input">
-          <label class="cfd-campo" for="cfdDireccion">Dirección de residencia (sin # ni -, y terminada en SECTOR URBANO o SECTOR RURAL)</label>
-          <input id="cfdDireccion" class="cfd-input" placeholder="Ej: CALLE 43 37 31 SECTOR URBANO">
-          <div class="cfd-info" id="cfdSueldoAviso" style="margin-top:.5rem"></div>
-          <div class="cfd-aviso" style="margin-top:.6rem">
-            Orientación sexual, pertenencia étnica y factor de vulnerabilidad van con los valores neutros
-            del portal («información no disponible», «no se autoreconoce», «no aplica»), porque BryNex no
-            los guarda.
-          </div>
-        </div>
+        {{-- Bloque de afiliación (solo si no hay problemas). El servidor es la opción
+             primaria; la extensión aparece si la empresa no la administra el gestor
+             único de Comfandi, o si la persona la pide. --}}
+        <div id="cfdAfiliar" style="display:none">
 
-        <div class="cfd-info" id="cfdSesion"></div>
-        <button class="cfd-btn sec" id="cfdBtnAbrir" style="display:none" onclick="abrirPortalComfandi()">🌐 Abrir el portal para iniciar sesión</button>
-        <button class="cfd-btn" id="cfdBtnIniciar" style="display:none" onclick="iniciarCajaComfandi()">🔎 Consultar al trabajador y llenar</button>
-        <div id="cfdPasos" style="display:none"></div>
+          {{-- Opción 1: el servidor (robot en netcup) la radica por un worker,
+               sin extensión ni abrir el portal. Tarda 1–3 min. --}}
+          <div id="cfdBloqueServidor" style="display:none">
+            <button class="cfd-btn" id="cfdBtnRobot" onclick="afiliarPorServidor()">🤖 Afiliar por el servidor</button>
+            <div id="cfdProg" class="cfd-prog" style="display:none">
+              <div class="cfd-prog-head"><span id="cfdProgPaso">Enviando…</span><span id="cfdProgReloj" class="cfd-reloj">0:00</span></div>
+              <div class="cfd-prog-barra"><div id="cfdProgBarra"></div></div>
+            </div>
+            <button class="cfd-link" id="cfdToggleExt" style="display:none" onclick="cfdMostrarExtension()">o afiliar por la extensión ▾</button>
+          </div>
 
-        {{-- Alternativa: radicar desde el servidor (netcup), sin extensión ni abrir
-             el portal. Corre en un worker (no en esta petición) reusando la sesión
-             del gestor; tarda 1–3 min y usa los datos de BryNex de arriba. --}}
-        <div id="cfdRobot" style="display:none;margin-top:.8rem;border-top:1px dashed #cbd5e1;padding-top:.7rem">
-          <div style="font-size:.72rem;color:#475569;margin-bottom:.4rem">O radícala desde el <strong>servidor</strong>, sin extensión ni abrir el portal (tarda 1–3 min; usa los datos de arriba):</div>
-          <button class="cfd-btn sec" id="cfdBtnRobot" onclick="afiliarPorServidor()">🤖 Afiliar por el servidor</button>
-          <div id="cfdRobotPasos" class="cfd-texto" style="display:none"></div>
+          {{-- Opción 2: la extensión BryNex Portales, en el navegador de la persona. --}}
+          <div id="cfdBloqueExtension" style="display:none">
+            <div class="cfd-aviso" id="cfdMotivoExtension" style="display:none"></div>
+            <div class="cfd-info" id="cfdSesion"></div>
+            <button class="cfd-btn sec" id="cfdBtnAbrir" style="display:none" onclick="abrirPortalComfandi()">🌐 Abrir el portal para iniciar sesión</button>
+            <button class="cfd-btn sec" id="cfdBtnIniciar" style="display:none" onclick="iniciarCajaComfandi()">🔎 Consultar al trabajador y llenar</button>
+            <div id="cfdPasos" style="display:none"></div>
+          </div>
+
+          {{-- Los demás campos del formulario, colapsados: casi nadie los edita. --}}
+          <button class="cfd-link" id="cfdToggleDetalles" onclick="cfdToggleDetalles()" style="margin-top:.7rem">▸ Ver / editar detalles del formulario</button>
+          <div id="cfdDatos" style="display:none;margin-top:.4rem">
+            <div class="cfd-fila">
+              <div><label class="cfd-campo" for="cfdGenero">Género</label><select id="cfdGenero" class="cfd-input"></select></div>
+              <div><label class="cfd-campo" for="cfdEstadoCivil">Estado civil</label><select id="cfdEstadoCivil" class="cfd-input"></select></div>
+            </div>
+            <div class="cfd-fila">
+              <div><label class="cfd-campo" for="cfdContrato">Tipo de contrato</label><select id="cfdContrato" class="cfd-input"></select></div>
+              <div><label class="cfd-campo" for="cfdSalario">Tipo de salario</label><select id="cfdSalario" class="cfd-input"></select></div>
+            </div>
+            <div class="cfd-fila">
+              <div><label class="cfd-campo" for="cfdHoras">Horas diarias</label><select id="cfdHoras" class="cfd-input"></select></div>
+              <div><label class="cfd-campo" for="cfdNivel">Nivel académico</label><select id="cfdNivel" class="cfd-input"></select></div>
+            </div>
+            <label class="cfd-campo" for="cfdOcupacion">Ocupación (se busca en la lista CIUO del portal)</label>
+            <input id="cfdOcupacion" class="cfd-input">
+            <label class="cfd-campo" for="cfdDireccion">Dirección de residencia (sin # ni -, y terminada en SECTOR URBANO/RURAL)</label>
+            <input id="cfdDireccion" class="cfd-input" placeholder="Ej: CALLE 43 37 31 SECTOR URBANO">
+            <div class="cfd-info" id="cfdSueldoAviso" style="margin-top:.5rem"></div>
+            <div class="cfd-aviso" style="margin-top:.6rem">
+              Orientación sexual, pertenencia étnica y factor de vulnerabilidad van con los valores neutros
+              del portal, porque BryNex no los guarda.
+            </div>
+          </div>
         </div>
 
         <div id="cfdRadicado" style="display:none">
@@ -155,7 +174,7 @@ function cfdOpciones(sel, lista, porDefecto) {
 
 async function abrirCajaComfandi(contratoId) {
     cfdContratoId = contratoId; cfdFinal = null; cfdEnviado = false; clearInterval(cfdReloj);
-    ['cfdContenido', 'cfdResultado', 'cfdPasos', 'cfdRadicado', 'cfdBtnAbrir', 'cfdBtnIniciar', 'cfdAvisos', 'cfdRobot'].forEach(id => cfdEl(id).style.display = 'none');
+    ['cfdContenido', 'cfdResultado', 'cfdAfiliar', 'cfdBloqueServidor', 'cfdBloqueExtension', 'cfdProg', 'cfdPasos', 'cfdRadicado', 'cfdDatos', 'cfdAvisos', 'cfdMotivoExtension', 'cfdToggleExt', 'cfdBtnAbrir', 'cfdBtnIniciar'].forEach(id => cfdEl(id).style.display = 'none');
     cfdEl('cfdCargando').style.display = 'block';
     cfdEl('cfdModal').classList.add('open');
 
@@ -163,6 +182,7 @@ async function abrirCajaComfandi(contratoId) {
     cfdEl('cfdCargando').style.display = 'none';
     cfdEl('cfdContenido').style.display = 'block';
 
+    // Resumen ESENCIAL: lo demás va en los detalles colapsados.
     const r = cfdPrep.resumen || {};
     const li = (k, v) => v ? `<div><span>${k}:</span> <strong>${cfdEsc(v)}</strong></div>` : '';
     cfdEl('cfdResumen').innerHTML =
@@ -171,8 +191,6 @@ async function abrirCajaComfandi(contratoId) {
         li('Caja', r.caja) + li('Ingreso', cfdFmt(r.fecha_ingreso)) +
         li('Salario', r.salario ? '$' + Number(r.salario).toLocaleString('es-CO') : null) +
         li('Jornada', r.jornada) +
-        li('Residencia', r.residencia) + li('Celular', r.celular) + li('Correo', r.correo) +
-        li('Usuario del portal', r.usuario_portal) +
         li('Radicado de caja', r.estado_radicado ? `${r.estado_radicado}${r.numero_radicado ? ' · ' + r.numero_radicado : ''}` : null);
 
     const problemas = cfdPrep.problemas || [];
@@ -182,12 +200,11 @@ async function abrirCajaComfandi(contratoId) {
     cfdEl('cfdAvisos').style.display = avisos.length ? 'block' : 'none';
     cfdEl('cfdAvisos').innerHTML = avisos.map(cfdEsc).join('<br>');
 
+    // Rellena los campos del formulario (quedan en los detalles colapsados).
     cfdOpciones(cfdEl('cfdGenero'), cfdPrep.listas?.generos, cfdPrep.portal?.genero || '1');
     cfdOpciones(cfdEl('cfdEstadoCivil'), cfdPrep.listas?.estados_civil, '1');
     cfdOpciones(cfdEl('cfdContrato'), cfdPrep.listas?.contratos, '02');
     cfdOpciones(cfdEl('cfdSalario'), cfdPrep.listas?.salarios, '02');
-    // La jornada la propone el contrato: un Tiempo Parcial de 14 días es media
-    // jornada, y el sueldo declarado tiene que ir en esa misma proporción.
     cfdOpciones(cfdEl('cfdHoras'), cfdPrep.listas?.horas, String(cfdPrep.portal?.horas || '8'));
     cfdOpciones(cfdEl('cfdNivel'), cfdPrep.listas?.niveles, '10');
     cfdEl('cfdOcupacion').value = cfdPrep.portal?.ocupacionTexto || '';
@@ -195,11 +212,38 @@ async function abrirCajaComfandi(contratoId) {
     cfdEl('cfdHoras').onchange = cfdAvisarSueldo;
     cfdAvisarSueldo();
 
-    if (problemas.length) { cfdEl('cfdDatos').style.display = 'none'; cfdEl('cfdSesion').style.display = 'none'; return; }
+    if (problemas.length) return;
+
+    cfdEl('cfdAfiliar').style.display = 'block';
+
+    // El servidor solo afilia las empresas del gestor único. servidor_disponible:
+    // true = sí; false = no (se usa la extensión, con el motivo visible); null = aún
+    // no se sabe → se ofrece el servidor (y si aborta por empresa, cae a la extensión).
+    if (cfdPrep.servidor_disponible === false) {
+        cfdMostrarExtension('Esta empresa no la administra el gestor único de Comfandi, así que no se puede afiliar por el servidor. Se afilia por la extensión en tu navegador.');
+    } else {
+        cfdEl('cfdBloqueServidor').style.display = 'block';
+        cfdEl('cfdToggleExt').style.display = 'block';
+    }
+}
+
+// Muestra el bloque de la extensión (opción 2) y arranca el sondeo de sesión.
+function cfdMostrarExtension(motivo) {
+    cfdEl('cfdBloqueServidor') && (cfdEl('cfdToggleExt').style.display = 'none');
+    cfdEl('cfdBloqueExtension').style.display = 'block';
+    if (motivo) { cfdEl('cfdMotivoExtension').style.display = 'block'; cfdEl('cfdMotivoExtension').innerHTML = '⚠️ ' + cfdEsc(motivo); }
     cfdEl('cfdSesion').style.display = 'block';
-    cfdEl('cfdRobot').style.display = 'block';
-    await revisarSesionComfandi();
+    revisarSesionComfandi();
+    clearInterval(cfdReloj);
     cfdReloj = setInterval(() => { if (cfdEl('cfdPasos').style.display !== 'block') revisarSesionComfandi(); }, 3000);
+}
+
+// Muestra/esconde los detalles del formulario.
+function cfdToggleDetalles() {
+    const d = cfdEl('cfdDatos'), b = cfdEl('cfdToggleDetalles');
+    const abrir = d.style.display === 'none';
+    d.style.display = abrir ? 'block' : 'none';
+    b.textContent = (abrir ? '▾' : '▸') + ' Ver / editar detalles del formulario';
 }
 
 async function revisarSesionComfandi() {
@@ -422,42 +466,53 @@ async function rechazoCajaComfandi() {
 
 // Afiliación por el SERVIDOR (worker): lanza el job y sondea su estado. No usa la
 // extensión ni abre el portal; corre en netcup reusando la sesión del gestor.
+// Porcentaje de la barra según el paso que reporta el daemon.
+const CFD_PASOS_PCT = { 'Entrando al portal': 35, 'Verificando la empresa': 52, 'Llenando el formulario': 74, 'Radicando en el portal': 90 };
+
 async function afiliarPorServidor() {
     const btn = cfdEl('cfdBtnRobot');
-    const pasos = cfdEl('cfdRobotPasos');
-    if (!confirm('Se radicará la afiliación en Comfandi desde el servidor, con los datos de BryNex de arriba. ¿Continuar?')) return;
+    if (!confirm('Se radicará la afiliación en Comfandi desde el servidor, con los datos de BryNex. ¿Continuar?')) return;
     const antes = btn.textContent;
     btn.disabled = true; btn.textContent = '⏳ Radicando en el servidor…';
-    pasos.style.display = 'block'; pasos.textContent = 'Enviando al servidor…';
+    cfdEl('cfdToggleExt').style.display = 'none';
+    const prog = cfdEl('cfdProg'), paso = cfdEl('cfdProgPaso'), reloj = cfdEl('cfdProgReloj'), barra = cfdEl('cfdProgBarra');
+    prog.style.display = 'block'; paso.textContent = 'Enviando…'; reloj.textContent = '0:00'; barra.style.width = '15%';
+
+    const falla = (msg) => { btn.disabled = false; btn.textContent = antes; prog.style.display = 'none'; cfdEl('cfdBloqueServidor').insertAdjacentHTML('beforeend', `<div class="cfd-aviso" style="margin-top:.5rem">❌ ${cfdEsc(msg)}</div>`); };
 
     let token;
     try {
         const r = await cfdPedir('api-lanzar', 'POST', { tipo: 'afiliar' });
-        if (!r.ok || !r.token) { pasos.innerHTML = '❌ ' + cfdEsc(r.error || 'No se pudo lanzar la afiliación.'); btn.disabled = false; btn.textContent = antes; return; }
+        if (!r.ok || !r.token) { falla(r.error || 'No se pudo lanzar la afiliación.'); return; }
         token = r.token;
-    } catch (e) { pasos.innerHTML = '❌ No se pudo lanzar la afiliación.'; btn.disabled = false; btn.textContent = antes; return; }
+    } catch (e) { falla('No se pudo lanzar la afiliación.'); return; }
 
     const url = CFD_ESTADO_URL.replace('__TOKEN__', token);
-    const desde = Date.now();
+    const t0 = Date.now();
     clearInterval(cfdReloj);
     cfdReloj = setInterval(async () => {
-        if (Date.now() - desde > 6 * 60 * 1000) {
-            clearInterval(cfdReloj);
-            pasos.innerHTML += '<br>⚠️ Está tardando más de lo normal; revísalo en la pestaña Radicados del portal.';
-            btn.disabled = false; btn.textContent = antes;
-            return;
-        }
+        const seg = Math.floor((Date.now() - t0) / 1000);
+        reloj.textContent = Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0');
+        if (seg > 360) { clearInterval(cfdReloj); paso.textContent = 'Está tardando; revisa en Radicados.'; btn.disabled = false; btn.textContent = antes; return; }
         let e;
         try { e = await (await fetch(url, { headers: { 'Accept': 'application/json' } })).json(); } catch (err) { return; }
-        if (e.estado === 'corriendo') { pasos.innerHTML = '⏳ ' + cfdEsc(e.paso || 'Procesando…'); return; }
+        if (e.estado === 'corriendo') { const p = e.paso || 'Entrando al portal'; paso.textContent = p; if (CFD_PASOS_PCT[p]) barra.style.width = CFD_PASOS_PCT[p] + '%'; return; }
         clearInterval(cfdReloj);
-        btn.disabled = false; btn.textContent = antes;
         if (e.estado === 'listo') {
+            barra.style.width = '100%'; paso.textContent = 'Listo';
             cfdTerminar('✅ ' + cfdEsc(e.mensaje || 'Afiliación radicada por el servidor.'));
-        } else {
-            pasos.innerHTML = '❌ ' + cfdEsc(e.error || 'No se pudo radicar la afiliación.');
+            return;
         }
-    }, 3000);
+        // Error. Si abortó por la empresa (no la administra el gestor), cae a la extensión.
+        btn.disabled = false; btn.textContent = antes; prog.style.display = 'none';
+        const err = e.error || 'No se pudo radicar la afiliación.';
+        if (/no se pudo cambiar a la empresa|fuera del gestor|no administra/i.test(err)) {
+            cfdEl('cfdBloqueServidor').style.display = 'none';
+            cfdMostrarExtension('Esta empresa no la administra el gestor de Comfandi, así que no se pudo afiliar por el servidor. Se afilia por la extensión.');
+        } else {
+            cfdEl('cfdBloqueServidor').insertAdjacentHTML('beforeend', `<div class="cfd-aviso" style="margin-top:.5rem">❌ ${cfdEsc(err)}</div>`);
+        }
+    }, 2500);
 }
 
 function cfdTerminar(html) {

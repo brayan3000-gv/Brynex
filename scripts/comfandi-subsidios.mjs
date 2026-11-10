@@ -925,7 +925,11 @@ try {
     // En modo servidor se llama una vez por request; en un disparo, una sola vez.
     const atender = async (op) => {
       // Afiliación individual por robot: reusa la sesión del gestor (DOM), no el API.
-      if (op.modo === 'afiliarIndividual') return afiliarIndividual(pagina, op, esperar, BASE);
+      if (op.modo === 'afiliarIndividual') {
+        // El daemon escribe el paso actual en op.progresoFile; comfandiApiEstado lo lee.
+        const progreso = (paso) => { try { if (op.progresoFile) writeFileSync(op.progresoFile, JSON.stringify({ paso, ts: Date.now() })); } catch { /* */ } };
+        return afiliarIndividual(pagina, op, esperar, BASE, progreso);
+      }
       const unNit = String(op.nit || '').replace(/\D/g, '');
       const docs = (op.documentos || []).map((d) => String(d).replace(/\D/g, '')).filter(Boolean);
       const unModo = ['listado', 'certificado'].includes(op.modo) ? op.modo : 'subsidios';

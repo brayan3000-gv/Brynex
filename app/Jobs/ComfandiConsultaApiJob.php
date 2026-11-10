@@ -49,9 +49,13 @@ class ComfandiConsultaApiJob implements ShouldQueue
         $api->alAvanzar($avisar);
 
         if ($this->tipo === 'afiliar') {
-            $avisar('Entrando al portal y radicando la afiliación (puede tardar)');
+            $avisar('Entrando al portal');
             $contrato = \App\Models\Contrato::findOrFail($this->contratoId);
-            $r = $api->afiliarIndividual($contrato, true);
+            // El daemon va escribiendo el paso actual en este archivo; comfandiApiEstado
+            // lo lee para mostrarlo en vivo (el job está bloqueado en la llamada al robot).
+            $progFile = self::progresoFile($this->token);
+            $r = $api->afiliarIndividual($contrato, true, $progFile);
+            @unlink($progFile);
 
             if (($r['ok'] ?? false) && ! empty($r['numero'])) {
                 app(\App\Services\Caja\ComfandiCajaService::class)
@@ -106,5 +110,11 @@ class ComfandiConsultaApiJob implements ShouldQueue
     public static function clave(string $token): string
     {
         return 'comfandi-api:'.$token;
+    }
+
+    /** Archivo donde el daemon escribe el paso actual de la afiliación (lo lee el modal). */
+    public static function progresoFile(string $token): string
+    {
+        return storage_path('app/comfandi-prog/'.$token.'.json');
     }
 }
