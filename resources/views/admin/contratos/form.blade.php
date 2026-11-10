@@ -622,8 +622,19 @@
         {{-- Comfandi por API: certificado con beneficiarios + consulta de subsidios.
              Solo aparece cuando la caja del contrato es Comfandi. --}}
         <div style="display:inline-block;margin-left:0.35rem;vertical-align:middle;" @keydown.escape.window="open=false" x-data="{
-              open:false, cargando:'', error:'', datos:null,
+              open:false, cargando:'', error:'', datos:null, seg:0, pasos:[], reloj_:null,
               csrf: document.querySelector('meta[name=csrf-token]')?.content || '',
+              empezar(tipo){
+                this.error=''; this.cargando=tipo; this.seg=0; this.pasos=[];
+                const t0=Date.now();
+                this.reloj_=setInterval(()=>{ this.seg=Math.floor((Date.now()-t0)/1000); },1000);
+                this.anotar('Enviando la consulta');
+              },
+              terminar(){ clearInterval(this.reloj_); this.cargando=''; },
+              anotar(texto){
+                if(texto && (!this.pasos.length || this.pasos[this.pasos.length-1].texto!==texto)) this.pasos.push({texto, seg:this.seg});
+              },
+              reloj(s){ return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); },
               async lanzar(tipo){
                 const r = await fetch('{{ route('admin.afiliaciones.caja-comfandi.api-lanzar', $contrato->id) }}', {method:'POST', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':this.csrf}, body:JSON.stringify({tipo})});
                 const d = await r.json().catch(()=>({}));
@@ -632,24 +643,25 @@
               },
               async sondear(token){
                 const base='{{ route('admin.afiliaciones.caja-comfandi.api-estado', '__T__') }}';
-                for(let i=0;i<70;i++){
-                  await new Promise(res=>setTimeout(res,5000));
+                for(const fin=Date.now()+350000; Date.now()<fin;){
+                  await new Promise(res=>setTimeout(res,2000));
                   const r = await fetch(base.replace('__T__', token), {headers:{'Accept':'application/json'}});
                   if(r.status===404) continue;
                   const d = await r.json().catch(()=>({}));
+                  this.anotar(d.paso);
                   if(d.estado==='listo') return d;
                   if(d.estado==='error') throw new Error(d.error||'La consulta falló.');
                 }
                 throw new Error('La consulta tardó demasiado; intenta de nuevo.');
               },
               async subsidios(){
-                this.error=''; this.datos=null; this.cargando='subsidios';
+                this.datos=null; this.empezar('subsidios');
                 try{ const t=await this.lanzar('datos'); this.datos=await this.sondear(t); }
                 catch(e){ this.error=e.message; }
-                this.cargando='';
+                this.terminar();
               },
               async certificado(){
-                this.error=''; this.cargando='certificado';
+                this.empezar('certificado');
                 try{
                   const t=await this.lanzar('certificado'); const d=await this.sondear(t);
                   const bin=atob(d.base64); const bytes=new Uint8Array(bin.length);
@@ -658,7 +670,7 @@
                   const a=document.createElement('a'); a.href=url; a.download='certificado-comfandi-{{ $contrato->cedula }}.pdf'; document.body.appendChild(a); a.click(); a.remove();
                   setTimeout(()=>URL.revokeObjectURL(url), 10000);
                 }catch(e){ this.error=e.message; }
-                this.cargando='';
+                this.terminar();
               }
             }">
           <button type="button" @click="open=true" title="Comfandi (API): certificado y subsidios"
@@ -678,18 +690,34 @@
                 </div>
                 <div style="padding:1.1rem 1.2rem;">
                   <div style="display:flex;gap:0.6rem;flex-wrap:wrap;">
-                    <button type="button" @click="certificado()" :disabled="cargando"
-                        style="flex:1;min-width:210px;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:600;cursor:pointer;" :style="cargando?'opacity:.6;cursor:wait':''">
+                    {{-- !!cargando y :style con objeto: en Alpine un texto vacío en
+                         :disabled deshabilita, y un :style de texto borra el style. --}}
+                    <button type="button" @click="certificado()" :disabled="!!cargando"
+                        style="flex:1;min-width:210px;background:#2563eb;color:#fff;border:none;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:600;cursor:pointer;" :style="cargando?{opacity:.6,cursor:'wait'}:{}">
                       <span x-show="cargando!=='certificado'">📄 Certificado con beneficiarios</span>
                       <span x-show="cargando==='certificado'" x-cloak>⏳ Generando… (puede tardar)</span>
                     </button>
-                    <button type="button" @click="subsidios()" :disabled="cargando"
-                        style="flex:1;min-width:210px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#1d4ed8;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:700;cursor:pointer;" :style="cargando?'opacity:.6;cursor:wait':''">
+                    <button type="button" @click="subsidios()" :disabled="!!cargando"
+                        style="flex:1;min-width:210px;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);color:#1d4ed8;border-radius:8px;padding:0.55rem 0.9rem;font-size:0.8rem;font-weight:700;cursor:pointer;" :style="cargando?{opacity:.6,cursor:'wait'}:{}">
                       <span x-show="cargando!=='subsidios'">💰 Consultar subsidios y beneficiarios</span>
                       <span x-show="cargando==='subsidios'" x-cloak>⏳ Consultando… (puede tardar)</span>
                     </button>
                   </div>
                   <div style="font-size:0.68rem;color:#94a3b8;margin-top:0.4rem;">La consulta entra al portal de Comfandi; puede tardar 1–3 minutos.</div>
+
+                  <div x-show="cargando" x-cloak style="margin-top:0.8rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:0.6rem 0.75rem;">
+                    <div style="display:flex;align-items:center;gap:0.5rem;">
+                      <span style="flex:none;width:14px;height:14px;border:2px solid #bae6fd;border-top-color:#0284c7;border-radius:50%;animation:cfd-gira .8s linear infinite;"></span>
+                      <strong style="flex:1;font-size:0.8rem;color:#0c4a6e;" x-text="pasos.length ? pasos[pasos.length-1].texto+'…' : ''"></strong>
+                      <span style="font-size:0.85rem;font-weight:700;color:#0369a1;font-variant-numeric:tabular-nums;" x-text="reloj(seg)"></span>
+                    </div>
+                    <ul x-show="pasos.length>1" style="list-style:none;margin:0.45rem 0 0;padding:0;font-size:0.72rem;color:#64748b;">
+                      <template x-for="(p,i) in pasos.slice(0,-1)" :key="i">
+                        <li style="display:flex;justify-content:space-between;gap:0.5rem;padding:0.05rem 0;"><span x-text="'✓ '+p.texto"></span><span style="font-variant-numeric:tabular-nums;" x-text="reloj(p.seg)"></span></li>
+                      </template>
+                    </ul>
+                    <style>@keyframes cfd-gira { to { transform: rotate(360deg); } }</style>
+                  </div>
 
                   <div x-show="error" x-cloak x-text="error" style="margin-top:0.8rem;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:7px;padding:0.5rem 0.7rem;font-size:0.78rem;"></div>
 

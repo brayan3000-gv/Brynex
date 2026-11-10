@@ -26,6 +26,31 @@ class ComfandiApi
 
     private const SEGUNDOS_POR_DOC = 20;
 
+    /** Recibe cada paso del robot (ver ComfandiConsultaApiJob). */
+    private ?\Closure $alAvanzar = null;
+
+    public function alAvanzar(callable $avisar): static
+    {
+        $this->alAvanzar = \Closure::fromCallable($avisar);
+
+        return $this;
+    }
+
+    private function avisar(string $paso): void
+    {
+        if ($this->alAvanzar) {
+            ($this->alAvanzar)($paso);
+        }
+    }
+
+    /** Avisa el último `paso:` que traiga un trozo de salida del robot. */
+    private function avisarDesdeSalida(string $salida): void
+    {
+        if (preg_match_all('/^paso: (.+)$/m', $salida, $m)) {
+            $this->avisar(trim(end($m[1])));
+        }
+    }
+
     /** @return array{usuario:string, clave:string, totp:string}|null */
     private function gestor(): ?array
     {
@@ -82,10 +107,14 @@ class ComfandiApi
         $segs = $segundos ?? self::SEGUNDOS_BASE;
         $lock = \Illuminate\Support\Facades\Cache::lock('comfandi-robot:'.$g['usuario'], $segs + 60);
 
-        try {
-            $lock->block($segs + 40);
-        } catch (\Throwable) {
-            return ['ok' => false, 'error' => 'Hay otra consulta de Comfandi en curso; intenta de nuevo en un momento.'];
+        if (! $lock->get()) {
+            $this->avisar('Hay otra consulta de Comfandi en curso: esperando turno');
+
+            try {
+                $lock->block($segs + 40);
+            } catch (\Throwable) {
+                return ['ok' => false, 'error' => 'Hay otra consulta de Comfandi en curso; intenta de nuevo en un momento.'];
+            }
         }
 
         try {
@@ -122,19 +151,27 @@ class ComfandiApi
     /** Corre la consulta con el robot de un disparo (abre Chrome, entra, consulta, sale). */
     private function unDisparo(array $g, array $opciones, int $segs): array
     {
+        $this->avisar('Abriendo una sesión nueva de Comfandi');
+
         $entrada = json_encode(array_merge($this->entradaBase($g), $opciones), JSON_UNESCAPED_UNICODE);
 
         $resultado = Process::path(base_path())
             ->timeout($segs)
             ->input($entrada)
-            ->run($this->comando());
+            ->run($this->comando(), function (string $tipo, string $trozo) {
+                if ($tipo === 'err') {
+                    $this->avisarDesdeSalida($trozo);
+                }
+            });
 
         $salida = json_decode(trim($resultado->output()), true) ?: [];
 
         if (! ($salida['ok'] ?? false)) {
+            $stderr = trim((string) preg_replace('/^paso: .*$\R?/m', '', $resultado->errorOutput()));
+
             return [
                 'ok' => false,
-                'error' => $salida['error'] ?? (trim($resultado->errorOutput()) ?: 'El portal no respondió.'),
+                'error' => $salida['error'] ?? ($stderr ?: 'El portal no respondió.'),
             ];
         }
 
@@ -158,6 +195,7 @@ class ComfandiApi
             && ($x['trabajadores'][$cedula]['body']['Titular'][0] ?? null) === null;
 
         if ($sinTitular($r)) {
+            $this->avisar('La sesión recién abierta volvió vacía: repitiendo la consulta');
             $r = $this->ejecutar($opciones, $segundos);
             $r['reintento'] = true;
         }
@@ -352,10 +390,21 @@ class ComfandiApi
     {
         $dir = $this->perfilDir($g);
 
-        $estado = $this->daemonVivo($dir) ?: $this->levantarDaemon($g, $dir);
+        $estado = $this->daemonVivo($dir);
+        if ($estado) {
+            $this->avisar('Usando la sesión de Comfandi que ya estaba abierta');
+        } else {
+            $this->avisar('Abriendo el navegador para entrar a Comfandi');
+            $estado = $this->levantarDaemon($g, $dir);
+        }
+
         if (! $estado) {
             return null;
         }
+
+        $this->avisar(($opciones['modo'] ?? '') === 'certificado'
+            ? 'Generando el certificado en Comfandi'
+            : 'Consultando trabajador, beneficiarios y subsidios');
 
         return $this->enviarAlDaemon((int) $estado['puerto'], $opciones);
     }
@@ -402,14 +451,25 @@ class ComfandiApi
             ? 'xvfb-run -a --server-args="-screen 0 1400x900x24" '.$node
             : $node;
 
+        // El log acumula corridas viejas: solo interesa lo que escriba de aquí en adelante.
+        $log = $dir.'/daemon.log';
+        $leidoHasta = is_file($log) ? (int) filesize($log) : 0;
+
         // Desprendido (setsid) para que sobreviva a esta petición PHP.
-        $inner = 'cd '.escapeshellarg(base_path()).' && '.$cmd.' >> '.escapeshellarg($dir.'/daemon.log').' 2>&1';
+        $inner = 'cd '.escapeshellarg(base_path()).' && '.$cmd.' >> '.escapeshellarg($log).' 2>&1';
         @exec('setsid bash -c '.escapeshellarg($inner).' >/dev/null 2>&1 &');
 
         // El daemon escribe daemon.json cuando ya entró y levantó el servidor
         // (login ~1–2 min). Se sondea hasta ~3 min.
         for ($i = 0; $i < 120; $i++) {
             usleep(1_500_000);
+
+            $nuevo = @file_get_contents($log, false, null, $leidoHasta);
+            if (is_string($nuevo) && $nuevo !== '') {
+                $leidoHasta += strlen($nuevo);
+                $this->avisarDesdeSalida($nuevo);
+            }
+
             if ($est = $this->daemonVivo($dir)) {
                 return $est;
             }

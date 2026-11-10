@@ -367,7 +367,7 @@ class ComfandiCajaController extends Controller
         $tipoDoc = $tipos[$tipoCliente] ?? 'CO1C';
 
         $token = \Illuminate\Support\Str::random(24);
-        Cache::put(\App\Jobs\ComfandiConsultaApiJob::clave($token), ['estado' => 'corriendo'], now()->addMinutes(15));
+        Cache::put(\App\Jobs\ComfandiConsultaApiJob::clave($token), ['estado' => 'corriendo', 'paso' => 'En cola, esperando turno en el servidor'], now()->addMinutes(15));
         \App\Jobs\ComfandiConsultaApiJob::dispatch($token, $tipo, $nit, $cedula, $tipoDoc);
 
         return response()->json(['ok' => true, 'token' => $token]);

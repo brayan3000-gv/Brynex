@@ -605,6 +605,10 @@ try {
   }
 
   // ── Entrar ────────────────────────────────────────────────────────────────
+  // Lo que va haciendo, para el modal de la ficha: ComfandiApi lee estas líneas.
+  const avance = (texto) => { if (via === 'api') console.error('paso: ' + texto); };
+
+  avance('Abriendo el portal de Comfandi');
   await pagina.goto(`${BASE}/guest`, { waitUntil: 'networkidle2', timeout: 60000 });
 
   // Con el perfil persistente la sesión puede seguir viva (confianza de 60 días):
@@ -627,6 +631,8 @@ try {
     if (estado.login) { yaDentro0 = false; break; }
     await esperar(500);
   }
+
+  avance(yaDentro0 ? 'La sesión de Comfandi seguía abierta' : 'Escribiendo usuario y clave');
 
   if (!yaDentro0) {
   await insistir(pagina, () => {
@@ -752,6 +758,7 @@ try {
   // Las pantallas que el portal encadena después de Entrar, hasta quedar dentro.
   const finLogin = Date.now() + 150000;
   let empresa = null;
+  let codigoAvisado = false;
 
   while (Date.now() < finLogin && !empresa) {
     await esperar(1500);
@@ -820,6 +827,10 @@ try {
 
     if (paso?.fin === 'clave') salir({ ok: false, error: 'Comfandi rechazó el usuario o la clave guardada en BryNex.' });
     if (paso?.fin === 'dentro') empresa = paso.empresa;
+    if (paso?.paso === '2fa-codigo' && !codigoAvisado) {
+      codigoAvisado = true;
+      avance('Ingresando el código de verificación (2FA)');
+    }
     // En la vía API no se elige empresa en la UI (el gestor ve varias): basta
     // estar dentro con el token capturado para llamar la API por x-company-id.
     if (via === 'api') {
@@ -835,6 +846,7 @@ try {
   // navegador real, así que pasa Akamai). Devuelve el JSON crudo de cada
   // endpoint; el mapeo de formas y NIT→x-company-id se resuelve en PHP.
   if (via === 'api') {
+    avance('Obteniendo el permiso para consultar');
     // El token lo capturó page.on('request'). Si aún no ha llegado, se espera un
     // poco y se fuerza una navegación a Afiliaciones, que dispara company-context.
     for (let i = 0; i < 20 && !apiToken; i++) {

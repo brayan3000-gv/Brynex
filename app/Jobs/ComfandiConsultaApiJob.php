@@ -41,6 +41,11 @@ class ComfandiConsultaApiJob implements ShouldQueue
     {
         $clave = self::clave($this->token);
 
+        // Cada paso del robot queda en la caché que sondea el modal.
+        $avisar = fn (string $paso) => Cache::put($clave, ['estado' => 'corriendo', 'paso' => $paso], now()->addMinutes(15));
+        $avisar('Preparando la consulta');
+        $api->alAvanzar($avisar);
+
         if ($this->tipo === 'certificado') {
             $r = $api->certificado($this->nit, $this->cedula, $this->tipoDoc, true);
             Cache::put($clave, ($r['ok'] ?? false)
