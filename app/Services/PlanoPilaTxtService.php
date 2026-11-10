@@ -349,8 +349,13 @@ class PlanoPilaTxtService
         // la genérica de independientes no tiene ARL propia: la de cada
         // contratista viene en su plano. Sin esto Enlace reclama que el
         // cotizante aporta a riesgos sin código de riesgos en el tipo 1.
-        if ($tipoPlanilla === 'I' && empty($codigoArlRs)) {
-            $codigoArlRs = $planos->pluck('cod_arl_pila')->first(fn ($c) => ! empty($c));
+        //
+        // En la liquidación puntual (el aportante es la persona) la ARL del
+        // plano manda aunque la razón social genérica tenga una configurada:
+        // con la de la razón social en el encabezado, quien cotiza en otra ARL
+        // cae en eo.val.2.296 (el encabezado no coincide con el cotizante).
+        if ($tipoPlanilla === 'I' && (empty($codigoArlRs) || $aportanteOverride)) {
+            $codigoArlRs = $planos->pluck('cod_arl_pila')->first(fn ($c) => ! empty($c)) ?: $codigoArlRs;
         }
 
         $nit = $aportanteOverride['numero'] ?? preg_replace('/[^0-9]/', '', (string) ($rs->nit ?? ''));

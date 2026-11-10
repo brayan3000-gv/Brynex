@@ -464,7 +464,14 @@ class PilaCotizanteCalculator
 
         // ── Tarifas EPS/SENA/ICBF ──────────────────────────────────────────
         $tarifaEpsStr  = $exonerado === 'S' ? '0.04000' : '0.12500';
-        $tarifaCcfStr  = sprintf('%.5f', $codCcfFin === 'CCF68' ? 0.04 : $tarifaCcf);
+        // CCF68 es "sin caja" y por convención va con $100. El cotizante 59 no
+        // admite el 4% ni en ese caso: eo.val.2.058, "las correctas son 0.006,
+        // 0.02". Con IBC de $100 las dos redondean al mismo aporte de $100.
+        $tarifaCcfSinCaja = 0.04;
+        if ($tipoCotizante === 59) {
+            $tarifaCcfSinCaja = abs($tarifaCcf - 0.006) < 0.0001 ? 0.006 : 0.02;
+        }
+        $tarifaCcfStr  = sprintf('%.5f', $codCcfFin === 'CCF68' ? $tarifaCcfSinCaja : $tarifaCcf);
         $tarifaSenaStr = $pagaParafiscales ? '0.02000' : '0.00000';
         $tarifaIcbfStr = $pagaParafiscales ? '0.03000' : '0.00000';
 
