@@ -358,29 +358,47 @@ const escogerEmpresa = async (pagina) => {
  * empresas y hay que entrar en la que toca, porque algunos datos —subsidios—
  * solo salen con la empresa seleccionada en la sesión, no basta el header).
  */
-const escogerEmpresaPorNombre = async (pagina, nombre) => {
-  const clave = String(nombre || '').toUpperCase().replace(/\s+/g, ' ').slice(0, 15);
+const escogerEmpresaPorNombre = async (pagina, nombre, nombresGestor = []) => {
+  const norm = (s) => String(s || '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const clave = norm(nombre).slice(0, 15);
   if (!clave) return false;
 
-  for (const b of await pagina.$$('button,[role=button],div[class*=select]')) {
-    const t = await b.evaluate(e => (e.offsetParent ? (e.innerText || '') : '')).catch(() => '');
-    if (/selecciona tu empresa/i.test(t)) { await b.click().catch(() => null); break; }
-  }
+  // La UI del portal ya no tiene «selecciona tu empresa»: el conmutador es el
+  // pill del encabezado que muestra la empresa ACTUAL (clase bg-principal…).
+  // Se pulsa para desplegar la lista con las empresas del gestor. Por eso hace
+  // falta la lista de nombres: el pill se reconoce porque su texto es el de
+  // alguna de ellas (la activa).
+  const abierto = await pagina.evaluate((claves) => {
+    const n = (t) => (t || '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const esEmp = (e) => claves.some((c) => c && n(e.innerText).includes(c.slice(0, 15)));
+    const todos = [...document.querySelectorAll('button,[role=button]')].filter((e) => e.offsetParent && esEmp(e));
+    const pill = todos.find((e) => /bg-principal|rounded-xl|rounded-full/.test((e.className || '').toString()))
+      || todos.find((e) => /flex-row/.test((e.className || '').toString()))
+      || todos[0];
+    if (pill) { pill.click(); return true; }
+    return false;
+  }, nombresGestor).catch(() => false);
+  if (!abierto) return false;
+  await esperar(1500);
+
+  // Clic en la empresa objetivo dentro de la lista desplegada.
+  const elegida = await pagina.evaluate((cl) => {
+    const n = (t) => (t || '').toUpperCase().replace(/\s+/g, ' ').trim();
+    const o = [...document.querySelectorAll('[class*=option],li,[role=option],[role=menuitem],button,[role=button],div[class*=item]')]
+      .find((e) => e.offsetParent && n(e.innerText).includes(cl) && n(e.innerText).length < 60);
+    if (o) { o.click(); return true; }
+    return false;
+  }, clave).catch(() => false);
   await esperar(900);
 
-  let elegida = null;
-  for (const o of [...await pagina.$$('[class*=option]'), ...await pagina.$$('li'), ...await pagina.$$('button,[role=button]')]) {
-    const t = await o.evaluate(e => (e.offsetParent ? (e.innerText || '').trim() : '')).catch(() => '');
-    if (t && t.toUpperCase().replace(/\s+/g, ' ').includes(clave)) { elegida = o; break; }
-  }
-  if (elegida) { await elegida.click().catch(() => null); await esperar(700); }
-
-  for (const b of await pagina.$$('button,[role=button],input[type=submit]')) {
-    const t = await b.evaluate(e => (e.offsetParent ? (e.innerText || e.value || '') : '')).catch(() => '');
-    if (/^\s*aceptar\s*$/i.test((t || '').trim())) { await b.click().catch(() => null); break; }
-  }
-  await esperar(2500);
-  return !!elegida;
+  // Confirmar si el portal lo pide (en la UI actual no suele hacer falta).
+  await pagina.evaluate(() => {
+    const b = [...document.querySelectorAll('button,[role=button],input[type=submit]')]
+      .find((e) => e.offsetParent && /^\s*aceptar\s*$/i.test((e.innerText || e.value || '').trim()));
+    if (b) b.click();
+  }).catch(() => null);
+  await esperar(2800);
+  return elegida;
 };
 
 /** Los bloqueos de un trabajador, o null si no se pudo llegar a su pantalla. */
@@ -951,7 +969,7 @@ try {
       if (emp && emp.name) {
         await pagina.goto(`${BASE}/affiliations`, { waitUntil: 'networkidle2', timeout: 30000 }).catch(() => null);
         await esperar(1500);
-        salida.empresaElegida = await escogerEmpresaPorNombre(pagina, emp.name);
+        salida.empresaElegida = await escogerEmpresaPorNombre(pagina, emp.name, empresasMap.map((e) => e.nombre || '').filter(Boolean));
         // La sesión necesita un respiro tras elegir la empresa: si el /sap sale
         // enseguida a veces vuelve vacío (arranque en frío).
         await esperar(2800);
