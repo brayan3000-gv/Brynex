@@ -610,8 +610,11 @@
           </optgroup>
           @endif
         </select>
+        {{-- El estado y el botón de Comfandi van en la misma fila. El número del
+             radicado queda solo en el tooltip. --}}
+        <div style="display:flex;gap:0.3rem;align-items:center;">
         @if($esEdicion && $contrato->caja_id && collect($cajas)->contains('id', (int)$contrato->caja_id))
-        {!! $badgeEstado($rPT->get('caja')) !!}
+        {!! $badgeEstado($rPT->get('caja'), false) !!}
         @endif
         @php
           $cajaCtrl = $esEdicion ? collect($cajas)->firstWhere('id', (int) $contrato->caja_id) : null;
@@ -621,7 +624,7 @@
         @if($comfandiApi)
         {{-- Comfandi por API: certificado con beneficiarios + consulta de subsidios.
              Solo aparece cuando la caja del contrato es Comfandi. --}}
-        <div style="display:inline-block;margin-left:0.35rem;vertical-align:middle;" @keydown.escape.window="open=false" x-data="{
+        <div style="flex:none;" @keydown.escape.window="open=false" x-data="{
               open:false, cargando:'', error:'', datos:null, seg:0, pasos:[], reloj_:null,
               csrf: document.querySelector('meta[name=csrf-token]')?.content || '',
               empezar(tipo){
@@ -673,8 +676,8 @@
                 this.terminar();
               }
             }">
-          <button type="button" @click="open=true" title="Comfandi (API): certificado y subsidios"
-              style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);border-radius:7px;padding:0.15rem 0.4rem;font-size:0.95rem;line-height:1;cursor:pointer;">📊</button>
+          <button type="button" @click="open=true" title="Comfandi (API): certificado y subsidios" class="chip-ss"
+              style="width:30px;padding:0;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.35);font-size:0.72rem;cursor:pointer;">📊</button>
 
           {{-- :style en vez de x-show: x-show pisaba el display:flex y el modal
                quedaba en block, pegado arriba-izquierda. --}}
@@ -759,6 +762,7 @@
             </div>
         </div>
         @endif
+        </div>
         <div id="aviso-caja-rs" style="display:none;font-size:0.66rem;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:0.2rem 0.4rem;margin-top:0.25rem;line-height:1.3;"></div>
       </div>
     </div>
