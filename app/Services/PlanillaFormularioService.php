@@ -147,10 +147,11 @@ class PlanillaFormularioService
         $nombreArl = (string) $plano->nombre_arl;
 
         $esIndependiente = (bool)($plano->razonSocial?->es_independiente ?? false);
-        $sinCajaCcf = ($c['codCcfPila'] == 'CCF68');
+        $sinCajaCcf = ($c['codCcfPila'] == 'CCF68') || !empty($c['independienteSinCaja']);
+        $cajaNinguna = ($esIndependiente && $sinCajaCcf) || !empty($c['independienteSinCaja']);
 
         $nombreCaja = $esPlanillaY ? 'NINGUNA CCF' : ($plano->nombre_caja ?: ($sinCajaCcf ? 'COMCAJA' : ''));
-        if ($esIndependiente && $sinCajaCcf && !$esPlanillaY) {
+        if ($cajaNinguna && !$esPlanillaY) {
             $nombreCaja = 'NINGUNA CCF';
         }
 
@@ -458,10 +459,10 @@ class PlanillaFormularioService
             'aporte.arl_aporte'  => '$ ' . number_format($c['vArl'], 0, ',', '.'),
 
             // Caja
-            'aporte.ccf_codigo'  => ($esPlanillaY ? 'NIN-CC' : ($esIndependiente && $sinCajaCcf ? 'NIN-CC' : $c['codCcfPila'])),
-            'aporte.ccf_tarifa'  => ($esPlanillaY ? '0 %' : ($esIndependiente && $sinCajaCcf ? '0 %' : '4 %')),
-            'aporte.ccf_ibc'     => ($esPlanillaY ? '$ 0' : ($esIndependiente && $sinCajaCcf ? '$ 0' : '$ ' . number_format($c['ibcCcf'], 0, ',', '.'))),
-            'aporte.ccf_aporte'  => ($esPlanillaY ? '$ 0' : ($esIndependiente && $sinCajaCcf ? '$ 0' : '$ ' . number_format($c['vCcf'], 0, ',', '.'))),
+            'aporte.ccf_codigo'  => ($esPlanillaY ? 'NIN-CC' : ($cajaNinguna ? 'NIN-CC' : $c['codCcfPila'])),
+            'aporte.ccf_tarifa'  => ($esPlanillaY ? '0 %' : ($cajaNinguna ? '0 %' : '4 %')),
+            'aporte.ccf_ibc'     => ($esPlanillaY ? '$ 0' : ($cajaNinguna ? '$ 0' : '$ ' . number_format($c['ibcCcf'], 0, ',', '.'))),
+            'aporte.ccf_aporte'  => ($esPlanillaY ? '$ 0' : ($cajaNinguna ? '$ 0' : '$ ' . number_format($c['vCcf'], 0, ',', '.'))),
 
             // Parafiscales
             'aporte.sena_tarifa' => '0 %',
@@ -487,7 +488,7 @@ class PlanillaFormularioService
             'total.fsps'  => '$ 0',
             'total.eps'   => '$ ' . number_format($c['vEps'], 0, ',', '.'),
             'total.arl'   => '$ ' . number_format($c['vArl'], 0, ',', '.'),
-            'total.ccf'   => ($esPlanillaY ? '$ 0' : ($esIndependiente && $sinCajaCcf ? '$ 0' : '$ ' . number_format($c['vCcf'], 0, ',', '.'))),
+            'total.ccf'   => ($esPlanillaY ? '$ 0' : ($cajaNinguna ? '$ 0' : '$ ' . number_format($c['vCcf'], 0, ',', '.'))),
             'total.sena'  => '$ 0',
             'total.icbf'  => '$ 0',
             'total.esap'  => '$ 0',

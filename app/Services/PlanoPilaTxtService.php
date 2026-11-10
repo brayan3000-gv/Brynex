@@ -411,6 +411,10 @@ class PlanoPilaTxtService
             if ((int) $_p->tipo_modalidad_id === \App\Models\TipoModalidad::ID_FONDO_SOLIDARIDAD) {
                 continue;
             }
+            // El independiente sin caja va con caja NINGUNA y campo 45 en cero.
+            if (empty($_p->cod_caj_pila) && ! empty(PilaCotizanteCalculator::calcular($_p)['independienteSinCaja'])) {
+                continue;
+            }
             $cajP = ! empty($_p->cod_caj_pila) ? $_p->cod_caj_pila : 'CCF68';
             $valorNomina += ($cajP === 'CCF68') ? 100 : $ibcP;
         }

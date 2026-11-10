@@ -464,14 +464,7 @@ class PilaCotizanteCalculator
 
         // ── Tarifas EPS/SENA/ICBF ──────────────────────────────────────────
         $tarifaEpsStr  = $exonerado === 'S' ? '0.04000' : '0.12500';
-        // CCF68 es "sin caja" y por convención va con $100. El cotizante 59 no
-        // admite el 4% ni en ese caso: eo.val.2.058, "las correctas son 0.006,
-        // 0.02". Con IBC de $100 las dos redondean al mismo aporte de $100.
-        $tarifaCcfSinCaja = 0.04;
-        if ($tipoCotizante === 59) {
-            $tarifaCcfSinCaja = abs($tarifaCcf - 0.006) < 0.0001 ? 0.006 : 0.02;
-        }
-        $tarifaCcfStr  = sprintf('%.5f', $codCcfFin === 'CCF68' ? $tarifaCcfSinCaja : $tarifaCcf);
+        $tarifaCcfStr  = sprintf('%.5f', $codCcfFin === 'CCF68' ? 0.04 : $tarifaCcf);
         $tarifaSenaStr = $pagaParafiscales ? '0.02000' : '0.00000';
         $tarifaIcbfStr = $pagaParafiscales ? '0.03000' : '0.00000';
 
@@ -605,6 +598,33 @@ class PilaCotizanteCalculator
             // Reportarlas es el error `eo.val.2.636`: "registra horas
             // laboradas pero no realiza aportes a CCF".
             $res['horasLaboradas']    = 0;
+        }
+
+        // ── Independiente sin caja: NINGUNA ─────────────────────────────────
+        // CCF68 es COMCAJA, y los $100 son una convención del dependiente sin
+        // caja. Al independiente la caja le es voluntaria: si no la compró va
+        // sin administradora, sin días, IBC, tarifa ni aporte, y sin horas
+        // (eo.val.2.636). Sin Comcaja tampoco hay por qué reportarlo en Guainía.
+        //
+        // La corrección N queda por fuera: su línea A repite lo ya pagado.
+        $esCorreccion = (int) ($p->tipo_p ?? 0) === 16 || ! empty($p->plano_corregido_id);
+        $res['independienteSinCaja'] = $sinCaja && $tipoModalidad !== 8 && ! $esCorreccion
+            && in_array($res['tipoCotizante'], [3, 59], true);
+
+        if ($res['independienteSinCaja']) {
+            $res['codCcfPila']     = '';
+            $res['diasCcf']        = 0;
+            $res['ibcCcf']         = 0;
+            $res['vCcf']           = 0;
+            $res['tarifaCcfStr']   = '0.00000';
+            $res['horasLaboradas'] = 0;
+
+            $depReal = trim((string) ($p->dep_id ?? $p->cod_departamento ?? ''));
+            $munReal = trim((string) ($p->mun_id ?? $p->cod_municipio ?? ''));
+            if ($depReal !== '' && $munReal !== '') {
+                $res['depCod'] = str_pad($depReal, 2, '0', STR_PAD_LEFT);
+                $res['munCod'] = str_pad($munReal, 3, '0', STR_PAD_LEFT);
+            }
         }
 
         // ── Fondo de Solidaridad (PSAP): cotizante 33 ───────────────────────
