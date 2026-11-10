@@ -992,6 +992,12 @@ try {
                 certificateCode: opCert,
               },
             });
+            // Para diagnosticar el 201 de Comfandi sin volcar el PDF: status,
+            // tamaño del base64 y si de verdad es un PDF (su base64 empieza en
+            // "JVBER", que es "%PDF"). Va al daemon.log por stderr.
+            const cc = salida.certificados[doc] || {};
+            console.error('CERT doc=' + doc + ' status=' + cc.status + ' ct=' + (cc.contentType || '')
+              + ' b64len=' + String(cc.base64 || '').length + ' pdf=' + /^JVBER/.test(String(cc.base64 || '')));
           }
         } else if (docs.length) {
           salida.trabajadores = {};

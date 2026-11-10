@@ -5,6 +5,7 @@ namespace App\Services\Caja;
 use App\Services\Afiliaciones\PortalesEntidades;
 use App\Services\ArlSura\ArlSuraSesionService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Process;
 
 /**
@@ -357,11 +358,56 @@ class ComfandiApi
         }
 
         $c = $r['certificados'][$cedula] ?? null;
-        if (! $c || (int) ($c['status'] ?? 0) !== 200 || empty($c['base64'])) {
-            return ['ok' => false, 'error' => 'Comfandi no devolvió el certificado (estado '.($c['status'] ?? '?').').'];
+        $status = (int) ($c['status'] ?? 0);
+        $base64 = (string) ($c['base64'] ?? '');
+        $bin = $base64 !== '' ? base64_decode($base64, true) : false;
+        $esPdf = $bin !== false && str_starts_with($bin, '%PDF');
+
+        // 200 y 201 (Created) son éxito: lo que decide es que de verdad venga un
+        // PDF. Comfandi a veces responde 201 con el PDF ya generado (y el chequeo
+        // viejo, que solo aceptaba 200, lo tiraba como error). Un 200/201 SIN un
+        // PDF válido suele ser «aceptado, generando» (async): no es un error feo,
+        // hay que reintentar en un momento.
+        if (! $c || ! in_array($status, [200, 201], true) || ! $esPdf) {
+            Log::info('Comfandi certificado sin PDF listo', ['cedula' => $cedula, 'status' => $c['status'] ?? null, 'b64len' => strlen($base64), 'pdf' => $esPdf]);
+
+            return [
+                'ok' => false,
+                'enProceso' => true,
+                'error' => 'El certificado todavía se está generando en Comfandi (estado '.($c['status'] ?? '?').'). Reintenta en un momento.',
+            ];
         }
 
-        return ['ok' => true, 'base64' => $c['base64'], 'contentType' => $c['contentType'] ?? 'application/pdf'];
+        return ['ok' => true, 'base64' => $base64, 'contentType' => $c['contentType'] ?? 'application/pdf'];
+    }
+
+    /**
+     * Etiqueta de parentesco para mostrar. Comfandi devuelve la categoría genérica
+     * «Padre - Madre Biológica» para cualquier progenitor (y a veces con doble
+     * espacio), que se lee mal: un hombre aparecía como «Madre Biológica». Se
+     * resuelve a Padre/Madre según el sexo del beneficiario; el resto de etiquetas
+     * se dejan igual, solo colapsando espacios.
+     */
+    public static function etiquetaParentesco(?string $raw, ?string $genero): string
+    {
+        $p = trim(preg_replace('/\s+/', ' ', (string) $raw));
+        if ($p === '') {
+            return '';
+        }
+
+        // «Padre - Madre [Biológica/Adoptiva/…]» → Padre/Madre según el sexo.
+        if (preg_match('/^padre\s*-\s*madre\b\s*(.*)$/i', $p, $m)) {
+            $es_f = strtoupper(trim((string) $genero)) === 'F';
+            $sufijo = trim($m[1]);
+            // Concordancia del sufijo para «Padre»: Biológica→Biológico, etc.
+            if (! $es_f) {
+                $sufijo = preg_replace('/(biol[oó]gic|adoptiv|legal)a\b/iu', '$1o', $sufijo);
+            }
+
+            return trim(($es_f ? 'Madre' : 'Padre').' '.$sufijo);
+        }
+
+        return $p;
     }
 
     /**

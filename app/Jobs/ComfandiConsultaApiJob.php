@@ -93,7 +93,13 @@ class ComfandiConsultaApiJob implements ShouldQueue
             ? [
                 'estado' => 'listo',
                 'titular' => $r['titular'] ?? null,
-                'beneficiarios' => $r['titular']['PACS'] ?? [],
+                'beneficiarios' => array_map(function ($b) {
+                    // Comfandi manda el parentesco genérico «Padre - Madre Biológica»;
+                    // se resuelve a Padre/Madre según el sexo para que no se lea mal.
+                    $b['Parentesco'] = ComfandiApi::etiquetaParentesco($b['Parentesco'] ?? '', $b['DatosPersona']['Genero'] ?? '');
+
+                    return $b;
+                }, $r['titular']['PACS'] ?? []),
                 'subsidios' => $r['movimientos'] ?? [],
             ]
             : ['estado' => 'error', 'error' => $r['error'] ?? 'No se pudo consultar Comfandi.'],
