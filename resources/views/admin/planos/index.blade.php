@@ -1049,7 +1049,12 @@
                     @endif
 
                     <button type="button"
-                        onclick="abrirModalPagoIndividual({{ $p->id }}, {{ $p->total_ss ?? 0 }}, '{{ addslashes($clienteNombre) }}', Number(this.closest('tr').dataset.operadorId) || null)"
+                        onclick="abrirModalPagoIndividual({{ $p->id }}, {{ $p->total_ss ?? 0 }}, '{{ addslashes($clienteNombre) }}', Number(this.closest('tr').dataset.operadorId) || null, this)"
+                        @if($p->numero_planilla_api)
+                        data-numero-api="{{ $p->numero_planilla_api }}"
+                        data-valor-api="{{ (int) round((float) $p->valor_total_api) }}"
+                        data-operador-api="{{ $p->operador_liquidado_id }}"
+                        @endif
                         style="padding:.2rem .55rem;border-radius:6px;font-size:.68rem;font-weight:700;border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s"
                         onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
                         💳 Pagar
@@ -2697,13 +2702,22 @@ function abrirModalPago() {
     btn.disabled = false; btn.textContent = '✅ CONFIRMAR PAGO PLANILLA';
     document.getElementById('modal-pago').classList.add('open');
 }
-function abrirModalPagoIndividual(planoId, totalSS, clienteNombre, operadorId) {
+function abrirModalPagoIndividual(planoId, totalSS, clienteNombre, operadorId, botonPagar) {
+    // Ya liquidada por API: el pago se confirma con el número, el operador y el
+    // total que dio el operador (con mora), no con lo facturado.
+    const liquidada = botonPagar?.dataset || {};
+    if (liquidada.operadorApi) operadorId = Number(liquidada.operadorApi);
+
     _planoIdActual    = planoId;
     _operadorClienteId = operadorId;
     document.getElementById('modal-pago-titulo').textContent = '💳 Pagar: ' + clienteNombre;
     document.getElementById('modal-pago-aviso').style.display = 'none';
     document.getElementById('pago-valor').value = totalSS;
     resetModalPago();
+    if (liquidada.numeroApi) {
+        document.getElementById('pago-numero').value = liquidada.numeroApi;
+        if (Number(liquidada.valorApi) > 0) document.getElementById('pago-valor').value = liquidada.valorApi;
+    }
     const btn = document.getElementById('btn-confirmar-pago');
     btn.disabled = false; btn.textContent = '✅ CONFIRMAR PAGO';
     // Pre-seleccionar operador del cliente
@@ -3618,7 +3632,13 @@ async function liquidarIndependienteRow(planoId, operadorId, btnEl) {
 
         // Reemplaza el botón por el chip de "ya liquidado" con el link PSE.
         if (celda) {
+            // Sin recargar, «Pagar» ya abre con los datos de esta liquidación.
             const btnPagar = celda.querySelector('button[onclick^="abrirModalPagoIndividual"]');
+            if (btnPagar) {
+                btnPagar.dataset.numeroApi   = data.numero_planilla;
+                btnPagar.dataset.valorApi    = Math.round(data.valor_total || 0);
+                btnPagar.dataset.operadorApi = operadorId;
+            }
             const chip = document.createElement('span');
             chip.className = 'chip-liquidado-api';
             chip.title = `Liquidada: ${data.numero_planilla}`;

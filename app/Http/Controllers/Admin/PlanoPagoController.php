@@ -208,6 +208,7 @@ class PlanoPagoController extends Controller
                     // Última liquidación por API de este registro puntual (independientes)
                     'opa.operador_planilla_id AS operador_liquidado_id',
                     'opa.numero_planilla      AS numero_planilla_api',
+                    'opa.valor_total          AS valor_total_api',
                     'opa.url_pago             AS url_pago_api',
                     'opa.estado               AS estado_api',
                     'opa.mensaje_error        AS mensaje_error_api',
