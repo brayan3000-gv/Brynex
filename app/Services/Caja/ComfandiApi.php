@@ -496,6 +496,64 @@ class ComfandiApi
         return ['ok' => true, 'listado' => $r['listado']['body'] ?? null, 'empresas' => $r['empresas'] ?? []];
     }
 
+    /**
+     * El listado de trabajadores de una empresa, ya en el orden que espera la
+     * conciliación de caja: [documento, nombre, ingreso a la empresa, ingreso a
+     * la caja]. Sale del `/sap` del gestor (`body.Titular[]`).
+     *
+     * Reintenta UNA vez si vuelve vacío: esa es la firma del arranque en frío
+     * (la empresa recién elegida aún no asienta y el /sap vuelve sin filas). En
+     * el nocturno solo se consultan empresas con afiliados vigentes en BryNex,
+     * así que un listado realmente vacío no se espera y el reintento es seguro.
+     *
+     * @return array{ok:bool, filas?:array, empresas?:array, error?:string}
+     */
+    public function listadoFilas(string $nit): array
+    {
+        $op = ['modo' => 'listado', 'nit' => preg_replace('/\D/', '', $nit)];
+        $titulares = fn (array $x): array => $x['listado']['body']['Titular'] ?? [];
+
+        $r = $this->ejecutar($op);
+
+        if (($r['ok'] ?? false) && ! $titulares($r)) {
+            $this->avisar('La sesión recién abierta volvió vacía: repitiendo el listado');
+            $r = $this->ejecutar($op);
+        }
+
+        if (! ($r['ok'] ?? false)) {
+            return ['ok' => false, 'error' => $r['error'] ?? 'No se pudo consultar.'];
+        }
+
+        $filas = [];
+        foreach ($titulares($r) as $t) {
+            $p = $t['DatosPersona'] ?? [];
+            $doc = preg_replace('/\D/', '', (string) ($p['NumeroDocumento'] ?? ''));
+            if ($doc === '') {
+                continue;
+            }
+            $nombre = trim(implode(' ', array_filter([
+                $p['PrimerNombre'] ?? '', $p['SegundoNombre'] ?? '',
+                $p['PrimerApellido'] ?? '', $p['SegundoApellido'] ?? '',
+            ], fn ($v) => trim((string) $v) !== '')));
+
+            // Mismo orden que el Excel del portal y el raspado: documento, nombre,
+            // ingreso a la empresa, ingreso a la caja (ver ComfandiCajaConciliacionService::leer).
+            // El /sap da las fechas como AAAAMMDD; se dejan legibles porque van en
+            // los mensajes de las tareas de conciliación.
+            $filas[] = [$doc, $nombre, self::fechaLegible($t['FechaIngreso'] ?? ''), self::fechaLegible($t['FechaAfiliacion'] ?? '')];
+        }
+
+        return ['ok' => true, 'filas' => $filas, 'empresas' => $r['empresas'] ?? []];
+    }
+
+    /** AAAAMMDD ("20260717") → "17/07/2026". Lo demás se devuelve tal cual. */
+    private static function fechaLegible(mixed $f): string
+    {
+        $s = trim((string) $f);
+
+        return preg_match('/^(\d{4})(\d{2})(\d{2})$/', $s, $m) ? "{$m[3]}/{$m[2]}/{$m[1]}" : $s;
+    }
+
     private function mesesEntre(string $desde, string $hasta): int
     {
         try {

@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Caja\ComfandiApi;
 use App\Services\Caja\ComfandiCajaConciliacionService;
-use App\Services\Caja\ComfandiSubsidiosHeadless;
 use App\Services\Caja\ComfenalcoCajaConciliacionService;
 use App\Services\Caja\ComfenalcoSubsidiosHeadless;
 use App\Services\TareaAutomaticaService;
@@ -37,10 +37,13 @@ class CajaConciliar extends Command
 
     protected $description = 'Confirma los radicados de caja cruzando con el listado de afiliados del portal';
 
+    /** NITs (en el formato que guarda BryNex, sin DV) que cubre el gestor de Comfandi. */
+    private array $gestorNits = [];
+
     public function handle(
         ComfenalcoSubsidiosHeadless $portal,
         ComfenalcoCajaConciliacionService $conciliacion,
-        ComfandiSubsidiosHeadless $comfandi,
+        ComfandiApi $comfandi,
         ComfandiCajaConciliacionService $comfandiConciliacion,
     ): int {
         $caja = mb_strtoupper(trim((string) $this->option('caja')));
@@ -58,6 +61,14 @@ class CajaConciliar extends Command
         if (! $empresas) {
             $this->line('Ninguna empresa con afiliados en esa caja.');
 
+            return self::SUCCESS;
+        }
+
+        // Comfandi se concilia con el usuario gestor (un login + TOTP para todas
+        // sus empresas), no clave por empresa: Comfandi ahora exige verificación
+        // en dos pasos, que solo el gestor pasa con su TOTP. Se calienta la sesión
+        // y se cachean sus NITs una vez; si no se puede entrar, no hay nada que hacer.
+        if ($esComfandi && ! $this->calentarGestor($comfandi)) {
             return self::SUCCESS;
         }
 
@@ -110,16 +121,53 @@ class CajaConciliar extends Command
         return self::SUCCESS;
     }
 
-    /** La conciliación de Comfandi: mismo cruce, otro portal. */
+    /**
+     * Calienta la sesión del gestor de Comfandi y cachea sus NITs. Devuelve false
+     * (con un aviso) si no hay gestor configurado o no se pudo entrar —típico
+     * ahora con la verificación en dos pasos—, para no intentar empresa por empresa.
+     */
+    private function calentarGestor(ComfandiApi $api): bool
+    {
+        if (! $api->disponible()) {
+            $this->error('Comfandi: no hay usuario gestor configurado (config comfandi.gestor_usuario). No se concilia.');
+
+            return false;
+        }
+
+        // empresas() hace entrar al gestor una vez: deja la sesión caliente y trae
+        // sus empresas. El token las da con el NIT + DV ("902103184-1"); se guardan
+        // en el formato de BryNex (sin DV) para cruzarlas con los NITs del nocturno.
+        $empresas = $api->empresas();
+        $nitsConDv = $empresas
+            ? collect($empresas)->pluck('nit')
+            : collect($api->empresasDelGestor() ?? []);
+
+        $this->gestorNits = $nitsConDv
+            ->map(fn ($nit) => ComfandiCajaConciliacionService::nitComoLoGuardaBryNex((string) $nit))
+            ->filter()->unique()->values()->all();
+
+        if (! $this->gestorNits) {
+            $this->error('Comfandi: no se pudo entrar con el usuario gestor (¿clave/TOTP o verificación en dos pasos?). No se concilia.');
+
+            return false;
+        }
+
+        return true;
+    }
+
+    /** La conciliación de Comfandi: mismo cruce, con el usuario gestor (API). */
     private function deComfandi(
-        ComfandiSubsidiosHeadless $portal,
+        ComfandiApi $api,
         ComfandiCajaConciliacionService $conciliacion,
         string $nit,
         int $cuantos,
         bool $simular,
     ): void {
-        if (! $portal->credencial($nit)) {
-            $this->line("{$nit}: sin clave de Comfandi, no se puede consultar.");
+        // El gestor solo ve sus empresas asignadas (las del token). Las demás no se
+        // pueden leer con su login: se omiten (antes se intentaba clave por empresa
+        // y chocaba con la verificación en dos pasos que Comfandi ahora exige).
+        if (! in_array($nit, $this->gestorNits, true)) {
+            $this->line("{$nit}: no está asignada a tu usuario gestor de Comfandi, se omite.");
 
             return;
         }
@@ -127,7 +175,7 @@ class CajaConciliar extends Command
         $this->line("{$nit}: {$cuantos} afiliado(s) en BryNex…");
 
         try {
-            $leido = $portal->trabajadores($nit);
+            $leido = $api->listadoFilas($nit);
         } catch (Throwable $e) {
             $leido = ['ok' => false, 'error' => $e->getMessage()];
         }
