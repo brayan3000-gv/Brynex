@@ -215,6 +215,8 @@ class FormularioEpsService
             'cliente.firma'            => $c?->cedula ? $this->firmaCliente($c) : '',
         ];
 
+        $datos += $this->datosNovedad($contrato, $novedadInicioLaboral);
+
         // Independientes: la sección del aportante/empleador va vacía. S.O.S. lo
         // devolvió así ("el campo de empleador (V) se deja vacío", sep-2026).
         if ($rs?->es_independiente) {
@@ -247,6 +249,65 @@ class FormularioEpsService
             if ($sufijo !== '') {
                 $datos["custom.{$sufijo}"] = (string) $valor;
             }
+        }
+
+        return $datos;
+    }
+
+    /**
+     * Sección «VI. Datos actualizados según reporte de la novedad» (casillas 61 a 68).
+     *
+     * Solo cuando el formulario va como novedad (reingreso / cambio de empleador):
+     * Sanitas devolvió las novedades del 26-oct-2026 que iban con la parte B y la
+     * casilla 9 marcadas pero esta sección vacía. En una afiliación las claves
+     * quedan vacías y el PDF no cambia.
+     *
+     * El 66 (fecha de novedad) es la fecha de ingreso: en la plantilla de Sanitas ya
+     * lo llenan los `contrato.fecha_ingreso_*` de la página 2; `novedad.fecha_*` queda
+     * para plantillas que lo quieran solo en la novedad. EPS anterior (65), motivo de
+     * traslado (67) y caja (68) van vacíos como en el formulario que validó Sanitas:
+     * en un reingreso a la misma EPS no hay traslado.
+     *
+     * @return array<string,string>
+     */
+    protected function datosNovedad(Contrato $contrato, bool $esNovedad): array
+    {
+        $claves = [
+            'primer_apellido', 'segundo_apellido', 'primer_nombre', 'segundo_nombre',
+            'tipo_doc', 'cedula', 'sexo_f_x', 'sexo_m_x', 'sexo_id_f_x', 'sexo_id_m_x',
+            'eps_anterior', 'motivo_traslado', 'caja',
+        ];
+        $digitos = ['d1', 'd2', 'm1', 'm2', 'a1', 'a2', 'a3', 'a4'];
+        foreach ($digitos as $s) {
+            $claves[] = "fecha_nacimiento_{$s}";
+            $claves[] = "fecha_{$s}";
+        }
+        $datos = array_fill_keys(array_map(fn ($k) => "novedad.{$k}", $claves), '');
+
+        $c = $contrato->cliente;
+        if (! $esNovedad || ! $c) {
+            return $datos;
+        }
+
+        $genero = strtoupper(trim((string) $c->genero));
+        $esM = in_array($genero, ['M', 'MASCULINO', 'HOMBRE']);
+        $esF = in_array($genero, ['F', 'FEMENINO', 'MUJER']);
+
+        $datos['novedad.primer_apellido'] = strtoupper((string) $c->primer_apellido);
+        $datos['novedad.segundo_apellido'] = strtoupper((string) $c->segundo_apellido);
+        $datos['novedad.primer_nombre'] = strtoupper((string) $c->primer_nombre);
+        $datos['novedad.segundo_nombre'] = strtoupper((string) $c->segundo_nombre);
+        $datos['novedad.tipo_doc'] = strtoupper((string) $c->tipo_doc);
+        $datos['novedad.cedula'] = (string) $c->cedula;
+        // 62 sexo biológico y 63 sexo de identificación: BryNex guarda uno solo.
+        $datos['novedad.sexo_f_x'] = $datos['novedad.sexo_id_f_x'] = $esF ? 'X' : '';
+        $datos['novedad.sexo_m_x'] = $datos['novedad.sexo_id_m_x'] = $esM ? 'X' : '';
+
+        $nacimiento = $c->fecha_nacimiento?->format('dmY') ?? '';
+        $novedad = $contrato->fecha_ingreso?->format('dmY') ?? '';
+        foreach ($digitos as $i => $s) {
+            $datos["novedad.fecha_nacimiento_{$s}"] = $nacimiento[$i] ?? '';
+            $datos["novedad.fecha_{$s}"] = $novedad[$i] ?? '';
         }
 
         return $datos;
