@@ -78,8 +78,25 @@ class PlanillaVigilarSubtipo4 extends Command
     /** La regla que estamos esperando que desaparezca. */
     private const REGLA_UGPP = 'eo.val.2.655';
 
+    /**
+     * La otra regla de la malla UGPP (la 2.655 es la del subtipo 4; la 2.379
+     * la acompaña en algunos cotizantes). Si ambas cuelgan de la misma consulta
+     * externa, deberían caer-abierto juntas: por eso se registran por separado,
+     * para confirmarlo en la próxima ventana.
+     */
+    private const REGLA_UGPP_2 = 'eo.val.2.379';
+
     /** Cédula del freno: no existe, así que su línea siempre falla. */
     private const FRENO_CEDULA = '9999999999';
+
+    /**
+     * Latencia del último sondeo al validador, en milisegundos. La escribe
+     * sondear() y la lee el log: la hipótesis es que cuando Simple no logra
+     * consultar la UGPP (y se abre el hueco) la validación responde más rápido
+     * porque se salta esa llamada externa. Si se confirma, la latencia es un
+     * aviso anticipado del hueco.
+     */
+    private ?int $latenciaSondeoMs = null;
 
     /** Cédulas que se vigilan siempre, aunque no tengan plano pendiente. */
     private const CONFIG_CEDULAS = 'vigia_subtipo4_cedulas';
@@ -425,13 +442,39 @@ class PlanillaVigilarSubtipo4 extends Command
         $limpias = [];
         $sello = now()->format('d-m H:i:s');
 
+        // Contadores de la malla UGPP para esta corrida: cuántos cotizantes
+        // toparon cada regla y cuántos las dos a la vez. Si 2.655 y 2.379 van
+        // siempre juntas, cuelgan de la misma consulta externa.
+        $n655 = 0;
+        $n379 = 0;
+        $nAmbas = 0;
+
         foreach ($resultado as $cedula => $errores) {
             $this->line(sprintf('%s  CC %-12s → %s', $sello, $cedula,
                 $errores ? implode(' ', $errores) : 'LIMPIO'));
 
-            if (! in_array(self::REGLA_UGPP, $errores, true)) {
+            $tiene655 = in_array(self::REGLA_UGPP, $errores, true);
+            $tiene379 = in_array(self::REGLA_UGPP_2, $errores, true);
+            $n655 += $tiene655 ? 1 : 0;
+            $n379 += $tiene379 ? 1 : 0;
+            $nAmbas += ($tiene655 && $tiene379) ? 1 : 0;
+
+            if (! $tiene655) {
                 $limpias[] = $cedula;
             }
+        }
+
+        // Línea de telemetría: latencia del validador + desglose UGPP. Con el
+        // sondeo cada minuto, grep sobre '>> tel ' da la serie para ver si la
+        // latencia cae cuando se abre el hueco y si las dos reglas se mueven
+        // juntas. Solo cuando hubo respuesta (si no, latenciaSondeoMs es null).
+        if ($resultado) {
+            $this->line(sprintf(
+                '%s  >> tel  lat=%sms · 2.655×%d · 2.379×%d · ambas×%d · limpias×%d/%d',
+                $sello,
+                $this->latenciaSondeoMs ?? '?',
+                $n655, $n379, $nAmbas, count($limpias), count($resultado)
+            ));
         }
 
         return $limpias;
@@ -657,14 +700,22 @@ class PlanillaVigilarSubtipo4 extends Command
 
         // Un reintento reautenticando: el operador admite una sola sesión por
         // usuario, y si otra cosa entró con la misma credencial la de aquí se cae.
+        //
+        // Se cronometra cada envío y se guarda el del intento que respondió: es
+        // la latencia del validador (la autenticación va cacheada entre sondeos,
+        // así que el grueso del tiempo es la validación misma). La hipótesis es
+        // que en el hueco baja, porque Simple se salta la consulta a la UGPP.
         $r = null;
+        $this->latenciaSondeoMs = null;
         for ($i = 0; $i < 2; $i++) {
+            $t0 = microtime(true);
             $r = $api->liquidarPlanilla(
                 $nit,
                 implode("\r\n", array_merge([$cabecera], array_values($lineas))),
                 $base['filename'],
                 ['tipoArchivo' => 'I']
             );
+            $this->latenciaSondeoMs = (int) round((microtime(true) - $t0) * 1000);
 
             if ($r['success'] ?? false) {
                 break;
