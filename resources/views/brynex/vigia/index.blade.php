@@ -51,12 +51,12 @@
     {{-- Referencia de latencia: qué buscar --}}
     <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #3b82f6;border-radius:10px;padding:0.8rem 1rem;margin-bottom:1.25rem;font-size:0.8rem;color:#475569;">
         <strong style="color:#0d2550;">⚡ Qué latencia buscar.</strong>
-        La señal dura de que cayó la validación es <strong>2.655×0 con portal OK</strong>.
-        La latencia lo <em>corrobora</em>: con la UGPP corriendo, lo normal hoy es
-        <span style="font-weight:700;color:#0d2550;" x-text="latNormal !== null ? ('~' + latNormal + ' ms (mínimo ' + (latMinNormal ?? '—') + ')') : 'aún sin datos de hoy'"></span>.
-        Un sondeo <strong>claramente más rápido</strong> que eso —por debajo de
-        <span style="font-weight:700;" x-text="umbralRapido !== null ? ('~' + umbralRapido + ' ms') : '—'"></span>—
-        delata que Simple se saltó la consulta de la UGPP. Esos salen marcados con ⚡ y en verde.
+        La señal <strong>dura</strong> de que cayó la validación es <strong>2.655×0 con portal OK</strong> (fila verde HUECO) — no la latencia sola.
+        La latencia solo <em>corrobora</em>: con la UGPP corriendo, lo normal hoy va de
+        <span style="font-weight:700;color:#0d2550;" x-text="latNormal !== null ? ('~' + (latMinNormal ?? '—') + ' a la mediana ~' + latNormal + ' ms') : 'aún sin datos de hoy'"></span>.
+        Oscila harto, así que un sondeo rápido dentro de ese rango <strong>es normal</strong>. Solo se marca ⚡ si baja
+        <strong>por debajo del mínimo normal del día</strong>
+        (<span style="font-weight:700;" x-text="umbralRapido !== null ? ('~' + umbralRapido + ' ms') : '—'"></span>) — ahí sí sería anómalo. Aun así, el que manda es el 2.655×0.
         <span style="color:#94a3b8;">El número exacto se calibra con el primer hueco real (aún no hay ninguno medido con latencia).</span>
     </div>
 
@@ -154,9 +154,12 @@ function vigiaMonitor() {
             if (this.baseEdad === null) return null;
             return this.baseEdad + Math.round((Date.now() - this.baseAt) / 1000);
         },
-        // Umbral "rápido": 70% de la mediana normal. Sin datos, no marca nada.
+        // Umbral "rápido": por debajo del MÍNIMO normal de hoy. La latencia
+        // normal ya oscila harto, así que marcar "más rápido que la mediana"
+        // pintaba de ⚡ el extremo bajo de lo normal. Un sondeo más rápido que
+        // el más rápido de los normales sí es anómalo (consulta UGPP saltada).
         get umbralRapido() {
-            return this.latNormal ? Math.round(this.latNormal * 0.7) : null;
+            return this.latMinNormal ?? null;
         },
         esRapida(l) {
             return l !== null && this.umbralRapido !== null && l < this.umbralRapido;
