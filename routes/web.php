@@ -974,6 +974,13 @@ Route::middleware('auth')->group(function () {
             Route::put('consumo/{aliado}/modulos', [$cx, 'actualizarModulos'])->name('consumo.modulos.update');
             Route::post('consumo/cobros/{cobro}/pago', [$cx, 'registrarPago'])->name('consumo.pago');
         });
+
+        // ── Monitor del vigía del subtipo 4 (minuto a minuto) ─────
+        // Lee el log del comando por cron y lo muestra en vivo: latencia,
+        // estado del portal y conteo del 2.655. Solo lectura.
+        $bvg = \App\Http\Controllers\BrynexVigiaController::class;
+        Route::get('vigia-subtipo4', [$bvg, 'index'])->name('vigia.index');
+        Route::get('vigia-subtipo4/datos', [$bvg, 'datos'])->name('vigia.datos');
     });
 
     // ── Razones sociales de BryNex ────────────────────────────────────────

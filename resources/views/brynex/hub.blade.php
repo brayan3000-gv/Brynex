@@ -246,6 +246,14 @@
                     </div>
                     <div class="hc-arrow">→</div>
                 </a>
+                <a href="{{ route('brynex.vigia.index') }}" class="hub-card">
+                    <div class="hc-icon">🛰️</div>
+                    <div class="hc-body">
+                        <div class="hc-name">Vigía subtipo 4</div>
+                        <div class="hc-desc">Monitor minuto a minuto: validación de la UGPP (2.655), latencia y caídas del portal de Simple</div>
+                    </div>
+                    <div class="hc-arrow">→</div>
+                </a>
                 @if(in_array(strtolower((string) auth()->user()->email), array_map('strtolower', (array) config('exportacion.correos_autorizados')), true))
                 <a href="{{ route('brynex.exportaciones.index') }}" class="hub-card" style="border-color:#fed7aa;background:#fff7ed">
                     <div class="hc-icon">📦</div>
