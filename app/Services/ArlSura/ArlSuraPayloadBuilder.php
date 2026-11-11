@@ -330,7 +330,7 @@ class ArlSuraPayloadBuilder
         $afp = $this->afpParaSura($contrato->pension ?: $cliente->pension);
 
         $direccion = $this->direccionValida(
-            $cliente->direccion_vivienda,
+            $this->sinPrefijoDeCiudad($cliente->direccion_vivienda),
             $rs->dir_formulario ?: $rs->direccion ?: $contrato->aliado?->direccion
         );
         // BryNex guarda el DANE como número: Antioquia es 5 y Medellín 5001.
@@ -359,13 +359,13 @@ class ArlSuraPayloadBuilder
             'telefono1' => $this->soloDigitos($this->telefono($contrato, $cliente, $rs)),
             'telefono2' => $this->soloDigitos($cliente->telefono) ?: null,
 
-            'direccion'     => $geo['dirtrad'] ?: $direccion,
+            'direccion'     => $this->recortar($geo['dirtrad'] ?: $direccion),
             'cordenadasDir' => [
                 'vectorx'   => (float) ($geo['longitude'] ?? 0),
                 'vectory'   => (float) ($geo['latitude'] ?? 0),
                 // El geocodificador devuelve el barrio real; la localidad es la
                 // comuna. Preferimos el barrio, que es lo que pide el formulario.
-                'localidad' => $geo['barrio'] ?: ($geo['localidad'] ?? null),
+                'localidad' => $this->recortar($geo['barrio'] ?: ($geo['localidad'] ?? null)),
             ],
             'departamento' => [
                 'nombreDepartamento' => $municipio['departamento']['nombreProvincia'] ?? null,
@@ -414,11 +414,11 @@ class ArlSuraPayloadBuilder
             ),
             'telefono2'     => null,
             'email'         => $this->correoEmpresa($contrato, $rs),
-            'direccion'     => $centro->direccion,
+            'direccion'     => $this->recortar($centro->direccion),
             'cordenadasDir' => [
                 'vectorx'   => (float) ($geo['longitude'] ?? 0),
                 'vectory'   => (float) ($geo['latitude'] ?? 0),
-                'localidad' => $geo['localidad'] ?? null,
+                'localidad' => $this->recortar($geo['localidad'] ?? null),
             ],
             'departamento' => [
                 'nombreDepartamento' => $centro->departamento,
@@ -516,6 +516,43 @@ class ArlSuraPayloadBuilder
                 "El contrato {$contrato->id} no tiene cargo y la razón social no tiene uno por defecto ".
                 "para el nivel de riesgo {$contrato->n_arl}."
             );
+    }
+
+    /**
+     * Sura no acepta direcciones de más de 50 caracteres: su formulario las
+     * recorta antes de enviar (`maxLengthDir = 50` en el bundle de SelWEB3) y
+     * el API, sin ese recorte, responde 500 «Error general al validar los datos
+     * de los afiliados» sin decir qué campo. Todas las fallas con ese mensaje
+     * hasta nov-2026 traían 53 o más; la exitosa más larga, 48.
+     *
+     * Se corta en el último espacio para no dejar media palabra.
+     */
+    private function recortar(?string $valor, int $max = 50): ?string
+    {
+        $v = trim(preg_replace('/\s+/', ' ', (string) $valor));
+        if ($v === '') {
+            return null;
+        }
+        if (mb_strlen($v) <= $max) {
+            return $v;
+        }
+
+        $corte   = mb_substr($v, 0, $max);
+        $espacio = mb_strrpos($corte, ' ');
+
+        return rtrim($espacio !== false && $espacio >= 30 ? mb_substr($corte, 0, $espacio) : $corte, ' -#');
+    }
+
+    /**
+     * Quita el «CALI VALLE DIRECCIÓN …» con que llegan algunas direcciones
+     * copiadas de un formulario: la ciudad ya viaja en su propio campo, y ese
+     * prefijo impide que el geocodificador de Sura la encuentre.
+     */
+    private function sinPrefijoDeCiudad(?string $dir): ?string
+    {
+        $limpia = preg_replace('/^.*?\bDIRECCI(?:O|Ó|ó)N\b\s*:?\s*/iu', '', (string) $dir);
+
+        return mb_strlen(trim((string) $limpia)) >= 5 ? $limpia : $dir;
     }
 
     /** Una dirección de "0" o vacía no sirve para geocodificar: cae a la de la razón social. */
