@@ -526,12 +526,15 @@ class ArlSuraPayloadBuilder
      * hasta nov-2026 traían 53 o más; la exitosa más larga, 48.
      *
      * Se corta en el último espacio para no dejar media palabra.
+     *
+     * Lo vacío sale como "" y nunca como null: Sura acepta la localidad vacía
+     * pero rechaza `null` («cordenadasDir.localidad : may not be null»).
      */
-    private function recortar(?string $valor, int $max = 50): ?string
+    private function recortar(?string $valor, int $max = 50): string
     {
         $v = trim(preg_replace('/\s+/', ' ', (string) $valor));
         if ($v === '') {
-            return null;
+            return '';
         }
         if (mb_strlen($v) <= $max) {
             return $v;
