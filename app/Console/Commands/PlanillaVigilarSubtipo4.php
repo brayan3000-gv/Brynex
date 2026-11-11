@@ -79,12 +79,15 @@ class PlanillaVigilarSubtipo4 extends Command
     private const REGLA_UGPP = 'eo.val.2.655';
 
     /**
-     * La otra regla de la malla UGPP (la 2.655 es la del subtipo 4; la 2.379
-     * la acompaña en algunos cotizantes). Si ambas cuelgan de la misma consulta
-     * externa, deberían caer-abierto juntas: por eso se registran por separado,
-     * para confirmarlo en la próxima ventana.
+     * El 2.379 NO se vigila a propósito. Es un cruce de salud de ADRES ("el
+     * cotizante aporta a la EPS X pero ADRES sugiere la EPS Y"), no la lista
+     * negra de la UGPP, y solo aparece porque el sondeo copia una línea de
+     * referencia que reporta salud a una EPS que no es la real de la persona.
+     * En los planos reales (cotizante 51, sin salud) nunca sale. Es otra fuente
+     * externa distinta del 2.655, así que no sirve para detectar el hueco: lo
+     * que marca si la validación UGPP cayó es el 2.655, y si el portal entero
+     * cayó lo dice que el sondeo responda o no (ver $portalRespondio).
      */
-    private const REGLA_UGPP_2 = 'eo.val.2.379';
 
     /** Cédula del freno: no existe, así que su línea siempre falla. */
     private const FRENO_CEDULA = '9999999999';
@@ -97,6 +100,18 @@ class PlanillaVigilarSubtipo4 extends Command
      * aviso anticipado del hueco.
      */
     private ?int $latenciaSondeoMs = null;
+
+    /**
+     * Si el operador respondió el último sondeo. Es lo que separa los dos
+     * mundos: con el portal arriba (respondió) y el 2.655 ausente, cayó solo
+     * la validación de la UGPP → hueco útil, se puede liquidar. Si el portal no
+     * respondió (autenticar/autorizar/validar fallan), cayó el portal entero →
+     * no hay nada que liquidar, aunque el 2.655 "no aparezca".
+     */
+    private bool $portalRespondio = false;
+
+    /** Por qué no respondió el portal (paso + mensaje), para el log. */
+    private string $portalMotivo = '';
 
     /** Cédulas que se vigilan siempre, aunque no tengan plano pendiente. */
     private const CONFIG_CEDULAS = 'vigia_subtipo4_cedulas';
@@ -442,39 +457,44 @@ class PlanillaVigilarSubtipo4 extends Command
         $limpias = [];
         $sello = now()->format('d-m H:i:s');
 
-        // Contadores de la malla UGPP para esta corrida: cuántos cotizantes
-        // toparon cada regla y cuántos las dos a la vez. Si 2.655 y 2.379 van
-        // siempre juntas, cuelgan de la misma consulta externa.
+        // Solo cuenta el 2.655: es el que marca si la validación de la UGPP
+        // está corriendo. El 2.379 es otra cosa (ADRES-salud) y no se vigila.
         $n655 = 0;
-        $n379 = 0;
-        $nAmbas = 0;
 
         foreach ($resultado as $cedula => $errores) {
             $this->line(sprintf('%s  CC %-12s → %s', $sello, $cedula,
                 $errores ? implode(' ', $errores) : 'LIMPIO'));
 
-            $tiene655 = in_array(self::REGLA_UGPP, $errores, true);
-            $tiene379 = in_array(self::REGLA_UGPP_2, $errores, true);
-            $n655 += $tiene655 ? 1 : 0;
-            $n379 += $tiene379 ? 1 : 0;
-            $nAmbas += ($tiene655 && $tiene379) ? 1 : 0;
-
-            if (! $tiene655) {
+            if (in_array(self::REGLA_UGPP, $errores, true)) {
+                $n655++;
+            } else {
                 $limpias[] = $cedula;
             }
         }
 
-        // Línea de telemetría: latencia del validador + desglose UGPP. Con el
-        // sondeo cada minuto, grep sobre '>> tel ' da la serie para ver si la
-        // latencia cae cuando se abre el hueco y si las dos reglas se mueven
-        // juntas. Solo cuando hubo respuesta (si no, latenciaSondeoMs es null).
-        if ($resultado) {
-            $this->line(sprintf(
-                '%s  >> tel  lat=%sms · 2.655×%d · 2.379×%d · ambas×%d · limpias×%d/%d',
-                $sello,
-                $this->latenciaSondeoMs ?? '?',
-                $n655, $n379, $nAmbas, count($limpias), count($resultado)
-            ));
+        // Telemetría. La idea es separar las dos caídas que se confundían:
+        //
+        //   portal=OK  + 2.655×0  → cayó SOLO la validación de la UGPP: hueco
+        //                            útil, el flujo responde y se puede liquidar.
+        //   portal=OK  + 2.655×N  → todo normal, la UGPP sigue rechazando.
+        //   portal=CAIDO          → se cayó el portal entero (auth/autorizar/
+        //                            validar no responden): NO es hueco, no hay
+        //                            nada que liquidar aunque el 2.655 "falte".
+        //
+        // Con el sondeo cada minuto, `grep '>> tel'` da la serie; la latencia
+        // acompaña para ver si el hueco responde más rápido (UGPP saltada).
+        if ($this->latenciaSondeoMs !== null || ! $this->portalRespondio) {
+            if ($this->portalRespondio) {
+                $hueco = ($n655 === 0 && $resultado) ? '  ← HUECO (validación UGPP caída)' : '';
+                $this->line(sprintf('%s  >> tel  lat=%sms · portal=OK · 2.655×%d/%d%s',
+                    $sello, $this->latenciaSondeoMs ?? '?', $n655, count($resultado), $hueco));
+            } elseif ($this->latenciaSondeoMs !== null) {
+                // Se llamó al operador y no contestó: portal caído, con el motivo.
+                $this->line(sprintf('%s  >> tel  lat=%sms · portal=CAIDO · %s',
+                    $sello, $this->latenciaSondeoMs, $this->portalMotivo));
+            }
+            // Si latencia es null y el portal no respondió, fue un corte de
+            // configuración antes de llamar al operador: no se registra tel.
         }
 
         return $limpias;
@@ -604,6 +624,13 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private function sondear(array $cedulas, int $mes, int $anio): array
     {
+        // Estado de este sondeo: hasta que el operador conteste, se asume que
+        // no respondió y que ni siquiera se llegó a llamarlo (latencia null, un
+        // corte de configuración que no cuenta como caída del portal).
+        $this->latenciaSondeoMs = null;
+        $this->portalRespondio = false;
+        $this->portalMotivo = '(no se llegó a sondear)';
+
         $rsRef = (int) ($this->option('rs-ref') ?: ConfiguracionBrynex::obtener(self::CONFIG_RS_REF, 0));
 
         if (! $rsRef) {
@@ -706,7 +733,6 @@ class PlanillaVigilarSubtipo4 extends Command
         // así que el grueso del tiempo es la validación misma). La hipótesis es
         // que en el hueco baja, porque Simple se salta la consulta a la UGPP.
         $r = null;
-        $this->latenciaSondeoMs = null;
         for ($i = 0; $i < 2; $i++) {
             $t0 = microtime(true);
             $r = $api->liquidarPlanilla(
@@ -726,10 +752,19 @@ class PlanillaVigilarSubtipo4 extends Command
         }
 
         if (! ($r['success'] ?? false)) {
-            $this->warn('El operador no respondió — '.substr($r['message'] ?? '(sin mensaje)', 0, 140));
+            // El portal entero no respondió (autenticar/autorizar/validar). NO
+            // es un hueco: es la caída que hay que distinguir de la de la UGPP.
+            $this->portalRespondio = false;
+            $this->portalMotivo = ($r['paso'] ?? '?').' · '.substr($r['message'] ?? '(sin mensaje)', 0, 90);
+            $this->warn('El operador no respondió — '.$this->portalMotivo);
 
             return [];
         }
+
+        // El portal contestó el flujo completo (autenticó, autorizó y validó):
+        // si además falta el 2.655, cayó solo la validación de la UGPP = hueco.
+        $this->portalRespondio = true;
+        $this->portalMotivo = '';
 
         // Con el freno no debería pasar nunca, pero si llegara a liquidar hay
         // que saberlo de inmediato y no en el extracto.
