@@ -30,7 +30,7 @@
                 <div style="font-size:1.05rem;font-weight:800;" x-text="tituloEstado(ultimo.estado)"></div>
                 <div style="font-size:0.8rem;opacity:0.85;margin-top:0.15rem;">
                     Último sondeo <span x-text="ultimo.hora"></span>
-                    <span x-show="edadSeg !== null">· hace <span x-text="edadSeg"></span>s</span>
+                    <span x-show="edadMostrar !== null">· hace <span x-text="edadMostrar"></span>s</span>
                     <span x-show="ultimo.lat !== null"> · <span x-text="ultimo.lat"></span> ms</span>
                     <span x-show="ultimo.estado === 'caido' && ultimo.motivo"> · <span x-text="ultimo.motivo"></span></span>
                 </div>
@@ -46,6 +46,18 @@
                 <div style="font-size:1.5rem;font-weight:800;margin-top:0.2rem;" :style="'color:' + k.color" x-text="k.valor"></div>
             </div>
         </template>
+    </div>
+
+    {{-- Referencia de latencia: qué buscar --}}
+    <div style="background:#fff;border:1px solid #e2e8f0;border-left:4px solid #3b82f6;border-radius:10px;padding:0.8rem 1rem;margin-bottom:1.25rem;font-size:0.8rem;color:#475569;">
+        <strong style="color:#0d2550;">⚡ Qué latencia buscar.</strong>
+        La señal dura de que cayó la validación es <strong>2.655×0 con portal OK</strong>.
+        La latencia lo <em>corrobora</em>: con la UGPP corriendo, lo normal hoy es
+        <span style="font-weight:700;color:#0d2550;" x-text="latNormal !== null ? ('~' + latNormal + ' ms (mínimo ' + (latMinNormal ?? '—') + ')') : 'aún sin datos de hoy'"></span>.
+        Un sondeo <strong>claramente más rápido</strong> que eso —por debajo de
+        <span style="font-weight:700;" x-text="umbralRapido !== null ? ('~' + umbralRapido + ' ms') : '—'"></span>—
+        delata que Simple se saltó la consulta de la UGPP. Esos salen marcados con ⚡ y en verde.
+        <span style="color:#94a3b8;">El número exacto se calibra con el primer hueco real (aún no hay ninguno medido con latencia).</span>
     </div>
 
     {{-- Tabla minuto a minuto --}}
@@ -66,7 +78,8 @@
                     <template x-for="(s, i) in sondeos" :key="s.fecha + s.hora + i">
                         <tr :style="'border-top:1px solid #f1f5f9;' + filaEstilo(s.estado)">
                             <td style="padding:0.5rem 1rem;font-variant-numeric:tabular-nums;color:#334155;" x-text="s.hora"></td>
-                            <td style="padding:0.5rem 1rem;font-variant-numeric:tabular-nums;" :style="'color:' + colorLat(s.lat)">
+                            <td style="padding:0.5rem 1rem;font-variant-numeric:tabular-nums;font-weight:600;" :style="'color:' + colorLat(s.lat)">
+                                <span x-show="esRapida(s.lat)">⚡ </span>
                                 <span x-text="s.lat !== null ? s.lat + ' ms' : '—'"></span>
                             </td>
                             <td style="padding:0.5rem 1rem;">
@@ -108,10 +121,15 @@
 <script>
 function vigiaMonitor() {
     return {
-        ahora: '', ultimo: null, edadSeg: null, resumen: {}, sondeos: [], cargando: false,
+        ahora: '', ultimo: null, resumen: {}, sondeos: [], cargando: false,
+        latNormal: null, latMinNormal: null,
+        baseEdad: null, baseAt: 0, tick: 0,
         init() {
             this.cargar();
-            setInterval(() => this.cargar(), 20000);
+            // El cron escribe una línea por minuto: consultar al servidor cada
+            // 30 s basta y es barato. El contador de "hace X s" corre local.
+            setInterval(() => this.cargar(), 30000);
+            setInterval(() => this.tick++, 1000);
         },
         cargar() {
             this.cargando = true;
@@ -120,12 +138,28 @@ function vigiaMonitor() {
                 .then(d => {
                     this.ahora = d.ahora;
                     this.ultimo = d.ultimo;
-                    this.edadSeg = d.edad_seg;
                     this.resumen = d.resumen;
                     this.sondeos = d.sondeos;
+                    this.latNormal = d.resumen.lat_normal_hoy;
+                    this.latMinNormal = d.resumen.lat_min_normal_hoy;
+                    this.baseEdad = d.edad_seg;
+                    this.baseAt = Date.now();
                 })
                 .catch(() => {})
                 .finally(() => this.cargando = false);
+        },
+        // Edad del último sondeo, avanzando sola cada segundo sin tocar el servidor.
+        get edadMostrar() {
+            this.tick; // dependencia reactiva
+            if (this.baseEdad === null) return null;
+            return this.baseEdad + Math.round((Date.now() - this.baseAt) / 1000);
+        },
+        // Umbral "rápido": 70% de la mediana normal. Sin datos, no marca nada.
+        get umbralRapido() {
+            return this.latNormal ? Math.round(this.latNormal * 0.7) : null;
+        },
+        esRapida(l) {
+            return l !== null && this.umbralRapido !== null && l < this.umbralRapido;
         },
         get kpis() {
             const r = this.resumen || {};
@@ -133,7 +167,7 @@ function vigiaMonitor() {
                 { label: 'Huecos hoy', valor: r.huecos_hoy ?? 0, color: (r.huecos_hoy > 0 ? '#059669' : '#0d2550') },
                 { label: 'Caídas portal hoy', valor: r.caidas_portal_hoy ?? 0, color: (r.caidas_portal_hoy > 0 ? '#dc2626' : '#0d2550') },
                 { label: 'Sondeos hoy', valor: r.sondeos_hoy ?? 0, color: '#0d2550' },
-                { label: 'Latencia prom. hoy', valor: (r.lat_promedio_hoy != null ? r.lat_promedio_hoy + ' ms' : '—'), color: '#0d2550' },
+                { label: 'Latencia normal hoy', valor: (r.lat_normal_hoy != null ? r.lat_normal_hoy + ' ms' : '—'), color: '#0d2550' },
             ];
         },
         iconoEstado(e) { return e === 'hueco' ? '🟢' : (e === 'caido' ? '🔴' : '🟡'); },
@@ -161,8 +195,8 @@ function vigiaMonitor() {
         },
         colorLat(l) {
             if (l === null) return '#94a3b8';
-            if (l < 1200) return '#059669';
-            if (l > 3000) return '#b45309';
+            if (this.esRapida(l)) return '#059669';                 // rápida: posible salto UGPP
+            if (this.latNormal && l > this.latNormal * 1.4) return '#b45309'; // lenta
             return '#334155';
         },
     };

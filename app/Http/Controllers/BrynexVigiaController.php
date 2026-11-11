@@ -64,7 +64,11 @@ class BrynexVigiaController extends Controller
                 'sondeos_hoy' => count($deHoy),
                 'huecos_hoy' => count(array_filter($deHoy, fn ($s) => $s['estado'] === 'hueco')),
                 'caidas_portal_hoy' => count(array_filter($deHoy, fn ($s) => $s['estado'] === 'caido')),
-                'lat_promedio_hoy' => $this->promedioLatencia($deHoy),
+                // Latencia "normal": mediana de los sondeos en estado normal
+                // (la UGPP sí corrió). Es la línea base contra la cual un sondeo
+                // notablemente más rápido delata que la validación se saltó.
+                'lat_normal_hoy' => $this->medianaLatencia(array_filter($deHoy, fn ($s) => $s['estado'] === 'normal')),
+                'lat_min_normal_hoy' => $this->minLatencia(array_filter($deHoy, fn ($s) => $s['estado'] === 'normal')),
             ],
             'sondeos' => array_slice($sondeos, 0, $limite),
         ]);
@@ -161,13 +165,32 @@ class BrynexVigiaController extends Controller
         ];
     }
 
-    private function promedioLatencia(array $sondeos): ?int
+    /** @param array<int,array<string,mixed>> $sondeos */
+    private function latencias(array $sondeos): array
     {
-        $lats = array_values(array_filter(array_map(fn ($s) => $s['lat'], $sondeos), fn ($v) => $v !== null));
+        return array_values(array_filter(
+            array_map(fn ($s) => $s['lat'], $sondeos),
+            fn ($v) => $v !== null
+        ));
+    }
+
+    private function medianaLatencia(array $sondeos): ?int
+    {
+        $lats = $this->latencias($sondeos);
         if (! $lats) {
             return null;
         }
+        sort($lats);
+        $n = count($lats);
+        $mid = intdiv($n, 2);
 
-        return (int) round(array_sum($lats) / count($lats));
+        return (int) ($n % 2 ? $lats[$mid] : round(($lats[$mid - 1] + $lats[$mid]) / 2));
+    }
+
+    private function minLatencia(array $sondeos): ?int
+    {
+        $lats = $this->latencias($sondeos);
+
+        return $lats ? min($lats) : null;
     }
 }
