@@ -905,6 +905,10 @@ class MetaAdsService
     {
         $texto = mb_strtolower(($publicacion->tema ?? '').' '.($publicacion->titulo ?? ''), 'UTF-8');
 
+        // «Sin pensión» es justo lo contrario: la #116 (EPS sin pensión, 12-nov-2026) entró al
+        // conjunto del exterior por esta regla, y una EPS no le sirve a quien vive fuera.
+        $texto = preg_replace('/sin\s+pensi[oó]n/u', '', $texto);
+
         return str_contains($texto, 'pensi') || str_contains($texto, 'afp') || str_contains($texto, 'semanas');
     }
 
