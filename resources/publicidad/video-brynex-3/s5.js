@@ -28,27 +28,38 @@
   } });
 })();
 
-// ── Escena 6 (24,38–30 s): el cierre ───────────────────────────────────────────
+// ── Escena 6 (24,38–30 s): el cierre con el logo de BRYGAR ──────────────────────
+// El logo es horizontal y en un video vertical quedaba chico: se separa en emblema y letras,
+// apilados, y un brillo recorre el metal como en el logo original.
 (() => {
   const el = h(`<div class="scene"></div>`);
-  const halo = h(`<div class="abs" style="left:90px;top:300px;width:900px;height:640px;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.55),transparent);filter:blur(30px)"></div>`, el);
-  const logo = h(`<img class="abs" src="logo-brygar.png" style="left:110px;top:455px;width:860px;transform-origin:50% 50%">`, el);
-  const a = h(`<div class="ctr" style="top:780px;font-size:82px"></div>`, el), b = h(`<div class="ctr tn" style="top:880px;font-size:122px"></div>`, el);
+  const halo = h(`<div class="abs" style="left:40px;top:180px;width:1000px;height:760px;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.6),rgba(147,197,253,.12) 60%,transparent);filter:blur(30px)"></div>`, el);
+  const shine = (src, l, t, w, hh) => `<div class="abs" style="left:${l}px;top:${t}px;width:${w}px;height:${hh}px;transform-origin:50% 50%">
+      <img src="${src}" style="position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 0 22px rgba(191,219,254,.4)) drop-shadow(0 18px 30px rgba(0,0,0,.5))">
+      <div class="sh" style="position:absolute;inset:0;-webkit-mask-image:url(${src});-webkit-mask-size:100% 100%;background:linear-gradient(105deg,transparent 42%,rgba(255,255,255,.95) 50%,transparent 58%);background-size:300% 100%"></div></div>`;
+  const emb = h(shine('brygar-emblema.png', 260, 262, 560, 354), el);
+  const let_ = h(shine('brygar-letras.png', 120, 630, 840, 274), el);
+  const shE = emb.querySelector('.sh'), shL = let_.querySelector('.sh');
+  const a = h(`<div class="ctr" style="top:946px;font-size:80px"></div>`, el), b = h(`<div class="ctr tn" style="top:1040px;font-size:116px"></div>`, el);
   const wa1 = words(a, 'EPS sin pensión', { all: 'grad' }), wb = words(b, '$125.000 al mes');
-  wb[1].style.fontSize = wb[2].style.fontSize = '74px'; wb[1].style.color = wb[2].style.color = '#bfdbfe';
-  const small = h(`<div class="ctr" style="top:1030px;font-size:40px;color:#bfdbfe;font-weight:600">Todo incluido · La afiliación también</div>`, el);
-  const rings = [0, 1].map(() => h(`<div class="ring" style="top:1146px"></div>`, el));
-  const wa = h(`<div id="wa" style="top:1146px"><svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M32 8a24 24 0 0 0-20.6 36.3L8 56l12-3.3A24 24 0 1 0 32 8z"/><path d="M24 26c0 8 6 14 14 14"/></svg>Escríbenos por WhatsApp</div>`, el);
-  const sub = h(`<div class="ctr" style="top:1338px;font-size:33px;font-weight:600;color:#93c5fd;letter-spacing:.04em">Médico · Medicamentos · Tus beneficiarios</div>`, el);
+  wb[1].style.fontSize = wb[2].style.fontSize = '70px'; wb[1].style.color = wb[2].style.color = '#bfdbfe';
+  const small = h(`<div class="ctr" style="top:1180px;font-size:38px;color:#bfdbfe;font-weight:600">Todo incluido · La afiliación también</div>`, el);
+  const rings = [0, 1].map(() => h(`<div class="ring" style="top:1262px"></div>`, el));
+  const wa = h(`<div id="wa" style="top:1262px"><svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M32 8a24 24 0 0 0-20.6 36.3L8 56l12-3.3A24 24 0 1 0 32 8z"/><path d="M24 26c0 8 6 14 14 14"/></svg>Escríbenos por WhatsApp</div>`, el);
+  const sub = h(`<div class="ctr" style="top:1446px;font-size:32px;font-weight:600;color:#93c5fd;letter-spacing:.04em">Médico · Medicamentos · Tus beneficiarios</div>`, el);
   const T0 = 24.375, P = BT * 2;
+  // Un brillo al aparecer y otro cada dos compases.
+  const sweep = (t, a0) => { const k = (((t - a0) % (BAR * 2)) + BAR * 2) % (BAR * 2); return t < a0 ? 100 : lerp(100, -50, eio(clamp(k / .9))); };
   scenes.push({ a: T0, b: 30.01, el, draw(t) {
-    const k = pr(t, T0 + .02, .7);
-    T(logo, { o: pr(t, T0 + .02, .12), s: lerp(2, 1, eo5(k)) + Math.sin(t * 1.4) * .008, blur: (1 - k) * 18 });
+    const k = pr(t, T0 + .02, .6), kl = pr(t, T0 + BT * .6, .5);
+    T(emb, { o: pr(t, T0 + .02, .1), s: lerp(2.2, 1, back(k)) + Math.sin(t * 1.6) * .012, y: Math.sin(t * 1.6) * 6, blur: (1 - eo5(k)) * 16 });
+    T(let_, { o: pr(t, T0 + BT * .6, .1), s: lerp(.6, 1, back(kl)), y: (1 - eo5(kl)) * 80, blur: (1 - eo5(kl)) * 12 });
+    shE.style.backgroundPosition = `${sweep(t, T0 + .55)}% 0`; shL.style.backgroundPosition = `${sweep(t, T0 + .75)}% 0`;
     T(halo, { o: pr(t, T0 + .1, .6) * (.75 + .25 * Math.sin(t * 2.2)), s: 1 + Math.sin(t * 1.1) * .05 });
-    slam(wa1, t, T0 + BT * 2, .1); slam(wb, t, T0 + BT * 3, .09);
-    pop(small, t, T0 + BT * 3.6, undefined, { s0: .7, y0: 20, d: .35 });
-    pop(wa, t, T0 + BAR + BT, undefined, { s0: .4, y0: 90, d: .55 });
-    const s0 = T0 + BAR + BT + .45;
+    slam(wa1, t, T0 + BT * 2.5, .1); slam(wb, t, T0 + BT * 3.5, .09);
+    pop(small, t, T0 + BT * 4.1, undefined, { s0: .7, y0: 20, d: .35 });
+    pop(wa, t, T0 + BAR + BT * 1.5, undefined, { s0: .4, y0: 90, d: .55 });
+    const s0 = T0 + BAR + BT * 1.5 + .45;
     wa.style.transform += ` scale(${1 + Math.max(0, Math.sin((t - s0) * Math.PI * 2 / P)) * .035 * pr(t, s0, .3)})`;
     rings.forEach((r, i) => { const st = s0 + i * P / 2, c = (((t - st) % P) + P) % P / P; T(r, { o: t > st ? (1 - c) * .7 : 0, s: 1 + c * .22 }); });
     T(sub, { o: pr(t, s0 + .2, .5), y: (1 - eo5(pr(t, s0 + .2, .6))) * 30 });
