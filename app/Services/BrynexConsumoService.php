@@ -73,12 +73,56 @@ class BrynexConsumoService
             fecha:    $ultimoDia->toDateString()
         );
 
+        // La afiliación nunca va en $0 por falta de tramo: se cobra con el
+        // acuerdo de afiliación del aliado o, si no tiene, con la tarifa de su
+        // plan ($5.500 con razón social, $600/$800 solo programa).
+        if ($moduloId === 2 && $calculo['tarifa_unidad'] === null && $calculo['tarifa_minima'] === null) {
+            $calculo = $this->afiliacionConTarifaDelPlan((int) $conteos[$clave], $alidoId, $ultimoDia->toDateString()) ?? $calculo;
+        }
+
         return array_merge($calculo, [
             'modulo_id'     => $moduloId,
             'modulo_codigo' => $codigo,
             'modulo_nombre' => $nombre,
             'descripcion'   => "{$descripcion} ({$this->nombreMes($mes)} {$anio})",
         ]);
+    }
+
+    /**
+     * Afiliaciones de un aliado sin tramo vigente en el mes. Las tarifas propias
+     * rigen desde el 1-oct-2026, así que para un mes anterior se usa su acuerdo
+     * de afiliación (Luis Lopez $20.000) y, si no tiene, la tarifa por unidad de
+     * su administración, que es la de su plan. Null si no tiene ninguna de las
+     * dos con tarifa por unidad (BRYGAR no se cobra; SS Faga paga un fijo).
+     */
+    private function afiliacionConTarifaDelPlan(int $cantidad, int $alidoId, string $fecha): ?array
+    {
+        foreach ([2 => 'Tarifa de afiliación del aliado', 1 => 'Tarifa del plan del aliado (la de su administración)'] as $moduloId => $etiqueta) {
+            $tramos = BrynexTramoTarifa::where('modulo_id', $moduloId)
+                ->where('aliado_id', $alidoId)
+                ->where('tarifa_unidad', '>', 0)
+                ->orderBy('vigente_desde')
+                ->get();
+
+            // La vigente en el mes o, si su acuerdo empezó después, la primera que tuvo.
+            $tramo = $tramos->last(fn ($t) => $t->vigente_desde?->toDateString() <= $fecha
+                    && ($t->vigente_hasta === null || $t->vigente_hasta->toDateString() >= $fecha))
+                ?? $tramos->first();
+
+            if ($tramo) {
+                $tarifa = (float) $tramo->tarifa_unidad;
+
+                return [
+                    'cant_unidades'  => $cantidad,
+                    'tarifa_unidad'  => $tarifa,
+                    'tarifa_minima'  => 0.0,
+                    'subtotal'       => $cantidad * $tarifa,
+                    'tramo_aplicado' => $etiqueta,
+                ];
+            }
+        }
+
+        return null;
     }
 
     // ════════════════════════════════════════════════════════════════════════
