@@ -104,11 +104,20 @@ class CorreoDianRepresentante
         $b = $this->buzonDe($rep) ?? throw new RuntimeException($this->porQueNoHayBuzon($rep));
 
         $limite = now()->subMinutes(self::minutos());
+        $pedidoA = $desde;
         $desde = $desde && $desde->gt($limite) ? $desde : $limite;
 
-        $c = collect($this->correosDian($b['buzon'], $desde, $rep, $b['via']))
-            ->filter(fn ($c) => $c['enlace'] !== null && $c['es_suyo'] && $c['fecha']->gte($desde))
-            ->first();
+        $conEnlace = collect($this->correosDian($b['buzon'], $desde, $rep, $b['via']))
+            ->filter(fn ($c) => $c['enlace'] !== null && $c['fecha']->gte($desde));
+
+        $c = $conEnlace->first(fn ($c) => $c['es_suyo']);
+
+        // En el buzón central el correo de la DIAN puede no nombrar a nadie.
+        // Si el robot dijo cuándo lo pidió y desde entonces llegó UN solo
+        // enlace, es el suyo; con dos o más no se adivina.
+        if (! $c && $pedidoA && $conEnlace->count() === 1) {
+            $c = $conEnlace->first();
+        }
 
         return $c ? [
             'enlace' => $c['enlace'],

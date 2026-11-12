@@ -398,7 +398,8 @@
                         Para que BryNex lea solo los correos de la DIAN: en Usuario va el <b>Gmail</b> y en Contraseña una
                         <b>contraseña de aplicación</b> (16 letras), no la clave normal. Se crea en
                         <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" style="color:#1e3a8a;">myaccount.google.com/apppasswords</a>
-                        con la verificación en dos pasos activa. Los Hotmail no se pueden leer así: se reenvían a un Gmail central.
+                        con la verificación en dos pasos activa. Sin esa clave, BryNex lee el buzón central
+                        <b>{{ config('representantes.buzon_reenvios') }}</b>, adonde deben llegar (o reenviarse) los correos de la DIAN.
                     </div>
                     <label class="rep-label" style="grid-column:span 2;">
                         Link de acceso
