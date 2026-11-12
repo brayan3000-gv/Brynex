@@ -76,7 +76,7 @@ function bg(t) {
   grid.style.transform = `translate(${(t * 14) % 120}px,${(t * 22) % 120}px)`; grid.style.opacity = .8 * (1 - tension);
   dust.forEach(d => { const y = 1920 - ((t * d.v + d.ph) % 2100); T(d.el, { o: (1 - tension) * (.08 + .25 * Math.abs(Math.sin(t * 1.3 + d.ph))), x: d.x + Math.sin(t + d.ph) * 30, y }); });
   const hit = (a, d, g) => t >= a ? (1 - pr(t, a, d)) * g : 0;
-  flash.style.opacity = hit(3.75, .45, .75) + hit(5.625, .3, .35) + hit(9.375, .3, .25) + hit(15, .3, .25) + hit(20.625, .35, .4) + hit(24.375, .45, .65);
+  flash.style.opacity = hit(3.75, .45, .75) + hit(5.625, .3, .35) + hit(9.375, .3, .25) + hit(15, .3, .25) + hit(18.75, .35, .4) + hit(24.375, .45, .65);
 }
 window.render = function (t) {
   bg(t);

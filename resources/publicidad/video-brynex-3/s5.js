@@ -1,4 +1,4 @@
-// ── Escena 5 (20,63–24,38 s): la garantía de cada mes ──────────────────────────
+// ── Escena 5 (18,75–24,38 s): la garantía de cada mes ──────────────────────────
 (() => {
   const el = h(`<div class="scene"></div>`);
   const glow = h(`<div class="abs" style="left:190px;top:200px;width:700px;height:700px;border-radius:50%;background:radial-gradient(closest-side,rgba(251,191,36,.45),transparent);filter:blur(30px)"></div>`, el);
@@ -12,17 +12,20 @@
     <text x="250" y="262" text-anchor="middle" font-family="P" font-weight="700" font-size="104" fill="#fbbf24">100%</text>
     <text x="250" y="316" text-anchor="middle" font-family="P" font-weight="600" font-size="30" fill="#fde68a" letter-spacing="3">DEVOLUCIÓN</text></svg>`, el);
   const sr = seal.querySelector('#sr');
-  const a1 = h(`<div class="ctr" style="top:880px;font-size:62px"></div>`, el), a2 = h(`<div class="ctr" style="top:960px;font-size:62px"></div>`, el);
-  const b1 = h(`<div class="ctr" style="top:1062px;font-size:80px"></div>`, el), b2 = h(`<div class="ctr" style="top:1172px;font-size:54px"></div>`, el);
-  const c1 = h(`<div class="ctr" style="top:1262px;font-size:38px;color:#93c5fd;font-weight:600">Estando al día · Todos los meses</div>`, el);
-  const wa1 = words(a1, 'Si tu EPS no te atiende'), wa2 = words(a2, 'por tu afiliación,'), wb1 = words(b1, 'te devolvemos el 100 %', { all: 'amber' }), wb2 = words(b2, 'del mes y te reactivamos gratis.');
-  scenes.push({ a: 20.625, b: 24.39, el, draw(t) {
-    const k = pr(t, 20.66, .55);
-    T(seal, { o: pr(t, 20.66, .08), s: lerp(2.4, 1, back(k)), r: lerp(-40, 0, eo5(k)), blur: (1 - eo5(k)) * 10 });
+  const L = [[860, 64, 'Si por tu afiliación'], [944, 60, 'no te dan la cita médica'], [1024, 60, 'o los medicamentos,']].map(([top, fs, txt]) => words(h(`<div class="ctr" style="top:${top}px;font-size:${fs}px"></div>`, el), txt));
+  const b1 = h(`<div class="ctr" style="top:1124px;font-size:82px"></div>`, el), b2 = h(`<div class="ctr" style="top:1232px;font-size:54px"></div>`, el);
+  const c1 = h(`<div class="ctr" style="top:1322px;font-size:38px;color:#93c5fd;font-weight:600">Estando al día · Todos los meses</div>`, el);
+  const wb1 = words(b1, 'te devolvemos el 100 %', { all: 'amber' }), wb2 = words(b2, 'del mes y te reactivamos gratis.');
+  const G = 18.75;
+  scenes.push({ a: G, b: 24.39, el, draw(t) {
+    const k = pr(t, G + .03, .55);
+    let pulso = 0; [G + BT * 6, G + BT * 8].forEach(p => { if (t >= p) pulso += Math.exp(-(t - p) * 7) * .08; });
+    T(seal, { o: pr(t, G + .03, .08), s: lerp(2.4, 1, back(k)) + pulso, r: lerp(-40, 0, eo5(k)), blur: (1 - eo5(k)) * 10 });
     sr.setAttribute('transform', `rotate(${t * 18} 250 250)`);
-    T(glow, { o: pr(t, 20.9, .4) * (.7 + .3 * Math.sin(t * 3)), s: 1 + (t >= 20.9 ? Math.exp(-(t - 20.9) * 5) * .5 : 0) });
-    slam(wa1, t, 21.5625, .08); slam(wa2, t, 21.85, .08); slam(wb1, t, 22.5, .1); slam(wb2, t, 22.96875, .07);
-    pop(c1, t, 23.4375, undefined, { s0: .7, y0: 20, d: .35 });
+    T(glow, { o: pr(t, G + .25, .4) * (.7 + .3 * Math.sin(t * 3)), s: 1 + (t >= G + .25 ? Math.exp(-(t - G - .25) * 5) * .5 : 0) + pulso * 3 });
+    L.forEach((w, i) => slam(w, t, G + BT * (2 + i), .08));
+    slam(wb1, t, G + BT * 6, .1); slam(wb2, t, G + BT * 7, .07);
+    pop(c1, t, G + BT * 9, undefined, { s0: .7, y0: 20, d: .35 });
     const out = ei3(pr(t, 24.15, .23));
     el.style.opacity = 1 - out; el.style.transform = `translateY(${-out * 180}px)`;
   } });

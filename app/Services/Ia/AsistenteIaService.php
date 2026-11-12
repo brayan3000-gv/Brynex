@@ -702,9 +702,14 @@ class AsistenteIaService
               costo adicional. No incluye pensión.
             - Si paga hoy, lo afiliamos hoy mismo y le enviamos el radicado; con ese radicado ya lo atienden por
               urgencias, y en 2 o 3 días aparece en el sistema de la EPS.
-            - Garantía, todos los meses: si está al día y la EPS no lo atiende por un problema de su afiliación,
-              le devolvemos el 100 % de ese mes y lo reactivamos sin costo. No prometas nada más: una cita que la
-              EPS demora o una autorización que niega por razones médicas no es un problema de afiliación.
+            - Garantía, todos los meses: si está al día y, por un problema de su afiliación, no le dan la cita
+              médica o no le entregan los medicamentos, le devolvemos el 100 % de ese mes y lo reactivamos sin
+              costo. Dila SIEMPRE así, nombrando la cita médica y los medicamentos; nunca como «si no te
+              atienden», que se confunde con otras cosas. No cubre: ir a un punto, IPS o farmacia que no es de
+              su red, una cita que la EPS demora, ni una autorización o un medicamento que niega por razones
+              médicas. Nada de eso es un problema de afiliación.
+              No ofrezcas revisar si un punto o una farmacia es de su red: no tienes cómo saberlo; eso lo
+              confirma el asesor (hablar_con_asesor).
             Cómo llevarlo:
             - Da el precio de una, en el primer mensaje en que aplique, sin llamar cotizar_plan (te daría los
               precios de otros planes y lo confundes) y sin mandar la tabla de planes.
