@@ -62,7 +62,7 @@ class PlanillaVigilarSubtipo4 extends Command
         {--mes= : Mes de pago a sondear (por defecto, el actual)}
         {--anio= : Año de pago a sondear (por defecto, el actual)}
         {--cedulas= : Cédulas a sondear, separadas por coma (pisa las configuradas)}
-        {--rs-ref= : Razón social con la que se sondea (pisa la configurada)}
+        {--rs-ref= : Razones sociales a sondear bajo su NIT, separadas por coma (pisa las configuradas)}
         {--credencial= : Id de la credencial de Simple con la que entra (pisa la configurada)}
         {--cada= : Minutos entre sondeos programados (pisa la configuración)}
         {--programado : Lo pone el planificador: respeta la cadencia configurada}
@@ -113,6 +113,15 @@ class PlanillaVigilarSubtipo4 extends Command
     /** Por qué no respondió el portal (paso + mensaje), para el log. */
     private string $portalMotivo = '';
 
+    /**
+     * Razones sociales cuyo validador dejó pasar el subtipo 4 en el último
+     * sondeo (2.655 ausente con el portal arriba) = hueco por ficha de ese
+     * aportante. Lo llena sondeoConLog y lo lee el aviso para nombrar cuál abrió.
+     *
+     * @var int[]
+     */
+    private array $aportantesAbiertos = [];
+
     /** Cédulas que se vigilan siempre, aunque no tengan plano pendiente. */
     private const CONFIG_CEDULAS = 'vigia_subtipo4_cedulas';
 
@@ -150,9 +159,23 @@ class PlanillaVigilarSubtipo4 extends Command
     private const CONFIG_MEDIR_MAX = 'vigia_subtipo4_medir_max_min';
 
     /**
-     * Aportante con el que se sondea: tiene que ser uno viejo y bien
-     * configurado, o los errores de su propia ficha —una sucursal sin asociar,
-     * por ejemplo— tapan lo que se quiere ver.
+     * Razones sociales a sondear, separadas por coma. Cada una viaja bajo SU
+     * propio NIT (su cabecera), así que el sondeo prueba la ficha de cada
+     * aportante por separado.
+     *
+     * Antes era una sola (la 35, neutra): solo veía el hueco GLOBAL de la UGPP
+     * —la lista negra 2.655, que es por cotizante y no depende del aportante—.
+     * Pero la config que de verdad abre el paso puede vivir en la ficha del
+     * aportante (validación extra / pago asistido): si Simple se la cambia a
+     * ELITES o Construtech y no a las demás, el subtipo 4 pasaría solo en esa
+     * razón social. Por eso se vigila una lista —ELITES 37, Construtech 28,
+     * Elitex 38— con la 35 de control: si el hueco abre en las SAS pero no en
+     * la 35, fue config de ficha; si abre en las cuatro, fue el hueco global.
+     *
+     * Cada razón social tiene que ser una bien configurada y con al menos un
+     * cotizante en el período (presta el formato de línea), o los errores de su
+     * propia ficha —una sucursal sin asociar, por ejemplo— tapan lo que se
+     * quiere ver.
      */
     private const CONFIG_RS_REF = 'vigia_subtipo4_rs_ref';
 
@@ -228,10 +251,15 @@ class PlanillaVigilarSubtipo4 extends Command
         if ($limpias && ! $this->option('sin-aviso')) {
             // Una vez cada 6 h: si la ventana dura, no conviene repetir el aviso
             // cada media hora, pero sí recordarlo si sigue abierta un rato después.
+            // La llave incluye los aportantes que abrieron: un hueco en ELITES
+            // y otro en Construtech son avisos distintos, no uno repetido.
+            $abiertos = $this->nombresRs($this->aportantesAbiertos);
+
             $alertas->enviarUnaVez(
-                'vigia-subtipo4-'.implode('-', $limpias),
+                'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $limpias),
                 'Vigía subtipo 4',
                 "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
+                .($abiertos ? "Aportante(s) con hueco: {$abiertos}\n" : '')
                 .'Cédulas que pasaron limpias: '.implode(', ', $limpias)."\n"
                 ."Período {$mes}/{$anio}.\n\n"
                 .($liquidadas
@@ -453,51 +481,105 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private function sondeoConLog(array $cedulas, int $mes, int $anio): array
     {
-        $resultado = $this->sondear($cedulas, $mes, $anio);
+        $this->aportantesAbiertos = [];
+
+        $rsList = $this->rsAVigilar();
+
+        if (! $rsList) {
+            $this->warn('Sin razones sociales de referencia: configure '.self::CONFIG_RS_REF.'.');
+
+            return [];
+        }
+
         $limpias = [];
-        $sello = now()->format('d-m H:i:s');
 
-        // Solo cuenta el 2.655: es el que marca si la validación de la UGPP
-        // está corriendo. El 2.379 es otra cosa (ADRES-salud) y no se vigila.
-        $n655 = 0;
+        // Un sondeo por aportante, bajo su propio NIT. Cada uno deja su propia
+        // línea `>> tel rs=NN`, así el registro y el monitor distinguen si el
+        // hueco abrió en una ficha y no en las otras (config del aportante) o
+        // en todas a la vez (hueco global de la UGPP).
+        foreach ($rsList as $rsRef) {
+            $resultado = $this->sondearRs($rsRef, $cedulas, $mes, $anio);
+            $sello = now()->format('d-m H:i:s');
 
-        foreach ($resultado as $cedula => $errores) {
-            $this->line(sprintf('%s  CC %-12s → %s', $sello, $cedula,
-                $errores ? implode(' ', $errores) : 'LIMPIO'));
+            // Solo cuenta el 2.655: es el que marca si la validación de la UGPP
+            // está corriendo. El 2.379 es otra cosa (ADRES-salud) y no se vigila.
+            $n655 = 0;
 
-            if (in_array(self::REGLA_UGPP, $errores, true)) {
-                $n655++;
-            } else {
-                $limpias[] = $cedula;
+            foreach ($resultado as $cedula => $errores) {
+                $this->line(sprintf('%s  CC %s rs=%d → %s', $sello, $cedula, $rsRef,
+                    $errores ? implode(' ', $errores) : 'LIMPIO'));
+
+                if (in_array(self::REGLA_UGPP, $errores, true)) {
+                    $n655++;
+                } else {
+                    $limpias[] = $cedula;
+                }
+            }
+
+            // Telemetría. La idea es separar las dos caídas que se confundían:
+            //
+            //   portal=OK  + 2.655×0  → cayó SOLO la validación de la UGPP: hueco
+            //                            útil, el flujo responde y se puede liquidar.
+            //   portal=OK  + 2.655×N  → todo normal, la UGPP sigue rechazando.
+            //   portal=CAIDO          → se cayó el portal entero (auth/autorizar/
+            //                            validar no responden): NO es hueco, no hay
+            //                            nada que liquidar aunque el 2.655 "falte".
+            //
+            // Con el sondeo cada minuto, `grep '>> tel'` da la serie; la latencia
+            // acompaña para ver si el hueco responde más rápido (UGPP saltada).
+            if ($this->latenciaSondeoMs !== null || ! $this->portalRespondio) {
+                if ($this->portalRespondio) {
+                    $esHueco = $n655 === 0 && $resultado;
+                    if ($esHueco) {
+                        $this->aportantesAbiertos[] = $rsRef;
+                    }
+                    $this->line(sprintf('%s  >> tel rs=%d  lat=%sms · portal=OK · 2.655×%d/%d%s',
+                        $sello, $rsRef, $this->latenciaSondeoMs ?? '?', $n655, count($resultado),
+                        $esHueco ? '  ← HUECO (validación UGPP caída)' : ''));
+                } elseif ($this->latenciaSondeoMs !== null) {
+                    // Se llamó al operador y no contestó: portal caído, con el motivo.
+                    $this->line(sprintf('%s  >> tel rs=%d  lat=%sms · portal=CAIDO · %s',
+                        $sello, $rsRef, $this->latenciaSondeoMs, $this->portalMotivo));
+                }
+                // Si latencia es null y el portal no respondió, fue un corte de
+                // configuración antes de llamar al operador: no se registra tel.
             }
         }
 
-        // Telemetría. La idea es separar las dos caídas que se confundían:
-        //
-        //   portal=OK  + 2.655×0  → cayó SOLO la validación de la UGPP: hueco
-        //                            útil, el flujo responde y se puede liquidar.
-        //   portal=OK  + 2.655×N  → todo normal, la UGPP sigue rechazando.
-        //   portal=CAIDO          → se cayó el portal entero (auth/autorizar/
-        //                            validar no responden): NO es hueco, no hay
-        //                            nada que liquidar aunque el 2.655 "falte".
-        //
-        // Con el sondeo cada minuto, `grep '>> tel'` da la serie; la latencia
-        // acompaña para ver si el hueco responde más rápido (UGPP saltada).
-        if ($this->latenciaSondeoMs !== null || ! $this->portalRespondio) {
-            if ($this->portalRespondio) {
-                $hueco = ($n655 === 0 && $resultado) ? '  ← HUECO (validación UGPP caída)' : '';
-                $this->line(sprintf('%s  >> tel  lat=%sms · portal=OK · 2.655×%d/%d%s',
-                    $sello, $this->latenciaSondeoMs ?? '?', $n655, count($resultado), $hueco));
-            } elseif ($this->latenciaSondeoMs !== null) {
-                // Se llamó al operador y no contestó: portal caído, con el motivo.
-                $this->line(sprintf('%s  >> tel  lat=%sms · portal=CAIDO · %s',
-                    $sello, $this->latenciaSondeoMs, $this->portalMotivo));
-            }
-            // Si latencia es null y el portal no respondió, fue un corte de
-            // configuración antes de llamar al operador: no se registra tel.
+        return array_values(array_unique($limpias));
+    }
+
+    /**
+     * Las razones sociales a sondear, cada una bajo su propio NIT.
+     *
+     * @return int[]
+     */
+    private function rsAVigilar(): array
+    {
+        $crudo = (string) ($this->option('rs-ref')
+            ?: ConfiguracionBrynex::obtener(self::CONFIG_RS_REF, ''));
+
+        return array_values(array_unique(array_filter(array_map(
+            fn ($x) => (int) trim($x), explode(',', $crudo)
+        ))));
+    }
+
+    /**
+     * Nombres de razones sociales para el aviso: "rs 37 (ELITES CREACIONES SAS)".
+     *
+     * @param  int[]  $ids
+     */
+    private function nombresRs(array $ids): string
+    {
+        if (! $ids) {
+            return '';
         }
 
-        return $limpias;
+        $nombres = DB::table('razones_sociales')->whereIn('id', $ids)
+            ->pluck('razon_social', 'id');
+
+        return collect($ids)->map(fn ($id) => "rs {$id}"
+            .(($nombres[$id] ?? null) ? " ({$nombres[$id]})" : ''))->implode(', ');
     }
 
     /**
@@ -622,7 +704,7 @@ class PlanillaVigilarSubtipo4 extends Command
      * @param  string[]  $cedulas
      * @return array<string, string[]>
      */
-    private function sondear(array $cedulas, int $mes, int $anio): array
+    private function sondearRs(int $rsRef, array $cedulas, int $mes, int $anio): array
     {
         // Estado de este sondeo: hasta que el operador conteste, se asume que
         // no respondió y que ni siquiera se llegó a llamarlo (latencia null, un
@@ -631,15 +713,14 @@ class PlanillaVigilarSubtipo4 extends Command
         $this->portalRespondio = false;
         $this->portalMotivo = '(no se llegó a sondear)';
 
-        $rsRef = (int) ($this->option('rs-ref') ?: ConfiguracionBrynex::obtener(self::CONFIG_RS_REF, 0));
+        $rs = DB::table('razones_sociales')->where('id', $rsRef)->first();
 
-        if (! $rsRef) {
-            $this->warn('Sin razón social de referencia: configure '.self::CONFIG_RS_REF.'.');
+        if (! $rs) {
+            $this->warn("La razón social de referencia {$rsRef} no existe.");
 
             return [];
         }
 
-        $rs = DB::table('razones_sociales')->where('id', $rsRef)->first();
         $credId = (int) ($this->option('credencial')
             ?: ConfiguracionBrynex::obtener(self::CONFIG_CREDENCIAL, 0));
 

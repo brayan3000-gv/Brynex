@@ -39,7 +39,9 @@ class BrynexVigiaController extends Controller
     {
         $this->guard();
 
-        $limite = max(10, min(300, (int) $request->input('limite', 90)));
+        // Más alto que antes: ahora cada minuto deja una fila por aportante
+        // vigilado, así que 160 filas son ~40 min con cuatro razones sociales.
+        $limite = max(10, min(400, (int) $request->input('limite', 160)));
         $sondeos = $this->parsearLog();
 
         $hoy = now()->format('d-m');
@@ -56,12 +58,28 @@ class BrynexVigiaController extends Controller
             $edadSeg = (int) $ts->diffInSeconds(now());
         }
 
+        // Nombre de cada aportante vigilado, para rotular las filas. El mismo
+        // minuto trae una fila por razón social, así que se muestra cuál es.
+        $rsIds = collect($sondeos)->pluck('rs')->filter()->unique()->values()->all();
+        $nombres = $rsIds
+            ? \DB::table('razones_sociales')->whereIn('id', $rsIds)->pluck('razon_social', 'id')
+            : collect();
+        $aportantes = [];
+        foreach ($rsIds as $id) {
+            $aportantes[$id] = $nombres[$id] ?? ('rs '.$id);
+        }
+
+        // "Sondeos del día" = minutos distintos, no filas: un minuto sondea
+        // varias razones sociales y cada una deja su propia fila.
+        $minutosHoy = count(array_unique(array_map(fn ($s) => $s['hora'], $deHoy)));
+
         return response()->json([
             'ahora' => now()->format('H:i:s'),
             'ultimo' => $ultimo,
             'edad_seg' => $edadSeg,
+            'aportantes' => $aportantes,
             'resumen' => [
-                'sondeos_hoy' => count($deHoy),
+                'sondeos_hoy' => $minutosHoy,
                 'huecos_hoy' => count(array_filter($deHoy, fn ($s) => $s['estado'] === 'hueco')),
                 'caidas_portal_hoy' => count(array_filter($deHoy, fn ($s) => $s['estado'] === 'caido')),
                 // Latencia "normal": mediana de los sondeos en estado normal
@@ -99,14 +117,16 @@ class BrynexVigiaController extends Controller
         }
         fclose($fh);
 
-        // Recoge, por sello de tiempo, qué cédulas dieron LIMPIO y cuáles 2.655.
+        // Recoge, por sello de tiempo + aportante, qué cédulas dieron LIMPIO y
+        // cuáles 2.655. La clave lleva el rs porque el mismo minuto trae un
+        // bloque de cédulas por cada razón social vigilada.
         $cedulasPorSello = [];
         foreach ($lineas as $l) {
-            if (preg_match('/^(\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+CC (\d+)\s+→\s+(.*)$/', $l, $m)) {
-                $sello = $m[1];
-                $cedulasPorSello[$sello][] = [
+            if (preg_match('/^(\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+CC (\d+) rs=(\d+)\s+→\s+(.*)$/', $l, $m)) {
+                $clave = $m[1].'|'.$m[3];
+                $cedulasPorSello[$clave][] = [
                     'cedula' => $m[2],
-                    'limpio' => ! str_contains($m[3], 'eo.val.2.655'),
+                    'limpio' => ! str_contains($m[4], 'eo.val.2.655'),
                 ];
             }
         }
@@ -117,8 +137,8 @@ class BrynexVigiaController extends Controller
             if ($fila === null) {
                 continue;
             }
-            $sello = $fila['fecha'].' '.$fila['hora'];
-            $fila['cedulas'] = $cedulasPorSello[$sello] ?? [];
+            $clave = $fila['fecha'].' '.$fila['hora'].'|'.$fila['rs'];
+            $fila['cedulas'] = $cedulasPorSello[$clave] ?? [];
             $sondeos[] = $fila;
         }
 
@@ -128,17 +148,18 @@ class BrynexVigiaController extends Controller
     /** Interpreta una línea '>> tel'. Devuelve null si no lo es. */
     private function parsearTel(string $l): ?array
     {
-        // 11-11 12:21:07  >> tel  lat=2233ms · portal=OK · 2.655×4/4  ← HUECO (...)
-        // 11-11 12:21:07  >> tel  lat=1200ms · portal=CAIDO · autorizacion · Empty reply...
-        if (! preg_match('/^(\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})\s+>> tel\s+lat=(\d+|\?)ms · portal=(OK|CAIDO) · (.*)$/', $l, $m)) {
+        // 11-11 12:21:07  >> tel rs=37  lat=2233ms · portal=OK · 2.655×4/4  ← HUECO (...)
+        // 11-11 12:21:07  >> tel rs=28  lat=1200ms · portal=CAIDO · autorizacion · Empty reply...
+        if (! preg_match('/^(\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})\s+>> tel rs=(\d+)\s+lat=(\d+|\?)ms · portal=(OK|CAIDO) · (.*)$/', $l, $m)) {
             return null;
         }
 
         $fecha = $m[1];
         $hora = $m[2];
-        $lat = $m[3] === '?' ? null : (int) $m[3];
-        $portalOk = $m[4] === 'OK';
-        $resto = $m[5];
+        $rs = (int) $m[3];
+        $lat = $m[4] === '?' ? null : (int) $m[4];
+        $portalOk = $m[5] === 'OK';
+        $resto = $m[6];
 
         $n655 = null;
         $total = null;
@@ -156,6 +177,7 @@ class BrynexVigiaController extends Controller
         return [
             'fecha' => $fecha,
             'hora' => $hora,
+            'rs' => $rs,
             'lat' => $lat,
             'portal_ok' => $portalOk,
             'n655' => $n655,

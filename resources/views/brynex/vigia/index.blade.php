@@ -11,7 +11,7 @@
                 🛰️ Vigía del subtipo 4 — minuto a minuto
             </h1>
             <p style="color:#64748b;font-size:0.83rem;margin:0.2rem 0 0 0;">
-                Validación de la UGPP (2.655) vs. caída del portal. Lee el log del sondeo automático.
+                Validación de la UGPP (2.655) <strong>por aportante</strong> vs. caída del portal. Sondea la ficha de cada razón social bajo su NIT; la 35 va de control.
             </p>
         </div>
         <div style="display:flex;align-items:center;gap:0.6rem;background:#fff;padding:0.5rem 0.9rem;border-radius:10px;border:1px solid #e2e8f0;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
@@ -30,6 +30,7 @@
                 <div style="font-size:1.05rem;font-weight:800;" x-text="tituloEstado(ultimo.estado)"></div>
                 <div style="font-size:0.8rem;opacity:0.85;margin-top:0.15rem;">
                     Último sondeo <span x-text="ultimo.hora"></span>
+                    · <span style="font-weight:700;" x-text="nombreAportante(ultimo.rs)"></span>
                     <span x-show="edadMostrar !== null">· hace <span x-text="edadMostrar"></span>s</span>
                     <span x-show="ultimo.lat !== null"> · <span x-text="ultimo.lat"></span> ms</span>
                     <span x-show="ultimo.estado === 'caido' && ultimo.motivo"> · <span x-text="ultimo.motivo"></span></span>
@@ -67,6 +68,7 @@
                 <thead>
                     <tr style="background:#f8fafc;color:#64748b;text-align:left;">
                         <th style="padding:0.6rem 1rem;font-weight:700;">Hora</th>
+                        <th style="padding:0.6rem 1rem;font-weight:700;">Aportante</th>
                         <th style="padding:0.6rem 1rem;font-weight:700;">Latencia</th>
                         <th style="padding:0.6rem 1rem;font-weight:700;">Portal</th>
                         <th style="padding:0.6rem 1rem;font-weight:700;">2.655</th>
@@ -78,6 +80,10 @@
                     <template x-for="(s, i) in sondeos" :key="s.fecha + s.hora + i">
                         <tr :style="'border-top:1px solid #f1f5f9;' + filaEstilo(s.estado)">
                             <td style="padding:0.5rem 1rem;font-variant-numeric:tabular-nums;color:#334155;" x-text="s.hora"></td>
+                            <td style="padding:0.5rem 1rem;color:#334155;white-space:nowrap;">
+                                <span style="font-weight:600;" x-text="nombreAportante(s.rs)"></span>
+                                <span x-show="s.rs === 35" style="color:#94a3b8;font-size:0.68rem;"> · control</span>
+                            </td>
                             <td style="padding:0.5rem 1rem;font-variant-numeric:tabular-nums;font-weight:600;" :style="'color:' + colorLat(s.lat)">
                                 <span x-show="esRapida(s.lat)">⚡ </span>
                                 <span x-text="s.lat !== null ? s.lat + ' ms' : '—'"></span>
@@ -106,7 +112,7 @@
                         </tr>
                     </template>
                     <template x-if="!sondeos.length">
-                        <tr><td colspan="6" style="padding:2rem;text-align:center;color:#94a3b8;">Sin sondeos en el log todavía.</td></tr>
+                        <tr><td colspan="7" style="padding:2rem;text-align:center;color:#94a3b8;">Sin sondeos en el log todavía.</td></tr>
                     </template>
                 </tbody>
             </table>
@@ -121,7 +127,7 @@
 <script>
 function vigiaMonitor() {
     return {
-        ahora: '', ultimo: null, resumen: {}, sondeos: [], cargando: false,
+        ahora: '', ultimo: null, resumen: {}, sondeos: [], aportantes: {}, cargando: false,
         latNormal: null, latMinNormal: null,
         baseEdad: null, baseAt: 0, tick: 0,
         init() {
@@ -140,6 +146,7 @@ function vigiaMonitor() {
                     this.ultimo = d.ultimo;
                     this.resumen = d.resumen;
                     this.sondeos = d.sondeos;
+                    this.aportantes = d.aportantes || {};
                     this.latNormal = d.resumen.lat_normal_hoy;
                     this.latMinNormal = d.resumen.lat_min_normal_hoy;
                     this.baseEdad = d.edad_seg;
@@ -172,6 +179,10 @@ function vigiaMonitor() {
                 { label: 'Sondeos hoy', valor: r.sondeos_hoy ?? 0, color: '#0d2550' },
                 { label: 'Latencia normal hoy', valor: (r.lat_normal_hoy != null ? r.lat_normal_hoy + ' ms' : '—'), color: '#0d2550' },
             ];
+        },
+        nombreAportante(rs) {
+            if (rs === null || rs === undefined) return '—';
+            return this.aportantes[rs] || ('rs ' + rs);
         },
         iconoEstado(e) { return e === 'hueco' ? '🟢' : (e === 'caido' ? '🔴' : '🟡'); },
         tituloEstado(e) {
