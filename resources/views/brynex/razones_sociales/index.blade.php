@@ -81,6 +81,7 @@
             </p>
         </div>
         <div style="display:flex;gap:0.5rem;">
+            <a href="{{ route('brynex.razones.representantes.index') }}" style="background:#fff;color:#334155;text-decoration:none;padding:0.5rem 0.9rem;border-radius:8px;font-size:0.82rem;font-weight:600;border:1px solid #cbd5e1;">👤 Representantes</a>
             <a href="{{ route('brynex.razones.tablero') }}" style="background:#b91c1c;color:#fff;text-decoration:none;padding:0.5rem 0.9rem;border-radius:8px;font-size:0.82rem;font-weight:600;">🚨 Vencimientos</a>
             <a href="{{ route('brynex.razones.calendario') }}" style="background:#fff;color:#334155;text-decoration:none;padding:0.5rem 0.9rem;border-radius:8px;font-size:0.82rem;font-weight:600;border:1px solid #cbd5e1;">📅 Calendario</a>
         </div>

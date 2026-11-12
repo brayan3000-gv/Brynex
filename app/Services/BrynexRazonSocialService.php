@@ -530,11 +530,13 @@ class BrynexRazonSocialService
             ->get()
             ->keyBy(fn ($c) => "{$c->anio}|{$c->obligacion_codigo}|{$c->periodo}");
 
-        $nuevos = [];
+        $nuevos = $this->tramitesUnicosFaltantes($ficha, $catalogo);
 
         for ($anio = $desde; $anio <= $hasta; $anio++) {
             foreach ($catalogo as $obligacion) {
-                if (! $obligacion->aplicaA($ficha)) {
+                // Los de una sola vez ya salieron arriba: repetirlos por año
+                // pediría habilitar la facturación electrónica cada enero.
+                if ($obligacion->esUnica() || ! $obligacion->aplicaA($ficha)) {
                     continue;
                 }
 
@@ -572,6 +574,56 @@ class BrynexRazonSocialService
         }
 
         return count($nuevos);
+    }
+
+    /**
+     * Renglones de los trámites de una sola vez que la razón social no tiene.
+     *
+     * Uno por razón social, sin importar el año: se busca en todos los años,
+     * no solo en el rango que se está generando. El vencimiento sale de la
+     * constitución más `meses_plazo` del catálogo; sin plazo queda sin fecha.
+     * El año del renglón es el de ese vencimiento, para que caiga en la
+     * pestaña correcta; mientras siga pendiente la ficha lo muestra además
+     * en el año en curso (ver `BrynexRazonSocialController::show()`).
+     */
+    private function tramitesUnicosFaltantes(BrynexRazonSocial $ficha, $catalogo): array
+    {
+        $unicos = $catalogo->filter(fn ($o) => $o->esUnica() && $o->aplicaA($ficha));
+
+        if ($unicos->isEmpty()) {
+            return [];
+        }
+
+        $yaEstan = $ficha->obligaciones()
+            ->whereIn('obligacion_codigo', $unicos->pluck('codigo'))
+            ->pluck('obligacion_codigo')
+            ->flip();
+
+        $nuevos = [];
+
+        foreach ($unicos as $obligacion) {
+            if ($yaEstan->has($obligacion->codigo)) {
+                continue;
+            }
+
+            $vence = $obligacion->meses_plazo !== null
+                ? $ficha->fecha_constitucion->copy()->addMonthsNoOverflow((int) $obligacion->meses_plazo)
+                : null;
+
+            $nuevos[] = [
+                'ficha_id' => $ficha->id,
+                'anio' => $vence?->year ?? (int) now()->year,
+                'obligacion_codigo' => $obligacion->codigo,
+                'periodo' => 1,
+                'periodo_etiqueta' => $obligacion->etiquetaPeriodo(1),
+                'fecha_vencimiento' => $vence?->toDateString(),
+                'estado' => 'pendiente',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+        }
+
+        return $nuevos;
     }
 
     /**

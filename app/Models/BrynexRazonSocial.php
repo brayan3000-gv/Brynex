@@ -26,6 +26,8 @@ class BrynexRazonSocial extends BaseModel
         'fecha_constitucion', 'firma_electronica_vence',
         'municipio_ica', 'periodicidad_ica',
         'contador_id', 'en_seguimiento', 'estado', 'notas',
+        // Puesto a mano cuando ningún aliado tiene la cédula del representante.
+        'representante_cedula',
         'creado_por', 'actualizado_por',
     ];
 

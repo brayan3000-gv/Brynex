@@ -995,9 +995,13 @@ Route::middleware('auth')->group(function () {
     Route::prefix('brynex/razones-sociales')->name('brynex.razones.')->group(function () {
         $brs = \App\Http\Controllers\BrynexRazonSocialController::class;
         $bob = \App\Http\Controllers\BrynexObligacionController::class;
+        // Representantes legales: una ficha por persona con sus claves
+        // personales, que sirven para todas sus empresas.
+        $brep = \App\Http\Controllers\BrynexRepresentanteController::class;
 
-        Route::middleware('permiso:brynex_razones.ver')->group(function () use ($brs, $bob) {
+        Route::middleware('permiso:brynex_razones.ver')->group(function () use ($brs, $bob, $brep) {
             Route::get('/', [$brs, 'index'])->name('index');
+            Route::get('/representantes', [$brep, 'index'])->name('representantes.index');
             Route::get('/tablero', [$brs, 'tablero'])->name('tablero');
             Route::get('/afiliados-excel', [$brs, 'afiliadosExcel'])->name('afiliados_excel');
             Route::get('/calendario', [$bob, 'calendario'])->name('calendario');
@@ -1005,8 +1009,10 @@ Route::middleware('auth')->group(function () {
             Route::get('/documentos/{id}/descargar', [$bob, 'descargarDocumento'])->name('documentos.descargar');
         });
 
-        Route::middleware('permiso:brynex_razones.gestionar')->group(function () use ($brs, $bob) {
+        Route::middleware('permiso:brynex_razones.gestionar')->group(function () use ($brs, $bob, $brep) {
             Route::post('/leer-documento', [$brs, 'leerDocumento'])->name('leer_documento');
+            Route::post('/representantes', [$brep, 'guardar'])->name('representantes.guardar');
+            Route::post('/representantes/asignar', [$brep, 'asignar'])->name('representantes.asignar');
             Route::post('/seguir', [$brs, 'seguir'])->name('seguir');
             Route::put('/{id}', [$brs, 'update'])->whereNumber('id')->name('update');
             Route::post('/{id}/dejar-de-seguir', [$brs, 'dejarDeSeguir'])->name('dejar');
@@ -1021,7 +1027,10 @@ Route::middleware('auth')->group(function () {
         // Las claves van por su propio permiso: el contador necesita las de la
         // DIAN y la cámara, pero no las del banco (ver `claves_banco`, que es
         // restringido y no lo hereda ni el superadmin).
-        Route::middleware('permiso:brynex_razones.claves')->group(function () use ($brs) {
+        Route::middleware('permiso:brynex_razones.claves')->group(function () use ($brs, $brep) {
+            Route::post('/representantes/claves', [$brep, 'guardarClave'])->name('representantes.claves.guardar');
+            Route::get('/representantes/claves/{id}/revelar', [$brep, 'revelarClave'])->whereNumber('id')->name('representantes.claves.revelar');
+            Route::delete('/representantes/claves/{id}', [$brep, 'eliminarClave'])->whereNumber('id')->name('representantes.claves.destroy');
             Route::post('/{id}/claves', [$brs, 'guardarClave'])->whereNumber('id')->name('claves.guardar');
             Route::get('/claves/{id}/revelar', [$brs, 'revelarClave'])->name('claves.revelar');
             Route::delete('/claves/{id}', [$brs, 'eliminarClave'])->name('claves.destroy');

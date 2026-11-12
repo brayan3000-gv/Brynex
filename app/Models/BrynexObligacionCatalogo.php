@@ -22,6 +22,10 @@ class BrynexObligacionCatalogo extends BaseModel
         // Años entre el año gravable y el plazo: la anual del 2026 se presenta
         // en 2027, pero la renovación de cámara del 2026 se hace en 2026.
         'anios_desfase',
+        // Solo para periodicidad 'unica' (trámites de una sola vez, como la
+        // habilitación de facturación electrónica): meses desde la
+        // constitución para hacerlo. Null = sin plazo fijo.
+        'meses_plazo',
         'descripcion', 'orden', 'activo',
     ];
 
@@ -35,6 +39,15 @@ class BrynexObligacionCatalogo extends BaseModel
         'CAMARA' => '📜 Cámara de Comercio',
         'MUNICIPIO' => '🏙️ Municipio',
     ];
+
+    /**
+     * Trámite de una sola vez: se genera un único renglón por razón social, no
+     * uno por año. Ver `BrynexRazonSocialService::generarObligaciones()`.
+     */
+    public function esUnica(): bool
+    {
+        return $this->periodicidad === 'unica';
+    }
 
     /** Cuántos renglones genera al año. */
     public function periodosPorAnio(): int
@@ -117,6 +130,7 @@ class BrynexObligacionCatalogo extends BaseModel
             'mensual' => self::MESES[$periodo - 1] ?? ('Mes '.$periodo),
             'bimestral' => $periodo.' bimestre',
             'cuatrimestral' => $periodo.' cuatrimestre',
+            'unica' => 'Una sola vez',
             default => 'Anual',
         };
     }

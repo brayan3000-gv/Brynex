@@ -70,6 +70,30 @@
                         @endif
                     </span>
 
+                    {{-- El representante sale de lo que anotó cada aliado; sus
+                         claves personales viven en su propia ficha y sirven
+                         para todas sus empresas. --}}
+                    @php
+                        $repsFicha = $representanteManual
+                            ? collect([['cedula' => $representanteManual->cedula, 'nombre' => $representanteManual->nombre]])
+                            : $vinculos
+                            ->map(fn ($v) => ['cedula' => \App\Services\BrynexRepresentanteService::normalizarCedula($v->cedula_rep), 'nombre' => trim((string) $v->nombre_rep)])
+                            ->filter(fn ($r) => $r['cedula'])
+                            ->unique('cedula')
+                            ->values();
+                    @endphp
+                    @forelse($repsFicha as $rep)
+                        <a class="rs-chip {{ $repsFicha->count() > 1 ? 'alerta' : '' }}" style="text-decoration:none;"
+                           href="{{ route('brynex.razones.representantes.index') }}#{{ \App\Services\BrynexRepresentanteService::ancla($rep['cedula']) }}"
+                           title="{{ $repsFicha->count() > 1 ? 'Los aliados tienen anotados representantes distintos para esta empresa' : 'Ver sus datos y claves personales' }}">
+                            👤 <b>{{ $rep['nombre'] ?: 'Representante' }}</b> ↗
+                        </a>
+                    @empty
+                        <span class="rs-chip alerta" title="Ningún aliado tiene anotada la cédula del representante legal de esta empresa">
+                            👤 Sin representante
+                        </span>
+                    @endforelse
+
                     <span class="rs-chip" title="{{ $vinculos->pluck('aliado')->filter()->implode(' · ') }}">
                         🏢 <b>{{ $vinculos->count() }}</b> {{ $vinculos->count() === 1 ? 'aliado la usa' : 'aliados la usan' }}
                     </span>
@@ -231,8 +255,12 @@
                             </td>
                             <td style="padding:0.6rem;">
                                 <span style="background:{{ $colorSemaforo[$sem] }}18;color:{{ $colorSemaforo[$sem] }};font-weight:700;font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:20px;">
-                                    {{ \App\Models\BrynexObligacion::ESTADOS[$o->estado] }}
+                                    {{-- Un trámite de una sola vez no se «paga»: se hace. --}}
+                                    {{ $cat?->esUnica() && $o->estado === 'pagada' ? 'Hecha' : \App\Models\BrynexObligacion::ESTADOS[$o->estado] }}
                                 </span>
+                                @if($cat?->esUnica() && $o->estado === 'pagada' && $o->fecha_pago)
+                                    <div style="font-size:0.68rem;color:#64748b;margin-top:0.15rem;">el {{ $o->fecha_pago->format('d/m/Y') }}</div>
+                                @endif
                             </td>
                             <td style="padding:0.6rem;text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;">
                                 {{ $o->valor_pagado ? '$' . number_format($o->valor_pagado, 0, ',', '.') : '—' }}
@@ -267,6 +295,7 @@
                                                 'valor_pagado' => $o->valor_pagado ? (float) $o->valor_pagado : '',
                                                 'fecha_pago' => $o->fecha_pago?->toDateString(),
                                                 'observacion' => $o->observacion,
+                                                'unica' => (bool) $cat?->esUnica(),
                                             ]) }}"
                                             style="background:#1e3a8a;color:#fff;border:none;padding:0.28rem 0.65rem;border-radius:6px;font-size:0.74rem;font-weight:600;cursor:pointer;">
                                         Chulear
@@ -738,7 +767,12 @@
                     <select name="estado" x-model="editar.estado" required
                             style="width:100%;margin-top:0.25rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-weight:400;">
                         @foreach(\App\Models\BrynexObligacion::ESTADOS as $k => $v)
-                            <option value="{{ $k }}">{{ $v }}</option>
+                            @if($k === 'pagada')
+                                {{-- Mismo estado (cierra el renglón), otro nombre en los trámites de una sola vez. --}}
+                                <option value="pagada" x-text="editar.unica ? 'Hecha' : 'Pagada'">{{ $v }}</option>
+                            @else
+                                <option value="{{ $k }}">{{ $v }}</option>
+                            @endif
                         @endforeach
                     </select>
                 </label>
@@ -750,7 +784,7 @@
                                style="width:100%;margin-top:0.25rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-weight:400;">
                     </label>
                     <label style="font-size:0.78rem;font-weight:700;color:#334155;">
-                        Fecha de pago
+                        <span x-text="editar.unica ? 'Fecha en que se hizo' : 'Fecha de pago'">Fecha de pago</span>
                         <input type="date" name="fecha_pago" :value="editar.fecha_pago"
                                style="width:100%;margin-top:0.25rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-weight:400;">
                     </label>

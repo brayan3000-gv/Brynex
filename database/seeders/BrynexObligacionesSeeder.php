@@ -64,12 +64,26 @@ class BrynexObligacionesSeeder extends Seeder
         'exogena' => '14',
     ];
 
+    /**
+     * Trámites de una sola vez (periodicidad 'unica'): meses desde la
+     * constitución para hacerlos. Se genera un único renglón por razón social.
+     */
+    private const MESES_PLAZO = [
+        // Art. 915 E.T.: el simple adopta la factura electrónica dentro de los
+        // 2 meses siguientes a su inscripción en el RUT.
+        'facturacion_electronica' => 2,
+    ];
+
     private function catalogo(): void
     {
         $filas = [
             // [codigo, nombre, entidad, formulario, regimen, periodicidad,
             //  requiere_iva, periodicidad_iva_requerida, orden, descripcion,
             //  anios_desfase]
+
+            // ── Trámites de una sola vez ──────────────────────────────
+            ['facturacion_electronica', 'Habilitación de facturación electrónica', 'DIAN', null, 'RST', 'unica', false, null, 5,
+                'Se hace una sola vez. El régimen simple tiene 2 meses desde la inscripción en el RUT (art. 915 E.T.); pasado el plazo el incumplimiento es insubsanable. Gratis con el facturador de la DIAN. Marcar «Hecha» con la fecha de la habilitación.', 0],
 
             // ── Régimen Simple ────────────────────────────────────────
             ['rst_anticipo_bimestral', 'Anticipo bimestral SIMPLE', 'DIAN', '2593', 'RST', 'bimestral', false, null, 10,
@@ -128,6 +142,7 @@ class BrynexObligacionesSeeder extends Seeder
                     // Años entre el año gravable y el plazo. Ordena el
                     // checklist cuando todavía no hay calendario cargado.
                     'anios_desfase' => $f[10],
+                    'meses_plazo' => self::MESES_PLAZO[$f[0]] ?? null,
                     'activo' => true,
                 ]
             );

@@ -398,9 +398,17 @@ class BrynexRazonSocialController extends Controller
         $base = fn () => $ficha->obligaciones()
             ->leftJoin('brynex_obligaciones_catalogo as cat', 'cat.codigo', '=', "{$t}.obligacion_codigo");
 
+        // Un trámite de una sola vez que sigue pendiente se muestra también en
+        // el año en curso: si la habilitación venció en 2023 y nadie la hizo,
+        // esconderla en la pestaña de 2023 es como no tenerla.
+        $esteAnio = (int) now()->year;
+
         $obligaciones = $base()
             ->with('documentos')
-            ->whereRaw("{$porPlazo} = ?", [$anio])
+            ->whereRaw(
+                "({$porPlazo} = ? OR (cat.periodicidad = 'unica' AND {$t}.estado NOT IN ('pagada', 'no_aplica') AND ? = ?))",
+                [$anio, $anio, $esteAnio]
+            )
             ->orderByRaw("CASE WHEN {$t}.fecha_vencimiento IS NULL THEN 1 ELSE 0 END")
             ->orderBy("{$t}.fecha_vencimiento")
             ->orderBy('cat.orden')
@@ -424,11 +432,18 @@ class BrynexRazonSocialController extends Controller
             'credenciales' => $ficha->credenciales()->where('activo', true)->orderBy('tipo')->get(),
             // Con join y no con with('aliado'): son dos consultas de 170 ms
             // para pintar una lista de etiquetas.
+            // Trae también el representante que cada aliado tiene anotado: de
+            // ahí sale la tarjeta del representante sin otra consulta.
             'vinculos' => DB::table('brynex_razon_social_vinculos as v')
                 ->leftJoin('aliados as a', 'a.id', '=', 'v.aliado_id')
+                ->leftJoin('razones_sociales as rs', 'rs.id', '=', 'v.razon_social_id')
                 ->where('v.ficha_id', $ficha->id)
                 ->orderBy('a.nombre')
-                ->get(['v.razon_social_id', 'v.aliado_id', 'a.nombre as aliado']),
+                ->get(['v.razon_social_id', 'v.aliado_id', 'a.nombre as aliado', 'rs.cedula_rep', 'rs.nombre_rep']),
+            // Solo cuando se puso a mano: el nombre no está en ningún aliado.
+            'representanteManual' => $ficha->representante_cedula
+                ? \App\Models\BrynexRepresentante::where('cedula', $ficha->representante_cedula)->first(['cedula', 'nombre'])
+                : null,
             'contadores' => User::where('es_brynex', true)->where('activo', true)->orderBy('nombre')->get(['id', 'nombre']),
             // Se le pasan las que ya se cargaron arriba: son exactamente las
             // mismas (todo el año), y otra consulta son 250 ms regalados.
