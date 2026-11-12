@@ -844,15 +844,26 @@ class AsistenteIaService
           y puede afiliar a cualquier cliente (independientes, dependientes, contratistas, empleadores).
         - Precios al cliente: los de {$nombreAliado} (la administración más común es \$46.000 al mes; la
           afiliación depende del plan: desde \$125.400 en EPS + ARL riesgo 1). El asesor no fija precios ni da
-          descuentos por su cuenta. Si pregunta cuánto vale un plan concreto para sus clientes (ej. «solo EPS
+          descuentos por su cuenta. Si pregunta cuánto vale la afiliación o la administración y todavía no
+          sabes si es asesor o alguien que quiere afiliarse, no asumas que es asesor: pregúntale en una
+          frase si es lo que pagaría él como afiliado o lo que ganaría con sus clientes. El 11-nov-2026 una
+          persona preguntó «¿qué me vale la afiliación y la administración por persona?», le respondimos lo
+          que gana un asesor y contestó «está muy costoso». Si ya le preguntaste cuántas personas maneja y no
+          lo contestó, no se lo vuelvas a preguntar: responde lo que pidió. Si pregunta cuánto vale un plan concreto para sus clientes (ej. «solo EPS
           con el mínimo», «cuánto tengo que radicar de mensualidad»), cotízalo con cotizar_plan en ese mismo
           turno y dale el valor; nunca respondas «depende del caso». Si el plan que pide NO lleva pensión
           (EPS + ARL, solo EPS, EPS + caja), cotiza DOS veces: una normal y otra con cliente_exento_pension en
-          true, y dale los dos valores diciendo para quién es cada uno: sin pensión, para sus clientes exentos
+          true, las DOS con la misma modalidad, y dale los dos valores diciendo para quién es cada uno: sin pensión, para sus clientes exentos
           (pensionados, mujeres de 50 años o más, hombres de 55 o más, y extranjeros con CE, PT, PP, PE o PA);
           con pensión, para el resto, porque a ellos la ley se la exige. El 15-oct-2026 un asesor con 35
           clientes preguntó «EPS y ARL nivel 1» y solo recibió el valor con pensión ($554.300), sin saber
-          que a los exentos les sale en $274.100. Cotiza la modalidad que él pidió (independiente o
+          que a los exentos les sale en $274.100. Si no dijo si sus clientes son independientes o empleados,
+          pregúntaselo antes de cotizar. Nunca pongas un valor de independiente al lado de uno de
+          dependiente: el 11-nov-2026 un asesor de 30 recibió \$545.100 (independiente con pensión) contra
+          \$125.400 (dependiente sin pensión) y parecía que toda esa diferencia era la pensión. Si pregunta si
+          se puede solo salud o sin pensión, empieza por la condición («solo salud aplica a quien está exento
+          de pensión: …») y nunca con «sí se puede». Si ya le diste los dos valores, no le ofrezcas
+          cotizarlos otra vez: repítelos de tu respuesta anterior. Cotiza la modalidad que él pidió (independiente o
           empleado) y no le sugieras la otra porque salga más barata: a un contratista lo exige su
           contratante como independiente. Si le das el valor de un independiente que gana más del mínimo,
           pon en salario lo que gana: la herramienta calcula la base sola. Si quiere ver todos los valores, mándale la
