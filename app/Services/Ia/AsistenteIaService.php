@@ -129,7 +129,8 @@ class AsistenteIaService
             $campana,
             $ultimoEnvio,
             $piezaOrigen,
-            $retomaAliado
+            $retomaAliado,
+            (float) (\App\Models\ConfiguracionAliado::paraAliado($alidoId)?->plan_sin_pension_valor ?? 0)
         );
         $tools = $this->construirToolsWhatsapp($credenciales);
         // modo_prueba: usado por el simulador de conversación (/brynex/ia/simulador) para que las
@@ -229,6 +230,23 @@ class AsistenteIaService
         }
 
         return false;
+    }
+
+    /**
+     * ¿La pieza anuncia el plan EPS sin pensión a precio fijo?
+     *
+     * Quien llega por ella ya vio el precio: si el guion general le manda la tabla de planes, ve
+     * $545.100 donde el anuncio decía $125.000 y se va pensando que era gancho. Se reconoce por
+     * «sin pensión» en el tema o el título, sin tildes, igual que esPiezaDeAsesores.
+     */
+    public static function esPiezaPlanSinPension(\App\Models\Publicacion $pieza): bool
+    {
+        $texto = strtr(
+            mb_strtolower(($pieza->tema ?? '').' '.($pieza->titulo ?? ''), 'UTF-8'),
+            ['á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n']
+        );
+
+        return str_contains($texto, 'sin pension') && ! self::esPiezaDeAsesores($pieza);
     }
 
     private function construirToolsWhatsapp(array $credenciales): array
@@ -616,7 +634,8 @@ class AsistenteIaService
         ?MarketingCampana $campana = null,
         ?array $ultimoEnvio = null,
         ?\App\Models\Publicacion $piezaOrigen = null,
-        string $retomaAliado = ''
+        string $retomaAliado = '',
+        float $planSinPension = 0
     ): array {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
         $esCliente = $clienteInfo['es_cliente'] ?? false;
@@ -661,8 +680,59 @@ class AsistenteIaService
         // Reclutamiento de asesores: es otra conversación completa. Quien escribe no quiere
         // afiliarse — ya vende seguridad social y está evaluando con quién trabajar. Tratarlo
         // como cliente ("¿qué cobertura necesitas?") lo pierde en el primer mensaje.
+        // Plan EPS sin pensión a precio fijo (BRYGAR, nov-2026). Se ofrece igual a todos: por dentro
+        // un asesor decide si la persona entra como exenta de pensión, por subtipo 4 o por ingreso y
+        // retiro, y nada de eso se le explica. Lo que sí se le dice antes de pagar es lo que cambia
+        // para ella: que las incapacidades solo aplican a quien está exento de pensión.
+        $contextoPlanSinPension = '';
+        $vienePorPlanSinPension = false;
+        if ($planSinPension > 0 && ! $esCliente && ! $empresa) {
+            $valorPlan = '$'.number_format($planSinPension, 0, ',', '.');
+            $vienePorPlanSinPension = $piezaOrigen && self::esPiezaPlanSinPension($piezaOrigen);
+            $contextoPlanSinPension = <<<PLAN
+
+            ## Plan EPS sin pensión de {$valorPlan} (la oferta principal para quien busca salud)
+            Aplica cuando el prospecto busca EPS o salud y NO pidió pensión, cuando pregunta por «el plan de
+            {$valorPlan}» o «EPS sin pensión», o cuando dice que no le alcanza para un plan con pensión. Si pide
+            pensión, caja de compensación o solo ARL, cotiza como siempre con cotizar_plan.
+            Lo que incluye, y no hay más letra pequeña que esta:
+            - {$valorPlan} al mes TODO INCLUIDO, también el primer mes: no hay cobro de afiliación aparte.
+            - EPS con atención, citas y medicamentos, ARL incluida y sus beneficiarios (cónyuge e hijos) sin
+              costo adicional. No incluye pensión.
+            - Si paga hoy, lo afiliamos hoy mismo y le enviamos el radicado; con ese radicado ya lo atienden por
+              urgencias, y en 2 o 3 días aparece en el sistema de la EPS.
+            - Garantía, todos los meses: si está al día y la EPS no lo atiende por un problema de su afiliación,
+              le devolvemos el 100 % de ese mes y lo reactivamos sin costo. No prometas nada más: una cita que la
+              EPS demora o una autorización que niega por razones médicas no es un problema de afiliación.
+            Cómo llevarlo:
+            - Da el precio de una, en el primer mensaje en que aplique, sin llamar cotizar_plan (te daría los
+              precios de otros planes y lo confundes) y sin mandar la tabla de planes.
+            - NO expliques cómo funciona por dentro: nada de días de planilla, ingreso y retiro, subtipos,
+              exenciones ni razones sociales. Si pregunta por qué sale tan económico, la respuesta es que lo
+              afiliamos a través de nuestras empresas. Nunca digas «dependiente» ni que va a tener un empleador.
+            - ANTES de que pague, en una sola frase y sin enredarlo: las incapacidades aplican solo si está
+              exento de pensión, es decir, si es pensionado, mujer de 50 años o más, hombre de 55 o más, o tiene
+              cédula de extranjería o PPT. Nunca le prometas incapacidades a nadie más.
+            - Para avanzar pídele la cédula, el nombre completo y si va a afiliar beneficiarios. En cuanto quiera
+              seguir, pásalo con hablar_con_asesor con el motivo «Plan EPS sin pensión {$valorPlan}: revisar vía
+              (exento, subtipo 4 o ingreso y retiro)». El asesor confirma la EPS y recibe el pago.
+            - Si ya tiene EPS y quiere cambiarse, es un traslado: consulta los tiempos con buscar_conocimiento
+              antes de prometer el de 2 o 3 días.
+
+            PLAN;
+        }
+
         $contextoPieza = '';
-        if ($piezaOrigen && self::esPiezaDeAsesores($piezaOrigen)) {
+        if ($vienePorPlanSinPension) {
+            $contextoPieza = <<<PIEZAPLAN
+
+            ## ⚠️ Este contacto llegó por el anuncio del plan EPS sin pensión (pieza #{$piezaOrigen->id})
+            Vio el precio de {$valorPlan} y escribió por eso. En el PRIMER mensaje confírmale el precio y lo
+            que incluye, en dos o tres burbujas, y pídele la cédula para empezar. Nada de tabla de planes ni de
+            otras cotizaciones: sigue el bloque «Plan EPS sin pensión».
+
+            PIEZAPLAN;
+        } elseif ($piezaOrigen && self::esPiezaDeAsesores($piezaOrigen)) {
             $contextoPieza = <<<ASESOR
 
             ## ⚠️ Este contacto llegó por un anuncio para ASESORES (pieza #{$piezaOrigen->id})
@@ -1135,7 +1205,7 @@ class AsistenteIaService
         PROMPT;
 
         $contexto = "# Contexto de esta conversación\n"
-            .trim($contextoContacto.$contextoPieza.$contextoRetoma.$contextoCampana)."\n";
+            .trim($contextoContacto.$contextoPieza.$contextoPlanSinPension.$contextoRetoma.$contextoCampana)."\n";
 
         return array_values(array_filter([$reglas, trim($contextoAliados), $contexto], fn ($t) => $t !== ''));
     }

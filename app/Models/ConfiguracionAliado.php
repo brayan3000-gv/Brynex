@@ -16,7 +16,7 @@ class ConfiguracionAliado extends BaseModel
         'dist_admon_pct', 'dist_retiro_pct', 'dia_ingreso_ir',
         'mora_dia_habil_inicio', 'mora_minimo', 'mora_segundo', 'dia_retiros_eps',
         'marketing_max_campanas', 'marketing_dias_periodo',
-        'ingreso_retiro_valor_mensual', 'tiempo_parcial_costo_afiliacion', 'arl_descuento_porcentaje',
+        'ingreso_retiro_valor_mensual', 'plan_sin_pension_valor', 'tiempo_parcial_costo_afiliacion', 'arl_descuento_porcentaje',
         'prospectos_recordatorio', 'prospectos_recordatorio_celular',
         'prospectos_dias_sin_respuesta', 'prospectos_dias_cierre',
     ];
@@ -33,6 +33,7 @@ class ConfiguracionAliado extends BaseModel
         'dia_retiros_eps'            => 'integer',
         'activo'                     => 'boolean',
         'ingreso_retiro_valor_mensual'    => 'decimal:2',
+        'plan_sin_pension_valor'          => 'decimal:2',
         'tiempo_parcial_costo_afiliacion' => 'decimal:2',
         'arl_descuento_porcentaje'        => 'integer',
         'prospectos_recordatorio'         => 'boolean',
