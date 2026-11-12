@@ -1030,6 +1030,8 @@ Route::middleware('auth')->group(function () {
         Route::middleware('permiso:brynex_razones.claves')->group(function () use ($brs, $brep) {
             Route::post('/representantes/claves', [$brep, 'guardarClave'])->name('representantes.claves.guardar');
             Route::get('/representantes/claves/{id}/revelar', [$brep, 'revelarClave'])->whereNumber('id')->name('representantes.claves.revelar');
+            Route::post('/representantes/{id}/probar-buzon', [$brep, 'probarBuzon'])->whereNumber('id')->name('representantes.probar_buzon');
+            Route::get('/representantes/{id}/enlace-dian', [$brep, 'enlaceDian'])->whereNumber('id')->name('representantes.enlace_dian');
             Route::delete('/representantes/claves/{id}', [$brep, 'eliminarClave'])->whereNumber('id')->name('representantes.claves.destroy');
             Route::post('/{id}/claves', [$brs, 'guardarClave'])->whereNumber('id')->name('claves.guardar');
             Route::get('/claves/{id}/revelar', [$brs, 'revelarClave'])->name('claves.revelar');

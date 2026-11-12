@@ -6,6 +6,7 @@ use App\Models\Bitacora;
 use App\Models\BrynexRepresentante;
 use App\Models\BrynexRepresentanteCredencial;
 use App\Services\BrynexRepresentanteService;
+use App\Services\Correo\CorreoDianRepresentante;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -192,6 +193,65 @@ class BrynexRepresentanteController extends Controller
 
         return redirect()->to(route('brynex.razones.representantes.index') . '#' . BrynexRepresentanteService::ancla($representante->cedula))
             ->with('success', 'Clave guardada. Sirve para todas las empresas de este representante.');
+    }
+
+    // ─── Correo de la DIAN ────────────────────────────────────────────
+
+    /**
+     * Prueba que BryNex puede leer el buzón del representante y lista los
+     * correos de la DIAN del último mes, SIN el enlace: un enlace vigente da
+     * acceso a las empresas y solo lo entrega `enlaceDian()`, que deja rastro.
+     */
+    public function probarBuzon(int $id, CorreoDianRepresentante $correo)
+    {
+        $rep = BrynexRepresentante::findOrFail($id);
+
+        try {
+            return response()->json(['ok' => true] + $correo->revisar($rep));
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => self::errorLegible($e)], 422);
+        }
+    }
+
+    /**
+     * El enlace de acceso vigente que mandó la DIAN al representante. Es lo
+     * que usa el robot de facturación electrónica después de pedirlo en el
+     * portal; `desde` (ISO) descarta los enlaces anteriores a esa petición.
+     */
+    public function enlaceDian(Request $request, int $id, CorreoDianRepresentante $correo)
+    {
+        $rep = BrynexRepresentante::findOrFail($id);
+        $desde = $request->filled('desde') ? \Illuminate\Support\Carbon::parse($request->input('desde')) : null;
+
+        try {
+            $enlace = $correo->enlaceVigente($rep, $desde);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => self::errorLegible($e)], 422);
+        }
+
+        if (! $enlace) {
+            return response()->json(['ok' => false, 'error' => 'No hay un enlace de la DIAN vigente en el buzón todavía.'], 404);
+        }
+
+        Bitacora::registrar(
+            'enlace_dian_leido', 'BrynexRepresentante', $rep->id,
+            "Se leyó el enlace de acceso de la DIAN de {$rep->nombre}",
+            ['cuenta' => $enlace['cuenta'], 'fecha_correo' => $enlace['fecha'], 'ip' => request()->ip()]
+        );
+
+        return response()->json(['ok' => true] + $enlace);
+    }
+
+    /** Gmail responde en inglés y con detalles del protocolo; lo esencial en español. */
+    private static function errorLegible(\Throwable $e): string
+    {
+        $m = $e->getMessage();
+
+        if (stripos($m, 'AUTHENTICATIONFAILED') !== false || stripos($m, 'Invalid credentials') !== false || stripos($m, 'authenticate') !== false) {
+            return 'Gmail rechazó la clave. Tiene que ser una contraseña de aplicación (16 letras) de esa cuenta, con la verificación en dos pasos activa.';
+        }
+
+        return $m;
     }
 
     /** Revelar una contraseña. Deja rastro en la bitácora siempre. */

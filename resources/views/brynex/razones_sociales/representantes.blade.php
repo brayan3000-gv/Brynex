@@ -33,6 +33,19 @@
             this.clave = Object.assign({ credencial_id: '', tipo: 'CORREO', entidad: this.sugeridas.CORREO, usuario: rep.correo_rut || '', link_acceso: '', observacion: '' }, rep);
             this.verClave = true;
         },
+        prueba: {},
+        async probarBuzon(id) {
+            this.prueba[id] = { cargando: true };
+            try {
+                const r = await fetch('{{ url('brynex/razones-sociales/representantes') }}/' + id + '/probar-buzon', {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                });
+                this.prueba[id] = await r.json();
+            } catch (e) {
+                this.prueba[id] = { ok: false, error: 'No se pudo conectar con BryNex.' };
+            }
+        },
         async revelar(id) {
             const r = await fetch('{{ url('brynex/razones-sociales/representantes/claves') }}/' + id + '/revelar', { headers: { Accept: 'application/json' } });
             const d = await r.json().catch(() => ({}));
@@ -132,10 +145,40 @@
                                     ]) }}); verDatos = true">✏️ Datos</button>
                         @endcan
                         @can('brynex_razones.claves')
+                            @if($r->registro)
+                                <button type="button" class="rep-btn" @click="probarBuzon({{ $r->registro->id }})"
+                                        title="Entra al correo (solo lectura) y busca los correos de la DIAN del último mes">📬 Probar buzón</button>
+                            @endif
                             <button type="button" class="rep-btn verde" @click="nuevaClave({{ Js::from($repJs) }})">+ Clave</button>
                         @endcan
                     </div>
                 </div>
+
+                @if($r->registro)
+                    @php $rid = $r->registro->id; @endphp
+                    <template x-if="prueba[{{ $rid }}]">
+                        <div class="rep-prueba" :class="prueba[{{ $rid }}].ok === false ? 'error' : ''">
+                            <template x-if="prueba[{{ $rid }}].cargando"><span>📬 Entrando al buzón…</span></template>
+                            <template x-if="prueba[{{ $rid }}].ok === false"><span x-text="'⚠️ ' + prueba[{{ $rid }}].error"></span></template>
+                            <template x-if="prueba[{{ $rid }}].ok">
+                                <div>
+                                    <div>
+                                        ✅ Conectó con <b x-text="prueba[{{ $rid }}].cuenta"></b>
+                                        <span x-text="prueba[{{ $rid }}].via === 'reenvios' ? '(buzón central de reenvíos)' : ''"></span>
+                                        · <span x-text="prueba[{{ $rid }}].correos.length"></span> correo(s) de la DIAN en el último mes.
+                                    </div>
+                                    <template x-for="c in prueba[{{ $rid }}].correos.slice(0, 5)">
+                                        <div style="color:#475569;margin-top:0.2rem;">
+                                            <span x-text="c.fecha"></span> · <span x-text="c.asunto"></span>
+                                            <span x-show="c.con_enlace" x-text="c.vigente ? ' · 🔗 enlace vigente' : ' · enlace vencido'"></span>
+                                            <span x-show="! c.es_suyo" style="color:#94a3b8;"> · de otra persona</span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                @endif
 
                 {{-- Empresas --}}
                 <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.8rem;">
@@ -351,6 +394,12 @@
                         Contraseña
                         <input type="password" name="contrasena" autocomplete="new-password" placeholder="Dejar vacío = no cambiar" class="rep-input">
                     </label>
+                    <div x-show="clave.tipo === 'CORREO'" style="grid-column:span 2;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;border-radius:8px;padding:0.55rem 0.7rem;font-size:0.74rem;font-weight:400;">
+                        Para que BryNex lea solo los correos de la DIAN: en Usuario va el <b>Gmail</b> y en Contraseña una
+                        <b>contraseña de aplicación</b> (16 letras), no la clave normal. Se crea en
+                        <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" style="color:#1e3a8a;">myaccount.google.com/apppasswords</a>
+                        con la verificación en dos pasos activa. Los Hotmail no se pueden leer así: se reenvían a un Gmail central.
+                    </div>
                     <label class="rep-label" style="grid-column:span 2;">
                         Link de acceso
                         <input type="url" name="link_acceso" x-model="clave.link_acceso" placeholder="https://…" class="rep-input">
@@ -381,6 +430,8 @@
 .rep-btn.chico { padding:0.18rem 0.55rem; font-size:0.74rem; }
 .rep-btn.verde { background:#047857; color:#fff; border-color:#047857; }
 .rep-btn.azul { background:#1e3a8a; color:#fff; border-color:#1e3a8a; }
+.rep-prueba { margin-top:0.7rem; background:#f0fdf4; border:1px solid #bbf7d0; color:#166534; border-radius:8px; padding:0.55rem 0.75rem; font-size:0.78rem; }
+.rep-prueba.error { background:#fef2f2; border-color:#fecaca; color:#991b1b; }
 .rep-modal { position:fixed; inset:0; background:rgba(15,23,42,0.55); display:flex; align-items:center; justify-content:center; z-index:60; padding:1rem; }
 .rep-modal-caja { background:#fff; border-radius:16px; max-width:540px; width:100%; padding:1.5rem; max-height:92vh; overflow:auto; }
 .rep-label { font-size:0.78rem; font-weight:700; color:#334155; }

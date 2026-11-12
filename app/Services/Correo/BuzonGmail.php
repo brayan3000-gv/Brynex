@@ -114,9 +114,13 @@ class BuzonGmail
      * leídos). Se lee "Todos" y no solo la bandeja: si alguien archiva o lee la
      * respuesta en Gmail, igual se procesa. Excluye lo enviado por la cuenta.
      *
+     * Con $conHtml trae además el HTML crudo en 'html' y los destinatarios en
+     * 'para': el texto pierde los href de los enlaces (y la DIAN manda el de
+     * acceso detrás de un botón).
+     *
      * @return \Generator<int, array{message_id:string, uid:int, in_reply_to:string, referencias:string, de:string, de_nombre:string, asunto:string, fecha:\Carbon\Carbon, texto:string, adjuntos:array}>
      */
-    public function recibidos(\Carbon\CarbonInterface $desde, ?callable $interesa = null, int $maximo = 500, ?string $busquedaGmail = null): \Generator
+    public function recibidos(\Carbon\CarbonInterface $desde, ?callable $interesa = null, int $maximo = 500, ?string $busquedaGmail = null, bool $conHtml = false): \Generator
     {
         $cm = new \Webklex\PHPIMAP\ClientManager(['options' => ['fetch' => \Webklex\PHPIMAP\IMAP::FT_PEEK, 'soft_fail' => true]]);
         $cliente = $cm->make([
@@ -173,7 +177,10 @@ class BuzonGmail
                     'adjuntos' => $m->getAttachments()->map(fn ($a) => [
                         'nombre' => self::decodificar((string) $a->getName()), 'contenido' => $a->getContent(), 'tipo' => (string) $a->getMimeType(),
                     ])->values()->all(),
-                ];
+                ] + ($conHtml ? [
+                    'html' => (string) $m->getHTMLBody(),
+                    'para' => collect($m->getTo()->all())->map(fn ($d) => strtolower((string) ($d->mail ?? '')))->filter()->values()->all(),
+                ] : []);
                 unset($m);
             }
         } finally {
