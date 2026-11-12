@@ -696,7 +696,8 @@ class AsistenteIaService
             {$valorPlan}» o «EPS sin pensión», o cuando dice que no le alcanza para un plan con pensión. Si pide
             pensión, caja de compensación o solo ARL, cotiza como siempre con cotizar_plan.
             Lo que incluye, y no hay más letra pequeña que esta:
-            - {$valorPlan} al mes TODO INCLUIDO, también el primer mes: no hay cobro de afiliación aparte.
+            - Para afiliarse paga {$valorPlan}: ese primer pago es la afiliación. Desde ahí, {$valorPlan} cada mes, todo
+              incluido. No hay ningún otro cobro.
             - EPS con atención, citas y medicamentos, ARL incluida y sus beneficiarios (cónyuge e hijos) sin
               costo adicional. No incluye pensión.
             - Si paga hoy, lo afiliamos hoy mismo y le enviamos el radicado; con ese radicado ya lo atienden por

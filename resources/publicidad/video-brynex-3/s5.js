@@ -32,11 +32,11 @@
 (() => {
   const el = h(`<div class="scene"></div>`);
   const halo = h(`<div class="abs" style="left:90px;top:300px;width:900px;height:640px;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.55),transparent);filter:blur(30px)"></div>`, el);
-  const logo = h(`<img class="abs" src="../../../public/img/logo-brynex.png" style="left:160px;top:440px;width:760px;transform-origin:50% 50%">`, el);
+  const logo = h(`<img class="abs" src="logo-brygar.png" style="left:110px;top:455px;width:860px;transform-origin:50% 50%">`, el);
   const a = h(`<div class="ctr" style="top:780px;font-size:82px"></div>`, el), b = h(`<div class="ctr tn" style="top:880px;font-size:122px"></div>`, el);
   const wa1 = words(a, 'EPS sin pensión', { all: 'grad' }), wb = words(b, '$125.000 al mes');
   wb[1].style.fontSize = wb[2].style.fontSize = '74px'; wb[1].style.color = wb[2].style.color = '#bfdbfe';
-  const small = h(`<div class="ctr" style="top:1030px;font-size:40px;color:#bfdbfe;font-weight:600">Todo incluido · También el primer mes</div>`, el);
+  const small = h(`<div class="ctr" style="top:1030px;font-size:40px;color:#bfdbfe;font-weight:600">Todo incluido · La afiliación también</div>`, el);
   const rings = [0, 1].map(() => h(`<div class="ring" style="top:1146px"></div>`, el));
   const wa = h(`<div id="wa" style="top:1146px"><svg width="64" height="64" viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"><path d="M32 8a24 24 0 0 0-20.6 36.3L8 56l12-3.3A24 24 0 1 0 32 8z"/><path d="M24 26c0 8 6 14 14 14"/></svg>Escríbenos por WhatsApp</div>`, el);
   const sub = h(`<div class="ctr" style="top:1338px;font-size:33px;font-weight:600;color:#93c5fd;letter-spacing:.04em">Médico · Medicamentos · Tus beneficiarios</div>`, el);

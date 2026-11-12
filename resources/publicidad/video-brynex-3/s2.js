@@ -6,7 +6,7 @@
   const halo = h(`<div class="abs" style="left:90px;top:520px;width:900px;height:520px;border-radius:50%;background:radial-gradient(closest-side,rgba(59,130,246,.6),transparent);filter:blur(30px)"></div>`, el);
   const price = h(`<div class="price tn" style="top:620px"></div>`, el);
   const mes = h(`<div class="ctr" style="top:872px;font-size:70px;color:#bfdbfe">al mes</div>`, el);
-  const P = ['Todo incluido', 'También el primer mes', 'Sin pago de afiliación'].map((txt, i) => h(`<div class="pill" style="top:${1030 + i * 128}px"><div class="z">${check}</div>${txt}</div>`, el));
+  const P = ['Todo incluido', 'Te afiliamos con $125.000', 'Y cada mes, $125.000'].map((txt, i) => h(`<div class="pill" style="left:110px;width:860px;top:${1030 + i * 128}px"><div class="z">${check}</div>${txt}</div>`, el));
   const fmt = n => '$' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
   scenes.push({ a: 3.75, b: 9.39, el, draw(t) {
     slam(w1, t, 3.8, .1); slam(w2, t, 4.0, .12);
