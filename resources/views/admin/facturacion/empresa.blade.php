@@ -972,7 +972,7 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
 
         <div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:.55rem 1.3rem;font-size:.7rem;color:#64748b;flex-shrink:0;">
-            Estuvieron con la empresa y no aparecen en {{ $meses[$mes] }} de {{ $anio }}.
+            Estuvieron con la empresa y no aparecen en {{ $meses[$mes - 1] }} de {{ $anio }}.
             De cada persona se muestra su último contrato retirado.
         </div>
 
