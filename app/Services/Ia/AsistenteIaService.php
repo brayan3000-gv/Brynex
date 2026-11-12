@@ -828,6 +828,32 @@ class AsistenteIaService
 
         // Quien quiere TRABAJAR con nosotros no es un cliente: hoy el guion lo frenaba en «¿cuántos
         // clientes manejas?» y lo mandaba a llamar; de 8 que llegaron así en sep-oct 2026 ninguno cerró.
+        // Los asesores también venden el plan EPS sin pensión (12-nov-2026). Sin plan configurado,
+        // la regla de siempre: solo salud es para quien está exento de pensión.
+        $valorPlanAsesor = $planSinPension > 0 ? '$'.number_format($planSinPension, 0, ',', '.') : '';
+        $reglaSinPensionAsesor = $planSinPension > 0
+            ? "Si el plan que pide es solo EPS o EPS + ARL sin pensión, NO cotices: para CUALQUIER cliente suyo, "
+              ."exento o no, es el plan EPS sin pensión de {$valorPlanAsesor} (ver el punto «Plan EPS sin pensión»). "
+              .'Si lleva caja de compensación (EPS + caja), cotiza DOS veces: una normal y otra con cliente_exento_pension en'
+            : 'Si el plan que pide NO lleva pensión (EPS + ARL, solo EPS, EPS + caja), cotiza DOS veces: una normal y otra con cliente_exento_pension en';
+        $reglaSoloSaludAsesor = $planSinPension > 0
+            ? "Si pregunta si se puede solo salud o sin pensión, sí: es el plan EPS sin pensión de {$valorPlanAsesor} para cualquier cliente."
+            : 'Si pregunta si se puede solo salud o sin pensión, empieza por la condición («solo salud aplica a quien está exento
+          de pensión: …») y nunca con «sí se puede».';
+        $puntoPlanAsesor = $planSinPension > 0 ? <<<PLANASESOR
+
+        - Plan EPS sin pensión: sus clientes, exentos o no, pueden afiliarse por {$valorPlanAsesor}: ese primer pago es
+          la afiliación y desde ahí {$valorPlanAsesor} cada mes, todo incluido (ARL y beneficiarios; sin pensión). Las
+          incapacidades solo aplican a quien está exento de pensión. Garantía de cada mes: si el cliente está al día y,
+          por su afiliación, no le dan la cita médica o los medicamentos, se le devuelve el 100 % del mes y se reactiva
+          gratis. Cómo se afilia cada cliente por dentro lo decide {$nombreAliado}: no le expliques vías, días de
+          planilla ni razones sociales. Lo que gana el asesor con este plan NO lo digas ni lo calcules con la regla de
+          la mitad de la afiliación: si lo pregunta, dile que se lo confirma un asesor y usa hablar_con_asesor.
+          Las cifras de perfilar_aliado (lo que gana por afiliación y por administración) son de los planes
+          normales: nunca las pongas en el mismo mensaje que el precio de este plan, porque parecen suyas. Si
+          tienes que darle las dos cosas, el precio del plan va en una respuesta y sus ganancias en otra.
+        PLANASESOR : '';
+
         $contextoAliados = (! $esCliente && ! $empresa) ? <<<ALIADOS
 
         ## Quienes quieren TRABAJAR CON NOSOTROS (asesores, empresas aliadas, empleadores)
@@ -927,8 +953,7 @@ class AsistenteIaService
           que gana un asesor y contestó «está muy costoso». Si ya le preguntaste cuántas personas maneja y no
           lo contestó, no se lo vuelvas a preguntar: responde lo que pidió. Si pregunta cuánto vale un plan concreto para sus clientes (ej. «solo EPS
           con el mínimo», «cuánto tengo que radicar de mensualidad»), cotízalo con cotizar_plan en ese mismo
-          turno y dale el valor; nunca respondas «depende del caso». Si el plan que pide NO lleva pensión
-          (EPS + ARL, solo EPS, EPS + caja), cotiza DOS veces: una normal y otra con cliente_exento_pension en
+          turno y dale el valor; nunca respondas «depende del caso». {$reglaSinPensionAsesor}
           true, las DOS con la misma modalidad, y dale los dos valores diciendo para quién es cada uno: sin pensión, para sus clientes exentos
           (pensionados, mujeres de 50 años o más, hombres de 55 o más, y extranjeros con CE, PT, PP, PE o PA);
           con pensión, para el resto, porque a ellos la ley se la exige. El 15-oct-2026 un asesor con 35
@@ -936,9 +961,7 @@ class AsistenteIaService
           que a los exentos les sale en $274.100. Si no dijo si sus clientes son independientes o empleados,
           pregúntaselo antes de cotizar. Nunca pongas un valor de independiente al lado de uno de
           dependiente: el 11-nov-2026 un asesor de 30 recibió \$545.100 (independiente con pensión) contra
-          \$125.400 (dependiente sin pensión) y parecía que toda esa diferencia era la pensión. Si pregunta si
-          se puede solo salud o sin pensión, empieza por la condición («solo salud aplica a quien está exento
-          de pensión: …») y nunca con «sí se puede». Si ya le diste los dos valores, no le ofrezcas
+          \$125.400 (dependiente sin pensión) y parecía que toda esa diferencia era la pensión. {$reglaSoloSaludAsesor} Si ya le diste los dos valores, no le ofrezcas
           cotizarlos otra vez: repítelos de tu respuesta anterior. Cotiza la modalidad que él pidió (independiente o
           empleado) y no le sugieras la otra porque salga más barata: a un contratista lo exige su
           contratante como independiente. Si le das el valor de un independiente que gana más del mínimo,
@@ -952,7 +975,7 @@ class AsistenteIaService
           menciones, porque ya está en el nivel más alto. Con menos de 5 personas empieza refiriendo (20 % durante 6 meses por cada
           cliente) y recibe su acceso al programa al llegar a 5.
         - De cada afiliación la mitad es suya; a la empresa le quedan mínimo \$60.000 para asumir el retiro
-          (en planes desde \$125.400 la mitad ya lo cubre).
+          (en planes desde \$125.400 la mitad ya lo cubre).{$puntoPlanAsesor}
         - En el programa ve solo sus clientes, con sus afiliaciones, planillas y su liquidación.
         - Si un dato que él capturó mal causa un cobro o una mora, se le descuenta a él.
         - Si se retira, sigue recibiendo el 20 % de la administración de sus clientes durante 6 meses.
