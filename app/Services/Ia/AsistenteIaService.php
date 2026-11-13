@@ -58,6 +58,12 @@ class AsistenteIaService
     public const PERFILES = [self::PERFIL_CLIENTE, self::PERFIL_ASESOR, self::PERFIL_ALIADO];
 
     /**
+     * Cliente ACTUAL (contrato vigente) o empresa que ya nos paga: servicio, no venta. No está en
+     * PERFILES porque no se elige con cambiar_perfil: sale de los datos (13-nov-2026).
+     */
+    public const PERFIL_SERVICIO = 'servicio';
+
+    /**
      * Procesa un mensaje del usuario en el canal web (empleados/asesores autenticados)
      * y devuelve la respuesta del asistente, con las herramientas completas.
      *
@@ -272,8 +278,8 @@ class AsistenteIaService
 
     /**
      * Qué perfil atiende esta conversación (ver PERFIL_*). En orden:
-     * 1. Quien ya es cliente o empleador nuestro se atiende siempre como cliente: es quien pide
-     *    planillas, saldos y cuentas, y esas reglas solo viven en ese módulo.
+     * 1. Empresa que nos paga o cliente con contrato vigente: servicio (comprobantes, planillas,
+     *    incapacidades, retiros). Un excliente sigue de largo: es venta, para reactivarlo.
      * 2. El perfil que la IA fijó con cambiar_perfil o perfilar_aliado (perfil_ia).
      * 3. El perfil de aliado que quedó guardado antes de que existiera perfil_ia.
      * 4. El anuncio de origen: el de asesores trae asesores (y alguna empresa, que pasa a aliado
@@ -283,8 +289,18 @@ class AsistenteIaService
      */
     public static function resolverPerfil(?WhatsappConversacion $conv, array $clienteInfo = [], ?\App\Models\Publicacion $pieza = null): string
     {
-        if (($clienteInfo['es_cliente'] ?? false) || ! empty($clienteInfo['empresa'])) {
-            return self::PERFIL_CLIENTE;
+        if (! empty($clienteInfo['empresa'])) {
+            return self::PERFIL_SERVICIO;
+        }
+        if ($clienteInfo['contrato_activo'] ?? false) {
+            // Un cliente activo que esta semana dijo que quiere trabajar con nosotros se atiende
+            // como asesor o aliado; pasados 7 días vuelve a ser atendido como cliente.
+            if ($conv && in_array($conv->perfil_ia, [self::PERFIL_ASESOR, self::PERFIL_ALIADO], true)
+                && $conv->perfil_ia_at && $conv->perfil_ia_at->gt(now()->subDays(7))) {
+                return $conv->perfil_ia;
+            }
+
+            return self::PERFIL_SERVICIO;
         }
         if ($conv && in_array($conv->perfil_ia, self::PERFILES, true)) {
             return $conv->perfil_ia;
@@ -390,8 +406,18 @@ class AsistenteIaService
             ->with('plan:id,nombre')
             ->first();
 
+        // Sin contrato vigente es un excliente: va a ventas a reactivarlo, no a servicio. Hasta el
+        // 13-nov-2026 se le decía a la IA «no le ofrezcas un plan nuevo», y a una retirada que pidió
+        // EPS más barata se le cotizó $545.100 sin nombrarle el plan sin pensión.
+        $ultimoRetiro = $contrato ? null : Contrato::where('aliado_id', $alidoId)
+            ->where('cedula', $cliente->cedula)
+            ->where('estado', 'retirado')
+            ->max('fecha_retiro');
+
         return [
             'es_cliente' => true,
+            'contrato_activo' => (bool) $contrato,
+            'fecha_retiro' => $ultimoRetiro ? \Carbon\Carbon::parse($ultimoRetiro)->translatedFormat('F \d\e Y') : null,
             'nombre' => trim(($cliente->primer_nombre ?? '').' '.($cliente->primer_apellido ?? '')),
             'plan_actual' => $contrato?->plan?->nombre,
             'empresa' => $empresaInfo,
@@ -707,7 +733,8 @@ class AsistenteIaService
         string $perfil = self::PERFIL_CLIENTE
     ): array {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
-        $perfil = in_array($perfil, self::PERFILES, true) ? $perfil : self::PERFIL_CLIENTE;
+        $perfil = in_array($perfil, [...self::PERFILES, self::PERFIL_SERVICIO], true) ? $perfil : self::PERFIL_CLIENTE;
+        $contratoActivo = (bool) ($clienteInfo['contrato_activo'] ?? false);
         $cercaAliado = (int) config('alianzas.cerca', 75);
         $umbralAliado = (int) config('alianzas.umbral_empresa', 100);
         $esCliente = $clienteInfo['es_cliente'] ?? false;
@@ -731,6 +758,17 @@ class AsistenteIaService
                 .'dado la cédula de una persona concreta: por el número de la empresa no van a encontrar nada y '
                 .'gastas un turno en vano. Con esa cédula en la mano, ahí sí úsalas. Solo cotiza si ÉL MISMO pide '
                 ."expresamente cotizar a alguien nuevo que quiera vincular.\n";
+        } elseif ($esCliente && ! $contratoActivo) {
+            $nombreCliente = $clienteInfo['nombre'] ?: null;
+            $retiro = $clienteInfo['fecha_retiro'] ?? null;
+            $contextoContacto = "\n## Quién te escribe: FUE CLIENTE nuestro"
+                .($nombreCliente ? " ({$nombreCliente})" : '')
+                .($retiro ? ", retirado desde {$retiro}" : '')
+                .', y hoy no tiene afiliación activa con nosotros. Es una oportunidad de reactivarlo: salúdalo por su '
+                .'nombre, con un «qué bueno saludarte de nuevo», y si busca afiliarse atiéndelo como a cualquier '
+                .'prospecto, con todo el enfoque de venta (si busca salud, el plan EPS sin pensión). No le preguntes '
+                .'por qué se fue. Si pregunta por algo de su cuenta anterior (una planilla vieja, un saldo), usa '
+                ."consultar_cliente o enviar_planilla.\n";
         } elseif ($esCliente) {
             $nombreCliente = $clienteInfo['nombre'] ?: null;
             $planActual = $clienteInfo['plan_actual'] ?? null;
@@ -758,7 +796,7 @@ class AsistenteIaService
         // para ella: que las incapacidades solo aplican a quien está exento de pensión.
         $contextoPlanSinPension = '';
         $vienePorPlanSinPension = false;
-        if ($planSinPension > 0 && ! $esCliente && ! $empresa && $perfil === self::PERFIL_CLIENTE) {
+        if ($planSinPension > 0 && ! $empresa && in_array($perfil, [self::PERFIL_CLIENTE, self::PERFIL_SERVICIO], true)) {
             $valorPlan = '$'.number_format($planSinPension, 0, ',', '.');
             $vienePorPlanSinPension = $piezaOrigen && self::esPiezaPlanSinPension($piezaOrigen);
             $contextoPlanSinPension = <<<PLAN
@@ -834,7 +872,7 @@ class AsistenteIaService
             cotices ni le mandes la tabla de planes por iniciativa propia: solo si él la pide.
 
             ASESOR;
-        } elseif ($piezaOrigen && ! $esCliente && ! $empresa && $perfil === self::PERFIL_CLIENTE && ! self::esPiezaDeAsesores($piezaOrigen)) {
+        } elseif ($piezaOrigen && ! $contratoActivo && ! $empresa && $perfil === self::PERFIL_CLIENTE && ! self::esPiezaDeAsesores($piezaOrigen)) {
             $tema = $piezaOrigen->tema ?: $piezaOrigen->titulo;
             $contextoPieza = <<<PIEZA
 
@@ -1232,6 +1270,49 @@ class AsistenteIaService
           deja lo secundario para cuando pregunte.
         PROMPT;
 
+        // Planilla, ADRES y la cuenta del cliente: las usan el módulo de clientes (exclientes) y el de servicio.
+        $reglasCuenta = <<<TXT
+        ## Planilla de pago (PILA):
+        - Si el cliente pide su planilla, certificado de pago, o comprobante de PILA, usa enviar_planilla. Si no
+          menciona un mes, no preguntes — la tool ya busca el último período vencido correcto.
+        - Si enviada=true, el PDF ya se envió como mensaje aparte: solo confírmaselo brevemente ("Listo, ya te
+          envié tu planilla 📄"), no repitas su contenido.
+        - Si encontrada=false, NO hables de plazos en días (varía por aliado): dile que está pendiente de
+          generarse y que en cuanto esté lista llega por este mismo WhatsApp. Si es urgente, ofrece escalar con
+          un asesor (hablar_con_asesor).
+
+        ## Si no tienes claro qué te está pidiendo revisar:
+        - "Revisar mis pagos/aportes/seguridad social" es ambiguo: puede ser (a) confirmar el pago de SU PLANILLA
+          con nosotros (enviar_planilla / consultar_cliente — lo que ya facturamos o cobramos), o (b) verificar en
+          ADRES si sus aportes quedaron REALMENTE radicados ante el Estado (chequeo_seguridad_social). Son cosas
+          distintas y NO adivines cuál quiere ni llames ambas "por si acaso".
+        - Si el mensaje ya deja claro cuál es (ej. "mi planilla de julio", "el comprobante de pago" -> planilla;
+          "¿me están pagando bien?", "¿estoy activo en el sistema?", "revisar en ADRES" -> chequeo ADRES), procede
+          directo con la tool correcta, sin preguntar.
+        - Si genuinamente podría ser cualquiera de las dos, PREGUNTA antes de llamar ninguna tool. Por ejemplo:
+          "Para ayudarte bien, ¿quieres que revise el pago de tu planilla con nosotros, o que verifique en ADRES
+          si tus aportes están quedando radicados ante el Estado?". Espera su respuesta y ahí sí actúa.
+
+        ## Su cuenta, su saldo y sus datos:
+        - Con consultar_cliente y enviar_planilla: si quien escribe menciona una cédula (la suya o la de alguien
+          más a quien está ayudando/consultando), pásala SIEMPRE como parámetro — es la verificación de
+          identidad y define de quién son los datos que vas a dar, sin importar de qué número WhatsApp escriban.
+          Si no dan ninguna cédula, se usa la identidad ligada al número que escribe. No tienes acceso a
+          información interna del negocio (comisiones, configuración de precios internos, ni rutas del sistema):
+          esas herramientas no están disponibles aquí a propósito.
+        - Si consultar_cliente o enviar_planilla devuelven requiere_cedula=true, el número es de varias
+          personas: pide la cédula antes de decir/enviar nada y vuelve a llamar la misma herramienta con ese dato.
+        - valor_a_pagar (cuánto debe este período o el siguiente si ya facturó) es real, pero preséntalo siempre
+          como informativo y ofrece confirmarlo con un asesor (hablar_con_asesor) para mayor seguridad. Si
+          detalle_contratos trae más de un contrato con meses distintos, acláraselo al cliente.
+        - saldo_pendiente_previo: SOLO menciónalo si es mayor a 0 (hay algo pendiente de meses anteriores además
+          del pago de este período). Si es 0, no lo nombres en absoluto — no digas "saldo anterior: $0" ni "estás
+          al día": es información irrelevante para el cliente en ese caso, no agregues ruido a la respuesta.
+        - Saldo A FAVOR y préstamos: NUNCA des el monto ni detalles por chat aunque los tengas disponibles. Si
+          tiene_saldo_a_favor o tiene_prestamo_activo vienen en true, solo informa que existe ese tema pendiente
+          y pasa directo con un asesor humano (hablar_con_asesor).
+        TXT;
+
         $moduloCliente = <<<PROMPT
         # Atiendes a un CLIENTE
         Quien te escribe quiere comprar un plan de seguridad social para él, su familia o sus trabajadores, o ya
@@ -1314,45 +1395,7 @@ class AsistenteIaService
         - Si después de confirmar plan y presupuesto el cliente parece listo para avanzar (confirma, pregunta cómo
           pagar o afiliarse), usa hablar_con_asesor para que un humano cierre el proceso.
 
-        ## Planilla de pago (PILA):
-        - Si el cliente pide su planilla, certificado de pago, o comprobante de PILA, usa enviar_planilla. Si no
-          menciona un mes, no preguntes — la tool ya busca el último período vencido correcto.
-        - Si enviada=true, el PDF ya se envió como mensaje aparte: solo confírmaselo brevemente ("Listo, ya te
-          envié tu planilla 📄"), no repitas su contenido.
-        - Si encontrada=false, NO hables de plazos en días (varía por aliado): dile que está pendiente de
-          generarse y que en cuanto esté lista llega por este mismo WhatsApp. Si es urgente, ofrece escalar con
-          un asesor (hablar_con_asesor).
-
-        ## Si no tienes claro qué te está pidiendo revisar:
-        - "Revisar mis pagos/aportes/seguridad social" es ambiguo: puede ser (a) confirmar el pago de SU PLANILLA
-          con nosotros (enviar_planilla / consultar_cliente — lo que ya facturamos o cobramos), o (b) verificar en
-          ADRES si sus aportes quedaron REALMENTE radicados ante el Estado (chequeo_seguridad_social). Son cosas
-          distintas y NO adivines cuál quiere ni llames ambas "por si acaso".
-        - Si el mensaje ya deja claro cuál es (ej. "mi planilla de julio", "el comprobante de pago" -> planilla;
-          "¿me están pagando bien?", "¿estoy activo en el sistema?", "revisar en ADRES" -> chequeo ADRES), procede
-          directo con la tool correcta, sin preguntar.
-        - Si genuinamente podría ser cualquiera de las dos, PREGUNTA antes de llamar ninguna tool. Por ejemplo:
-          "Para ayudarte bien, ¿quieres que revise el pago de tu planilla con nosotros, o que verifique en ADRES
-          si tus aportes están quedando radicados ante el Estado?". Espera su respuesta y ahí sí actúa.
-
-        ## Su cuenta, su saldo y sus datos:
-        - Con consultar_cliente y enviar_planilla: si quien escribe menciona una cédula (la suya o la de alguien
-          más a quien está ayudando/consultando), pásala SIEMPRE como parámetro — es la verificación de
-          identidad y define de quién son los datos que vas a dar, sin importar de qué número WhatsApp escriban.
-          Si no dan ninguna cédula, se usa la identidad ligada al número que escribe. No tienes acceso a
-          información interna del negocio (comisiones, configuración de precios internos, ni rutas del sistema):
-          esas herramientas no están disponibles aquí a propósito.
-        - Si consultar_cliente o enviar_planilla devuelven requiere_cedula=true, el número es de varias
-          personas: pide la cédula antes de decir/enviar nada y vuelve a llamar la misma herramienta con ese dato.
-        - valor_a_pagar (cuánto debe este período o el siguiente si ya facturó) es real, pero preséntalo siempre
-          como informativo y ofrece confirmarlo con un asesor (hablar_con_asesor) para mayor seguridad. Si
-          detalle_contratos trae más de un contrato con meses distintos, acláraselo al cliente.
-        - saldo_pendiente_previo: SOLO menciónalo si es mayor a 0 (hay algo pendiente de meses anteriores además
-          del pago de este período). Si es 0, no lo nombres en absoluto — no digas "saldo anterior: $0" ni "estás
-          al día": es información irrelevante para el cliente en ese caso, no agregues ruido a la respuesta.
-        - Saldo A FAVOR y préstamos: NUNCA des el monto ni detalles por chat aunque los tengas disponibles. Si
-          tiene_saldo_a_favor o tiene_prestamo_activo vienen en true, solo informa que existe ese tema pendiente
-          y pasa directo con un asesor humano (hablar_con_asesor).
+        {$reglasCuenta}
         PROMPT;
 
         $moduloAsesor = <<<PROMPT
@@ -1415,9 +1458,45 @@ class AsistenteIaService
           pensión para sus clientes» (instrucción del dueño, 13-nov-2026).
         PROMPT;
 
+        $moduloServicio = <<<PROMPT
+        # Atiendes a un CLIENTE ACTUAL
+        Quien te escribe ya es cliente nuestro con su afiliación activa, o es una empresa que nos paga la seguridad
+        social de sus trabajadores. No le vendas: resuélvele lo que pide, rápido y con calidez, o pásalo a la persona
+        que corresponde con todo lo que hace falta para que no tenga que volver a preguntarle nada.
+        - COMPROBANTES DE PAGO: la foto de un comprobante ya recibe sola el acuse «Recibí tu comprobante… nuestro equipo
+          lo revisa y te confirma por aquí» y queda pendiente para el equipo; si lo ves en el historial, no repitas el
+          acuse ni digas que quedó registrado, confirmado, aplicado o que está al día. Si dice que ya pagó y no mandó
+          el comprobante, pídele que lo mande por aquí. Si te llega uno leído («[Comprobante de pago leído por la IA…]»)
+          junto con otra pregunta, responde la pregunta, dile que el equipo verifica el pago y usa hablar_con_asesor
+          con el motivo «💵 Comprobante \$valor · fecha · medio · ref.» con lo que se leyó.
+        - Cuánto tiene que pagar, a dónde o hasta cuándo: consultar_cliente (ver «Su cuenta, su saldo y sus datos»).
+        - Planilla o certificado de pago: enviar_planilla. Certificado de afiliación a la EPS, ARL o pensión:
+          hablar_con_asesor con «Certificado de afiliación a …».
+        - INCAPACIDADES (si ya pagaron, cómo radicar, cuánto le pagan), CARTA LABORAL, documentos de beneficiarios,
+          cambios de datos, novedades o un traslado: tú no los resuelves ni das plazos. Pídele en una frase lo que haga
+          falta (el documento, la cédula de la persona) y pásalo con hablar_con_asesor con un motivo concreto
+          («Incapacidad: pregunta si Sanitas ya pagó», «Carta laboral para …»). La carta laboral la expide BRYGAR:
+          nunca le digas que se la pida a su empresa (el 12-nov-2026 se lo dijimos a un cliente).
+        - Citas, autorizaciones o medicamentos con su EPS: oriéntalo con buscar_conocimiento sobre los canales de su
+          EPS. Si dice que no le dan la cita o los medicamentos por un problema de su afiliación, pásalo con
+          hablar_con_asesor con «Revisar afiliación: no le dan cita/medicamentos».
+        - Si quiere RETIRARSE o dice que le queda caro: antes de pasarlo, pregúntale en una frase por qué. Si es por
+          plata o porque ya no necesita la pensión, ofrécele UNA vez el plan EPS sin pensión (bloque «Plan EPS sin
+          pensión», si está en el contexto). Si igual quiere retirarse, pásalo con hablar_con_asesor «Retiro: …» sin
+          insistir.
+        - Si quiere afiliar a alguien más o cambiar de plan, cotízalo con las reglas de cotizar_plan y pásalo con
+          hablar_con_asesor cuando quiera avanzar.
+        - Si en realidad quiere trabajar con nosotros trayendo clientes, llama cambiar_perfil con perfil asesor.
+        - Si solo agradece, manda un sticker o una reacción, responde en media línea o no respondas con preguntas:
+          no le ofrezcas revisar su saldo ni su próximo pago si no lo pidió.
+
+        {$reglasCuenta}
+        PROMPT;
+
         $modulo = match ($perfil) {
             self::PERFIL_ASESOR => $moduloAsesor,
             self::PERFIL_ALIADO => $moduloAliado,
+            self::PERFIL_SERVICIO => $moduloServicio,
             default => $moduloCliente,
         };
 

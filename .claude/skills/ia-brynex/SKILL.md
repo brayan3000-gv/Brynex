@@ -82,7 +82,7 @@ pegan y aprovechan su caché automática. **Nada que cambie por conversación
 (fecha con hora, nombre del cliente, anuncio, campaña) puede ir en las
 reglas**: rompe la caché de todas las respuestas.
 
-### Tres perfiles en WhatsApp: cliente, asesor y aliado (13-nov-2026)
+### Perfiles en WhatsApp: cliente, servicio, asesor y aliado (13-nov-2026)
 
 Un solo número y un solo «Brygar», pero cada conversación se atiende con un
 módulo distinto sobre una base común (identidad, formato, reglas técnicas de
@@ -90,12 +90,14 @@ módulo distinto sobre una base común (identidad, formato, reglas técnicas de
 
 | Perfil | Quién | Qué ofrece |
 |---|---|---|
-| `cliente` | Quiere comprar un plan, o ya es cliente/empleador | Cotizar, plan EPS sin pensión, cerrar con cédula → `hablar_con_asesor`; planillas, saldos |
+| `cliente` | Quiere comprar un plan, o fue cliente y está retirado (reactivación) | Cotizar, plan EPS sin pensión, cerrar con cédula → `hablar_con_asesor` |
+| `servicio` | Cliente con contrato vigente o empresa que ya nos paga | Valor a pagar, planilla; comprobantes, incapacidades, carta laboral y retiros → `hablar_con_asesor`; en un retiro ofrece una vez el plan sin pensión |
 | `asesor` | Trabaja con BRYGAR trayendo clientes (de 0 a ~50) | Plan Asesor, calculadora, reunión virtual |
 | `aliado` | Empresa desde `alianzas.cerca` (75) o persona desde `umbral_empresa` (100) | Planes de BryNex: Alianza Esencial, Específica, Integral |
 
-`AsistenteIaService::resolverPerfil` decide: cliente/empleador existente →
-cliente; `whatsapp_conversaciones.perfil_ia`; `perfil_aliado` viejo; anuncio de
+`AsistenteIaService::resolverPerfil` decide: empresa o contrato vigente →
+servicio (salvo que esa semana haya dicho que quiere ser asesor); un excliente
+sigue como venta; `whatsapp_conversaciones.perfil_ia`; `perfil_aliado` viejo; anuncio de
 asesores → asesor; si no, cliente. El perfil cambia solo: `perfilar_aliado`
 lo fija según la cantidad, y `cambiar_perfil` cuando el de clientes descubre
 que es asesor (o al revés). Esa herramienta devuelve instrucciones para el
