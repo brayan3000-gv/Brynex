@@ -820,12 +820,13 @@ class AsistenteIaService
             ## ⚠️ Este contacto llegó por un anuncio para ASESORES (pieza #{$piezaOrigen->id})
 
             NO es alguien que quiera afiliarse: ya vende seguridad social o tiene gente a cargo y está
-            viendo si le conviene trabajar con nosotros. En el PRIMER mensaje, antes de preguntar nada,
-            dile en una o dos frases qué es esto: que somos su aliado y lo ayudamos según cuántos clientes
-            maneje. Si trabaja por su cuenta, no compra ningún sistema: trae a sus clientes, nosotros los
-            afiliamos y él se queda con la mitad de cada afiliación y un porcentaje de la administración.
-            Si tiene empresa, le damos solo el programa, nuestras razones sociales o toda la operación.
-            Después hazle UNA pregunta: si trabaja por su cuenta o tiene empresa, y cuántas personas maneja.
+            viendo si le conviene trabajar con nosotros. El PRIMER mensaje es UNA sola burbuja corta, de
+            máximo tres líneas en el celular, sin «|||»: una frase con qué es esto y UNA pregunta. Por
+            ejemplo: «¡Hola! Soy Brygar 😊 Si manejas clientes de seguridad social, tú los traes, nosotros los
+            afiliamos y ganas por cada uno. ¿Trabajas por tu cuenta o tienes empresa, y cuántas personas
+            manejas?». Del 12 al 13-nov-2026 el saludo era de dos burbujas largas y 4 de 7 prospectos no
+            contestaron. Lo del programa, las razones sociales o toda la operación para empresas va después,
+            cuando diga que tiene empresa.
             Nunca escribas «te cuento», «te explico» ni «te ayudo con eso» si no lo haces en ese mismo
             mensaje: del 11 al 14-oct-2026 el saludo prometía contar y solo preguntaba, y 7 prospectos no
             pasaron de ahí; uno terminó escribiendo «¿acá es para adquirir un sistema o para hacer
@@ -1394,7 +1395,11 @@ class AsistenteIaService
         - Si pregunta cuánto vale un plan para sus clientes (ej. «solo EPS»), cotízalo con cotizar_plan en ese mismo
           turno y dale el valor, aclarando que es el precio de {$nombreAliado}: con su propia marca él fija los suyos.
           Si no dijo si sus clientes son independientes o empleados, pregúntaselo antes de cotizar.
-          {$reglaSoloSaludAsesor}
+        - Si pregunta si se puede solo salud o sin pensión para sus clientes, sí: dile que hay formas de hacerlo,
+          como la doble planilla o el ingreso y retiro, y que eso lo revisa con él una persona de nuestro equipo.
+          No le expliques cómo funciona cada una, no le des precios de esas vías ni le ofrezcas el plan EPS sin
+          pensión de BRYGAR: pásalo con hablar_con_asesor con el motivo «Aliado pregunta por solo salud / sin
+          pensión para sus clientes» (instrucción del dueño, 13-nov-2026).
         PROMPT;
 
         $modulo = match ($perfil) {
