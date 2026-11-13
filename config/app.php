@@ -179,6 +179,8 @@ return [
         App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
+        // Modo demo (config/demo.php): no hace nada fuera de demo.brynex.co.
+        App\Providers\DemoServiceProvider::class,
     ])->toArray(),
 
     /*

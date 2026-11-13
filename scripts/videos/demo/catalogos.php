@@ -81,10 +81,16 @@ $prod = new class($leido, function () use (&$prodPdo, $p, $opc) {
         };
     }
 };
-$demo = new PDO('sqlsrv:Server=127.0.0.1,14333;Database=BryNex_Videos;Encrypt=no;TrustServerCertificate=1', 'sa', $v['VIDEOS_SQL_SA'], $opc);
+// La base de los videos, o la de la demo pública (scripts/demo/demo.sh): las dos
+// viven en el mismo Docker. DEMO_PUBLICO deja fuera a la única persona real.
+$destino = getenv('VIDEOS_DB') ?: 'BryNex_Videos';
+if (! in_array($destino, ['BryNex_Videos', 'BryNex_Demo'], true)) {
+    exit("Destino inesperado ($destino): no copio nada.\n");
+}
+$demo = new PDO("sqlsrv:Server=127.0.0.1,14333;Database=$destino;Encrypt=no;TrustServerCertificate=1", 'sa', $v['VIDEOS_SQL_SA'], $opc);
 
-// Seguro: el destino tiene que ser la base de videos, nunca la de producción.
-if ($demo->query('SELECT DB_NAME()')->fetchColumn() !== 'BryNex_Videos' || $p['DB_PORT'] === '14333') {
+// Seguro: el destino tiene que ser la base de videos o de la demo, nunca la de producción.
+if ($demo->query('SELECT DB_NAME()')->fetchColumn() !== $destino || $p['DB_PORT'] === '14333') {
     exit("Destino inesperado: no copio nada.\n");
 }
 
@@ -171,7 +177,8 @@ $demo->exec('EXEC sp_MSforeachtable "ALTER TABLE ? WITH CHECK CHECK CONSTRAINT A
 // Su última respuesta del registro oficial (RUAF/BDUA), tal como la guardó la
 // app, armada con la misma forma que devuelve RegistroOficialService::consultar().
 // No se consulta al operador: se lee lo que ya quedó guardado. Va FUERA del repo.
-$r = $prod->query("SELECT TOP 1 operador, payload, consultado_at FROM ruaf_consultas
+// En la demo pública NO: su autorización es para los videos, no para que la vea cualquiera.
+$r = getenv('DEMO_PUBLICO') ? null : $prod->query("SELECT TOP 1 operador, payload, consultado_at FROM ruaf_consultas
     WHERE cedula = '1143961945' AND estado = 'hallado' ORDER BY consultado_at DESC")->fetch(PDO::FETCH_ASSOC);
 if ($r) {
     $d = json_decode($r['payload'], true);

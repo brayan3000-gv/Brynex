@@ -225,6 +225,13 @@ if [[ $REINICIAR_REVERB -eq 1 ]]; then
 fi
 supervisorctl status | sed 's/^/  /'
 
+# La demo pública (demo.brynex.co) va con el mismo código. Si no está montada no
+# hace nada, y si falla no toca producción. Ver scripts/demo/servidor.
+if [[ -d /var/www/brynex-demo/.git ]]; then
+    titulo "Actualizando la demo pública"
+    bash "$APP_DIR/scripts/demo/servidor/actualizar.sh" || echo "  ⚠️  La demo no se pudo actualizar (producción quedó bien)."
+fi
+
 # ------------------------------------------------------------------------ cierre
 
 titulo "Listo"

@@ -16,10 +16,10 @@ class WhatsappApiService
 
     public function __construct()
     {
-        $this->http = new Client([
+        $this->http = new Client(\App\Services\Demo\GuzzleSimulado::opciones([
             'timeout'         => 30,
             'connect_timeout' => 10,
-        ]);
+        ]));
     }
 
     // ── Envío de mensajes ───────────────────────────────────────────

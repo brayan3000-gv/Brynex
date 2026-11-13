@@ -32,7 +32,7 @@ class WhatsappPlantillaRecibo extends Command
 
     public function handle(): int
     {
-        $http = new Client(['timeout' => 40, 'connect_timeout' => 10]);
+        $http = new Client(\App\Services\Demo\GuzzleSimulado::opciones(['timeout' => 40, 'connect_timeout' => 10]));
 
         foreach ($this->cuentas() as $cuenta) {
             $this->line("── WABA {$cuenta['creds']['waba_id']} (aliado {$cuenta['aliado_id']})");

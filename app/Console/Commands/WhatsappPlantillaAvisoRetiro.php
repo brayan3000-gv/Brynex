@@ -73,7 +73,7 @@ TXT;
             return self::FAILURE;
         }
         $creds = $config->credencialesEfectivas();
-        $http = new Client(['timeout' => 40, 'connect_timeout' => 10]);
+        $http = new Client(\App\Services\Demo\GuzzleSimulado::opciones(['timeout' => 40, 'connect_timeout' => 10]));
 
         $enMeta = $this->buscarEnMeta($http, $creds);
 

@@ -180,6 +180,7 @@ class RegistroOficialService
      */
     private function consultarEnOperador(int $aliadoId, string $cedula, string $tipoDoc = 'CC'): ?array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\RegistroOficialSimulado::consultar($cedula, $tipoDoc); }
         $candidatos = $this->candidatosParaRuaf($aliadoId);
 
         if (empty($candidatos)) {

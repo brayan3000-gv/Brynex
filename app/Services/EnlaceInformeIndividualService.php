@@ -303,6 +303,7 @@ class EnlaceInformeIndividualService
      */
     public function soporte(Plano $plano, ?int $operadorPlanillaId = null): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\SoporteSimulado::planilla($plano, $operadorPlanillaId); }
         // Mi Planilla no corre sobre Enlace ni tiene plantilla: o sale el PDF
         // real de su portal, o nada (antes salía uno con formato de ARUS).
         if (self::esMiPlanilla($operadorPlanillaId)) {
@@ -336,6 +337,7 @@ class EnlaceInformeIndividualService
      */
     public function soporteOriginal(Plano $plano, ?int $operadorPlanillaId = null): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\SoporteSimulado::planilla($plano, $operadorPlanillaId); }
         if (self::esMiPlanilla($operadorPlanillaId)) {
             return $this->deMiPlanilla($plano);
         }
@@ -641,7 +643,7 @@ class EnlaceInformeIndividualService
                 $opciones['handler'] = $pila;
             }
 
-            $http = new Client($opciones);
+            $http = new Client(\App\Services\Demo\GuzzleSimulado::opciones($opciones));
 
             try {
                 $this->abrirSesion($http, $host, $codigoOperador, $cred, $tipoAportante, $numeroAportante);
@@ -827,6 +829,7 @@ class EnlaceInformeIndividualService
      */
     public function comprobantePago(Plano $plano, ?int $operadorPlanillaId = null): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\SoporteSimulado::comprobante($plano); }
         $numero = self::numeroParaOperador($plano->numero_planilla)
             ?? throw new RuntimeException("«{$plano->numero_planilla}» no es un número de planilla válido.");
 

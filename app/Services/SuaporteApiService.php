@@ -329,6 +329,7 @@ class SuaporteApiService
      */
     public function autenticar(bool $forzar = false): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::autenticar(); }
         if (empty($this->usuario) || empty($this->contrasena) || empty($this->claveSecreta)) {
             return [
                 'success' => false,
@@ -442,6 +443,7 @@ class SuaporteApiService
      */
     public function consultarAportante(string $tipoDocumento, string $numeroDocumento): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::aportante($tipoDocumento, $numeroDocumento); }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)
@@ -486,6 +488,7 @@ class SuaporteApiService
      */
     public function consultarFichaAportante(int $aportanteId): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::fichaAportante($aportanteId); }
         foreach (['pyme', 'corporate'] as $segmento) {
             try {
                 $response = $this->http()
@@ -573,6 +576,7 @@ class SuaporteApiService
      */
     public function buscarActividadEconomica(string $termino): ?int
     {
+        if (config('demo.activo')) { return null; }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)
@@ -611,6 +615,7 @@ class SuaporteApiService
      */
     public function crearAportanteIndependiente(array $datos): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::crearAportante($datos); }
         $actividadId = $this->buscarActividadEconomica($datos['actividad_economica'] ?? '7490')
             ?? 405; // fallback: "Otras actividades profesionales, científicas y técnicas n.c.p."
 
@@ -707,6 +712,7 @@ class SuaporteApiService
      */
     public function autorizar(int $aportanteId, string $tipoDocumento, string $numeroDocumento, ?int $aplicacion = null): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::autorizar(); }
         $query = [
             'id' => $aportanteId,
             'tipoIdentificacion' => $tipoDocumento,
@@ -769,6 +775,7 @@ class SuaporteApiService
      */
     public function validarPlanilla(string $contenidoTxt, string $nombreArchivo, array $opciones = []): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::validar($contenidoTxt); }
         $parametros = json_encode([
             'planillaUGPP' => (bool) ($opciones['planillaUGPP'] ?? false),
             'planillaNSoloNovedades' => (bool) ($opciones['planillaNSoloNovedades'] ?? false),
@@ -823,6 +830,7 @@ class SuaporteApiService
      */
     public function corregirPlanilla(int $codigoPlanilla, array $opciones = []): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::corregir($codigoPlanilla); }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)
@@ -894,6 +902,7 @@ class SuaporteApiService
      */
     public function consultarInconsistencias(int $codigoPlanilla, int $registroInicial = 0, int $limite = 100): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::inconsistencias(); }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)
@@ -929,6 +938,7 @@ class SuaporteApiService
      */
     public function consultarAfiliacion(string $tipoDocumento, string $numeroDocumento, bool $reintento = false): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::afiliacion($tipoDocumento, $numeroDocumento); }
         if (empty($this->headers['token'])) {
             $auth = $this->autenticar();
             if (! $auth['success']) {
@@ -994,6 +1004,7 @@ class SuaporteApiService
      */
     public function consultarTotales(int $numeroPlanilla): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::totales($numeroPlanilla); }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)
@@ -1041,6 +1052,7 @@ class SuaporteApiService
      */
     public function obtenerUrlPago(int $numeroPlanilla): array
     {
+        if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::urlPago($numeroPlanilla); }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)

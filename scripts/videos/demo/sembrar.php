@@ -40,9 +40,14 @@ $app = require $APP.'/bootstrap/app.php';
 $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
 
 // ── Seguro: solo la base de Docker ─────────────────────────────────────────
+// O la de la demo pública (DEMO_PUBLICO=1, scripts/demo/demo.sh): BryNex_Demo con
+// la app en modo demo, en Docker o en el servidor. Nunca otra base.
 $c = config('database.connections.sqlsrv');
-if ((string) $c['port'] !== '14333' || $c['database'] !== 'BryNex_Videos' || ! in_array($c['host'], ['127.0.0.1', 'localhost'], true)) {
-    fwrite(STDERR, "Esto solo siembra la base de videos (127.0.0.1:14333/BryNex_Videos).\n");
+$PUBLICO = (bool) getenv('DEMO_PUBLICO');
+$esVideos = (string) $c['port'] === '14333' && $c['database'] === 'BryNex_Videos' && in_array($c['host'], ['127.0.0.1', 'localhost'], true);
+$esDemo = $PUBLICO && config('demo.activo') && $c['database'] === 'BryNex_Demo';
+if (! $esVideos && ! $esDemo) {
+    fwrite(STDERR, "Esto solo siembra la base de videos (127.0.0.1:14333/BryNex_Videos) o la de la demo (BryNex_Demo con BRYNEX_DEMO=true).\n");
     exit(1);
 }
 
@@ -54,7 +59,7 @@ const RS_IND = 998500102;   // la de los independientes
 // RegistroOficialService::consultar(): al buscar su cédula, la app la encuentra
 // ahí y no sale a preguntarle al operador. `restablecer` la vuelve a poner.
 $json = getenv('HOME').'/Movies/Brynex-videos/base/ruaf-yuly.json';
-if (is_file($json)) {
+if (! $PUBLICO && is_file($json)) {
     \Illuminate\Support\Facades\Cache::forever('ruaf_'.ALIADO.'_CC_1143961945', json_decode(file_get_contents($json), true));
 }
 if (in_array('--solo-cache', $argv, true)) {
@@ -103,7 +108,8 @@ $cuentas = [
 $lineasEnv = [];
 $usuarios = [];
 foreach ($cuentas as $clave => [$cedula, $nombre, $rol]) {
-    $pass = 'Video-'.bin2hex(random_bytes(5));
+    // En la demo pública la cuenta principal es la que se muestra en el login.
+    $pass = ($PUBLICO && $clave === 'SUPERADMIN' && getenv('DEMO_CLAVE')) ? getenv('DEMO_CLAVE') : 'Video-'.bin2hex(random_bytes(5));
     $id = $ins('users', [
         'aliado_id' => ALIADO, 'nombre' => $nombre, 'email' => strtolower(explode(' ', $nombre)[0]).'.'.$cedula.'@example.com',
         'password' => Hash::make($pass), 'cedula' => $cedula, 'telefono' => '399500'.substr($cedula, -4), 'es_brynex' => 0, 'activo' => 1,
@@ -214,8 +220,9 @@ for ($i = 1; $i <= 62; $i++) {
     ]);
 }
 // Yuly: nombre, cédula, EPS y fondo reales (de su consulta del registro oficial); lo demás, inventado.
+// En la demo pública no va: su autorización es solo para los videos.
 $ruafYuly = json_decode((string) @file_get_contents(getenv('HOME').'/Movies/Brynex-videos/base/ruaf-yuly.json'), true);
-$yuly = $nuevoCliente([
+$PUBLICO || $nuevoCliente([
     'cedula' => '1143961945', 'primer_nombre' => 'YULY', 'segundo_nombre' => 'PAOLA', 'primer_apellido' => 'GARCIA', 'segundo_apellido' => 'VIDAL',
     'genero' => 'F', 'celular' => '3995199999', 'correo' => 'yuly.demo@example.com', 'direccion_vivienda' => 'Carrera 50 # 10-20',
     'barrio' => 'El Vergel', 'eps_id' => $ruafYuly['eps_id'] ?? 2, 'pension_id' => $ruafYuly['pension_id'] ?? 9, 'cod_empresa' => 4,
@@ -539,8 +546,17 @@ foreach (array_slice($pendientes, 0, 3) as $k => $c) {
 
 Carbon::setTestNow();
 
+// ── Lo que solo lleva la demo pública ─────────────────────────────────────
+if ($PUBLICO) {
+    require __DIR__.'/../../demo/extras.php';
+}
+
 // ── Cuentas a .env.videos ──────────────────────────────────────────────────
 $archivo = getenv('VIDEOS_ENV');
+if ($PUBLICO || ! $archivo) {
+    echo $errores ? "Terminó con $errores errores (ver arriba).\n" : "Sembrado sin errores.\n";
+    exit($errores ? 1 : 0);
+}
 $previo = array_filter(file($archivo, FILE_IGNORE_NEW_LINES) ?: [], fn ($l) => ! preg_match('/^VIDEOS_(SUPERADMIN|ADMIN|USUARIO|CONTABLE|ASESOR|EMPRESA)_/', $l));
 file_put_contents($archivo, implode("\n", array_merge($previo, $lineasEnv))."\n");
 echo $errores ? "Terminó con $errores errores (ver arriba).\n" : "Sembrado sin errores.\n";

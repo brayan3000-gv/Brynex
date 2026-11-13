@@ -59,7 +59,7 @@ class MiPlanillaPortalService
             $opciones['proxy'] = $proxy;
         }
 
-        $this->http = new Client($opciones);
+        $this->http = new Client(\App\Services\Demo\GuzzleSimulado::opciones($opciones));
     }
 
     /**

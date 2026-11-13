@@ -194,13 +194,13 @@ class PortalCorreccionSaludService
             throw new RuntimeException('La razón social no tiene NIT.');
         }
 
-        $this->http = new Client([
+        $this->http = new Client(\App\Services\Demo\GuzzleSimulado::opciones([
             'cookies' => new CookieJar,
             'curl' => SuaporteApiService::opcionesCurlTls(),
             'timeout' => 120,
             'http_errors' => false,
             'headers' => ['User-Agent' => 'Mozilla/5.0', 'Accept-Language' => 'es-CO,es;q=0.9'],
-        ]);
+        ]));
 
         // Con las credenciales completas para respetar el freno de claves
         // rechazadas: cada intento fallido cuenta para el bloqueo de la cuenta.

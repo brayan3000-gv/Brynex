@@ -1,0 +1,23 @@
+<?php
+
+use App\Http\Controllers\DemoController;
+use Illuminate\Support\Facades\Route;
+
+/*
+| Rutas que solo existen en la demo (demo.brynex.co). Las carga
+| App\Providers\DemoServiceProvider cuando BRYNEX_DEMO=true; en producción
+| este archivo no se lee.
+*/
+
+Route::middleware('auth')->group(function () {
+    Route::prefix('demo/radicar')->name('demo.radicar.')
+        ->middleware(['permiso:radicados.ver', 'permiso.escritura:radicados.gestionar'])
+        ->group(function () {
+            Route::get('{id}/precheck', [DemoController::class, 'precheck'])->whereNumber('id')->name('precheck');
+            Route::post('{id}', [DemoController::class, 'radicar'])->whereNumber('id')->name('ejecutar');
+            Route::get('{id}/pdf', [DemoController::class, 'pdf'])->whereNumber('id')->name('pdf');
+        });
+
+    Route::get('demo/pago-pse/{numero}', [DemoController::class, 'pagoPse'])->whereNumber('numero')->name('demo.pago-pse');
+    Route::post('demo/pago-pse/{numero}', [DemoController::class, 'aprobarPse'])->whereNumber('numero')->name('demo.pago-pse.aprobar');
+});
