@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Bitacora;
 use App\Models\DocumentoCliente;
+use App\Services\BrynexRepresentanteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -88,8 +90,16 @@ class RazonSocialDocumentoController extends Controller
         // Almacenar en disco local privado
         Storage::disk('local')->put($ruta, file_get_contents($archivo->getRealPath()));
 
+        // Un solo documento por tipo: el que existía de ese tipo se reemplaza.
+        // Se busca antes de crear el nuevo para no borrarlo a él mismo.
+        $anteriores = DocumentoCliente::where('aliado_id', $aliadoId)
+            ->where('cc_cliente', $nit)
+            ->whereNull('doc_beneficiario')
+            ->where('tipo_documento', $tipoDocumento)
+            ->get();
+
         // Crear registro en la tabla de documentos
-        DocumentoCliente::create([
+        $nuevo = DocumentoCliente::create([
             'aliado_id'        => $aliadoId,
             'cc_cliente'       => $nit,
             'doc_beneficiario' => null, // null indica que es titular (en este caso la razón social)
@@ -99,7 +109,52 @@ class RazonSocialDocumentoController extends Controller
             'subido_por'       => auth()->id(),
         ]);
 
-        return back()->with('success', '✅ Documento subido y asociado correctamente.');
+        foreach ($anteriores as $anterior) {
+            Storage::disk('local')->delete($anterior->ruta);
+            $anterior->delete();
+        }
+
+        if ($anteriores->isNotEmpty()) {
+            Bitacora::registrar(
+                'updated', 'DocumentoCliente', $nuevo->id,
+                "«{$tipoDocumento}» de {$rs->razon_social} reemplazado",
+                ['reemplazados' => $anteriores->pluck('nombre_archivo')->all()]
+            );
+        }
+
+        return back()->with('success', $anteriores->isNotEmpty()
+            ? "✅ {$tipoDocumento} actualizado: reemplazó al que había."
+            : '✅ Documento subido y asociado correctamente.');
+    }
+
+    /**
+     * Descargar la cédula o el RUT personal del representante legal, que se
+     * guardan una sola vez por persona en Representantes (BryNex) y no en
+     * cada razón social. Solo si la empresa está ligada a una ficha de BryNex
+     * cuyo representante es esa persona (ver `representanteDeRazonSocial`).
+     */
+    public function downloadRepresentante(int $id, int $documentoId, BrynexRepresentanteService $representantes)
+    {
+        $rs = DB::table('razones_sociales')
+            ->where('id', $id)
+            ->where('aliado_id', session('aliado_id_activo'))
+            ->first();
+
+        abort_if(! $rs, 404, 'Razón Social no encontrada.');
+
+        $representante = $representantes->representanteDeRazonSocial($id);
+        abort_if(! $representante, 404, 'Esta razón social no tiene representante en BryNex.');
+
+        $documento = $representante->documentos->firstWhere('id', $documentoId);
+        abort_if(! $documento || ! Storage::disk('local')->exists($documento->ruta), 404, 'El archivo ya no está.');
+
+        Bitacora::registrar(
+            'descarga', 'BrynexRepresentanteDocumento', $documento->id,
+            "Descarga de {$documento->tipoEtiqueta()} de {$representante->nombre} desde {$rs->razon_social}",
+            ['aliado_id' => session('aliado_id_activo'), 'razon_social_id' => $id, 'ip' => request()->ip()]
+        );
+
+        return Storage::disk('local')->download($documento->ruta, $documento->nombre_original);
     }
 
     /**

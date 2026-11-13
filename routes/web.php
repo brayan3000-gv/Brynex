@@ -537,6 +537,11 @@ Route::middleware('auth')->group(function () {
         });
 
         Route::get('configuracion/razones-sociales/documentos/{id}/descargar', [$rsdc, 'download'])->name('configuracion.razones.documentos.download')->middleware('permiso:razones_sociales.ver');
+        // Cédula y RUT personal del representante: viven una vez por persona
+        // en Representantes (BryNex); aquí solo se leen.
+        Route::get('configuracion/razones-sociales/{id}/representante/documentos/{documento}/descargar', [$rsdc, 'downloadRepresentante'])
+            ->whereNumber('id')->whereNumber('documento')
+            ->name('configuracion.razones.documentos.representante')->middleware('permiso:razones_sociales.ver');
         // Permiso propio, aparte de `gestionar`: subir la cámara de comercio o
         // el RUT no tiene por qué dar también editar los datos de la empresa.
         Route::middleware('permiso:razones_sociales.documentos')->group(function () use ($rsdc) {

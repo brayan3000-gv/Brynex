@@ -142,6 +142,53 @@ class BrynexRepresentanteService
     }
 
     /**
+     * El representante (con sus documentos) de la razón social de un aliado,
+     * con la misma regla de `agrupar()`: se mira la ficha de BryNex a la que
+     * está ligada la fila, manda el puesto a mano y, si no hay, la cédula que
+     * tengan todos los aliados de esa ficha.
+     *
+     * Devuelve null si la razón social no está en una ficha en seguimiento o
+     * si los aliados no se ponen de acuerdo en quién es: así un aliado no
+     * puede ver la cédula de cualquiera con solo escribirla en su fila, porque
+     * una cédula distinta a la de los demás deja la empresa en conflicto.
+     */
+    public function representanteDeRazonSocial(int $razonSocialId): ?BrynexRepresentante
+    {
+        $fichaId = DB::table('brynex_razon_social_vinculos')
+            ->where('razon_social_id', $razonSocialId)
+            ->value('ficha_id');
+
+        if (! $fichaId) {
+            return null;
+        }
+
+        $filas = DB::table('brynex_razones_sociales as f')
+            ->leftJoin('brynex_razon_social_vinculos as v', 'v.ficha_id', '=', 'f.id')
+            ->leftJoin('razones_sociales as rs', 'rs.id', '=', 'v.razon_social_id')
+            ->where('f.id', $fichaId)
+            ->whereNull('f.deleted_at')
+            ->where('f.en_seguimiento', true)
+            ->get(['f.representante_cedula', 'rs.cedula_rep']);
+
+        if ($filas->isEmpty()) {
+            return null;
+        }
+
+        $manual = self::normalizarCedula($filas->first()->representante_cedula);
+        $cedulas = $manual
+            ? collect([$manual])
+            : $filas->map(fn ($f) => self::normalizarCedula($f->cedula_rep))->filter()->unique()->values();
+
+        if ($cedulas->count() !== 1) {
+            return null;
+        }
+
+        return BrynexRepresentante::with(['documentos' => fn ($q) => $q->orderBy('tipo')->orderByDesc('created_at')])
+            ->where('cedula', $cedulas->first())
+            ->first();
+    }
+
+    /**
      * `cedula_rep` es BIGINT en `razones_sociales` y sqlsrv lo devuelve como
      * string; aquí se le quitan puntos, espacios y ceros a la izquierda, y el
      * 0 que algunos aliados dejaron de relleno cuenta como vacío. Las letras

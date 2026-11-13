@@ -27,6 +27,17 @@
         }
     }
     $puedeDocs = auth()->user()->can('razones_sociales.documentos');
+
+    // La cédula y el RUT personal del representante se guardan una sola vez
+    // por persona en Representantes (BryNex) y aquí solo se muestran, para
+    // no tener que cargarlos en cada empresa de la misma persona.
+    $repBrynex = app(\App\Services\BrynexRepresentanteService::class)->representanteDeRazonSocial((int) $rs->id);
+    $repDocs = $repBrynex?->documentos ?? collect();
+    $repTieneCedula = $repDocs->contains('tipo', 'CEDULA');
+
+    // Un solo documento por tipo: subir otro del mismo tipo reemplaza al actual.
+    $tiposCargados = $documentosRs->pluck('tipo_documento')->unique()->flip();
+    $etiquetaTipo = fn (string $tipo) => $tipo . (isset($tiposCargados[$tipo]) ? ' · reemplaza el actual' : '');
 @endphp
 
     {{-- ── 📁 Documentos de la Razón Social ── --}}
@@ -36,10 +47,10 @@
         {{-- Listado de documentos existentes --}}
         <div style="margin-bottom: 1.5rem">
             <h4 style="font-size: .75rem; color: #475569; text-transform: uppercase; margin-bottom: .6rem; letter-spacing: .02em">
-                Documentos Cargados ({{ $documentosRs->count() }})
+                Documentos Cargados ({{ $documentosRs->count() + $repDocs->count() }})
             </h4>
 
-            @if($documentosRs->isEmpty())
+            @if($documentosRs->isEmpty() && $repDocs->isEmpty())
                 <div style="background: #f8fafc; border: 1.5px dashed #e2e8f0; padding: 1.5rem; text-align: center; border-radius: 10px; color: #94a3b8; font-size: .8rem">
                     📭 No hay documentos cargados para esta razón social.
                 </div>
@@ -56,6 +67,29 @@
                             </tr>
                         </thead>
                         <tbody>
+                            @foreach($repDocs as $rd)
+                                <tr style="border-bottom: 1px solid #f1f5f9; background: #f5f3ff">
+                                    <td style="padding: .55rem .75rem; font-weight: 700; color: #1e293b">
+                                        {{ $rd->tipo === 'CEDULA' ? 'Cédula del Representante' : $rd->tipoEtiqueta() . ' del Representante' }}
+                                        <div style="font-size: .62rem; font-weight: 600; color: #6d28d9">👤 de Representantes · {{ $repBrynex->nombre }}</div>
+                                    </td>
+                                    <td style="padding: .55rem .75rem; color: #475569; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap" title="{{ $rd->nombre_original }}">
+                                        {{ $rd->nombre_original }}
+                                    </td>
+                                    <td style="padding: .55rem .75rem; color: #64748b">BryNex</td>
+                                    <td style="padding: .55rem .75rem; color: #94a3b8; font-size: .72rem">
+                                        {{ $rd->created_at?->format('d/m/Y h:i A') }}
+                                    </td>
+                                    <td style="padding: .55rem .75rem; text-align: right; white-space: nowrap">
+                                        <a href="{{ route('admin.configuracion.razones.documentos.representante', [$rs->id, $rd->id]) }}"
+                                           style="padding: .25rem .5rem; background: #dbeafe; border: 1px solid #bfdbfe; border-radius: 6px; color: #1d4ed8; text-decoration: none; font-size: .7rem; font-weight: 700; display: inline-flex; align-items: center; gap: .2rem">
+                                            📥 Descargar
+                                        </a>
+                                        <span title="Se cambia en BryNex → Razones sociales → Representantes, y sirve para todas sus empresas"
+                                              style="display: inline-block; margin-left: 4px; font-size: .64rem; color: #7c3aed; font-weight: 600">🔒 se edita en Representantes</span>
+                                    </td>
+                                </tr>
+                            @endforeach
                             @foreach($documentosRs as $doc)
                                 <tr style="border-bottom: 1px solid #f1f5f9">
                                     <td style="padding: .55rem .75rem; font-weight: 700; color: #1e293b">
@@ -112,18 +146,26 @@
                         <label class="flb">Tipo de Documento <span>*</span></label>
                         <select class="finp" name="tipo_documento" id="selectTipoDoc" required onchange="toggleOtroDocumento(this.value)">
                             <option value="">— Seleccionar Tipo —</option>
-                            <option value="RUT">RUT</option>
-                            <option value="Cámara de Comercio">Cámara de Comercio</option>
-                            <option value="Radicado ARL">Radicado ARL</option>
-                            <option value="Cédula del Representante">Cédula del Representante</option>
-                            <option value="Certificación Bancaria">Certificación Bancaria</option>
+                            <option value="RUT">{{ $etiquetaTipo('RUT') }}</option>
+                            <option value="Cámara de Comercio">{{ $etiquetaTipo('Cámara de Comercio') }}</option>
+                            <option value="Radicado ARL">{{ $etiquetaTipo('Radicado ARL') }}</option>
+                            @unless($repTieneCedula)
+                                <option value="Cédula del Representante">{{ $etiquetaTipo('Cédula del Representante') }}</option>
+                            @endunless
+                            <option value="Certificación Bancaria">{{ $etiquetaTipo('Certificación Bancaria') }}</option>
                             <optgroup label="Declaraciones de Renta">
                                 @foreach($aniosRenta as $anio)
-                                    <option value="Declaración de Renta {{ $anio }}">Declaración de Renta {{ $anio }}</option>
+                                    <option value="Declaración de Renta {{ $anio }}">{{ $etiquetaTipo('Declaración de Renta ' . $anio) }}</option>
                                 @endforeach
                             </optgroup>
                             <option value="Otro">Otro (Especificar nombre)</option>
                         </select>
+                        <div style="font-size: .66rem; color: #64748b; margin-top: .3rem">
+                            Se guarda uno por tipo: si ya hay uno, el nuevo lo reemplaza.
+                            @if($repTieneCedula)
+                                La cédula del representante viene de Representantes y no hay que cargarla aquí.
+                            @endif
+                        </div>
                     </div>
 
                     <div id="wrapOtroDoc" style="display: none">
