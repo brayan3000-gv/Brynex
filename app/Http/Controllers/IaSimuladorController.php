@@ -142,7 +142,7 @@ class IaSimuladorController extends Controller
 
         // hablar_con_asesor / no_contactar pueden haber dejado la conversación de prueba
         // apagada o el número bloqueado de marketing — se restaura para la próxima corrida.
-        $waConversacion?->update(['bot_activo' => true, 'pendiente_atencion' => false, 'pendiente_motivo' => null]);
+        $waConversacion?->update(['bot_activo' => true, 'pendiente_atencion' => false, 'pendiente_motivo' => null, 'perfil_ia' => null, 'perfil_ia_at' => null]);
         MarketingBloqueado::where('aliado_id', $alidoId)->where('celular', $this->telefonoPlayground($alidoId))->delete();
 
         return response()->json(['ok' => true]);

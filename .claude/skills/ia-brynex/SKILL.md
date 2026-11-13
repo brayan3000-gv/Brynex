@@ -75,12 +75,34 @@ esa fecha Gemini 3.6 Flash se registraba al doble del precio real.
 ### Caché y orden del prompt
 
 El system prompt va en trozos, de lo fijo a lo variable
-(`construirSystemPromptWhatsapp` devuelve `[reglas, bloque de aliados,
+(`construirSystemPromptWhatsapp` devuelve `[base común, módulo del perfil,
 contexto de la conversación]`). `ClaudeProvider` marca con `cache_control` la
 última herramienta y todos los trozos menos el último; Gemini y OpenAI los
 pegan y aprovechan su caché automática. **Nada que cambie por conversación
 (fecha con hora, nombre del cliente, anuncio, campaña) puede ir en las
 reglas**: rompe la caché de todas las respuestas.
+
+### Tres perfiles en WhatsApp: cliente, asesor y aliado (13-nov-2026)
+
+Un solo número y un solo «Brygar», pero cada conversación se atiende con un
+módulo distinto sobre una base común (identidad, formato, reglas técnicas de
+`cotizar_plan`, conocimiento, no_contactar):
+
+| Perfil | Quién | Qué ofrece |
+|---|---|---|
+| `cliente` | Quiere comprar un plan, o ya es cliente/empleador | Cotizar, plan EPS sin pensión, cerrar con cédula → `hablar_con_asesor`; planillas, saldos |
+| `asesor` | Trabaja con BRYGAR trayendo clientes (de 0 a ~50) | Plan Asesor, calculadora, reunión virtual |
+| `aliado` | Empresa desde `alianzas.cerca` (75) o persona desde `umbral_empresa` (100) | Planes de BryNex: Alianza Esencial, Específica, Integral |
+
+`AsistenteIaService::resolverPerfil` decide: cliente/empleador existente →
+cliente; `whatsapp_conversaciones.perfil_ia`; `perfil_aliado` viejo; anuncio de
+asesores → asesor; si no, cliente. El perfil cambia solo: `perfilar_aliado`
+lo fija según la cantidad, y `cambiar_perfil` cuando el de clientes descubre
+que es asesor (o al revés). Esa herramienta devuelve instrucciones para el
+turno en curso, porque el módulo nuevo entra desde el mensaje siguiente.
+Las reglas de un perfil van en SU módulo: con un prompt único se colaban
+(«Tipo de vinculación: Dependiente sin preguntar» contra «pregúntale al asesor
+si sus clientes son independientes»).
 
 ### Trampa: `[]` vs `{}` en Claude
 

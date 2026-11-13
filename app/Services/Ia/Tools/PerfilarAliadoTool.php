@@ -62,6 +62,14 @@ class PerfilarAliadoTool implements IaToolInterface
             ? $servicio->aplicar($conv, $tipo, $personas, avisar: true, simular: (bool) ($contexto['modo_prueba'] ?? false))
             : $servicio->orientar(2, $tipo, $personas) + ['responsable' => null];
 
+        // Con lo que contó queda decidido a quién atiende la IA desde el próximo mensaje: asesor,
+        // aliado (con muchos afiliados) o cliente (el empleador). Ver AsistenteIaService::resolverPerfil.
+        // En el simulador $conv es la conversación de prueba, así que se guarda igual.
+        $conv?->forceFill([
+            'perfil_ia' => \App\Services\Ia\AsistenteIaService::perfilSegunPerfilado($tipo, $personas),
+            'perfil_ia_at' => now(),
+        ])->save();
+
         if (! empty($input['detalle']) && $conv && empty($contexto['modo_prueba'])) {
             $conv->forceFill(['pendiente_motivo' => '🤝 '.ucfirst($tipo).' · '.$personas.' personas · '.$input['detalle']])->save();
         }
