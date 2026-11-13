@@ -890,6 +890,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/accesos', [$bx, 'accesos'])->name('accesos');
         Route::post('/accesos', [$bx, 'toggleAcceso'])->name('accesos.toggle');
 
+        // Validador de cédulas: ¿pasa con subtipo 03/04/09? → recomienda el plan
+        // (X1 para quien califica, Ingreso-Retiro para quien no). Solo consulta.
+        $bval = \App\Http\Controllers\BrynexValidadorController::class;
+        Route::get('/validador-subtipo', [$bval, 'index'])->name('validador.index');
+        Route::post('/validador-subtipo', [$bval, 'verificar'])->name('validador.verificar');
+
         // Conciliación de afiliados contra ARL Sura. Vive en BryNex y no en los
         // informes del aliado porque cruza una póliza contra los contratos de
         // todos los aliados que comparten ese NIT.

@@ -254,6 +254,14 @@
                     </div>
                     <div class="hc-arrow">→</div>
                 </a>
+                <a href="{{ route('brynex.validador.index') }}" class="hub-card">
+                    <div class="hc-icon">🪪</div>
+                    <div class="hc-body">
+                        <div class="hc-name">Validador de cédulas</div>
+                        <div class="hc-desc">¿Pasa con subtipo 03/04/09? Consulta a Simple y recomienda el plan (X1 o Ingreso-Retiro)</div>
+                    </div>
+                    <div class="hc-arrow">→</div>
+                </a>
                 @if(in_array(strtolower((string) auth()->user()->email), array_map('strtolower', (array) config('exportacion.correos_autorizados')), true))
                 <a href="{{ route('brynex.exportaciones.index') }}" class="hub-card" style="border-color:#fed7aa;background:#fff7ed">
                     <div class="hc-icon">📦</div>
