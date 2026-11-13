@@ -11,6 +11,7 @@ use App\Services\AlertaOperativaService;
 use App\Services\WhatsappApiService;
 use App\Services\WhatsappBandejaCompartida;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -207,12 +208,10 @@ class RelevoDemo
             return false;
         }
 
-        $yaSeLeMando = DemoProspecto::whereIn('celular', [$p->celular, $numero])
-            ->where('id', '<>', $p->id)
-            ->where('created_at', '>', now()->subHour())
-            ->exists();
-
-        if ($yaSeLeMando) {
+        // Cuenta las bienvenidas que de verdad salieron, no los registros: si no,
+        // un registro sin envío bloqueaba el siguiente (13-nov-2026).
+        $llave = 'demo_bienvenida_'.$numero;
+        if (Cache::has($llave)) {
             return false;
         }
 
@@ -229,6 +228,8 @@ class RelevoDemo
 
         if (! $r['ok']) {
             Log::warning('Demo: Meta no aceptó la bienvenida', ['prospecto' => $p->id, 'error' => $r['error'] ?? null]);
+        } else {
+            Cache::put($llave, true, now()->addHour());
         }
 
         return (bool) $r['ok'];
