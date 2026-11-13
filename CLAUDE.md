@@ -162,6 +162,7 @@ antes de tocar un módulo de negocio:
 - [[permisos-brynex]] — roles Spatie, `es_brynex`, aliado activo en sesión
 - [[blade-alpine-brynex]] — patrones de UI (Blade + Alpine.js)
 - [[laravel-migracion]] — cómo escribir migraciones incrementales para SQL Server
+- [[videos-publicidad]] — guiones y videos de pauta (historias con personas por Gemini Omni, voz, música, cierre BRYGAR) + agente `revisor-guiones`
 
 ## Convenciones
 

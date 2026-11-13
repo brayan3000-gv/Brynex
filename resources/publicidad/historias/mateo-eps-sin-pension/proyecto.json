@@ -1,0 +1,139 @@
+{
+  "titulo": "Mateo — EPS sin pensión BRYGAR $125.000",
+  "marca": "BRYGAR",
+  "aliado_id": 2,
+  "aspecto": "9:16",
+  "resolucion": "720p",
+  "etiqueta": "Dramatización",
+  "estiloVisual": "Cinematic, photorealistic, shot in Cali, Colombia, humble working-class home and places, shallow depth of field, soft film grain, natural acting, slow subtle camera movement, vertical framing with the faces in the upper-middle of the frame.",
+  "voz": {
+    "nombre": "Aoede",
+    "modelo": "gemini-2.5-pro-preview-tts",
+    "estilo": "narradora de un comercial colombiano, mujer de Cali, con voz cálida y cercana y acento colombiano natural",
+    "tempo": 1.04
+  },
+  "musica": {
+    "prompt": "Emotional cinematic score for a 40-second Colombian TV commercial about health and family. First 18 seconds: soft, sad solo piano with gentle low strings, sparse and intimate, slow (around 70 BPM). Then a warm, hopeful lift: piano becomes brighter, soft strings and a light acoustic guitar join, building gently to an uplifting, reassuring ending with a soft resolved final chord. No drums at the start, no vocals. Instrumental only, no vocals.",
+    "volumen": 0.3,
+    "giro": 14
+  },
+  "referencias": [
+    {
+      "id": "familia",
+      "prompt": "A Colombian mother, about 32 years old, from Cali, warm medium-brown skin, dark curly hair tied in a low messy ponytail, kind tired eyes, no makeup, small gold stud earrings, wearing a faded mustard-yellow cotton t-shirt and grey leggings. Next to her, her son, about 5 years old, short curly black hair, wearing light blue cotton pajamas with small white stars. Both looking at the camera."
+    }
+  ],
+  "escenas": [
+    {
+      "id": "noche",
+      "voz": "Dos de la mañana. Mateo con fiebre… y su mamá sin EPS.",
+      "tono": "en voz baja, íntima y pausada, con angustia contenida",
+      "resaltar": [
+        "sin EPS"
+      ],
+      "toma": {
+        "refs": [
+          "familia"
+        ],
+        "dur": 8,
+        "prompt": "Night. Opens on a close-up of the mother's face lit by the soft glow of her phone screen, a concerned, thoughtful expression. The camera slowly pulls back to reveal a cozy, humble bedroom with blue moonlight through the window and a warm bedside lamp, where her son sleeps peacefully under a blanket with a small white towel folded on his forehead. She puts the phone down and gently strokes his hair.",
+        "sonido": "quiet night ambience, a clock ticking"
+      }
+    },
+    {
+      "id": "urgencias",
+      "voz": "En urgencias lo atienden, sí. Pero después vienen los exámenes, las citas, los medicamentos… y no tenía EPS.",
+      "tono": "seria, a ritmo de conversación normal, con una pausa breve antes de «y no tenía EPS»",
+      "resaltar": [
+        "exámenes",
+        "citas",
+        "medicamentos",
+        "no tenía EPS"
+      ],
+      "toma": {
+        "refs": [
+          "familia"
+        ],
+        "dur": 10,
+        "prompt": "Early morning at a public hospital in Cali, fluorescent lights, a few people waiting. The mother, same mustard-yellow t-shirt, stands at the admissions window holding a few papers, reading them with a worried face; her son sits on a plastic chair behind her wrapped in a small blanket, calm and sleepy. Handheld camera, documentary feel.",
+        "sonido": "hospital waiting room murmur, distant beeping"
+      }
+    },
+    {
+      "id": "cuenta",
+      "voz": "Todo porque la pensión no le alcanzaba.",
+      "tono": "lenta y triste, casi en susurro al final",
+      "resaltar": [
+        "la pensión no le alcanzaba"
+      ],
+      "toma": {
+        "refs": [
+          "familia"
+        ],
+        "dur": 5,
+        "prompt": "Night, a small humble kitchen with a single warm hanging bulb. The mother sits alone at a wooden table, same mustard-yellow t-shirt, looking at a few Colombian peso bills and coins next to a pharmacy receipt. She covers her mouth with her hand and lets out a quiet sigh, eyes glassy. Static camera, slow and still.",
+        "sonido": "quiet kitchen, refrigerator hum, coins on wood"
+      }
+    },
+    {
+      "id": "solucion",
+      "voz": "Con BRYGAR hay EPS sin pensión: ciento veinticinco mil al mes, todo incluido. Y Mateo también queda cubierto.",
+      "tono": "con un tono luminoso y esperanzador, más ágil y segura, sonriendo",
+      "resaltar": [
+        "BRYGAR",
+        "EPS sin pensión",
+        "$125.000 al mes",
+        "Mateo también queda cubierto"
+      ],
+      "tarjeta": {
+        "tipo": "precio",
+        "desde": 1.6
+      },
+      "toma": {
+        "refs": [
+          "familia"
+        ],
+        "dur": 9,
+        "prompt": "Bright warm morning sunlight in the same humble living room. The mother, same mustard-yellow t-shirt, sits on the sofa typing a message on her phone; her face changes from doubt to relief and a soft smile. Her son, now healthy, in his light blue star pajamas, climbs next to her and hugs her arm. Gentle slow dolly-in, hopeful warm tones.",
+        "sonido": "morning birds, soft home ambience"
+      },
+      "pantalla": "Con BRYGAR hay EPS sin pensión: $125.000 al mes, todo incluido. Y Mateo también queda cubierto.",
+      "giro": true
+    },
+    {
+      "id": "garantia",
+      "voz": "Te afiliamos el mismo día. Y si estás al día y por tu afiliación no te dan la cita o los medicamentos, te devolvemos el cien por ciento del mes.",
+      "tono": "firme, segura y ágil, como una promesa, sin pausas largas",
+      "resaltar": [
+        "el mismo día",
+        "la cita",
+        "los medicamentos",
+        "100 % del mes"
+      ],
+      "tarjeta": {
+        "tipo": "garantia",
+        "desde": 2.2,
+        "pie": "Estando al día · Reactivación gratis"
+      },
+      "toma": {
+        "refs": [
+          "familia"
+        ],
+        "dur": 10,
+        "prompt": "Daytime in a clean, bright medical office in Cali. A friendly doctor in a white coat finishes checking the boy, healthy and smiling, sitting on the examination bed in a t-shirt; the doctor gives him a playful high five. The mother, same mustard-yellow t-shirt, receives a prescription from the doctor and smiles with relief. Warm natural light, slow camera movement.",
+        "sonido": "soft clinic ambience, the boy laughs softly"
+      },
+      "pantalla": "Te afiliamos el mismo día. Y si estás al día y por tu afiliación no te dan la cita o los medicamentos, te devolvemos el 100 % del mes."
+    },
+    {
+      "id": "cierre",
+      "voz": "Afíliate hoy. Escríbenos por WhatsApp.",
+      "tono": "cálida y decidida, invitando",
+      "cierre": {
+        "dir": "resources/publicidad/video-brynex-3",
+        "desde": 24.6,
+        "hasta": 30
+      }
+    }
+  ]
+}
