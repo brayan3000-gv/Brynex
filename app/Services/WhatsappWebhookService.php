@@ -425,9 +425,10 @@ class WhatsappWebhookService
         // Asistente IA: solo si el bot está activo en esta conversación y el aliado
         // tiene la IA activada para WhatsApp. Se procesa en un Job para no bloquear
         // la respuesta al webhook de Meta (~20s de margen).
-        // El «DEMO 1234» de quien prueba la demo pública ya lo contestó RelevoDemo:
-        // la IA no tiene nada que decirle a ese código.
-        $esCodigoDemo = $tipo === 'text' && \App\Services\Demo\RelevoDemo::codigoEn($dataMensaje['contenido'] ?? null) !== null;
+        // El «DEMO 1234» (o el botón de la bienvenida) de quien prueba la demo
+        // pública ya lo contestó RelevoDemo: la IA no tiene nada que decirle.
+        $esCodigoDemo = ($tipo === 'text' && \App\Services\Demo\RelevoDemo::codigoEn($dataMensaje['contenido'] ?? null) !== null)
+            || ($tipo === 'button' && \App\Services\Demo\RelevoDemo::esBotonDemo($dataMensaje['contenido'] ?? null));
 
         if ($conversacion->bot_activo && !$esRechazoPublicidad && !$esCodigoDemo) {
             if ($iaActiva) {
@@ -894,11 +895,18 @@ class WhatsappWebhookService
         $perfiles = collect($value['contacts'] ?? [])->mapWithKeys(fn ($c) => [($c['wa_id'] ?? '') => $c['profile']['name'] ?? null]);
 
         foreach ($value['messages'] as $msg) {
-            if (($msg['type'] ?? '') !== 'text' || empty($msg['from'])) {
+            $tipo = $msg['type'] ?? '';
+            if (! in_array($tipo, ['text', 'button'], true) || empty($msg['from'])) {
                 continue;
             }
             try {
-                \App\Services\Demo\RelevoDemo::verificarDesdeWhatsapp($msg['from'], $perfiles[$msg['from']] ?? null, $msg['text']['body'] ?? null);
+                $perfil = $perfiles[$msg['from']] ?? null;
+                if ($tipo === 'button') {
+                    // Los botones de la plantilla de bienvenida (sí / no fui yo).
+                    \App\Services\Demo\RelevoDemo::responderBoton($msg['from'], $perfil, $msg['button']['text'] ?? null);
+                } else {
+                    \App\Services\Demo\RelevoDemo::verificarDesdeWhatsapp($msg['from'], $perfil, $msg['text']['body'] ?? null);
+                }
             } catch (\Throwable $e) {
                 Log::warning('Demo: no se pudo verificar el código', ['from' => $msg['from'], 'error' => $e->getMessage()]);
             }

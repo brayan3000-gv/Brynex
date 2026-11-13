@@ -21,7 +21,7 @@
 <style>
     #demo-franja{position:fixed;left:14px;bottom:14px;z-index:2147483000;display:flex;align-items:center;gap:.5rem;cursor:pointer;
         background:#111827;color:#fff;border-radius:999px;padding:.4rem .7rem .4rem .45rem;font:600 12px/1.2 system-ui,-apple-system,Segoe UI,sans-serif;
-        box-shadow:0 6px 24px rgba(0,0,0,.25);border:none}
+        box-shadow:0 6px 24px rgba(0,0,0,.25);border:none;width:auto;margin:0}
     #demo-franja .demo-pill{background:#f59e0b;color:#111827;border-radius:999px;padding:.15rem .5rem;font-weight:800;letter-spacing:.04em}
     #demo-panel{position:fixed;left:14px;bottom:60px;z-index:2147483000;width:340px;max-width:calc(100vw - 28px);max-height:calc(100vh - 90px);overflow:auto;
         background:#fff;color:#0f172a;border-radius:14px;box-shadow:0 14px 40px rgba(0,0,0,.28);font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;display:none}
@@ -106,9 +106,21 @@
             return true;
         }
         const texto = encodeURIComponent(`DEMO ${d.codigo} — Hola, soy ${nombre} y estoy probando la demo de BryNex.`);
+        const enlace = `https://wa.me/${d.numero}?text=${texto}`;
+        if (d.bienvenida) {
+            // Le llegó la plantilla: basta con tocar el botón. El código queda de respaldo.
+            const cel = String(d.celular || '').replace(/(\d{3})(\d{3})(\d+)/, '$1 $2 $3');
+            caja.innerHTML = `Te enviamos un WhatsApp al <strong>${cel}</strong>.
+                <div style="margin:.45rem 0;font-weight:700;color:#0f172a">Ábrelo y toca «Sí, quiero los ejemplos».</div>
+                Así te llega lo que envíes desde la demo (máximo ${d.max} mensajes).
+                <div style="margin-top:.4rem;font-size:.72rem">⏳ Esperando tu respuesta…</div>
+                <div style="margin-top:.5rem;font-size:.72rem">¿No te llegó? Escríbenos <span class="dp-cod" style="font-size:.8rem">DEMO ${d.codigo}</span>
+                    <a href="${enlace}" target="_blank" rel="noopener" style="color:#16a34a;font-weight:700">desde aquí</a>.</div>`;
+            return false;
+        }
         caja.innerHTML = `Recibe en tu celular lo que envíes desde la demo (máximo ${d.max} mensajes).
             <div style="margin:.5rem 0">Escríbenos por WhatsApp el código <span class="dp-cod">DEMO ${d.codigo}</span></div>
-            <a class="dp-btn" href="https://wa.me/${d.numero}?text=${texto}" target="_blank" rel="noopener">Abrir WhatsApp</a>
+            <a class="dp-btn" href="${enlace}" target="_blank" rel="noopener">Abrir WhatsApp</a>
             <div style="margin-top:.4rem;font-size:.72rem">⏳ Esperando tu mensaje…</div>`;
         return false;
     };

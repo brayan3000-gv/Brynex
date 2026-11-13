@@ -6,6 +6,7 @@ use App\Models\DemoProspecto;
 use App\Models\WhatsappConfig;
 use App\Models\WhatsappConversacion;
 use App\Models\WhatsappMensaje;
+use App\Models\WhatsappPlantilla;
 use App\Services\WhatsappApiService;
 use App\Services\WhatsappBandejaCompartida;
 use Illuminate\Http\Request;
@@ -34,6 +35,18 @@ class RelevoDemo
 {
     /** «DEMO 1234», «demo-1234», «DEMO1234». */
     private const PATRON = '/\bDEMO[\s\-]*(\d{4})\b/i';
+
+    /**
+     * La plantilla que le llega al celular que escribió al registrarse, con dos
+     * botones. Tocar «Sí» verifica sin escribir ningún código; un desconocido
+     * cuyo número alguien escribió recibe solo este mensaje y puede ignorarlo.
+     * Creada en la cuenta de Info Avapp el 13-nov-2026 (categoría UTILITY).
+     */
+    public const PLANTILLA_BIENVENIDA = 'demo_bienvenida_brynex';
+
+    private const BOTON_SI = '/s[ií],?\s*quiero los ejemplos/iu';
+
+    private const BOTON_NO = '/no fui yo/iu';
 
     public static function maxEnvios(): int
     {
@@ -105,6 +118,81 @@ class RelevoDemo
         return $texto && preg_match(self::PATRON, $texto, $m) ? $m[1] : null;
     }
 
+    /** ¿Es uno de los dos botones de la plantilla de bienvenida? */
+    public static function esBotonDemo(?string $texto): bool
+    {
+        return $texto && (preg_match(self::BOTON_SI, $texto) || preg_match(self::BOTON_NO, $texto));
+    }
+
+    /**
+     * La plantilla de bienvenida al celular que escribió. Una por número por
+     * hora: registrarse diez veces con el número de otro no le manda diez mensajes.
+     */
+    public static function enviarBienvenida(DemoProspecto $p): bool
+    {
+        $numero = WhatsappApiService::normalizarNumero($p->celular);
+        $config = self::configBrynex();
+
+        if (strlen($numero) < 11 || ! $config) {
+            return false;
+        }
+
+        $yaSeLeMando = DemoProspecto::whereIn('celular', [$p->celular, $numero])
+            ->where('id', '<>', $p->id)
+            ->where('created_at', '>', now()->subHour())
+            ->exists();
+
+        if ($yaSeLeMando) {
+            return false;
+        }
+
+        $plantilla = (new WhatsappPlantilla)->forceFill(['nombre' => self::PLANTILLA_BIENVENIDA, 'idioma' => 'es']);
+        $primerNombre = Str::limit(trim(explode(' ', trim($p->nombre))[0]), 30, '');
+
+        try {
+            $r = app(WhatsappApiService::class)->enviarTemplate($numero, $plantilla, [$primerNombre ?: 'hola'], $config);
+        } catch (Throwable $e) {
+            Log::warning('Demo: no salió la bienvenida', ['prospecto' => $p->id, 'error' => $e->getMessage()]);
+
+            return false;
+        }
+
+        if (! $r['ok']) {
+            Log::warning('Demo: Meta no aceptó la bienvenida', ['prospecto' => $p->id, 'error' => $r['error'] ?? null]);
+        }
+
+        return (bool) $r['ok'];
+    }
+
+    /**
+     * Respuesta a los botones de la bienvenida. «Sí» verifica con el número que
+     * tocó el botón; «No fui yo» le quita la autorización y no se le escribe más.
+     */
+    public static function responderBoton(string $telefono, ?string $nombrePerfil, ?string $texto): ?DemoProspecto
+    {
+        if (! self::esBotonDemo($texto)) {
+            return null;
+        }
+
+        $telefono = preg_replace('/\D/', '', $telefono);
+        $p = DemoProspecto::whereIn('celular', [$telefono, substr($telefono, 2)])
+            ->where('created_at', '>', now()->subDay())
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $p) {
+            return null;
+        }
+
+        if (preg_match(self::BOTON_NO, (string) $texto)) {
+            $p->update(['acepto_contacto' => false, 'ultimo_uso_at' => now()]);
+
+            return $p;
+        }
+
+        return self::marcarVerificado($p, $telefono, $nombrePerfil);
+    }
+
     public static function registrar(array $datos, ?string $ip): DemoProspecto
     {
         do {
@@ -144,6 +232,12 @@ class RelevoDemo
             return null;
         }
 
+        return self::marcarVerificado($p, $telefono, $nombrePerfil);
+    }
+
+    /** Deja verificado al prospecto con el número que de verdad escribió, y se lo confirma. */
+    private static function marcarVerificado(DemoProspecto $p, string $telefono, ?string $nombrePerfil): DemoProspecto
+    {
         $primeraVez = ! $p->verificado_at;
         $p->update([
             'telefono_whatsapp' => preg_replace('/\D/', '', $telefono),

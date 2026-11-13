@@ -55,6 +55,8 @@ class DemoController extends Controller
             'nombre' => trim($datos['nombre']),
             'codigo' => $r['codigo'] ?? null,
             'numero' => $r['numero'] ?? null,
+            'bienvenida' => (bool) ($r['bienvenida'] ?? false),
+            'celular' => preg_replace('/\D/', '', $datos['celular']),
             'verificado' => false,
             'envios' => 0,
             'max' => $r['max'] ?? RelevoDemo::maxEnvios(),
@@ -86,6 +88,8 @@ class DemoController extends Controller
             'max' => $p['max'],
             'codigo' => $p['codigo'],
             'numero' => $p['numero'],
+            'bienvenida' => (bool) ($p['bienvenida'] ?? false),
+            'celular' => $p['celular'] ?? null,
         ]);
     }
 

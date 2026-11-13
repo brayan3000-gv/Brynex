@@ -27,9 +27,10 @@ class DemoRelevoController extends Controller
         ]);
 
         $p = RelevoDemo::registrar($datos, $datos['ip'] ?? null);
+        $bienvenida = $p->acepto_contacto && RelevoDemo::enviarBienvenida($p);
 
         return response()->json([
-            'ok' => true, 'id' => $p->id, 'codigo' => $p->codigo,
+            'ok' => true, 'id' => $p->id, 'codigo' => $p->codigo, 'bienvenida' => $bienvenida,
             'numero' => preg_replace('/\D/', '', (string) config('demo.relevo.numero')), 'max' => RelevoDemo::maxEnvios(),
         ]);
     }
