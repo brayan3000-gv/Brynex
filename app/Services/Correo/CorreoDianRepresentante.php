@@ -127,6 +127,46 @@ class CorreoDianRepresentante
         ] : null;
     }
 
+    /**
+     * El enlace vigente de UNA empresa de este representante. Es el que hay
+     * que usar con el buzón central: ahí llegan los enlaces de todos y todos
+     * saludan al mismo correo, así que «menciona al representante» no sirve
+     * para distinguirlos. El enlace trae la cédula (`pk=…|cédula`) y el NIT
+     * (`rk=nit`), y con eso se compara.
+     *
+     * @return array{enlace: string, fecha: string, asunto: string, cuenta: string}|null
+     */
+    public function enlaceDeEmpresa(BrynexRepresentante $rep, string $nit, ?Carbon $desde = null): ?array
+    {
+        $b = $this->buzonDe($rep) ?? throw new RuntimeException($this->porQueNoHayBuzon($rep));
+
+        $limite = now()->subMinutes(self::minutos());
+        $desde = $desde && $desde->gt($limite) ? $desde : $limite;
+        $nit = preg_replace('/\D/', '', $nit);
+
+        foreach ($this->correosDian($b['buzon'], $desde, $rep, $b['via']) as $c) {
+            if ($c['enlace'] && $c['fecha']->gte($desde) && self::enlaceEsDe($c['enlace'], $rep->cedula, $nit)) {
+                return [
+                    'enlace' => $c['enlace'],
+                    'fecha' => $c['fecha']->format('Y-m-d H:i:s'),
+                    'asunto' => $c['asunto'],
+                    'cuenta' => $b['buzon']->cuenta(),
+                ];
+            }
+        }
+
+        return null;
+    }
+
+    /** ¿El enlace de la DIAN es de esta cédula y este NIT? (`pk=…|cédula&rk=nit`). */
+    public static function enlaceEsDe(string $enlace, string $cedula, string $nit): bool
+    {
+        parse_str((string) parse_url($enlace, PHP_URL_QUERY), $q);
+
+        return ($q['rk'] ?? null) === $nit
+            && str_ends_with((string) ($q['pk'] ?? ''), '|' . $cedula);
+    }
+
     public function porQueNoHayBuzon(BrynexRepresentante $rep): string
     {
         if (self::esGmail($rep->correo_rut)) {

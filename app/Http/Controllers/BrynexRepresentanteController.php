@@ -226,7 +226,11 @@ class BrynexRepresentanteController extends Controller
         $desde = $request->filled('desde') ? \Illuminate\Support\Carbon::parse($request->input('desde')) : null;
 
         try {
-            $enlace = $correo->enlaceVigente($rep, $desde);
+            // Con `nit` se busca el enlace exacto de esa empresa: en el buzón
+            // central todos los enlaces saludan al mismo correo.
+            $enlace = $request->filled('nit')
+                ? $correo->enlaceDeEmpresa($rep, (string) $request->input('nit'), $desde)
+                : $correo->enlaceVigente($rep, $desde);
         } catch (\Throwable $e) {
             return response()->json(['ok' => false, 'error' => self::errorLegible($e)], 422);
         }
