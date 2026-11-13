@@ -13,8 +13,10 @@ $aliadoId = session('aliado_id_activo');
 $r100 = fn($v) => (int)(ceil(($v ?? 0) / 100) * 100); // redondeo al centena superior
 // El IVA NO se redondea a centena: es impuesto, va exacto como se factura.
 $rIva = fn($v) => (int) round($v ?? 0);
-// Columna de IVA visible solo si la empresa está marcada con iva=SI
-$mostrarIva = \App\Services\IvaService::bandera($empresa->iva ?? null);
+// Columna de IVA visible si la empresa está en iva=SI o si algún cliente del
+// lote lo paga por su propia marca (ver IvaService).
+$mostrarIva = \App\Services\IvaService::bandera($empresa->iva ?? null)
+    || collect($contratos ?? [])->contains(fn ($c) => (bool) ($c->tiene_iva ?? false));
 $ivaPct     = \App\Models\ConfiguracionBrynex::porcentajeIva();
 
 $estadoLabel = fn($e) => match($e) {

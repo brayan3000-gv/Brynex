@@ -57,11 +57,13 @@ Columnas clave:
 4. **Mora**: Calculada por `MoraClienteService` — depende de días de atraso y config del aliado
 5. **Distribución**: `dist_encargado` + `admon_asesor` debe ser ≤ `administracion`
 6. **Tiempo Parcial**: El IBC se calcula proporcional a `dias_tiempo_parcial / 30`
-7. **IVA**: única fuente de verdad en `App\Services\IvaService`. Si el cliente
-   pertenece a una empresa (`clientes.cod_empresa`), **manda `empresas.iva`**: en
-   'SI' cobra IVA a todos sus clientes y en 'No' los exime a todos, sin importar
-   `clientes.iva` — la cuenta de cobro se le emite a la empresa. Solo cuando el
-   cliente no tiene empresa decide su propia marca. La base gravada es `admon + admon_asesor + afiliacion` de esa factura: en planilla
+7. **IVA**: única fuente de verdad en `App\Services\IvaService`. Se cobra si el
+   cliente (`clientes.iva`) **o** su empresa (`clientes.cod_empresa` →
+   `empresas.iva`) están en 'SI'; basta con uno. Hasta nov-2026 mandaba la
+   empresa y un 'No' de la empresa le quitaba el IVA al cliente marcado: falló
+   con un canal de referidos («ALIADO-…», NIT 1), que no es empleador ni recibe
+   la cuenta de cobro (factura 107981, el IVA pagado quedó como saldo a favor).
+   La base gravada es `admon + admon_asesor + afiliacion` de esa factura: en planilla
    es solo la administración, en afiliación pura es solo el costo de afiliación, y en
    I ACT primer mes son ambas. El seguro y la seguridad social no se gravan.
    Nunca recalcular el IVA a mano en un controlador nuevo — usar `IvaService::deFactura()`.

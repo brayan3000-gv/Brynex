@@ -171,14 +171,14 @@ class EmpresaPeriodoService
             ->select('contrato_id', DB::raw('SUM(saldo_proximo) as suma'))
             ->pluck('suma', 'contrato_id');
 
-        // IVA: todos estos clientes pertenecen a esta empresa, así que manda la
-        // marca de la empresa — la del cliente no cuenta aquí (ver IvaService).
+        // IVA: el cliente o la empresa en 'SI' (ver IvaService). Con la empresa
+        // en 'SI' todos pagan; si no, solo los clientes marcados.
         $empresaTieneIva = \App\Services\IvaService::bandera($empresa->iva);
         $ivaClientes = DB::table('clientes')
             ->where('aliado_id', $aliadoId)
             ->where('cod_empresa', $empresaId)
             ->pluck('iva', 'cedula')
-            ->map(fn ($v) => $empresaTieneIva)
+            ->map(fn ($v) => $empresaTieneIva || \App\Services\IvaService::bandera($v))
             ->toArray();
 
         // ── Contratos a los que les falta el mes anterior ──────────────────

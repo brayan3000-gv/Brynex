@@ -10,12 +10,16 @@ use Illuminate\Support\Facades\DB;
  * Regla única de IVA para la facturación.
  *
  * ¿Quién causa IVA?
- *   • Si el cliente pertenece a una empresa (`clientes.cod_empresa`), **manda la
- *     empresa**: `empresas.iva = 'SI'` cobra IVA a todos sus clientes, y
- *     `empresas.iva = 'No'` exime a todos — aunque el cliente tenga su propia
- *     marca en 'SI'. La cuenta de cobro se le emite a la empresa, así que es su
- *     condición tributaria la que aplica.
- *   • Si el cliente no tiene empresa (independiente), manda `clientes.iva`.
+ *   • Se cobra IVA si el cliente (`clientes.iva`) **o** su empresa
+ *     (`clientes.cod_empresa` → `empresas.iva`) están marcados 'SI'. Basta
+ *     con uno de los dos.
+ *   • Hasta nov-2026 mandaba la empresa: con la empresa en 'No' se eximía al
+ *     cliente aunque él tuviera 'SI'. Eso le quitó el IVA a un cliente ligado a
+ *     un canal de referidos («ALIADO-…», NIT 1) que no es su empleador ni recibe
+ *     la cuenta de cobro: pagó con IVA y los $10.500 quedaron como saldo a favor
+ *     (factura 107981, aliado 4).
+ *   • `cod_empresa` puede apuntar a una empresa de otro aliado (ver
+ *     Contrato::pagaParafiscales()); esa no cuenta y decide solo el cliente.
  *
  * ¿Sobre qué?
  *   • Planilla    → administración (admon empresa + admon asesor).
@@ -42,8 +46,7 @@ class IvaService
     }
 
     /**
-     * ¿El contrato causa IVA? Si el cliente tiene empresa, decide la empresa;
-     * si no la tiene, decide su propia marca.
+     * ¿El contrato causa IVA? Sí, si el cliente o su empresa están en 'SI'.
      */
     public static function aplicaContrato(?Contrato $contrato): bool
     {
@@ -75,15 +78,9 @@ class IvaService
                 ->value('iva')
             : null;
 
-        // Sin fila de empresa no hay empresa que mande, aunque el cliente traiga
-        // un `cod_empresa`: muchos apuntan a una empresa de otro aliado (ver
-        // Contrato::pagaParafiscales()), y la consulta con el aliado correcto no
-        // encuentra nada. Tratar ese null como "no cobra IVA" le quitaba el IVA
-        // a un cliente que lo venia pagando (Jhon Jairo Ospina, ago-2026:
-        // $9.300 cobrados que la factura no incluyo y quedaron a favor).
-        $aplica = $ivaEmpresa !== null
-            ? self::bandera($ivaEmpresa)
-            : self::bandera($cliente->iva);
+        // Sin fila de empresa en este aliado (cod_empresa de otro aliado, ver
+        // Contrato::pagaParafiscales()) decide solo la marca del cliente.
+        $aplica = self::bandera($cliente->iva) || self::bandera($ivaEmpresa);
 
         return self::$cache[$llave] = $aplica;
     }
@@ -130,11 +127,9 @@ class IvaService
 
         $mapa = [];
         foreach ($clientes as $cli) {
-            // Mismo criterio que aplicaContrato(): si la empresa no aparece en
-            // este aliado, manda la marca del cliente y no un "no" por defecto.
-            $mapa[$cli->cedula] = array_key_exists($cli->cod_empresa, $empresasIva)
-                ? (bool) $empresasIva[$cli->cod_empresa]
-                : self::bandera($cli->iva);
+            // Mismo criterio que aplicaContrato(): el cliente o su empresa.
+            $mapa[$cli->cedula] = self::bandera($cli->iva)
+                || (bool) ($empresasIva[$cli->cod_empresa] ?? false);
             self::$cache[self::llave($aliadoId, $cli->cedula)] = $mapa[$cli->cedula];
         }
 
