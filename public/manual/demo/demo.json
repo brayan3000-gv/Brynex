@@ -1,0 +1,16 @@
+{
+ "afiliaciones-arl-api": {
+  "archivo": "demo/afiliaciones-arl-api.mp4",
+  "titulo": "Afiliar a la ARL por API",
+  "segundos": 49.8,
+  "pasos": [
+   "Cada contrato nuevo trae su radicado de ARL. Aquí está pendiente, en naranja.",
+   "Al abrirlo, BryNex ofrece afiliar por API, sin entrar al portal de la ARL.",
+   "Primero revisa lo que pide la ARL: el trabajador, el empleador, el riesgo, el cargo y el salario.",
+   "Si algo falta, lo avisa antes de enviar. Aquí está todo; solo se elige desde cuándo cubre.",
+   "BryNex entra al API, valida al trabajador, envía la afiliación y descarga el certificado.",
+   "Listo: el radicado queda en OK, con su número y el certificado adjunto.",
+   "En la demo todo es simulado: el PDF dice muestra y nada sale a la ARL."
+  ]
+ }
+}

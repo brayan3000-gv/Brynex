@@ -60,7 +60,7 @@ class VideosManual
     /** Todos los clips por id, prefiriendo el de escritorio cuando hay dos formatos. */
     public static function todos(): array
     {
-        return Cache::remember('demo_videos_manual', 600, function () {
+        return Cache::remember('demo_videos_manual_v2', 600, function () {
             $json = json_decode((string) @file_get_contents(public_path('manual/manual.json')), true) ?: [];
             $clips = [];
 
@@ -79,6 +79,21 @@ class VideosManual
                     'pasos' => array_values(array_filter((array) ($c['pasos'] ?? []))),
                     'url' => asset('manual/'.ltrim($c['archivo'], '/')),
                 ];
+            }
+
+            // Las versiones grabadas en la demo (public/manual/demo, scripts/videos/
+            // escenas/demo-*.mjs) reemplazan al clip del manual con el mismo id:
+            // muestran el flujo que ve el prospecto (p. ej. la afiliación simulada).
+            $propios = json_decode((string) @file_get_contents(public_path('manual/demo/demo.json')), true) ?: [];
+            foreach ($propios as $id => $c) {
+                if (isset($clips[$id]) && ! empty($c['archivo']) && is_file(public_path('manual/'.$c['archivo']))) {
+                    $clips[$id] = [
+                        'titulo' => $c['titulo'] ?? $clips[$id]['titulo'],
+                        'segundos' => (int) round((float) ($c['segundos'] ?? $clips[$id]['segundos'])),
+                        'pasos' => array_values(array_filter((array) ($c['pasos'] ?? []))),
+                        'url' => asset('manual/'.ltrim($c['archivo'], '/')),
+                    ] + $clips[$id];
+                }
             }
 
             return $clips;

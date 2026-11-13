@@ -47,6 +47,8 @@ function leerEnv(archivo) {
 
 /** Cédula (o NIT) y clave de cada rol: `.env.videos` (lo escribe demo/sembrar.php). */
 export function cuentaDe(rol) {
+  // La demo pública (scripts/demo) tiene su propia cuenta: VIDEOS_CEDULA y VIDEOS_CLAVE.
+  if (process.env.VIDEOS_CEDULA) return { cedula: process.env.VIDEOS_CEDULA, clave: process.env.VIDEOS_CLAVE }
   const v = leerEnv('.env.videos')
   return { cedula: v[`VIDEOS_${rol}_CEDULA`], clave: v[`VIDEOS_${rol}_CLAVE`] }
 }
@@ -171,6 +173,8 @@ export async function grabar({ nombre, formato, rol, escena, salida }) {
   // Nada sale del Mac: lo que no es localhost (o una librería estática de CDN) se aborta y se anota.
   const salidas = new Set()
   await ctx.route('**/*', (r) => {
+    // Lo interno del navegador (su visor de PDF) no sale a ninguna parte.
+    if (/^(chrome|chrome-extension|data|blob):/.test(r.request().url())) return r.continue()
     const host = new URL(r.request().url()).hostname
     if (host === 'localhost' || host === '127.0.0.1' || PERMITIDOS.includes(host)) return r.continue()
     salidas.add(r.request().url().slice(0, 140))
@@ -427,9 +431,11 @@ async function listo(page) {
 export async function entrar(page, { cedula, clave }) {
   if (!cedula || !clave) throw new Error('Falta la cuenta en .env.videos: corre scripts/videos/base-videos.sh rehacer')
   await page.goto(BASE + '/login', { waitUntil: 'domcontentloaded' })
+  // En la demo pública el login está detrás del registro.
+  if (await page.locator('#demo-con-clave').count()) await page.click('#demo-con-clave')
   await page.fill('input[name=cedula]', cedula)
   await page.fill('input[name=password]', clave)
-  await page.click('button[type=submit]')
+  await page.click('form[action*="login"] button[type=submit]')
   await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 30000 })
   if (page.url().includes('/tratamiento-datos')) {
     await page.check('input[name=acepto]')
