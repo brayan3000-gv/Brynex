@@ -267,6 +267,42 @@
                 @else
                     <div style="color:#94a3b8;font-size:0.78rem;margin-top:0.8rem;">Sin claves guardadas.</div>
                 @endif
+
+                {{-- Documentos personales: cédula, RUT personal. Datos personales → solo con `gestionar`. --}}
+                @can('brynex_razones.gestionar')
+                    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:0.4rem;margin-top:0.8rem;padding-top:0.7rem;border-top:1px dashed #e2e8f0;">
+                        <span style="color:#64748b;font-size:0.68rem;font-weight:700;text-transform:uppercase;margin-right:0.2rem;">Documentos</span>
+                        @forelse($r->documentos as $d)
+                            <span class="rep-empresa" style="gap:0.3rem;" title="{{ $d->nombre_original }}{{ $d->observacion ? ' · ' . $d->observacion : '' }} · subido {{ $d->created_at?->format('d/m/Y') }}">
+                                <a href="{{ route('brynex.razones.representantes.documentos.descargar', $d->id) }}" style="color:inherit;text-decoration:none;">
+                                    📄 {{ $d->tipoEtiqueta() }}
+                                </a>
+                                <form method="POST" action="{{ route('brynex.razones.representantes.documentos.destroy', $d->id) }}"
+                                      onsubmit="return confirm('¿Eliminar este documento? El archivo se borra.')" style="display:inline;">
+                                    @csrf @method('DELETE')
+                                    <button type="submit" title="Eliminar" style="background:none;border:none;color:#cbd5e1;cursor:pointer;font-size:0.72rem;padding:0;">✕</button>
+                                </form>
+                            </span>
+                        @empty
+                            <span style="color:#94a3b8;font-size:0.78rem;">Sin cédula ni RUT guardados.</span>
+                        @endforelse
+
+                        <form method="POST" action="{{ route('brynex.razones.representantes.documentos.subir') }}" enctype="multipart/form-data"
+                              style="display:inline-flex;gap:0.35rem;align-items:center;margin-left:auto;">
+                            @csrf
+                            <input type="hidden" name="cedula" value="{{ $r->cedula }}">
+                            <input type="hidden" name="nombre" value="{{ $r->nombre }}">
+                            <input type="hidden" name="tipo_documento" value="{{ $r->tipo_documento }}">
+                            <select name="tipo" style="font-size:0.75rem;padding:0.2rem 0.3rem;border:1px solid #cbd5e1;border-radius:6px;">
+                                @foreach(\App\Models\BrynexRepresentanteDocumento::TIPOS as $k => $v)
+                                    <option value="{{ $k }}">{{ $v }}</option>
+                                @endforeach
+                            </select>
+                            <input type="file" name="archivo" accept=".pdf,image/*" required style="font-size:0.72rem;max-width:190px;">
+                            <button type="submit" class="rep-btn chico">⬆ Subir</button>
+                        </form>
+                    </div>
+                @endcan
             </div>
         @empty
             <div class="rep-card" style="text-align:center;color:#94a3b8;">

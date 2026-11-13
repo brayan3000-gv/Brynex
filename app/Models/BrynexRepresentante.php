@@ -29,4 +29,9 @@ class BrynexRepresentante extends BaseModel
     {
         return $this->hasMany(BrynexRepresentanteCredencial::class, 'representante_id');
     }
+
+    public function documentos()
+    {
+        return $this->hasMany(BrynexRepresentanteDocumento::class, 'representante_id');
+    }
 }

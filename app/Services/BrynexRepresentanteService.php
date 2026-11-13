@@ -93,7 +93,10 @@ class BrynexRepresentanteService
 
         // También salen los que se registraron a mano y hoy no figuran como
         // representantes de ninguna ficha: sus claves no deben quedar huérfanas.
-        $registros = BrynexRepresentante::with(['credenciales' => fn ($q) => $q->where('activo', true)->orderBy('tipo')])
+        $registros = BrynexRepresentante::with([
+            'credenciales' => fn ($q) => $q->where('activo', true)->orderBy('tipo'),
+            'documentos' => fn ($q) => $q->orderBy('tipo')->orderByDesc('created_at'),
+        ])
             ->get()
             ->keyBy('cedula');
 
@@ -121,6 +124,7 @@ class BrynexRepresentanteService
                 'telefono' => $registro?->telefono,
                 'notas' => $registro?->notas,
                 'credenciales' => $registro?->credenciales ?? collect(),
+                'documentos' => $registro?->documentos ?? collect(),
                 'empresas' => $empresas,
                 // Los aliados escriben el nombre a mano; si no coincide entre
                 // ellos, conviene verlo antes de confiar en uno.

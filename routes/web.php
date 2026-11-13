@@ -1022,6 +1022,11 @@ Route::middleware('auth')->group(function () {
             Route::post('/leer-documento', [$brs, 'leerDocumento'])->name('leer_documento');
             Route::post('/representantes', [$brep, 'guardar'])->name('representantes.guardar');
             Route::post('/representantes/asignar', [$brep, 'asignar'])->name('representantes.asignar');
+            // Cédula y RUT personal: datos personales, por eso van con
+            // `gestionar` y no con `ver`, y cada descarga queda en la bitácora.
+            Route::post('/representantes/documentos', [$brep, 'subirDocumento'])->name('representantes.documentos.subir');
+            Route::get('/representantes/documentos/{id}/descargar', [$brep, 'descargarDocumento'])->whereNumber('id')->name('representantes.documentos.descargar');
+            Route::delete('/representantes/documentos/{id}', [$brep, 'eliminarDocumento'])->whereNumber('id')->name('representantes.documentos.destroy');
             Route::post('/seguir', [$brs, 'seguir'])->name('seguir');
             Route::put('/{id}', [$brs, 'update'])->whereNumber('id')->name('update');
             Route::post('/{id}/dejar-de-seguir', [$brs, 'dejarDeSeguir'])->name('dejar');

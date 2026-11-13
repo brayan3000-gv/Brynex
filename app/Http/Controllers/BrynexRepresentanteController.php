@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\Bitacora;
 use App\Models\BrynexRepresentante;
 use App\Models\BrynexRepresentanteCredencial;
+use App\Models\BrynexRepresentanteDocumento;
 use App\Services\BrynexRepresentanteService;
 use App\Services\Correo\CorreoDianRepresentante;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 /**
@@ -252,6 +254,95 @@ class BrynexRepresentanteController extends Controller
         }
 
         return $m;
+    }
+
+    // ─── Documentos ───────────────────────────────────────────────────
+
+    /**
+     * Cédula, RUT personal u otro documento del representante. Se guarda una
+     * vez por persona y sirve para todas sus empresas. Va al disco `local`:
+     * son datos personales (C-4 de la auditoría).
+     */
+    public function subirDocumento(Request $request)
+    {
+        $datos = $request->validate([
+            'cedula' => 'required|string|max:20',
+            'nombre' => 'required|string|max:150',
+            'tipo_documento' => ['required', Rule::in(array_keys(BrynexRepresentante::TIPOS_DOCUMENTO))],
+            'tipo' => ['required', Rule::in(array_keys(BrynexRepresentanteDocumento::TIPOS))],
+            'observacion' => 'nullable|string|max:300',
+            'archivo' => 'required|file|max:15360|mimes:pdf,jpg,jpeg,png,webp',
+        ], [
+            'archivo.max' => 'El archivo no puede pesar más de 15 MB.',
+            'archivo.mimes' => 'Solo se aceptan PDF o imágenes.',
+        ]);
+
+        $cedula = BrynexRepresentanteService::normalizarCedula($datos['cedula']);
+        if (! $cedula) {
+            return back()->with('error', 'La cédula no es válida.');
+        }
+
+        $representante = BrynexRepresentante::firstOrCreate(
+            ['cedula' => $cedula],
+            [
+                'nombre' => mb_strtoupper(trim($datos['nombre'])),
+                'tipo_documento' => $datos['tipo_documento'],
+                'creado_por' => auth()->id(),
+                'actualizado_por' => auth()->id(),
+            ]
+        );
+
+        $archivo = $request->file('archivo');
+        $ruta = $archivo->store("brynex/representantes/{$cedula}", 'local');
+
+        $documento = BrynexRepresentanteDocumento::create([
+            'representante_id' => $representante->id,
+            'tipo' => $datos['tipo'],
+            'nombre_original' => $archivo->getClientOriginalName(),
+            'ruta' => $ruta,
+            'mime' => $archivo->getClientMimeType(),
+            'tamano' => $archivo->getSize(),
+            'observacion' => $datos['observacion'] ?? null,
+            'subido_por' => auth()->id(),
+        ]);
+
+        Bitacora::registrar(
+            'created', 'BrynexRepresentanteDocumento', $documento->id,
+            "{$documento->tipoEtiqueta()} de {$representante->nombre}"
+        );
+
+        return redirect()->to(route('brynex.razones.representantes.index') . '#' . BrynexRepresentanteService::ancla($representante->cedula))
+            ->with('success', "{$documento->tipoEtiqueta()} guardado. Sirve para todas las empresas de este representante.");
+    }
+
+    public function descargarDocumento(int $id)
+    {
+        $documento = BrynexRepresentanteDocumento::with('representante')->findOrFail($id);
+
+        abort_unless(Storage::disk('local')->exists($documento->ruta), 404, 'El archivo ya no está.');
+
+        Bitacora::registrar(
+            'descarga', 'BrynexRepresentanteDocumento', $documento->id,
+            "Descarga de {$documento->tipoEtiqueta()} de {$documento->representante?->nombre}",
+            ['ip' => request()->ip()]
+        );
+
+        return Storage::disk('local')->download($documento->ruta, $documento->nombre_original);
+    }
+
+    public function eliminarDocumento(int $id)
+    {
+        $documento = BrynexRepresentanteDocumento::with('representante')->findOrFail($id);
+        $cedula = $documento->representante?->cedula ?? '';
+        $descripcion = "{$documento->tipoEtiqueta()} de {$documento->representante?->nombre}";
+
+        Storage::disk('local')->delete($documento->ruta);
+        $documento->delete();
+
+        Bitacora::registrar('deleted', 'BrynexRepresentanteDocumento', $id, "{$descripcion} eliminado");
+
+        return redirect()->to(route('brynex.razones.representantes.index') . '#' . BrynexRepresentanteService::ancla($cedula))
+            ->with('success', 'Documento eliminado.');
     }
 
     /** Revelar una contraseña. Deja rastro en la bitácora siempre. */
