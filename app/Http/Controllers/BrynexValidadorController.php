@@ -48,22 +48,29 @@ class BrynexValidadorController extends Controller
         // cruza el nombre contra la RNEC; con el real evitamos ruido de formato).
         $cli = DB::table('clientes')->where('cedula', $cedula)->first();
 
+        $apellido = trim($data['primer_apellido'] ?? '') ?: ($cli->primer_apellido ?? '');
+        $nombre = trim($data['primer_nombre'] ?? '') ?: ($cli->primer_nombre ?? '');
+
+        // El gate de la UGPP (2.655 / 2.506) es por cédula: el nombre no cambia
+        // el resultado (verificado 12-nov-2026). Así que si no hay ficha ni se
+        // escribió nombre —caso típico del lote de prospectos— se usa uno
+        // genérico para que la línea quede bien formada, y la cédula igual se
+        // valida. Se marca `con_ficha` para que la vista avise si el nombre no
+        // es el real.
         $persona = [
-            'tipo_doc' => strtoupper(trim($data['tipo_doc'])),
+            'tipo_doc' => strtoupper(trim($data['tipo_doc'])) ?: 'CC',
             'cedula' => $cedula,
-            'primer_apellido' => trim($data['primer_apellido'] ?? '') ?: ($cli->primer_apellido ?? ''),
+            'primer_apellido' => $apellido ?: 'VALIDACION',
             'segundo_apellido' => trim($data['segundo_apellido'] ?? '') ?: ($cli->segundo_apellido ?? ''),
-            'primer_nombre' => trim($data['primer_nombre'] ?? '') ?: ($cli->primer_nombre ?? ''),
+            'primer_nombre' => $nombre ?: 'CEDULA',
             'segundo_nombre' => trim($data['segundo_nombre'] ?? '') ?: ($cli->segundo_nombre ?? ''),
         ];
 
-        if (! $persona['primer_apellido'] && ! $persona['primer_nombre']) {
-            return response()->json([
-                'ok' => false,
-                'error' => 'No encontré ficha para esa cédula. Escribe al menos el primer apellido y el primer nombre.',
-            ], 422);
+        $res = $svc->validar($persona);
+        if (is_array($res)) {
+            $res['con_ficha'] = (bool) $cli;
         }
 
-        return response()->json($svc->validar($persona));
+        return response()->json($res);
     }
 }
