@@ -140,9 +140,15 @@ class BuzonGmail
             // únicamente de los que interesan, para no llenar la memoria con todo el buzón.
             // Con $busquedaGmail la búsqueda la hace Gmail (X-GM-RAW, misma sintaxis del
             // buscador de Gmail, sin comillas): leer los encabezados de todo el buzón es lento.
-            $consulta = $carpeta->query()->leaveUnread()->setFetchBody(false)->setFetchFlags(false)->limit($maximo);
+            // Del más nuevo al más viejo: con `limit` se quedan los primeros, y en
+            // orden ascendente un día con muchos correos dejaba por fuera los
+            // recientes (el enlace de la DIAN recién pedido no aparecía).
+            $consulta = $carpeta->query()->leaveUnread()->setFetchBody(false)->setFetchFlags(false)
+                ->setFetchOrderDesc()->limit($maximo);
+            // `after:` de Gmail acepta segundos Unix: así la búsqueda empieza en
+            // $desde y no en el día anterior (un minuto de margen por relojes).
             $consulta = $busquedaGmail
-                ? $consulta->where('CUSTOM X-GM-RAW', trim($busquedaGmail).' after:'.$desde->copy()->subDay()->format('Y/m/d'))
+                ? $consulta->where('CUSTOM X-GM-RAW', trim($busquedaGmail).' after:'.($desde->getTimestamp() - 60))
                 : $consulta->since($desde->copy()->startOfDay());
             $cabeceras = $consulta->get();
 
