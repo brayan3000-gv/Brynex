@@ -5,8 +5,7 @@
 # (la mora, los semáforos y la caja del día se calculan contra la fecha real).
 #
 # Lo corre el cron de /etc/cron.d/brynex-demo a las 3:30, como root. Todo lo que
-# toca es de la demo: su base (con el login brynex_demo, que solo es dueño de
-# ella) y /var/www/brynex-demo.
+# toca es de la demo: la base BryNex_Demo y /var/www/brynex-demo.
 set -euo pipefail
 
 DEMO=/var/www/brynex-demo
@@ -23,12 +22,20 @@ leer() { grep -E "^$1=" "$DEMO/.env" | head -1 | cut -d= -f2-; }
 
 como_demo() { sudo -u "$USUARIO" env HOME=/tmp TZ=America/Bogota "$@"; }
 
-SQLCMDPASSWORD="$(leer DB_PASSWORD)" "$SQLCMD" -S 127.0.0.1 -U brynex_demo -C -b -Q "
-    ALTER DATABASE BryNex_Demo SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+# Restaura con sa (root, /root/.brynex_credentials): la copia trae a sa como
+# dueño, así que después de cada RESTORE hay que devolverle la base a
+# brynex_demo, y eso solo lo puede hacer un sysadmin. Todo va fijo a BryNex_Demo.
+SA="$(. /root/.brynex_credentials; echo "${SA_PASS:-}")"
+[[ -n "$SA" ]] || { echo "Falta SA_PASS en /root/.brynex_credentials"; exit 1; }
+salida="$(SQLCMDPASSWORD="$SA" "$SQLCMD" -S 127.0.0.1 -U sa -C -b -Q "
+    IF DB_ID('BryNex_Demo') IS NOT NULL ALTER DATABASE BryNex_Demo SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
     RESTORE DATABASE BryNex_Demo FROM DISK = '$BAK' WITH REPLACE,
         MOVE 'BryNex_Demo' TO '/var/opt/mssql/data/BryNex_Demo.mdf',
         MOVE 'BryNex_Demo_log' TO '/var/opt/mssql/data/BryNex_Demo_log.ldf';
-    ALTER DATABASE BryNex_Demo SET MULTI_USER;" >/dev/null
+    ALTER DATABASE BryNex_Demo SET MULTI_USER;
+    ALTER AUTHORIZATION ON DATABASE::BryNex_Demo TO brynex_demo;" 2>&1)" \
+    || { echo "$salida"; exit 1; }
+unset SA
 
 # Lo que la gente subió o generó ayer (PDF de radicados, documentos, sesiones).
 rm -rf "$DEMO/storage/app/radicados" "$DEMO/storage/app/documentos" "$DEMO/storage/framework/sessions/"* \

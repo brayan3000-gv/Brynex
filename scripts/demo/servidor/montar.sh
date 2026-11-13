@@ -5,7 +5,8 @@
 #   bash /var/www/brynex/scripts/demo/servidor/montar.sh
 #
 # Antes: el DNS de demo.brynex.co apuntando al servidor, y la plantilla de la
-# base subida desde el Mac (`scripts/demo/demo.sh subir`).
+# base subida desde el Mac (`scripts/demo/demo.sh subir`). La clave de sa la lee
+# de /root/.brynex_credentials; si no está, la pregunta.
 #
 # Qué deja, y por qué así:
 #   - /var/www/brynex-demo: otra copia del MISMO código (clon local de
@@ -14,12 +15,25 @@
 #     mod_php de producción: así ni un fallo de la demo puede leer el .env de
 #     producción (que es 600 de www-data) ni escribir en /var/www/brynex.
 #   - Su login de SQL (`brynex_demo`) es dueño SOLO de BryNex_Demo y
-#     BryNex_Finanzas_Demo: no ve la base de producción. Ser dueño le deja
-#     restaurar su base cada noche sin ser sysadmin.
+#     BryNex_Finanzas_Demo: no ve la base de producción. (La restauración de
+#     cada noche la hace root con sa: ver reiniciar.sh.)
 #   - Un cron a las 3:30 vuelve la base a cero y la siembra con fechas de hoy.
 #
 # Es idempotente: si algo ya existe, lo deja.
 set -euo pipefail
+# Producción es de www-data y esto corre como root: git se niega a leer
+# /var/www/brynex/.git. Git 2.34 (Ubuntu 22.04) solo acepta esa excepción desde
+# la config global, así que se usa una global temporal (la de root + esa ruta)
+# sin tocar /root/.gitconfig.
+GIT_CONFIG_GLOBAL="$(mktemp)"; export GIT_CONFIG_GLOBAL
+trap 'rm -f "$GIT_CONFIG_GLOBAL"' EXIT
+printf '[include]
+	path = /root/.gitconfig
+[safe]
+	directory = /var/www/brynex/.git
+	directory = /var/www/brynex
+	directory = /var/www/brynex-demo
+' > "$GIT_CONFIG_GLOBAL"
 
 DEMO=/var/www/brynex-demo
 PROD=/var/www/brynex
@@ -39,9 +53,8 @@ id "$USUARIO" >/dev/null 2>&1 || useradd --system --home-dir "$DEMO" --shell /us
 
 titulo "Código (clon local de producción)"
 if [[ ! -d "$DEMO/.git" ]]; then
-    git -c safe.directory="$PROD" clone --quiet --no-hardlinks "$PROD" "$DEMO"
+    git clone --quiet --no-hardlinks "$PROD" "$DEMO"
 fi
-git config --global --add safe.directory "$DEMO" 2>/dev/null || true
 git -C "$DEMO" fetch --quiet origin main
 git -C "$DEMO" reset --quiet --hard origin/main
 # Mismo composer.lock que producción: se copia el vendor en vez de instalarlo.
@@ -116,7 +129,10 @@ chmod 640 "$DEMO/.env"
 leer() { grep -E "^$1=" "$DEMO/.env" | head -1 | cut -d= -f2-; }
 
 titulo "Bases de datos (con la clave de sa, una sola vez)"
-read -r -s -p "  Clave de sa de SQL Server: " SA; echo
+# La clave de sa vive en /root/.brynex_credentials (desde la migración, ago-2026).
+SA=""
+if [[ -f /root/.brynex_credentials ]]; then SA="$(. /root/.brynex_credentials; echo "${SA_PASS:-}")"; fi
+[[ -n "$SA" ]] || { read -r -s -p "  Clave de sa de SQL Server: " SA; echo; }
 sa() { SQLCMDPASSWORD="$SA" "$SQLCMD" -S 127.0.0.1 -U sa -C -b -h -1 -W "$@"; }
 sa -Q "IF SUSER_ID('brynex_demo') IS NULL CREATE LOGIN brynex_demo WITH PASSWORD = '$(leer DB_PASSWORD)', CHECK_POLICY = OFF;
        ELSE ALTER LOGIN brynex_demo WITH PASSWORD = '$(leer DB_PASSWORD)';"
@@ -149,6 +165,8 @@ php_admin_value[post_max_size] = 12M
 php_admin_value[memory_limit] = 256M
 php_admin_value[max_execution_time] = 60
 EOF
+# Producción usa mod_php: el servicio de php-fpm puede estar apagado.
+systemctl enable --now php$PHPV-fpm >/dev/null 2>&1
 systemctl reload php$PHPV-fpm
 
 titulo "Apache ($DOMINIO)"
