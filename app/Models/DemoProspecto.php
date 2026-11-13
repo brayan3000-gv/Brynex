@@ -13,7 +13,7 @@ class DemoProspecto extends BaseModel
     protected $fillable = [
         'aliado_id', 'nombre', 'empresa', 'celular', 'codigo', 'acepto_contacto',
         'telefono_whatsapp', 'nombre_whatsapp', 'verificado_at', 'envios',
-        'ultimo_envio_at', 'ultimo_uso_at', 'ip',
+        'ultimo_envio_at', 'ultimo_uso_at', 'ip', 'actividad',
     ];
 
     protected $casts = [
@@ -22,6 +22,7 @@ class DemoProspecto extends BaseModel
         'ultimo_envio_at' => 'datetime',
         'ultimo_uso_at' => 'datetime',
         'envios' => 'integer',
+        'actividad' => 'array',
     ];
 
     /**

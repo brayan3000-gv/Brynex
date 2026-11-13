@@ -14,6 +14,7 @@ Route::prefix('demo-relevo')->middleware('throttle:120,1')->group(function () {
     Route::post('registro', [DemoRelevoController::class, 'registro']);
     Route::post('estado', [DemoRelevoController::class, 'estado']);
     Route::post('enviar', [DemoRelevoController::class, 'enviar']);
+    Route::post('actividad', [DemoRelevoController::class, 'actividad']);
 });
 
 Route::middleware(['web', 'auth'])->get('admin/demo-prospectos', [DemoRelevoController::class, 'listado'])

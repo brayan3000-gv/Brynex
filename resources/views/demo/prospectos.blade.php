@@ -18,6 +18,7 @@
                 <th style="padding:.5rem .6rem;">Celular escrito</th>
                 <th style="padding:.5rem .6rem;">WhatsApp verificado</th>
                 <th style="padding:.5rem .6rem;">Nombre en WhatsApp</th>
+                <th style="padding:.5rem .6rem;">Qué hizo</th>
                 <th style="padding:.5rem .6rem;">Envíos</th>
                 <th style="padding:.5rem .6rem;">Último uso</th>
                 <th style="padding:.5rem .6rem;">Contactar</th>
@@ -42,6 +43,12 @@
                     @endif
                 </td>
                 <td style="padding:.45rem .6rem;">{{ $p->nombre_whatsapp ?: '—' }}</td>
+                @php $act = (array) ($p->actividad ?? []); $nPasos = count((array) ($act['pasos'] ?? [])); @endphp
+                <td style="padding:.45rem .6rem;min-width:180px;">
+                    <span style="font-weight:700;color:{{ $nPasos >= 6 ? '#15803d' : ($nPasos ? '#b45309' : '#94a3b8') }}">Recorrido {{ $nPasos }}/6</span>
+                    @if (! empty($act['presentacion'])) · 🎬 vio la presentación @endif
+                    @if (! empty($act['modulos']))<div style="color:#64748b;font-size:.75rem">{{ implode(', ', $act['modulos']) }}</div>@endif
+                </td>
                 <td style="padding:.45rem .6rem;">{{ $p->envios }}</td>
                 <td style="padding:.45rem .6rem;white-space:nowrap;">{{ $p->ultimo_uso_at?->format('d/m/Y H:i') }}</td>
                 <td style="padding:.45rem .6rem;">
@@ -53,7 +60,7 @@
                 </td>
             </tr>
         @empty
-            <tr><td colspan="9" style="padding:1.2rem;text-align:center;color:#94a3b8;">Todavía nadie ha entrado a la demo.</td></tr>
+            <tr><td colspan="10" style="padding:1.2rem;text-align:center;color:#94a3b8;">Todavía nadie ha entrado a la demo.</td></tr>
         @endforelse
         </tbody>
     </table>

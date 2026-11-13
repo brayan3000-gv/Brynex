@@ -65,6 +65,17 @@ class DemoController extends Controller
         return redirect()->route('dashboard');
     }
 
+    /** La presentación se reprodujo (lo avisa el reproductor de la bienvenida). */
+    public function actividad(Request $request)
+    {
+        if ($request->boolean('presentacion')) {
+            session(['demo_presentacion' => true]);
+            RelevoDemo::sincronizarActividad();
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     /** ¿Ya escribió el código desde su WhatsApp? Lo consulta el panel cada pocos segundos. */
     public function whatsappEstado()
     {

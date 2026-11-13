@@ -146,6 +146,20 @@
 </script>
 @endif
 
+@if (! empty($cierre))
+    {{-- Completó el recorrido: el momento de invitarlo a hablar (y a producción le llega el aviso). --}}
+    <div id="demo-cierre" style="position:fixed;inset:0;z-index:2147483300;background:rgba(2,6,23,.75);display:flex;align-items:center;justify-content:center;padding:16px;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif">
+        <div style="background:#fff;color:#0f172a;border-radius:16px;max-width:520px;width:100%;padding:1.6rem 1.5rem;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.4)">
+            <div style="font-size:2.4rem;line-height:1">🎉</div>
+            <h2 style="margin:.5rem 0 .3rem;font-size:1.35rem">¡Recorriste toda la demo{{ ($prospecto['nombre'] ?? '') ? ', '.explode(' ', trim($prospecto['nombre']))[0] : '' }}!</h2>
+            <p style="margin:0 0 1.1rem;color:#475569">Afiliaste, liquidaste la planilla, la enviaste por WhatsApp y le preguntaste a la IA.
+                ¿Te imaginas esto con tu gente y tus empresas? Te ayudamos a pasar tu operación a BryNex.</p>
+            <a href="{{ $wa }}" target="_blank" rel="noopener" style="display:block;background:#16a34a;color:#fff;border-radius:10px;padding:.8rem 1rem;font-weight:800;text-decoration:none;margin-bottom:.6rem">💬 Quiero BryNex para mi empresa</a>
+            <button type="button" onclick="document.getElementById('demo-cierre').remove()" style="background:none;border:none;color:#64748b;cursor:pointer;font:inherit">Seguir explorando la demo</button>
+        </div>
+    </div>
+@endif
+
 @if ($enLogin)
     {{-- La entrada de la demo: registro corto en vez del login (el login sigue a un clic). --}}
     <template id="demo-registro">

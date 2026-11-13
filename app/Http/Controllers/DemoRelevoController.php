@@ -28,6 +28,7 @@ class DemoRelevoController extends Controller
 
         $p = RelevoDemo::registrar($datos, $datos['ip'] ?? null);
         $bienvenida = $p->acepto_contacto && RelevoDemo::enviarBienvenida($p);
+        RelevoDemo::avisarRegistro($p, $bienvenida);
 
         return response()->json([
             'ok' => true, 'id' => $p->id, 'codigo' => $p->codigo, 'bienvenida' => $bienvenida,
@@ -63,6 +64,21 @@ class DemoRelevoController extends Controller
         ])['pedido'];
 
         return response()->json(RelevoDemo::enviarPedido($p, $pedido));
+    }
+
+    /** Lo que va haciendo en la demo (pasos, módulos, presentación). */
+    public function actividad(Request $request)
+    {
+        abort_unless(RelevoDemo::firmaValida($request), 403);
+        $p = $this->prospecto($request);
+
+        $datos = $request->validate([
+            'pasos' => 'array', 'pasos.*' => 'string|max:20',
+            'modulos' => 'array', 'modulos.*' => 'string|max:40',
+            'presentacion' => 'boolean',
+        ]);
+
+        return response()->json(['ok' => true, 'actividad' => RelevoDemo::anotarActividad($p, $datos)]);
     }
 
     /** Quiénes han probado la demo, para volver a escribirles. Solo usuarios de BryNex. */

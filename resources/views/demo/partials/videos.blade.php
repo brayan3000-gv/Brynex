@@ -128,6 +128,14 @@
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
     const abrirPanelDemo = () => document.getElementById('demo-panel')?.classList.add('abierto');
+    // Que vio la presentación queda en su ficha de prospecto (RelevoDemo).
+    let presentacionAnotada = false;
+    const anotarPresentacion = () => {
+        if (presentacionAnotada) return;
+        presentacionAnotada = true;
+        fetch(@json(route('demo.actividad')), { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '' }, body: JSON.stringify({ presentacion: true }) }).catch(() => {});
+    };
 
     window.DemoVideos = {
         /** Un video por id; sin id, el capítulo del módulo (o su primer clip). */
@@ -137,6 +145,7 @@
             document.getElementById('demo-panel')?.classList.remove('abierto');
             document.getElementById('dv-cab-tit').textContent = c.id === 'comercial' ? '🎬 BryNex en dos minutos' : '🎬 Cómo funciona';
             video.src = c.url;
+            if (c.id === 'comercial') anotarPresentacion();
             document.getElementById('dv-tit').textContent = c.titulo;
             document.getElementById('dv-pasos').innerHTML = c.capitulo
                 ? '<li style="list-style:none;margin-left:-1.1rem">Recorrido completo del módulo, con voz y subtítulos.</li>'
@@ -153,6 +162,7 @@
             const medio = document.getElementById('dv-b-medio');
             if (!medio || !CLIPS.comercial) return this.abrir('comercial');
             medio.innerHTML = `<video src="${esc(CLIPS.comercial.url)}" controls autoplay playsinline></video>`;
+            anotarPresentacion();
             const ver = document.getElementById('dv-b-ver');
             document.querySelector('#dv-bienvenida .dv-sec')?.remove();
             ver.textContent = 'Empezar a probar →';

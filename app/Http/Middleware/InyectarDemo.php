@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use App\Services\Demo\RelevoDemo;
 use App\Services\Demo\VideosManual;
 use Illuminate\Http\Response;
 
@@ -21,6 +22,21 @@ class InyectarDemo
         $response = $next($request);
 
         $this->anotarPaso($request, $response);
+        // Solo cuenta una pantalla abierta de verdad, no las consultas de fondo
+        // (p. ej. el contador de mensajes de WhatsApp que pide cada página).
+        $esPagina = $request->isMethod('GET') && ! $request->ajax() && ! $request->expectsJson()
+            && $response->getStatusCode() === 200
+            && str_contains((string) $response->headers->get('Content-Type'), 'text/html');
+        $modulo = $esPagina && auth()->check() ? VideosManual::deLaPagina($request) : null;
+        if ($modulo && $request->hasSession()) {
+            $vistos = (array) $request->session()->get('demo_modulos', []);
+            if (! in_array($modulo['titulo'], $vistos, true)) {
+                $request->session()->put('demo_modulos', [...$vistos, $modulo['titulo']]);
+            }
+        }
+        if ($request->hasSession() && auth()->check()) {
+            RelevoDemo::sincronizarActividad();
+        }
 
         if (! $response instanceof Response || $response->getStatusCode() !== 200
             || ! str_contains((string) $response->headers->get('Content-Type'), 'text/html')) {
@@ -35,7 +51,16 @@ class InyectarDemo
         }
 
         $enLogin = $request->routeIs('login') || $request->is('login');
-        $extra = view('demo.partials.franja', ['enLogin' => $enLogin])->render();
+
+        // El cierre: la primera vez que se ve el recorrido completo.
+        $mostrarCierre = false;
+        if (! $enLogin && auth()->check() && count((array) $request->session()->get('demo_pasos', [])) >= RelevoDemo::PASOS_RECORRIDO
+            && ! $request->session()->get('demo_cierre_visto')) {
+            $request->session()->put('demo_cierre_visto', true);
+            $mostrarCierre = true;
+        }
+
+        $extra = view('demo.partials.franja', ['enLogin' => $enLogin, 'cierre' => $mostrarCierre])->render();
 
         // Los videos del manual: la presentación la primera vez que se llega al
         // inicio y el «¿Cómo funciona?» de cada módulo (ver VideosManual).
@@ -45,7 +70,7 @@ class InyectarDemo
                 $request->session()->put('demo_bienvenida_vista', true);
             }
             $extra .= view('demo.partials.videos', [
-                'modulo' => VideosManual::deLaPagina($request),
+                'modulo' => $modulo ?? VideosManual::deLaPagina($request),
                 'comercial' => VideosManual::comercial(),
                 'pasos' => VideosManual::deLosPasos(),
                 'bienvenida' => $bienvenida,

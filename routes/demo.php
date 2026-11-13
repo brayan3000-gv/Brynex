@@ -14,6 +14,7 @@ Route::middleware(['guest', 'throttle:10,1'])->post('demo/registro', [DemoContro
 
 Route::middleware('auth')->group(function () {
     Route::get('demo/whatsapp/estado', [DemoController::class, 'whatsappEstado'])->middleware('throttle:60,1')->name('demo.whatsapp.estado');
+    Route::post('demo/actividad', [DemoController::class, 'actividad'])->middleware('throttle:30,1')->name('demo.actividad');
 
     Route::prefix('demo/radicar')->name('demo.radicar.')
         ->middleware(['permiso:radicados.ver', 'permiso.escritura:radicados.gestionar'])

@@ -26,7 +26,9 @@ return [
     'clave' => env('DEMO_CLAVE'),
 
     // A dónde escribe el prospecto que quiere BryNex de verdad.
-    'contacto_whatsapp' => env('DEMO_CONTACTO_WHATSAPP', '573000000000'),
+    // Por defecto Info Avapp, el de la bandeja de BryNex: ahí la IA perfila a los
+    // prospectos de aliados y los reparte.
+    'contacto_whatsapp' => env('DEMO_CONTACTO_WHATSAPP', env('DEMO_RELEVO_NUMERO', '573334315129')),
 
     // Las únicas bases con las que arranca en modo demo. Nunca `BryNex`.
     'bases_permitidas' => ['BryNex_Demo', 'BryNex_Videos'],

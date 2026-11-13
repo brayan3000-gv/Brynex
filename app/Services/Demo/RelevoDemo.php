@@ -7,6 +7,7 @@ use App\Models\WhatsappConfig;
 use App\Models\WhatsappConversacion;
 use App\Models\WhatsappMensaje;
 use App\Models\WhatsappPlantilla;
+use App\Services\AlertaOperativaService;
 use App\Services\WhatsappApiService;
 use App\Services\WhatsappBandejaCompartida;
 use Illuminate\Http\Request;
@@ -103,6 +104,30 @@ class RelevoDemo
         }
     }
 
+    /**
+     * Lado de la demo: manda a producción lo que lleva hecho el prospecto de esta
+     * sesión (pasos, módulos, presentación), solo cuando cambió.
+     */
+    public static function sincronizarActividad(): void
+    {
+        $p = session('demo_prospecto');
+        if (! $p || empty($p['id'])) {
+            return;
+        }
+
+        $actividad = [
+            'pasos' => array_values((array) session('demo_pasos', [])),
+            'modulos' => array_values((array) session('demo_modulos', [])),
+            'presentacion' => (bool) session('demo_presentacion', false),
+        ];
+        $firma = md5(json_encode($actividad));
+
+        if (session('demo_actividad_firma') !== $firma) {
+            session(['demo_actividad_firma' => $firma]);
+            self::pedir('actividad', ['id' => $p['id']] + $actividad);
+        }
+    }
+
     /** Lo que usa SimuladorHttp para dejar pasar estas peticiones. */
     public static function esPeticionDelRelevo(string $url): bool
     {
@@ -116,6 +141,51 @@ class RelevoDemo
     public static function codigoEn(?string $texto): ?string
     {
         return $texto && preg_match(self::PATRON, $texto, $m) ? $m[1] : null;
+    }
+
+    /** Los pasos del recorrido de la demo (resources/views/demo/partials/franja). */
+    public const PASOS_RECORRIDO = 6;
+
+    /** Un aviso al WhatsApp del dueño (el mismo canal de los avisos operativos). */
+    public static function avisar(string $mensaje): void
+    {
+        try {
+            app(AlertaOperativaService::class)->enviar('Demo BryNex', $mensaje);
+        } catch (Throwable $e) {
+            Log::warning('Demo: no salió el aviso al dueño', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /** El aviso de un registro nuevo. */
+    public static function avisarRegistro(DemoProspecto $p, bool $bienvenida): void
+    {
+        self::avisar('🧪 Nuevo en la demo: '.$p->nombre
+            .($p->empresa ? ' · '.$p->empresa : '')
+            .' · '.$p->celular
+            .($bienvenida ? ' · le llegó la bienvenida por WhatsApp' : ''));
+    }
+
+    /**
+     * Lo que hizo en la demo: pasos del recorrido, módulos abiertos y si vio la
+     * presentación. Se guarda la unión con lo anterior (nunca se pierde un paso)
+     * y, la primera vez que completa el recorrido, se avisa: es un prospecto caliente.
+     */
+    public static function anotarActividad(DemoProspecto $p, array $datos): array
+    {
+        $antes = (array) ($p->actividad ?? []);
+        $actividad = [
+            'pasos' => array_values(array_unique(array_merge((array) ($antes['pasos'] ?? []), (array) ($datos['pasos'] ?? [])))),
+            'modulos' => array_values(array_unique(array_merge((array) ($antes['modulos'] ?? []), (array) ($datos['modulos'] ?? [])))),
+            'presentacion' => ! empty($antes['presentacion']) || ! empty($datos['presentacion']),
+        ];
+        $p->update(['actividad' => $actividad, 'ultimo_uso_at' => now()]);
+
+        if (count($actividad['pasos']) >= self::PASOS_RECORRIDO && count((array) ($antes['pasos'] ?? [])) < self::PASOS_RECORRIDO) {
+            self::avisar('🔥 '.$p->nombre.($p->empresa ? ' ('.$p->empresa.')' : '')
+                .' completó el recorrido de la demo. Celular: '.($p->telefono_whatsapp ?: $p->celular).'.');
+        }
+
+        return $actividad;
     }
 
     /** ¿Es uno de los dos botones de la plantilla de bienvenida? */
