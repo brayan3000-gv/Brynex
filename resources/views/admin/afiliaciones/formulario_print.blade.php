@@ -94,12 +94,22 @@
         <p>{{ $empresa }} &nbsp;·&nbsp; Ingreso: {{ $fechaIngreso }} &nbsp;·&nbsp; Salario: {{ $salario }}</p>
     </div>
 
+    @php $qNovedad = $novedad === null ? '' : 'novedad='.($novedad ? 1 : 0); @endphp
     @if($conBeneficiarios)
-    <a href="{{ $urlVista }}"
+    <a href="{{ $urlVista }}{{ $qNovedad ? '?'.$qNovedad : '' }}"
        class="btn btn-secondary" target="_blank">👤 Sin beneficiarios</a>
     @else
-    <a href="{{ $urlVista }}?beneficiarios=1"
+    <a href="{{ $urlVista }}?beneficiarios=1{{ $qNovedad ? '&'.$qNovedad : '' }}"
        class="btn btn-secondary" target="_blank">👨‍👩‍👧 Con beneficiarios</a>
+    @endif
+
+    {{-- Sanitas: el ingreso va como novedad 9 (cambio de empleador); se puede pasar a afiliación --}}
+    @if($novedad !== null)
+    <a href="{{ $urlVista }}?{{ http_build_query(['beneficiarios' => $conBeneficiarios ? 1 : 0, 'novedad' => $novedad ? 0 : 1]) }}"
+       class="btn btn-secondary"
+       title="{{ $novedad ? 'Hoy sale como Reporte de novedades con la casilla 9 (inicio de relación laboral)' : 'Hoy sale como Afiliación' }}">
+        {{ $novedad ? '🔁 Novedad 9 · pasar a afiliación' : '📄 Afiliación · pasar a novedad' }}
+    </a>
     @endif
 
     {{-- Botón firmar --}}
@@ -133,7 +143,7 @@
 @endif
 
 <iframe id="pdfFrame"
-    src="{{ $urlRaw }}?beneficiarios={{ $conBeneficiarios ? 1 : 0 }}"
+    src="{{ $urlRaw }}?beneficiarios={{ $conBeneficiarios ? 1 : 0 }}{{ $qNovedad ? '&'.$qNovedad : '' }}"
     title="Formulario {{ $tituloEntidad }}">
 </iframe>
 
@@ -175,6 +185,7 @@
 const FIRMA_URL  = "{{ $urlFirma }}";
 const PDF_BASE   = "{{ $urlRaw }}";
 const BEN_PARAM  = {{ $conBeneficiarios ? 'true' : 'false' }};
+const NOVEDAD_PARAM = @json($novedad === null ? null : ($novedad ? '1' : '0'));
 const CSRF       = document.querySelector('meta[name="csrf-token"]').content;
 const TIENE_FIRMA = {{ $tieneFirma ? 'true' : 'false' }};
 
@@ -182,6 +193,7 @@ const TIENE_FIRMA = {{ $tieneFirma ? 'true' : 'false' }};
 function buildPdfUrl() {
     const params = new URLSearchParams();
     params.set('beneficiarios', BEN_PARAM ? '1' : '0');
+    if (NOVEDAD_PARAM !== null) params.set('novedad', NOVEDAD_PARAM);
     // Recopilar inputs custom
     document.querySelectorAll('.custom-campo-input').forEach(inp => {
         const val = inp.value.trim();

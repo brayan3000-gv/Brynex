@@ -367,6 +367,18 @@ class FormularioEpsService
     }
 
     /** Si el cliente ya tiene firma dibujada guardada. */
+    /**
+     * Sanitas recibe el ingreso como novedad, no como afiliación: parte B
+     * «Reporte de novedades» y novedad 9 «Inicio de relación laboral» (cambio
+     * de empleador, código 10513 del portal). Así lo genera el robot
+     * (SanitasNovedadService) y así tiene que salir también al imprimirlo o
+     * firmarlo desde la vista; antes la vista lo armaba como afiliación.
+     */
+    public static function vaComoNovedad($eps): bool
+    {
+        return strtoupper(trim((string) ($eps?->codigo ?? ''))) === 'EPS005';
+    }
+
     public static function tieneFirma($cliente): bool
     {
         return (bool) $cliente?->cedula && file_exists(storage_path('app/firmas/'.$cliente->cedula.'.png'));

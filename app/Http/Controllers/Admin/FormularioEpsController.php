@@ -99,6 +99,11 @@ class FormularioEpsController extends Controller
         };
         $rutaRaw = $rutaVista.'.raw';
 
+        // Sanitas va como novedad por defecto; la vista deja cambiarlo.
+        $novedad = $tipo === 'eps' && FormularioEpsService::vaComoNovedad($contrato->eps)
+            ? request()->boolean('novedad', true)
+            : null;
+
         return view('admin.afiliaciones.formulario_print', [
             'contrato' => $contrato,
             'tituloEntidad' => $tituloEntidad,
@@ -107,6 +112,7 @@ class FormularioEpsController extends Controller
             'fechaIngreso' => $fechaIngreso,
             'salario' => $salario,
             'conBeneficiarios' => $conBeneficiarios,
+            'novedad' => $novedad,
             'camposCustom' => $camposCustom,
             'urlVista' => route($rutaVista, ['contrato' => $contrato->id]),
             'urlRaw' => route($rutaRaw, ['contrato' => $contrato->id]),
@@ -195,7 +201,12 @@ class FormularioEpsController extends Controller
         $pdfBinario = match ($tipo) {
             'pension' => $this->service->generarPension($contrato, $incluirBeneficiarios, $customDatos),
             'caja' => $this->service->generarCaja($contrato, $incluirBeneficiarios, $customDatos),
-            default => $this->service->generar($contrato, $incluirBeneficiarios, $customDatos),
+            default => $this->service->generar(
+                $contrato,
+                $incluirBeneficiarios,
+                $customDatos,
+                FormularioEpsService::vaComoNovedad($contrato->eps) && request()->boolean('novedad', true)
+            ),
         };
 
         $nombreCliente = str_replace([' ', '/'], '_', $contrato->cliente?->nombre_completo ?? 'formulario');
