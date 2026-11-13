@@ -157,7 +157,8 @@ class AsistenteIaService
             $piezaOrigen,
             $retomaAliado,
             (float) (\App\Models\ConfiguracionAliado::paraAliado($alidoId)?->plan_sin_pension_valor ?? 0),
-            self::resolverPerfil($waConversacion, $clienteInfo, $piezaOrigen)
+            self::resolverPerfil($waConversacion, $clienteInfo, $piezaOrigen),
+            self::reglaMora($alidoId)
         );
         $tools = $this->construirToolsWhatsapp($credenciales);
         // modo_prueba: usado por el simulador de conversación (/brynex/ia/simulador) para que las
@@ -313,6 +314,60 @@ class AsistenteIaService
         }
 
         return self::PERFIL_CLIENTE;
+    }
+
+    /**
+     * Cómo se cobra la mora en este aliado, para que la IA la explique igual que cobros
+     * (MoraClienteService): la fecha límite sale del día hábil de la razón social, y si paga
+     * tarde se cobra el primer tramo, luego el segundo y, en atrasos mayores, el interés de ley.
+     * Vacío si el aliado no tiene tramos configurados.
+     */
+    public static function reglaMora(int $aliadoId): string
+    {
+        $cfg = \App\Models\ConfiguracionAliado::where('aliado_id', $aliadoId)->first(['mora_minimo', 'mora_segundo']);
+        $min = (int) ($cfg?->mora_minimo ?? 0);
+        $seg = (int) ($cfg?->mora_segundo ?? 0);
+        if ($min <= 0) {
+            return '';
+        }
+        $f = fn (int $v) => '$'.number_format($v, 0, ',', '.');
+
+        return "Si paga después de la fecha límite (la dice su recordatorio; depende de la razón social con que está afiliado), "
+            ."se le suma mora: no es un valor por día, sino por tramos: de entrada {$f($min)}"
+            .($seg > $min ? ", si pasan más días sube a {$f($seg)}" : '')
+            .', y en un atraso mayor es el interés de mora de ley sobre el valor de su seguridad social. El valor exacto de su '
+            .'caso sale de consultar_cliente o lo confirma el equipo: nunca lo calcules tú.';
+    }
+
+    /**
+     * ¿El mensaje es la respuesta automática de un WhatsApp Business (la del negocio del cliente),
+     * no algo que escribió una persona? Le llega al recordatorio de pago y la IA le contestaba a
+     * un robot. Casos reales del oct-nov 2026: «Gracias por comunicarte con Tostadas "La Mejor".
+     * ¿Cómo podemos ayudarte?…», «Gracias por comunicarte con Dentaflex🦷 ¿Cómo podemos
+     * ayudarte?😁», «Hola!, gracias por contactarte con BRYGAR Te damos la Bienvenida…».
+     * Son frases en la voz de un negocio («podemos», «te damos»), que un cliente no escribe.
+     */
+    public static function esRespuestaAutomatica(string $texto): bool
+    {
+        $t = mb_strtolower(trim($texto), 'UTF-8');
+        if ($t === '') {
+            return false;
+        }
+
+        foreach ([
+            '/gracias por (comunicarte|comunicarse|contactarte|contactarse|contactarnos) con/u',
+            '/(te|le|les) damos la bienvenida/u',
+            '/(c[oó]mo|en qu[eé]) (te|le|les) podemos (ayudar|servir|colaborar)/u',
+            '/nuestro horario de atenci[oó]n/u',
+            '/(este es un|mensaje|respuesta) autom[aá]tic[oa]/u',
+            '/en este momento no (estamos disponibles|podemos atender)/u',
+        ] as $patron) {
+            if (preg_match($patron, $t) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -730,7 +785,8 @@ class AsistenteIaService
         ?\App\Models\Publicacion $piezaOrigen = null,
         string $retomaAliado = '',
         float $planSinPension = 0,
-        string $perfil = self::PERFIL_CLIENTE
+        string $perfil = self::PERFIL_CLIENTE,
+        string $reglaMora = ''
     ): array {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
         $perfil = in_array($perfil, [...self::PERFILES, self::PERFIL_SERVICIO], true) ? $perfil : self::PERFIL_CLIENTE;
@@ -766,7 +822,8 @@ class AsistenteIaService
                 .($retiro ? ", retirado desde {$retiro}" : '')
                 .', y hoy no tiene afiliación activa con nosotros. Es una oportunidad de reactivarlo: salúdalo por su '
                 .'nombre, con un «qué bueno saludarte de nuevo», y si busca afiliarse atiéndelo como a cualquier '
-                .'prospecto, con todo el enfoque de venta (si busca salud, el plan EPS sin pensión). No le preguntes '
+                .'prospecto, con todo el enfoque de venta (si busca salud, el plan EPS sin pensión). Al volver se le cobra '
+                .'la afiliación completa, como a cualquiera. No le preguntes '
                 .'por qué se fue. Si pregunta por algo de su cuenta anterior (una planilla vieja, un saldo), usa '
                 ."consultar_cliente o enviar_planilla.\n";
         } elseif ($esCliente) {
@@ -1223,6 +1280,18 @@ class AsistenteIaService
         - Si el cliente pide hablar con una persona, quiere negociar, se queja, o el tema lo amerita, usa
           hablar_con_asesor de inmediato y despídete brevemente.
 
+        ## Si dice que el número no es de esa persona («se equivocan», «aquí no hay ningún Kevin», «no soy X»):
+        - No le des NINGÚN dato de la cuenta de nadie: ni saldos, ni valores, ni períodos, ni planillas, ni nombres,
+          ni lo que le enviamos. Tampoco llames consultar_cliente ni enviar_planilla con ese número. Discúlpate en una
+          frase por la molestia y usa hablar_con_asesor con «Número equivocado: el mensaje era para [nombre al que le
+          escribimos]» para que corrijan el número. El 9-nov-2026 a alguien que repetía «este número no es de ningún
+          Kevin» le dimos el saldo y el período de Kevin, y terminó diciendo que iba a ir a la policía.
+
+        ## Si se queja o reclama (un cobro que no reconoce, plata que dice que le deben, mala atención, «nadie me responde»):
+        - No discutas ni le expliques por qué tiene razón el sistema, aunque creas que el cobro está bien. Reconoce
+          su molestia en una frase, dile que le pasas el caso a una persona para que lo revise, y usa hablar_con_asesor
+          con el motivo empezando por «⚠️ Queja:» y un resumen de lo que reclama (valores y fechas que dio).
+
         ## Si pregunta de dónde salió su número, o pide que no le escriban más:
         - Es normal que un prospecto frío pregunte esto — no te pongas a la defensiva ni des detalles internos.
           Respóndele con algo como: "Tu número llegó a través de bases de contactos comerciales. Si prefieres
@@ -1470,7 +1539,9 @@ class AsistenteIaService
           junto con otra pregunta, responde la pregunta, dile que el equipo verifica el pago y usa hablar_con_asesor
           con el motivo «💵 Comprobante \$valor · fecha · medio · ref.» con lo que se leyó.
         - Cuánto tiene que pagar, a dónde o hasta cuándo: consultar_cliente (ver «Su cuenta, su saldo y sus datos»).
-        - Planilla o certificado de pago: enviar_planilla. Certificado de afiliación a la EPS, ARL o pensión:
+        - Mora: {$reglaMora} Si la discute o dice que pagó a tiempo, es una queja: no la defiendas.
+        - Planilla: si la pide, mándala de una con enviar_planilla, sin pasarla a una persona.
+        - Certificado de pago: enviar_planilla. Certificado de afiliación a la EPS, ARL o pensión:
           hablar_con_asesor con «Certificado de afiliación a …».
         - INCAPACIDADES (si ya pagaron, cómo radicar, cuánto le pagan), CARTA LABORAL, documentos de beneficiarios,
           cambios de datos, novedades o un traslado: tú no los resuelves ni das plazos. Pídele en una frase lo que haga
@@ -1499,6 +1570,14 @@ class AsistenteIaService
             self::PERFIL_SERVICIO => $moduloServicio,
             default => $moduloCliente,
         };
+
+        // Los avisos de préstamo (finanzas del dueño) salen por el mismo número. Al enviarlos la
+        // conversación queda asignada y sin IA; esto es por si una se cuela con el bot prendido.
+        if ($ultimoEnvio && in_array($ultimoEnvio['clave'] ?? '', ['aviso_previo_prestamo', 'recordatorio_prestamo'], true)) {
+            $contextoCampana .= "\n## ⚠️ El último mensaje que le enviamos es el aviso de un PRÉSTAMO personal, no de seguridad social. "
+                .'No le hables de planes, planillas ni seguridad social, no confirmes pagos ni des saldos: usa hablar_con_asesor '
+                ."con «Préstamo: …» y lo que dijo.\n";
+        }
 
         $contexto = "# Contexto de esta conversación\n"
             .trim($contextoContacto.$contextoPieza.$contextoPlanSinPension.$contextoRetoma.$contextoCampana)."\n";

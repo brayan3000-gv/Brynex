@@ -98,6 +98,15 @@ class WhatsappResponderIaJob implements ShouldQueue
         Cache::put($claveUltimoAtendido, (int) $mensajesPendientes->last()->id, now()->addDays(30));
 
         $textoUsuario = $mensajesPendientes->pluck('contenido')->implode("\n");
+
+        // La respuesta automática del WhatsApp Business del cliente («Gracias por comunicarte con…
+        // ¿cómo podemos ayudarte?») no la escribió nadie: contestarle es hablarle a un robot, y el
+        // robot vuelve a contestar. Se deja en el inbox sin respuesta (13-nov-2026).
+        if (AsistenteIaService::esRespuestaAutomatica($textoUsuario)) {
+            Log::info('IA WhatsApp: respuesta automática de un negocio, no se contesta', ['conversacion_id' => $conversacion->id]);
+
+            return;
+        }
         $ultimoWaMessageId = $mensajesPendientes->last()->wa_message_id;
 
         try {
