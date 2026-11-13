@@ -16,6 +16,7 @@
 #   scripts/demo/demo.sh servir       # http://localhost:8078, dentro del sandbox (solo localhost)
 #   scripts/demo/demo.sh sincronizar  # vuelve a copiar el código del repo a la copia
 #   scripts/demo/demo.sh subir        # la plantilla sin gente a netcup (ver scripts/demo/servidor)
+#   scripts/demo/demo.sh capitulos [--servidor]  # los capítulos del manual para «¿Cómo funciona?»
 #   scripts/demo/demo.sh sql "SELECT …"
 #
 # La clave de la cuenta de la demo va en .env.demo (ignorado por git).
@@ -79,7 +80,7 @@ copiar_codigo() {
   mkdir -p "$APP"
   rsync -a --delete \
     --exclude '/.env' --exclude '/storage' --exclude '/node_modules' --exclude '/vendor' \
-    --exclude '/public/storage' --exclude '/public/build' --exclude '/public/hot' \
+    --exclude '/public/storage' --exclude '/public/build' --exclude '/public/hot' --exclude '/public/manual/capitulos' \
     "$tmp/" "$APP/"
   rm -rf "$tmp"
 }
@@ -204,6 +205,36 @@ EOF
     rm -rf "$tmp"
     echo "Plantilla en netcup:/var/opt/mssql/backup/BryNex_Demo_Catalogos.bak"
     ;;
+  capitulos)
+    # Los capítulos completos del manual, uno por módulo (los usa el «¿Cómo
+    # funciona?» de la demo, ver VideosManual). No van en git: pesan ~40 MB.
+    # Se comprimen a 720p desde ~/Movies/Brynex-videos/salida/capitulos.
+    SRC="${VIDEOS_DIR:-$HOME/Movies/Brynex-videos}/salida/capitulos"
+    CAPS="${VIDEOS_DIR:-$HOME/Movies/Brynex-videos}/salida/demo-capitulos"
+    mkdir -p "$CAPS"
+    for f in "$SRC"/*-escritorio.mp4 "$SRC"/visita-movil.mp4; do
+      n="$(basename "$f")"; n="${n%-escritorio.mp4}"; n="${n%-movil.mp4}"
+      [ "$n" = comercial ] && continue
+      [ -s "$CAPS/$n.mp4" ] && continue
+      vf="scale=1280:-2"; [ "$n" = visita ] && vf="scale=-2:1280"
+      ffmpeg -v error -y -i "$f" -vf "$vf" -c:v libx264 -preset slow -crf 26 -pix_fmt yuv420p \
+        -c:a aac -b:a 96k -movflags +faststart "$CAPS/$n.mp4"
+    done
+    (cd "$CAPS" && python3 -c '
+import json, os, subprocess
+d = {}
+for f in sorted(x for x in os.listdir(".") if x.endswith(".mp4")):
+    s = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f]))
+    d[f[:-4]] = {"archivo": f, "segundos": round(s)}
+json.dump(d, open("capitulos.json", "w"), ensure_ascii=False, indent=1)')
+    mkdir -p "$APP/public/manual/capitulos"
+    rsync -a "$CAPS/" "$APP/public/manual/capitulos/"
+    if [ "${2:-}" = "--servidor" ]; then
+      rsync -a "$CAPS/" netcup:/var/www/brynex-demo/public/manual/capitulos/
+      ssh netcup 'cd /var/www/brynex-demo && chown -R root:root public/manual/capitulos && chmod 755 public/manual/capitulos && chmod 644 public/manual/capitulos/* && (grep -qxF "public/manual/capitulos/" .git/info/exclude || echo "public/manual/capitulos/" >> .git/info/exclude) && rm -f storage/framework/cache/data/*/*/* 2>/dev/null; ls public/manual/capitulos | wc -l'
+    fi
+    echo "Capítulos listos en $APP/public/manual/capitulos${2:+ y en el servidor}"
+    ;;
   sql) shift; sql -d BryNex_Demo -Q "$*" ;;
-  *) echo "Uso: $0 app|sincronizar|base [--esquema]|servir|subir|sql \"…\""; exit 1;;
+  *) echo "Uso: $0 app|sincronizar|base [--esquema]|servir|subir|capitulos [--servidor]|sql \"…\""; exit 1;;
 esac

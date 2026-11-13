@@ -76,7 +76,7 @@ class VideosManual
                     'titulo' => $c['titulo'] ?? '',
                     'escena' => $c['escena'] ?? '',
                     'segundos' => (int) round((float) ($c['segundos'] ?? 0)),
-                    'pasos' => array_values((array) ($c['pasos'] ?? [])),
+                    'pasos' => array_values(array_filter((array) ($c['pasos'] ?? []))),
                     'url' => asset('manual/'.ltrim($c['archivo'], '/')),
                 ];
             }
@@ -97,14 +97,59 @@ class VideosManual
         return $c ? $c + ['portada' => asset('manual/comercial-portada.jpg')] : null;
     }
 
-    /** Los videos del módulo de esta pantalla, o null si no hay. */
+    /**
+     * Los capítulos completos del manual (uno por módulo, narrado de principio a
+     * fin). No van en git: los sube `scripts/demo/demo.sh capitulos` a
+     * public/manual/capitulos con su capitulos.json. Si no están, la demo usa
+     * solo los clips.
+     */
+    public static function capitulos(): array
+    {
+        return Cache::remember('demo_capitulos_manual', 600, function () {
+            $json = json_decode((string) @file_get_contents(public_path('manual/capitulos/capitulos.json')), true) ?: [];
+            $caps = [];
+
+            foreach ($json as $escena => $c) {
+                if (! empty($c['archivo']) && is_file(public_path('manual/capitulos/'.$c['archivo']))) {
+                    $caps[$escena] = [
+                        'id' => 'cap-'.$escena,
+                        'titulo' => (self::TITULOS[$escena] ?? ucfirst($escena)).', de principio a fin',
+                        'escena' => $escena,
+                        'segundos' => (int) ($c['segundos'] ?? 0),
+                        'pasos' => [],
+                        'capitulo' => true,
+                        'url' => asset('manual/capitulos/'.$c['archivo']),
+                    ];
+                }
+            }
+
+            return $caps;
+        });
+    }
+
+    /**
+     * Un clip que enseña algo por sí solo. Los de una sola frase o de menos de
+     * 14 segundos son recortes para buscar en el manual, no para aprender el
+     * módulo: en la demo no se muestran (el capítulo ya los cubre).
+     */
+    private static function sirve(array $c): bool
+    {
+        return in_array($c['id'], self::PASOS, true) || ($c['segundos'] >= 14 && count($c['pasos']) >= 2);
+    }
+
+    /** Los videos del módulo de esta pantalla: primero el capítulo, luego las tareas. Null si no hay. */
     public static function deLaPagina(Request $request): ?array
     {
         foreach (self::RUTAS as $patron => $escena) {
             if ($request->is($patron)) {
-                $clips = array_values(array_filter(self::todos(), fn ($c) => $c['escena'] === $escena));
+                $clips = array_values(array_filter(self::todos(), fn ($c) => $c['escena'] === $escena && self::sirve($c)));
+                $capitulo = self::capitulos()[$escena] ?? null;
 
-                return $clips ? ['titulo' => self::TITULOS[$escena] ?? ucfirst($escena), 'clips' => $clips] : null;
+                return ($capitulo || $clips) ? [
+                    'titulo' => self::TITULOS[$escena] ?? ucfirst($escena),
+                    'capitulo' => $capitulo,
+                    'clips' => $clips,
+                ] : null;
             }
         }
 
