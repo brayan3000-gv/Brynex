@@ -158,5 +158,11 @@ Subir la cámara nueva a la ficha (Archivos → Cámara de Comercio): reemplaza 
 | LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · Identidad validada (13-nov) |
 | LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · Identidad validada (13-nov) |
 | LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · Identidad validada (13-nov) |
+| YEVI CONSTRUCCIONES | 902062049 | Yesenia 1144132276 | Registrado + gratuito | d4eee986… | 01080278 · Identidad validada (13-nov) |
+| YEVI EXPRESS | 902077391 | Yesenia | Registrado + gratuito | a2c25a58… | 01080295 · Identidad validada (13-nov) |
 
-Faltan las empresas de Sebastián, Karla, Yuly y Yesenia (ver Representantes).
+Las YEVI se radicaron con cámaras del 15-oct (29 días). YEVI EXPRESS tiene la dirección
+distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó la de la cámara.
+
+Faltan las empresas de Sebastián, Karla y Yuly (ver Representantes). Yuly: ELITES
+901904750 y ELITEX 901906958, sin cámara en BryNex (hay que comprarlas).
