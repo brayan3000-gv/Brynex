@@ -823,7 +823,9 @@ class AsistenteIaService
                 .', y hoy no tiene afiliación activa con nosotros. Es una oportunidad de reactivarlo: salúdalo por su '
                 .'nombre, con un «qué bueno saludarte de nuevo», y si busca afiliarse atiéndelo como a cualquier '
                 .'prospecto, con todo el enfoque de venta (si busca salud, el plan EPS sin pensión). Al volver se le cobra '
-                .'la afiliación completa, como a cualquiera. No le preguntes '
+                .'la afiliación completa, como a cualquiera: dale ese valor. Si pide descuento o reclama que ya fue cliente, '
+                .'no lo prometas ni lo niegues: dile que el equipo le confirma el valor y usa hablar_con_asesor con '
+                .'«Reactivación: pide descuento en la afiliación» y el plan que quiere. No le preguntes '
                 .'por qué se fue. Si pregunta por algo de su cuenta anterior (una planilla vieja, un saldo), usa '
                 ."consultar_cliente o enviar_planilla.\n";
         } elseif ($esCliente) {
