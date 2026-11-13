@@ -696,6 +696,9 @@ Route::middleware('auth')->group(function () {
             Route::post('/api-operador/liquidar', [$pa, 'liquidar'])->name('api_operador.liquidar');
             Route::post('/api-operador/liquidar-independiente', [$pa, 'liquidarIndependiente'])->name('api_operador.liquidar_independiente');
             Route::post('/api-operador/autocorregir', [$pa, 'autocorregir'])->name('api_operador.autocorregir');
+            // Pago PSE con enlace fresco: el guardado al liquidar caduca (ver abrirPago).
+            Route::get('/api-operador/pagar/{numeroPlanilla}', [$pa, 'abrirPago'])
+                ->whereNumber('numeroPlanilla')->name('api_operador.pagar');
             Route::get('/api-operador/{codigoPlanilla}/inconsistencias', [$pa, 'inconsistencias'])
                 ->whereNumber('codigoPlanilla')->name('api_operador.inconsistencias');
 

@@ -666,6 +666,10 @@ class PlanillaApiController extends Controller
             ], 500);
         }
 
+        if ($frenado = self::frenarSinUbicacion($plano)) {
+            return $frenado;
+        }
+
         // ── 4. Registro de trazabilidad ──────────────────────────────────
         // Volver a liquidar reusa el registro de la planilla que ya había. Si
         // el intento nuevo no deja otra liquidada, esa sigue siendo la buena y
@@ -1033,6 +1037,10 @@ class PlanillaApiController extends Controller
             ], 500);
         }
 
+        if ($frenado = self::frenarSinUbicacion($planoTxt)) {
+            return $frenado;
+        }
+
         $registro = OperadorPlanillaApi::updateOrCreate(
             [
                 'aliado_id'            => $aliadoId,
@@ -1305,6 +1313,64 @@ class PlanillaApiController extends Controller
      * Detalle paginado de inconsistencias de una planilla con errores.
      * La validación solo devuelve las primeras 100 líneas.
      */
+    /**
+     * Abre el pago PSE de una planilla con un enlace recién pedido a Enlace.
+     *
+     * El enlace que se guarda al liquidar lleva cifrada la sesión de ese
+     * momento, con los perfiles que el usuario tenía entonces y una vida de
+     * minutos. Abierto horas después —o tras darle el perfil Tesorería al
+     * usuario— Enlace lo rechaza con "sólo aquellos usuarios que tienen el
+     * perfil Tesorería asignado pueden efectuar pagos de planilla" (Integra
+     * Duitama, planilla 89495688, 13-nov-2026). Si Enlace no da uno nuevo se
+     * abre el guardado, que es lo que se hacía antes.
+     */
+    public function abrirPago(int $numeroPlanilla)
+    {
+        $aliadoId = (int) session('aliado_id_activo');
+
+        $registro = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+            ->where('numero_planilla', $numeroPlanilla)
+            ->orderByDesc('updated_at')
+            ->first();
+
+        if (! $registro) {
+            abort(404, 'Planilla no encontrada.');
+        }
+
+        try {
+            $sesion = $this->abrirSesion($registro, $aliadoId);
+            $pago = ($sesion['success'] ?? false)
+                ? $sesion['api']->obtenerUrlPago($numeroPlanilla)
+                : ['success' => false, 'message' => $sesion['message'] ?? null];
+        } catch (\Throwable $e) {
+            $pago = ['success' => false, 'message' => $e->getMessage()];
+        }
+
+        if (($pago['success'] ?? false) && ! empty($pago['url_pago'])) {
+            $registro->update(['url_pago' => $pago['url_pago']]);
+
+            return redirect()->away($pago['url_pago']);
+        }
+
+        Log::warning('Enlace API: no se pudo renovar la URL de pago, se abre la guardada', [
+            'planilla' => $numeroPlanilla,
+            'message'  => $pago['message'] ?? null,
+        ]);
+
+        if ($registro->url_pago) {
+            return redirect()->away($registro->url_pago);
+        }
+
+        // Sin enlace nuevo ni guardado: el operador suele decir por qué (ya
+        // pagada, vencida). Se muestra tal cual en vez de una página en blanco.
+        return response(
+            '<p style="font-family:sans-serif;padding:2rem">No se pudo abrir el pago de la planilla '
+            .e((string) $numeroPlanilla).': '.e($pago['message'] ?? 'el operador no entregó el enlace de pago.')
+            .'</p>',
+            422
+        );
+    }
+
     public function inconsistencias(Request $request, int $codigoPlanilla)
     {
         $aliadoId = session('aliado_id_activo');
@@ -1848,5 +1914,31 @@ class PlanillaApiController extends Controller
         }
 
         return OperadorCredencial::paraOperador($casa, $operadorId, (int) $rsCasa)->first();
+    }
+
+    /**
+     * Frena el envío si alguien con caja de compensación va sin departamento
+     * o municipio: la ficha del cliente no los tiene y el operador rechaza
+     * la planilla entera ("el código del municipio no es válido", "la Caja no
+     * presta cubrimiento en el departamento ingresado"). Pasó con el cargue
+     * del Excel de Integra Duitama (9-oct-2026), que no traía la ciudad.
+     */
+    private static function frenarSinUbicacion(array $plano): ?\Illuminate\Http\JsonResponse
+    {
+        $faltan = $plano['sin_ubicacion'] ?? [];
+        if (empty($faltan)) {
+            return null;
+        }
+
+        $lista = collect($faltan)->map(fn ($f) => "• {$f['nombre']} ({$f['cedula']})")->implode("\n");
+
+        return response()->json([
+            'success'       => false,
+            'sin_ubicacion' => $faltan,
+            'message'       => (count($faltan) === 1
+                    ? 'No se envió la planilla: esta persona tiene caja de compensación pero su ficha no tiene departamento ni municipio:'
+                    : 'No se envió la planilla: estas '.count($faltan).' personas tienen caja de compensación pero su ficha no tiene departamento ni municipio:')
+                ."\n{$lista}\n\nComplete la ciudad en la ficha del cliente y vuelva a liquidar.",
+        ], 422);
     }
 }

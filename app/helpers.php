@@ -39,6 +39,31 @@ if (!function_exists('nombre_oracion')) {
     }
 }
 
+if (!function_exists('razon_social_corta')) {
+    /**
+     * Quita del final de una razón social el tipo de sociedad, solo para mostrar:
+     * "CONFECCIONES GAVI SOCIEDAD POR ACCIONES SIMPLIFICADA" → "CONFECCIONES GAVI",
+     * "ACME S.A.S." → "ACME", "PEREZ Y CIA LTDA" → "PEREZ Y CIA".
+     * Si al quitarlo no queda nada, devuelve el nombre original.
+     */
+    function razon_social_corta($valor): string
+    {
+        $original = trim((string) $valor);
+        $sufijo = '/[\s,.\-]+(?:'
+            . 'SOCIEDAD\s+POR\s+ACCIONES\s+SIMPLIFICADA|SOCIEDAD\s+AN[OÓ]NIMA|SOCIEDAD\s+LIMITADA'
+            . '|EMPRESA\s+UNIPERSONAL|BENEFICIO\s+E\s+INTER[EÉ]S\s+COLECTIVO'
+            . '|S\.?\s?A\.?\s?S\.?|S\.?\s?A\.?|LTDA\.?|LIMITADA|E\.?\s?U\.?|S\.?\s?EN\s?C\.?(?:\s?S\.?)?|BIC'
+            . ')[\s.,]*$/iu';
+        $nombre = ' ' . $original;
+        do {
+            $antes = $nombre;
+            $nombre = preg_replace($sufijo, '', $nombre);
+        } while ($nombre !== $antes);
+        $nombre = trim($nombre, " \t,.-");
+        return $nombre !== '' ? $nombre : $original;
+    }
+}
+
 if (!function_exists('nombre_con_inicial')) {
     /**
      * Primer nombre + inicial del segundo + primer apellido, en tipo oración:

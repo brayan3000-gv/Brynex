@@ -705,7 +705,7 @@
                 <input type="hidden" name="razon_social_id" id="sel-rs-val" value="{{ $razonSocialId ?? '' }}">
                 <div class="rs-wrap" id="rs-wrap">
                     <button type="button" class="rs-btn" onclick="toggleRs()">
-                        <span class="rs-btn-txt" id="rs-btn-txt">{{ $rsSeleccionada ? mb_strtoupper($rsSeleccionada->razon_social) : '— Todas —' }}</span>
+                        <span class="rs-btn-txt" id="rs-btn-txt">{{ $rsSeleccionada ? mb_strtoupper(razon_social_corta($rsSeleccionada->razon_social)) : '— Todas —' }}</span>
                         <span class="rs-btn-arr">▼</span>
                     </button>
                     <div class="rs-panel">
@@ -727,7 +727,7 @@
                             @if($rsConPlanos->count())
                             <div class="rs-glabel">● Con planos — {{ $rsConPlanos->count() }} RS</div>
                             @foreach($rsConPlanos as $rs)
-                            @php $cant = $cantPorRs[$rs->id] ?? 0; $nom = mb_strtoupper($rs->razon_social); @endphp
+                            @php $cant = $cantPorRs[$rs->id] ?? 0; $nom = mb_strtoupper(razon_social_corta($rs->razon_social)); @endphp
                             <div class="rs-row {{ $razonSocialId == $rs->id ? 'sel':'' }}"
                                  data-lbl="{{ strtolower($rs->razon_social) }}"
                                  onclick="selRs('{{ $rs->id }}','{{ $rs->n_plano }}','{{ addslashes($nom) }}')">
@@ -741,7 +741,7 @@
                             @if($rsSinPlanos->count())
                             <div class="rs-glabel" style="margin-top:.2rem">○ Sin planos — {{ $rsSinPlanos->count() }} RS</div>
                             @foreach($rsSinPlanos as $rs)
-                            @php $nom = mb_strtoupper($rs->razon_social); @endphp
+                            @php $nom = mb_strtoupper(razon_social_corta($rs->razon_social)); @endphp
                             <div class="rs-row {{ $razonSocialId == $rs->id ? 'sel':'' }}"
                                  data-lbl="{{ strtolower($rs->razon_social) }}"
                                  onclick="selRs('{{ $rs->id }}','{{ $rs->n_plano }}','{{ addslashes($nom) }}')">
@@ -1028,7 +1028,7 @@
                     <span class="chip-liquidado-api" title="Liquidada en {{ $p->operador_cliente_nombre }}: {{ $p->numero_planilla_api }}">
                         ⚡ {{ $p->numero_planilla_api }}
                         @if($p->url_pago_api)
-                        <a href="{{ $p->url_pago_api }}" target="_blank" rel="noopener">PSE →</a>
+                        <a href="{{ route('admin.planos.api_operador.pagar', $p->numero_planilla_api) }}" target="_blank" rel="noopener">PSE →</a>
                         @endif
                     </span>
                     @else
@@ -1953,6 +1953,8 @@ const CTX = {
         enlaceLiquidar : '{{ route('admin.planos.api_operador.liquidar') }}',
         enlaceLiquidarIndependiente: '{{ route('admin.planos.api_operador.liquidar_independiente') }}',
         enlaceAutocorregir: '{{ route('admin.planos.api_operador.autocorregir') }}',
+        // El enlace PSE se pide fresco al abrirlo: el guardado al liquidar caduca.
+        enlacePagar: '{{ route('admin.planos.api_operador.pagar', 999999999) }}',
     },
     // Tipos de modalidad presentes en los planos cargados actualmente
     // Array de objetos: { id: int, nombre: string }
@@ -3077,7 +3079,7 @@ async function cargarEstadoEnlace() {
                 const filas = otra.planillas_tanda.map(p =>
                     `<li><strong>${p.numero_planilla}</strong> · $ ${fmtNum(Math.round(p.valor_total))} · ` +
                     `<em>${p.modalidades}</em> · ${p.fecha || ''}` +
-                    (p.url_pago ? ` · <a href="${p.url_pago}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline">pagar en PSE →</a>` : '') +
+                    (p.url_pago ? ` · <a href="${urlPagarPlanilla(p.numero_planilla)}" target="_blank" rel="noopener" style="color:#92400e;font-weight:700;text-decoration:underline">pagar en PSE →</a>` : '') +
                     `</li>`).join('');
 
                 const cont = document.getElementById('enlace-ultima');
@@ -3313,13 +3315,20 @@ const LOGO_PSE = '<svg width="22" height="22" viewBox="0 0 40 40" aria-hidden="t
     + '<text x="20" y="24.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="13" '
     + 'font-weight="700" fill="#fff">pse</text></svg>';
 
+// Pago PSE de una planilla liquidada por API. No se usa la URL guardada al
+// liquidar: lleva la sesión de ese momento y Enlace la rechaza después
+// ("sólo ... perfil Tesorería"). La ruta pide una nueva y redirige.
+function urlPagarPlanilla(numero) {
+    return CTX.routes.enlacePagar.replace('999999999', encodeURIComponent(String(numero)));
+}
+
 function accionesPago(urlPago, numero, valor, operadorNombre) {
     if (CTX.planoPagado) return '';
     const estilo = 'display:inline-flex;align-items:center;gap:.4rem;border:none;border-radius:8px;'
         + 'padding:.42rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer;text-decoration:none;color:#fff';
     let html = '';
     if (urlPago) {
-        html += `<a href="${urlPago}" target="_blank" rel="noopener" style="${estilo};background:#0b4f9c">`
+        html += `<a href="${numero ? urlPagarPlanilla(numero) : urlPago}" target="_blank" rel="noopener" style="${estilo};background:#0b4f9c">`
             + `${LOGO_PSE} Pagar con PSE</a>`;
     }
     if (numero) {
@@ -3473,6 +3482,12 @@ async function liquidarEnEnlace(operadorId, operadorNombre, paso = 1) {
                 ? ['#fffbeb', '#fde68a', '#92400e', '⏳ Todavía no se puede enviar la corrección.']
                 : ['#fef2f2', '#fecaca', '#991b1b', '✗ No se pudo liquidar.'];
 
+            if ((data.sin_ubicacion || []).length) {
+                cont.innerHTML = avisoEnlace('#fef2f2', '#fecaca', '#991b1b', htmlSinUbicacion(data.sin_ubicacion));
+                mostrarToast(textoSinUbicacion(data.sin_ubicacion), 'error');
+                return;
+            }
+
             cont.innerHTML = avisoEnlace(estilo[0], estilo[1], estilo[2],
                 `<strong>${estilo[3]}</strong><br>${data.message || 'Error desconocido.'}`);
             mostrarToast(data.message || 'No se pudo liquidar la planilla.', 'error');
@@ -3617,7 +3632,9 @@ async function liquidarIndependienteRow(planoId, operadorId, btnEl) {
         const data = await resp.json();
 
         if (!resp.ok || !data.success) {
-            mostrarToast(data.message || 'No se pudo liquidar la planilla.', 'error');
+            mostrarToast((data.sin_ubicacion || []).length
+                ? textoSinUbicacion(data.sin_ubicacion)
+                : (data.message || 'No se pudo liquidar la planilla.'), 'error');
             return;
         }
 
@@ -3643,7 +3660,7 @@ async function liquidarIndependienteRow(planoId, operadorId, btnEl) {
             chip.className = 'chip-liquidado-api';
             chip.title = `Liquidada: ${data.numero_planilla}`;
             chip.innerHTML = `⚡ ${data.numero_planilla}` +
-                (data.url_pago ? ` <a href="${data.url_pago}" target="_blank" rel="noopener">PSE →</a>` : '');
+                (data.url_pago ? ` <a href="${urlPagarPlanilla(data.numero_planilla)}" target="_blank" rel="noopener">PSE →</a>` : '');
             btnEl.replaceWith(chip);
         }
 
@@ -4266,6 +4283,23 @@ async function ejecutarCorregirPago() {
     }
 }
 
+// ── Cotizantes con caja sin departamento/municipio en la ficha ────────
+// El servidor frena el envío (el operador rechazaría la planilla entera)
+// y devuelve quiénes son, para corregir la ficha antes de liquidar.
+function textoSinUbicacion(lista) {
+    return lista.length === 1
+        ? `${lista[0].nombre} tiene caja pero su ficha no tiene ciudad. Complétela y vuelva a liquidar.`
+        : `${lista.length} personas tienen caja pero su ficha no tiene ciudad. Complételas y vuelva a liquidar.`;
+}
+function htmlSinUbicacion(lista) {
+    const esc = t => String(t ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const items = lista.map(f => `<li><strong>${esc(f.nombre)}</strong> · ${esc(f.cedula)}</li>`).join('');
+    return `<strong>✗ No se envió la planilla.</strong> `
+        + (lista.length === 1 ? 'Esta persona tiene' : `Estas ${lista.length} personas tienen`)
+        + ` caja de compensación pero su ficha no tiene <strong>departamento ni municipio</strong>, y el operador la rechazaría:`
+        + `<ul style="margin:.35rem 0 .35rem 1.1rem;padding:0">${items}</ul>`
+        + `Complete la ciudad en la ficha del cliente y vuelva a liquidar.`;
+}
 function mostrarToast(msg, tipo='success') {
     const t = document.getElementById('toast-msg');
     t.textContent = msg;

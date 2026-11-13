@@ -29,6 +29,17 @@ class PlanoPilaTxtService
         '830025804' => '25-10',  // Colfondos
     ];
 
+    /**
+     * Cotizantes con caja de compensación que salieron sin departamento o
+     * municipio: la ficha del cliente no los tiene. El operador los rechaza
+     * ("el código del municipio no es válido", "la Caja no presta cubrimiento
+     * en el departamento ingresado"), así que quien envía el archivo lo frena
+     * antes con `sin_ubicacion` — ver PlanillaApiController.
+     *
+     * @var array<string, array{cedula: string, nombre: string}>
+     */
+    private array $sinUbicacion = [];
+
     /** Alfanumérico → mayúsculas Latin-1, relleno espacios derecha */
     private function A(string $val, int $len): string
     {
@@ -115,6 +126,7 @@ class PlanoPilaTxtService
      */
     public function construir(array $params): array
     {
+        $this->sinUbicacion = [];
         $aliadoId = $params['aliado_id'];
         $razonSocialId = $params['razon_social_id'];
         $mesPago = (int) $params['mes'];
@@ -463,7 +475,12 @@ class PlanoPilaTxtService
         $filename = "{$nombreRs}_{$mesPago}_{$anioPago}_P{$nPlano}.txt";
         $contenido = implode("\r\n", $lineas);
 
-        return ['filename' => $filename, 'contenido' => $contenido, 'planilla_asociada' => $planillaAsociada];
+        return [
+            'filename'          => $filename,
+            'contenido'         => $contenido,
+            'planilla_asociada' => $planillaAsociada,
+            'sin_ubicacion'     => array_values($this->sinUbicacion),
+        ];
     }
 
     // ── Registro Tipo 1 — 359 chars, 22 campos (Resolución 2388) ─────────────
@@ -644,6 +661,13 @@ class PlanoPilaTxtService
         // ── Depto / Municipio (del calculador: 99 si CCF68/K) ────────────────────
         $depId = $c['depCod'];
         $munId = $c['munCod'];
+        if ($codCaj !== '' && ((int) $depId === 0 || (int) $munId === 0)) {
+            $this->sinUbicacion[(string) $p->no_identifi] = [
+                'cedula' => trim(($p->tipo_doc ?? 'CC').' '.$p->no_identifi),
+                'nombre' => trim(preg_replace('/\s+/', ' ', ($p->primer_nombre ?? '').' '.($p->segundo_nombre ?? '').' '
+                    .($p->primer_ape ?? '').' '.($p->segundo_ape ?? ''))),
+            ];
+        }
 
         // ── Tarifas (del calculador) ────────────────────────────────────────────
         $tarifaSalud = $c['tarifaEpsStr'];

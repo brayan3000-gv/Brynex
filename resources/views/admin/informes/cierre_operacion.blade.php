@@ -173,7 +173,7 @@
                                     @if($l->api->valor_total) · $ {{ number_format((float) $l->api->valor_total) }} @endif
                                 </div>
                                 @if($l->api->url_pago)
-                                    <a href="{{ $l->api->url_pago }}" target="_blank" rel="noopener" @click.stop
+                                    <a href="{{ $l->api->numero_planilla ? route('admin.planos.api_operador.pagar', $l->api->numero_planilla) : $l->api->url_pago }}" target="_blank" rel="noopener" @click.stop
                                        style="font-size:.72rem;color:#15803d;font-weight:700;">Ir a pagar en PSE →</a>
                                 @endif
                             @else
