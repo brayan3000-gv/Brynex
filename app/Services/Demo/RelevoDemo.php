@@ -163,6 +163,7 @@ class RelevoDemo
         self::avisar('🧪 Nuevo en la demo: '.$p->nombre
             .($p->empresa ? ' · '.$p->empresa : '')
             .' · '.$p->celular
+            .' · '.$p->origenTexto()
             .($bienvenida ? ' · le llegó la bienvenida por WhatsApp' : ''));
     }
 
@@ -183,7 +184,8 @@ class RelevoDemo
 
         if (count($actividad['pasos']) >= self::PASOS_RECORRIDO && count((array) ($antes['pasos'] ?? [])) < self::PASOS_RECORRIDO) {
             self::avisar('🔥 '.$p->nombre.($p->empresa ? ' ('.$p->empresa.')' : '')
-                .' completó el recorrido de la demo. Celular: '.($p->telefono_whatsapp ?: $p->celular).'.');
+                .' completó el recorrido de la demo. Celular: '.($p->telefono_whatsapp ?: $p->celular)
+                .' · '.$p->origenTexto().'.');
         }
 
         return $actividad;
@@ -277,6 +279,8 @@ class RelevoDemo
             'celular' => $datos['celular'],
             'codigo' => $codigo,
             'acepto_contacto' => (bool) ($datos['acepto_contacto'] ?? false),
+            'origen' => $datos['origen'] ?? null,
+            'origen_detalle' => $datos['origen_detalle'] ?? null,
             'ip' => $ip,
             'ultimo_uso_at' => now(),
         ]);

@@ -182,6 +182,18 @@
                     <input name="empresa" maxlength="150" value="{{ old('empresa') }}" autocomplete="organization"></label>
                 <label class="demo-lbl">Celular (WhatsApp)
                     <input name="celular" required inputmode="tel" maxlength="16" placeholder="300 123 4567" value="{{ old('celular') }}" autocomplete="tel"></label>
+                <label class="demo-lbl">¿Cómo conociste BryNex?
+                    <select name="origen" id="demo-origen" required>
+                        <option value="">— Elige una —</option>
+                        <option value="asesor" @selected(old('origen') === 'asesor')>Un asesor me atendió</option>
+                        <option value="redes" @selected(old('origen') === 'redes')>Redes sociales</option>
+                        <option value="campana" @selected(old('origen') === 'campana')>Un anuncio o campaña</option>
+                        <option value="otro" @selected(old('origen') === 'otro')>Otro</option>
+                    </select></label>
+                <label class="demo-lbl" id="demo-asesor-caja" style="display:none">Nombre del asesor que te atendió
+                    <input name="asesor" id="demo-asesor" maxlength="120" value="{{ old('asesor') }}" placeholder="Ej: Juan Pérez"></label>
+                <label class="demo-lbl" id="demo-otro-caja" style="display:none">¿Cuál?
+                    <input name="origen_detalle" id="demo-origen-detalle" maxlength="120" value="{{ old('origen_detalle') }}"></label>
                 <label style="display:flex;gap:.45rem;align-items:flex-start;font-size:.74rem;line-height:1.35;color:#cbd5e1;text-transform:none;letter-spacing:normal;font-weight:400;">
                     <input type="checkbox" name="acepto" value="1" required {{ old('acepto') ? 'checked' : '' }} style="margin-top:.15rem">
                     <span>Autorizo a BryNex a guardar estos datos y a escribirme por WhatsApp sobre la demo y sus servicios.</span>
@@ -193,7 +205,8 @@
     </template>
     <style>
         .demo-lbl{display:flex;flex-direction:column;gap:.25rem;font-size:.78rem;font-weight:600;color:#cbd5e1}
-        .demo-lbl input{padding:.6rem .7rem;border-radius:8px;border:1px solid rgba(148,163,184,.35);background:rgba(15,23,42,.35);color:#fff;font-size:.9rem}
+        .demo-lbl input,.demo-lbl select{padding:.6rem .7rem;border-radius:8px;border:1px solid rgba(148,163,184,.35);background:rgba(15,23,42,.35);color:#fff;font-size:.9rem}
+        .demo-lbl select option{color:#0f172a}
     </style>
     <script>
     (function () {
@@ -208,7 +221,27 @@
         const caja = document.getElementById('demo-registro').content.cloneNode(true);
         form.parentNode.insertBefore(caja, form);
         const errorLogin = document.querySelector('.error-msg');
-        const usarClave = !!errorLogin && !@json($errors->has('nombre') || $errors->has('celular') || $errors->has('acepto'));
+        const usarClave = !!errorLogin && !{{ $errors->hasAny(['nombre', 'celular', 'acepto', 'origen', 'asesor']) ? 'true' : 'false' }};
+
+        // ¿Cómo llegó? Con ?asesor=Juan (el enlace de cada asesor) o ?origen=meta-nov
+        // (el de cada campaña) ya viene respondido.
+        const origen = document.getElementById('demo-origen');
+        const asesor = document.getElementById('demo-asesor');
+        const detalle = document.getElementById('demo-origen-detalle');
+        const params = new URLSearchParams(location.search);
+        if (params.get('asesor') && !asesor.value) { origen.value = 'asesor'; asesor.value = params.get('asesor').slice(0, 120); }
+        else if (params.get('origen') && !origen.value) {
+            const o = params.get('origen').toLowerCase();
+            origen.value = /redes|instagram|facebook|tiktok/.test(o) ? 'redes' : 'campana';
+            detalle.value = params.get('origen').slice(0, 120);
+        }
+        const mostrar = () => {
+            document.getElementById('demo-asesor-caja').style.display = origen.value === 'asesor' ? '' : 'none';
+            document.getElementById('demo-otro-caja').style.display = origen.value === 'otro' ? '' : 'none';
+            asesor.required = origen.value === 'asesor';
+        };
+        origen.onchange = mostrar;
+        mostrar();
         form.style.display = usarClave ? '' : 'none';
         if (usarClave) document.getElementById('demo-registro-caja').style.display = 'none';
         else if (errorLogin) errorLogin.style.display = 'none';

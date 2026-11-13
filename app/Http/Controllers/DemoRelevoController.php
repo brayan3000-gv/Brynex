@@ -23,6 +23,8 @@ class DemoRelevoController extends Controller
             'empresa' => 'nullable|string|max:150',
             'celular' => 'required|string|max:20',
             'acepto_contacto' => 'boolean',
+            'origen' => 'nullable|in:asesor,redes,campana,otro',
+            'origen_detalle' => 'nullable|string|max:120',
             'ip' => 'nullable|string|max:45',
         ]);
 

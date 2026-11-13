@@ -11,7 +11,7 @@ class DemoProspecto extends BaseModel
     protected $table = 'demo_prospectos';
 
     protected $fillable = [
-        'aliado_id', 'nombre', 'empresa', 'celular', 'codigo', 'acepto_contacto',
+        'aliado_id', 'nombre', 'empresa', 'celular', 'codigo', 'acepto_contacto', 'origen', 'origen_detalle',
         'telefono_whatsapp', 'nombre_whatsapp', 'verificado_at', 'envios',
         'ultimo_envio_at', 'ultimo_uso_at', 'ip', 'actividad',
     ];
@@ -30,6 +30,20 @@ class DemoProspecto extends BaseModel
      * y su último mensaje fue hace menos de 24 h (fuera de esa ventana Meta no
      * deja mandar mensajes libres, solo plantillas).
      */
+    /** Para la lista y los avisos: «Asesor: Juan», «Redes sociales», «Campaña: meta-nov». */
+    public function origenTexto(): string
+    {
+        $d = trim((string) $this->origen_detalle);
+
+        return match ($this->origen) {
+            'asesor' => 'Asesor: '.($d ?: 'sin nombre'),
+            'redes' => 'Redes sociales'.($d ? ' ('.$d.')' : ''),
+            'campana' => 'Campaña'.($d ? ': '.$d : ''),
+            'otro' => 'Otro'.($d ? ': '.$d : ''),
+            default => 'Sin dato',
+        };
+    }
+
     public function puedeRecibir(int $maximo): bool
     {
         return $this->verificado_at

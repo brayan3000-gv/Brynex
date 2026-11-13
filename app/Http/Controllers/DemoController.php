@@ -32,7 +32,12 @@ class DemoController extends Controller
             'empresa' => 'nullable|string|max:150',
             'celular' => ['required', 'string', 'regex:/^\+?[\d\s\-]{10,16}$/'],
             'acepto' => 'accepted',
+            'origen' => 'required|in:asesor,redes,campana,otro',
+            'asesor' => 'nullable|required_if:origen,asesor|string|max:120',
+            'origen_detalle' => 'nullable|string|max:120',
         ], [
+            'origen.required' => 'Cuéntanos cómo conociste BryNex.',
+            'asesor.required_if' => 'Escribe el nombre del asesor que te atendió.',
             'celular.regex' => 'Escribe un celular válido, por ejemplo 300 123 4567.',
             'acepto.accepted' => 'Necesitamos tu autorización para guardar tus datos y escribirte.',
         ]);
@@ -42,6 +47,8 @@ class DemoController extends Controller
             'empresa' => trim((string) ($datos['empresa'] ?? '')) ?: null,
             'celular' => preg_replace('/\D/', '', $datos['celular']),
             'acepto_contacto' => true,
+            'origen' => $datos['origen'],
+            'origen_detalle' => trim((string) ($datos['origen'] === 'asesor' ? $datos['asesor'] : ($datos['origen_detalle'] ?? ''))) ?: null,
             'ip' => $request->ip(),
         ]);
 

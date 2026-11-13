@@ -68,6 +68,7 @@ ARCHIVOS_DEMO=(
   app/Models/DemoProspecto.php app/Http/Controllers/DemoRelevoController.php routes/demo-relevo.php
   app/Services/WhatsappWebhookService.php database/migrations/2026_11_13_160000_create_demo_prospectos_table.php
   database/migrations/2026_11_13_190000_add_actividad_to_demo_prospectos.php public/manual/demo
+  database/migrations/2026_11_13_200000_add_origen_to_demo_prospectos.php
 )
 
 copiar_codigo() {
