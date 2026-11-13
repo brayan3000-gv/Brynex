@@ -152,7 +152,12 @@ class BuzonGmail
                 if ($correoDe === strtolower($this->cuenta)) {
                     continue;
                 }
-                $fecha = \Illuminate\Support\Carbon::parse((string) $h->getDate()->first());
+                // La fecha llega con la zona del remitente (la DIAN manda UTC). Pasarla
+                // a texto pierde la zona y quedaba 5 horas adelantada: se convierte.
+                $cruda = $h->getDate()->first();
+                $fecha = ($cruda instanceof \Carbon\CarbonInterface
+                    ? \Illuminate\Support\Carbon::instance($cruda)
+                    : \Illuminate\Support\Carbon::parse((string) $cruda))->setTimezone(config('app.timezone'));
                 if ($fecha->lt($desde)) {
                     continue;
                 }
