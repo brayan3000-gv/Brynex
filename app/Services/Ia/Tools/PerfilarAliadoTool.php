@@ -58,9 +58,20 @@ class PerfilarAliadoTool implements IaToolInterface
             : null;
         $servicio = app(ProspectoAliadoService::class);
 
+        // Quien trabaja solo pero ya tiene 100 o más es aliado (decisión del dueño, 13-nov-2026): se le
+        // ofrecen primero las alianzas de BryNex y el Plan Asesor queda como alternativa. Antes recibía
+        // solo el Plan Asesor con «también le alcanza para una alianza», y en la prueba con 120 la IA ni
+        // nombró la alianza.
+        $soloConCartera = $tipo === 'asesor' && $personas >= (int) config('alianzas.umbral_empresa', 100);
+        $tipoOrientacion = $soloConCartera ? 'empresa' : $tipo;
+
         $r = $conv
-            ? $servicio->aplicar($conv, $tipo, $personas, avisar: true, simular: (bool) ($contexto['modo_prueba'] ?? false))
-            : $servicio->orientar(2, $tipo, $personas) + ['responsable' => null];
+            ? $servicio->aplicar($conv, $tipoOrientacion, $personas, avisar: true, simular: (bool) ($contexto['modo_prueba'] ?? false))
+            : $servicio->orientar(2, $tipoOrientacion, $personas) + ['responsable' => null];
+        if ($soloConCartera) {
+            $r['resumen'] .= ' Como trabaja por su cuenta, si prefiere no tener su propia marca también puede trabajar como asesor '
+                .'con el Plan Asesor, sin pagar plataforma: nómbralo en una frase como alternativa, después de las alianzas.';
+        }
 
         // Con lo que contó queda decidido a quién atiende la IA desde el próximo mensaje: asesor,
         // aliado (con muchos afiliados) o cliente (el empleador). Ver AsistenteIaService::resolverPerfil.

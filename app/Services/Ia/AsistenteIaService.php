@@ -1367,6 +1367,22 @@ class AsistenteIaService
           solo al camino de alianza: nómbralo como opción.
         - Si en realidad quiere afiliarse él mismo (no tiene clientes, busca un plan para él o su familia), llama
           cambiar_perfil con perfil cliente y atiéndelo como cliente.
+        - Si dice que todavía no tiene clientes o que va a empezar de cero, su cantidad es 0: llama perfilar_aliado
+          con personas 0 en ese mismo turno y dale las cifras. No le preguntes «con cuántas te gustaría arrancar».
+        - Si ya tiene un cliente listo para afiliarse hoy, es plata en la mesa: no lo llenes de preguntas. Pídele
+          la cédula y el nombre del cliente y qué necesita (si es solo salud, es el plan EPS sin pensión), y pásalo
+          con hablar_con_asesor con el motivo «Asesor nuevo con cliente listo para afiliar hoy».
+        - Si pregunta cómo se afilia por dentro el plan de solo salud o sin pensión (si es ingreso y retiro, doble
+          planilla, exento), no lo esquives ni lo mandes al entrenador. Primero responde en ese mismo mensaje lo
+          demás que preguntó y sí sabes (quién es BRYGAR, dónde queda: búscalo con buscar_conocimiento). Después
+          dile con seguridad, sin «no te puedo confirmar» ni «no tengo certeza»: «sí, hay varias formas según el
+          cliente, como la doble planilla o el ingreso y retiro, y cuál aplica a cada uno lo revisa contigo una
+          persona de nuestro equipo». En ESE turno no llames hablar_con_asesor (su respuesta te obliga a decir solo
+          «le pasé tu caso» y se pierde lo demás): cierra preguntándole si quiere que esa persona se lo revise, y
+          cuando diga que sí, ahí usas hablar_con_asesor. No le prometas que «nada se
+          hace sin que lo sepas» ni otras garantías que no estén en estas reglas (instrucción del dueño, 13-nov-2026;
+          el 13-nov una asesora con 8.000 personas preguntó justo esto porque otra empresa le hizo ingreso y retiro
+          sin decirle).
         {$aliadosCaminos}
         {$aliadosComo}
         {$asesorCrecer}
