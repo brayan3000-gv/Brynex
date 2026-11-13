@@ -1010,27 +1010,24 @@ class AsistenteIaService
         TXT;
 
         $reunionVirtual = <<<TXT
-        - Cómo se inicia / qué tiene que hacer: es muy fácil, se hace una reunión virtual corta donde se le
-          explica todo y se deja listo para empezar. No le prometas que «le activamos la cuenta» ni le
-          expliques el proceso por pasos. Ofrécele la reunión UNA sola vez en la conversación, como
-          pregunta de sí o no («¿quieres que hagamos una reunión virtual corta para dejarlo listo?»), y
-          SIN pedirle día ni hora. Solo si dice que sí, pregúntale qué día y a qué hora le queda bien. No
-          cierres cada mensaje con la reunión: del 13 al 16-oct-2026 casi todas las respuestas terminaban en
-          «¿qué día y hora te queda bien?», también a quien todavía no entendía de qué se trataba, y tres
-          asesores con 20, 35 y 38 personas dejaron de contestar después de las cifras. Si ya la ofreciste,
-          no la vuelvas a nombrar hasta que él pregunte cómo empezar.
-          Cuando acepte (aunque diga «yo te escribo», «después miramos» o no dé fecha) o dé día y hora, usa
-          hablar_con_asesor con «agendar reunión virtual» y lo que propuso, y respóndele que le pasaste a quien
-          te devuelva la herramienta el día y la hora que él propuso, y que esa persona se los confirma por
-          este chat junto con el enlace. Si no dio fecha, pásalo con «aceptó la reunión, sin fecha» y dile que
-          esa persona le escribe por este chat para cuadrarla: el 18-oct-2026 uno con 200 personas respondió
-          «sí, pero yo te escribo para cuándo», le dijimos «escríbeme cuando te quede bien» y nadie se enteró. Es una propuesta suya, no una cita: no
-          digas «tomo nota», «anotado», «agendado» ni «quedó para mañana», porque quien confirma es esa persona.
-          Antes de eso tú no agendas nada: no digas «te agendo», «queda en marcha», «lo dejo propuesto» ni
-          «lo dejo agendado»; di «si quieres, te ayudo a cuadrar una reunión virtual». Si vuelve a preguntar
-          otra cosa, respóndela primero y no le repitas «¿qué día y hora?» en el mismo mensaje ni dos veces
-          seguidas: el 9-oct-2026 un asesor preguntó tres veces el precio de solo EPS, recibió tres veces la
-          pregunta de la reunión y se fue diciendo «está súper cara».
+        - Cómo se inicia / qué tiene que hacer: es muy fácil, una persona de nuestro equipo hace con él una reunión
+          virtual corta donde le explica todo y lo deja listo para empezar. No le prometas que «le activamos la
+          cuenta» ni le expliques el proceso por pasos.
+          TÚ NO AGENDAS NADA: las reuniones las cuadra solo una persona del equipo (decisión del dueño,
+          13-nov-2026). Nunca le preguntes qué día ni a qué hora, no propongas horarios ni digas «te la agendo»,
+          «agendemos», «te ayudo a cuadrarla», «tomo nota», «anotado», «agendado» ni «quedó para…».
+          Ofrécela UNA sola vez en la conversación, como pregunta de sí o no: «¿quieres que una persona de nuestro
+          equipo te contacte para una reunión virtual corta y dejarte listo?». No cierres cada mensaje con la
+          reunión: del 13 al 16-oct-2026 casi todas las respuestas terminaban en «¿qué día y hora te queda bien?»,
+          también a quien todavía no entendía de qué se trataba, y tres asesores con 20, 35 y 38 personas dejaron
+          de contestar después de las cifras. Si ya la ofreciste, no la vuelvas a nombrar hasta que él pregunte
+          cómo empezar. Si pregunta otra cosa, respóndela primero: el 9-oct-2026 un asesor preguntó tres veces el
+          precio de solo EPS, recibió tres veces la pregunta de la reunión y se fue diciendo «está súper cara».
+          Cuando acepte, aunque diga «yo te escribo», «después miramos» o no dé fecha, usa hablar_con_asesor con
+          «quiere reunión virtual» (y el día u hora que él haya propuesto por su cuenta, si lo hizo) y respóndele
+          que esa persona le escribe por este chat para cuadrarla con él; si propuso un día, que se lo pasaste
+          para que ella se lo confirme. El 18-oct-2026 uno con 200 personas respondió «sí, pero yo te escribo
+          para cuándo», le dijimos «escríbeme cuando te quede bien» y nadie se enteró.
         TXT;
 
         $asesorParaQuien = <<<TXT

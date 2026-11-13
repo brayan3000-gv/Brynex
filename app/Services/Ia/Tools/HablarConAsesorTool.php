@@ -58,8 +58,9 @@ class HablarConAsesorTool implements IaToolInterface
                 'ok'      => true,
                 'mensaje' => "{$responsable['nombre']} quedó avisado y va a continuar esta conversación por este mismo WhatsApp. "
                     . 'Dile al cliente SOLO eso, en una o dos frases.' . $numero
-                    . ' Si propuso día y hora para una reunión, puedes decirle que se los pasaste para que se los confirme,'
-                    . ' pero NO digas «tomo nota», «anotado» ni que algo quedó agendado: quien confirma es esa persona.',
+                    . ' Si propuso día u hora para una reunión, dilo SOLO así: «le pasé tu propuesta de [lo que dijo] para que te la'
+                    . ' confirme por este chat». NO uses «anoté», «anotado», «tomo nota», «te dejé anotado», «agendado» ni «quedó para»:'
+                    . ' tú no agendas, quien cuadra la reunión es esa persona.',
             ];
         }
 
@@ -71,7 +72,8 @@ class HablarConAsesorTool implements IaToolInterface
             'mensaje' => 'Una persona del equipo quedó avisada y continuará esta conversación. Dile al cliente '
                 . 'SOLO eso, en una o dos frases: que le pasaste su caso a un asesor y que lo va a contactar. '
                 . 'NO digas que algo quedó registrado, agendado, programado, reservado ni guardado, ni prometas '
-                . 'un día u hora: nada de eso se hizo.',
+                . 'un día u hora: nada de eso se hizo. Si propuso día u hora para una reunión, dilo SOLO así: «le pasé tu '
+                . 'propuesta de [lo que dijo] para que te la confirme por este chat», nunca «anoté», «anotado» ni «te dejé anotado».',
         ];
     }
 }
