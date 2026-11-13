@@ -45,11 +45,11 @@
         <div style="color:#64748b">{{ $ahora->format('d/m/Y H:i') }}</div>
     </div>
     <div class="ent">{{ $entidad['nombre'] }}</div>
-    <div class="doc">{{ $titulos[$tipo] ?? 'Constancia de radicación' }}</div>
+    <div class="doc">{{ ($operacion ?? null) === 'anular' ? 'Constancia de anulación de la afiliación' : (($operacion ?? null) === 'retirar' ? 'Constancia de retiro (novedad RET)' : ($titulos[$tipo] ?? 'Constancia de radicación')) }}</div>
     @if ($entidad['nit'])<div class="doc">NIT {{ $entidad['nit'] }}</div>@endif
 </div>
 
-<p>Estado del trámite: <span class="estado">{{ $tipo === 'arl' ? 'AFILIADO' : 'RADICADO' }}</span>
+<p>Estado del trámite: <span class="estado">{{ ($operacion ?? null) === 'anular' ? 'ANULADA' : (($operacion ?? null) === 'retirar' ? 'RETIRADO' : ($tipo === 'arl' ? 'AFILIADO' : 'RADICADO')) }}</span>
    &nbsp; Canal: API / portal web (simulado)</p>
 
 <h2>Trabajador</h2>
@@ -72,7 +72,7 @@
         <tr><td class="k">Tipo de afiliado</td><td>{{ ($payload['tipoAfiliado'] ?? 'D') === 'I' ? 'Independiente' : 'Dependiente' }}</td></tr>
         <tr><td class="k">Clase de riesgo</td><td>{{ $resumen['nivel_riesgo'] ?: '—' }}</td></tr>
         <tr><td class="k">Cargo</td><td>{{ $resumen['cargo'] ?: '—' }}</td></tr>
-        <tr><td class="k">Inicio de cobertura</td><td><strong>{{ $fechaCobertura->format('d/m/Y') }}</strong></td></tr>
+        <tr><td class="k">{{ ($operacion ?? null) === 'retirar' ? 'Fin de cobertura' : (($operacion ?? null) === 'anular' ? 'Anulada el' : 'Inicio de cobertura') }}</td><td><strong>{{ $fechaCobertura->format('d/m/Y') }}</strong></td></tr>
     @else
         <tr><td class="k">Novedad</td><td>ING — {{ $payload['descripcion'] ?? 'Ingreso' }}</td></tr>
     @endif

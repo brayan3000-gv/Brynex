@@ -32,6 +32,12 @@ class DemoServiceProvider extends ServiceProvider
     public function boot(): void
     {
         if (! config('demo.activo')) {
+            // Producción: atiende a la demo (guardar prospectos y mandarles sus
+            // WhatsApp de prueba) solo si se configuró el secreto compartido.
+            if (config('demo.relevo.secreto')) {
+                Route::group([], base_path('routes/demo-relevo.php'));
+            }
+
             return;
         }
 

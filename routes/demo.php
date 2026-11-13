@@ -9,13 +9,19 @@ use Illuminate\Support\Facades\Route;
 | este archivo no se lee.
 */
 
+// La entrada: nombre, empresa y celular, y adentro (ver DemoController::registro).
+Route::middleware(['guest', 'throttle:10,1'])->post('demo/registro', [DemoController::class, 'registro'])->name('demo.registro');
+
 Route::middleware('auth')->group(function () {
+    Route::get('demo/whatsapp/estado', [DemoController::class, 'whatsappEstado'])->middleware('throttle:60,1')->name('demo.whatsapp.estado');
+
     Route::prefix('demo/radicar')->name('demo.radicar.')
         ->middleware(['permiso:radicados.ver', 'permiso.escritura:radicados.gestionar'])
         ->group(function () {
             Route::get('{id}/precheck', [DemoController::class, 'precheck'])->whereNumber('id')->name('precheck');
             Route::post('{id}', [DemoController::class, 'radicar'])->whereNumber('id')->name('ejecutar');
             Route::get('{id}/pdf', [DemoController::class, 'pdf'])->whereNumber('id')->name('pdf');
+            Route::post('{id}/anular', [DemoController::class, 'anular'])->whereNumber('id')->name('anular');
         });
 
     Route::get('demo/pago-pse/{numero}', [DemoController::class, 'pagoPse'])->whereNumber('numero')->name('demo.pago-pse');

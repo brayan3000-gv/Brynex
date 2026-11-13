@@ -48,6 +48,7 @@
 (function () {
     const URL_PRECHECK = @json(route('demo.radicar.precheck', ['id' => '__ID__']));
     const URL_RADICAR  = @json(route('demo.radicar.ejecutar', ['id' => '__ID__']));
+    const URL_ANULAR   = @json(route('demo.radicar.anular', ['id' => '__ID__']));
     const csrf = () => document.querySelector('meta[name=csrf-token]')?.content || (typeof CSRF !== 'undefined' ? CSRF : '');
     const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const pausa = (ms) => new Promise(r => setTimeout(r, ms));
@@ -104,11 +105,96 @@
                 </div>`;
         },
 
+        async animarPasos() {
+            for (const li of document.querySelectorAll('#dr-pasos li')) {
+                li.className = 'activo';
+                li.querySelector('.dr-ico').innerHTML = '<span class="dr-giro">◌</span>';
+                await pausa(650 + Math.random() * 650);
+                li.className = 'hecho';
+                li.querySelector('.dr-ico').textContent = '✓';
+            }
+        },
+
+        pintarPasos(lista) {
+            document.getElementById('dr-pasos').innerHTML = lista.map(p => `<li><span class="dr-ico">○</span>${esc(p)}</li>`).join('');
+        },
+
+        /** Anular o retirar una afiliación a la ARL que ya está en OK. */
+        async abrirAnulacion(radId, contratoId) {
+            estado = { radId, contratoId };
+            const cuerpo = document.getElementById('dr-cuerpo');
+            document.getElementById('demoRad').style.display = 'flex';
+            cuerpo.innerHTML = '<p style="color:#64748b">⏳ Buscando la afiliación…</p>';
+            let d;
+            try {
+                const r = await fetch(URL_PRECHECK.replace('__ID__', radId), { headers: { Accept: 'application/json' } });
+                d = await r.json();
+                if (!r.ok) throw new Error(d.message || 'No se pudo leer el contrato.');
+            } catch (e) {
+                cuerpo.innerHTML = `<div class="dr-prob">❌ ${esc(e.message)}</div>`;
+                return;
+            }
+            estado.d = d;
+            const ent = d.entidad, s = d.resumen;
+            const hoy = new Date().toISOString().slice(0, 10);
+            document.getElementById('dr-titulo').textContent = '↩️ Anular o retirar en ' + ent.nombre;
+            cuerpo.innerHTML = `
+                <div class="dr-aviso">🧪 <strong>Simulación.</strong> Así lo hace BryNex de verdad por el API de ${esc(ent.nombre)}; en la demo no se envía nada.</div>
+                <div class="dr-grid"><div><span>Trabajador:</span> <strong>${esc(s.trabajador)}</strong></div><div><span>Documento:</span> <strong>${esc(s.documento)}</strong></div>
+                    <div><span>Empleador:</span> <strong>${esc(s.razon_social)}</strong></div></div>
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:.84rem;margin-bottom:.6rem">
+                    <label><input type="radio" name="dr-op" value="anular" checked> <strong>Anular</strong> — deshacer la afiliación (hasta 30 días)</label>
+                    <label><input type="radio" name="dr-op" value="retirar"> <strong>Retirar</strong> — cerrar la cobertura en una fecha</label>
+                </div>
+                <label id="dr-fecha-ret" style="display:none;font-size:.8rem;margin-bottom:.6rem">Fin de cobertura:
+                    <input type="date" id="dr-fecha" value="${hoy}" style="margin-left:.4rem;padding:.25rem .4rem;border:1px solid #cbd5e1;border-radius:6px"></label>
+                <ul class="dr-pasos" id="dr-pasos"></ul>
+                <div class="dr-acc"><button class="dr-btn dr-sec" onclick="DemoRadicar.cerrar()">Cancelar</button>
+                    <button class="dr-btn dr-prim" id="dr-ir" style="background:linear-gradient(135deg,#b91c1c,#ef4444)" onclick="DemoRadicar.anular()">↩️ Anular ahora</button></div>`;
+            const cambiar = () => {
+                const op = document.querySelector('input[name=dr-op]:checked').value;
+                document.getElementById('dr-fecha-ret').style.display = op === 'retirar' ? 'block' : 'none';
+                document.getElementById('dr-ir').textContent = op === 'retirar' ? '🚪 Retirar ahora' : '↩️ Anular ahora';
+                DemoRadicar.pintarPasos(d.pasos_anulacion[op]);
+            };
+            document.querySelectorAll('input[name=dr-op]').forEach(i => i.onchange = cambiar);
+            cambiar();
+        },
+
+        async anular() {
+            const op = document.querySelector('input[name=dr-op]:checked').value;
+            const boton = document.getElementById('dr-ir');
+            boton.disabled = true; boton.textContent = 'Procesando…';
+            const peticion = fetch(URL_ANULAR.replace('__ID__', estado.radId), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': csrf() },
+                body: JSON.stringify({ operacion: op, fecha: op === 'retirar' ? document.getElementById('dr-fecha').value : null }),
+            }).then(async r => ({ r, d: await r.json().catch(() => ({})) }));
+            await this.animarPasos();
+            const { r, d } = await peticion;
+            const cuerpo = document.getElementById('dr-cuerpo');
+            if (!r.ok || !d.ok) {
+                cuerpo.insertAdjacentHTML('afterbegin', `<div class="dr-prob">❌ ${esc(d.mensaje || d.message || 'No se pudo simular.')}</div>`);
+                boton.disabled = false; boton.textContent = 'Reintentar';
+                return;
+            }
+            if (typeof pintarRadicadoEnLista === 'function') {
+                try { pintarRadicadoEnLista(d.radicado, estado.contratoId); } catch (e) {}
+            }
+            const ent = estado.d.entidad;
+            cuerpo.innerHTML = `
+                <div class="dr-ok"><div style="font-weight:800;color:#15803d;font-size:.95rem">✅ ${op === 'anular' ? 'Afiliación anulada' : 'Retiro reportado'} en ${esc(ent.nombre)} (simulado)</div>
+                    <div style="font-size:.82rem;margin-top:.25rem">N°: <strong>${esc(d.numero)}</strong>${op === 'retirar' ? ` · Cobertura hasta <strong>${esc(d.fecha)}</strong>` : ' · El radicado quedó abierto para volver a afiliar'}</div></div>
+                <iframe src="${esc(d.pdf_url)}?t=${Date.now()}" title="PDF de muestra"></iframe>
+                <div class="dr-acc" style="margin-top:.8rem">
+                    <a class="dr-btn dr-sec" style="text-decoration:none" href="${esc(d.pdf_url)}" target="_blank" rel="noopener">👁️ Abrir PDF</a>
+                    <button class="dr-btn dr-prim" onclick="DemoRadicar.cerrar()">Listo</button></div>`;
+        },
+
         async radicar() {
             const boton = document.getElementById('dr-ir');
             if (boton) { boton.disabled = true; boton.textContent = 'Radicando…'; }
             const fecha = document.getElementById('dr-fecha')?.value || null;
-            const pasos = [...document.querySelectorAll('#dr-pasos li')];
 
             // La llamada sale ya; los pasos se pintan mientras tanto.
             const peticion = fetch(URL_RADICAR.replace('__ID__', estado.radId), {
@@ -117,13 +203,7 @@
                 body: JSON.stringify({ fecha_cobertura: fecha }),
             }).then(async r => ({ r, d: await r.json().catch(() => ({})) }));
 
-            for (const li of pasos) {
-                li.className = 'activo';
-                li.querySelector('.dr-ico').innerHTML = '<span class="dr-giro">◌</span>';
-                await pausa(650 + Math.random() * 650);
-                li.className = 'hecho';
-                li.querySelector('.dr-ico').textContent = '✓';
-            }
+            await this.animarPasos();
 
             const { r, d } = await peticion;
             const cuerpo = document.getElementById('dr-cuerpo');
@@ -170,6 +250,17 @@
     };
     zona.appendChild(btn);
 
+    // Para radicados de ARL ya en OK: anular o retirar.
+    const btnAnular = document.createElement('button');
+    btnAnular.type = 'button';
+    btnAnular.id = 'btnAnularDemo';
+    btnAnular.style.cssText = 'display:none;align-items:center;gap:.35rem;padding:.3rem .85rem;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:7px;font-size:.75rem;font-weight:700;cursor:pointer;';
+    btnAnular.onclick = () => {
+        if (typeof cerrarModal === 'function') cerrarModal('modalRadicado');
+        DemoRadicar.abrirAnulacion(btn._radId, btn._contratoId);
+    };
+    zona.appendChild(btnAnular);
+
     const original = window.abrirModalRadicado;
     window.abrirModalRadicado = function (radId, radData, ctx = {}, contratoId = null) {
         const r = original.apply(this, arguments);
@@ -180,6 +271,8 @@
         btn._radId = radId;
         btn._contratoId = contratoId || ctx.id || null;
         btn.textContent = (tipo === 'arl' ? '🚀 Afiliar en ' : '🏥 Radicar en ') + (nombre || ETIQUETA[tipo] || 'la entidad') + ' por API';
+        btnAnular.style.display = (tipo === 'arl' && radData.estado === 'ok') ? 'inline-flex' : 'none';
+        btnAnular.textContent = '↩️ Anular o retirar en ' + (nombre || 'la ARL');
         return r;
     };
 })();

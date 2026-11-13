@@ -64,6 +64,8 @@ ARCHIVOS_DEMO=(
   app/Services/WhatsappApiService.php app/Services/MiPlanilla/MiPlanillaPortalService.php
   app/Services/PortalCorreccionSaludService.php app/Console/Commands/WhatsappPlantillaAvisoRetiro.php
   app/Console/Commands/WhatsappPlantillaRecibo.php app/Console/Commands/WhatsappPlantillasSistema.php
+  app/Models/DemoProspecto.php app/Http/Controllers/DemoRelevoController.php routes/demo-relevo.php
+  app/Services/WhatsappWebhookService.php database/migrations/2026_11_13_160000_create_demo_prospectos_table.php
 )
 
 copiar_codigo() {

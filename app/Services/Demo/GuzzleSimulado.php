@@ -37,10 +37,16 @@ class GuzzleSimulado
         // WhatsApp Cloud API: el mensaje «sale» y la app lo guarda en el chat.
         if ($host === 'graph.facebook.com') {
             if (str_ends_with($ruta, '/messages')) {
-                return self::json(['messaging_product' => 'whatsapp', 'messages' => [['id' => 'wamid.DEMO'.Str::upper(Str::random(24))]]]);
+                $payload = json_decode((string) $r->getBody(), true) ?: [];
+                // Si quien prueba la demo conectó su WhatsApp, le llega de verdad
+                // (lo manda producción, ver WhatsappDeLaDemo). Si no, solo queda en el chat.
+                $real = WhatsappDeLaDemo::enviar($payload);
+
+                return self::json(['messaging_product' => 'whatsapp', 'messages' => [['id' => $real ?: 'wamid.DEMO'.Str::upper(Str::random(24))]]]);
             }
             if (str_ends_with($ruta, '/media')) {
-                return self::json(['id' => 'DEMO-MEDIA-'.Str::random(10)]);
+                // El archivo se guarda un rato: si después se envía, va con el pedido.
+                return self::json(['id' => WhatsappDeLaDemo::guardarArchivo($r)]);
             }
             if (str_ends_with($ruta, '/message_templates')) {
                 return $r->getMethod() === 'GET'

@@ -30,4 +30,15 @@ return [
 
     // Las únicas bases con las que arranca en modo demo. Nunca `BryNex`.
     'bases_permitidas' => ['BryNex_Demo', 'BryNex_Videos'],
+
+    // El puente con producción (App\Services\Demo\RelevoDemo): ahí se guardan
+    // los prospectos y de ahí salen los WhatsApp reales a quien prueba la demo.
+    // El mismo secreto va en el .env de los dos lados. Sin secreto, no hay puente
+    // y la demo solo simula.
+    'relevo' => [
+        'secreto' => env('DEMO_RELEVO_SECRETO'),
+        'url' => env('DEMO_RELEVO_URL', 'https://brynex.co'),   // lo usa la demo
+        'numero' => env('DEMO_RELEVO_NUMERO', '573334315129'),   // Info Avapp, el de BryNex
+        'max_envios' => (int) env('DEMO_RELEVO_MAX_ENVIOS', 5),
+    ],
 ];

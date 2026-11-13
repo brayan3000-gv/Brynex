@@ -278,6 +278,81 @@ class RadicacionSimulada
         ];
     }
 
+    /** Los pasos de anular o retirar, para que el modal los muestre como en radicar. */
+    public function pasosAnulacion(string $operacion): array
+    {
+        $n = $this->entidad()['nombre'];
+
+        return $operacion === 'anular' ? [
+            "Abriendo sesión con el API de {$n}",
+            'Buscando la cobertura creada para este trabajador',
+            'Revisando que esté dentro de los 30 días para anular',
+            'Anulando el ingreso',
+            'Descargando la constancia de anulación',
+            'Reabriendo el radicado para volver a afiliar',
+        ] : [
+            "Abriendo sesión con el API de {$n}",
+            'Buscando la cobertura vigente del trabajador',
+            'Reportando la novedad de retiro (RET) con la fecha de fin',
+            'Descargando la constancia de retiro',
+            'Dejando la constancia en el radicado',
+        ];
+    }
+
+    /**
+     * Anular (deshacer la afiliación, como si nunca hubiera existido) o retirar
+     * (cerrar la cobertura en una fecha). Solo ARL, que es donde BryNex lo hace
+     * por API de verdad.
+     */
+    public function anular(string $operacion, ?string $fecha, ?int $usuarioId): array
+    {
+        abort_unless($this->radicado->tipo === Radicado::TIPO_ARL, 422, 'Solo se anula o retira en la ARL.');
+
+        $entidad = $this->entidad();
+        $c = $this->contrato;
+        $fin = Carbon::parse($fecha ?: now()->toDateString())->startOfDay();
+        $numero = 'DEMO-'.($operacion === 'anular' ? 'ANU' : 'RET').'-'.now()->format('ymd').'-'.str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
+
+        $pdf = Pdf::loadView('demo.pdf.radicado', [
+            'entidad' => $entidad,
+            'numero' => $numero,
+            'resumen' => $this->resumen(),
+            'payload' => ['operacion' => $operacion === 'anular' ? 'ANULACION_INGRESO' : 'RETIRO',
+                'trabajador' => $this->payload()['trabajador'], 'empleador' => $this->payload()['empleador']]
+                + ($operacion === 'retirar' ? ['fechaFinCobertura' => $fin->format('d/m/Y')] : []),
+            'fechaCobertura' => $fin,
+            'ahora' => now(),
+            'tipo' => $this->radicado->tipo,
+            'operacion' => $operacion,
+        ])->setPaper('letter')->setOption('isFontSubsettingEnabled', true)->output();
+
+        $ruta = "radicados/{$c->aliado_id}/{$c->id}/{$c->cedula}/arl_{$operacion}_demo_".now()->format('Ymd_His').'.pdf';
+        Storage::disk('local')->put($ruta, $pdf);
+
+        if ($operacion === 'anular') {
+            $this->radicado->fill([
+                'estado' => Radicado::ESTADO_PENDIENTE,
+                'numero_radicado' => null,
+                'ruta_pdf' => $ruta,
+                'user_id' => $usuarioId,
+                'observacion' => "Anulación SIMULADA en {$entidad['nombre']} ({$numero}). El radicado quedó abierto para volver a afiliar.",
+            ])->save();
+            $c->update(['fecha_arl' => null]);
+        } else {
+            $this->radicado->fill([
+                'ruta_pdf' => $ruta,
+                'user_id' => $usuarioId,
+                'observacion' => "Retiro SIMULADO en {$entidad['nombre']} ({$numero}): cobertura hasta el ".$fin->format('d/m/Y').'.',
+            ])->save();
+        }
+
+        Bitacora::registrar('updated', 'Contrato', $c->id,
+            ($operacion === 'anular' ? 'Anulación' : 'Retiro')." simulado en {$entidad['nombre']}: {$numero}",
+            ['radicado_id' => $this->radicado->id, 'demo' => true], (int) $c->aliado_id);
+
+        return ['numero' => $numero, 'fecha' => $fin->format('d/m/Y'), 'operacion' => $operacion];
+    }
+
     private function nombreTrabajador(): string
     {
         $cl = $this->contrato->cliente;

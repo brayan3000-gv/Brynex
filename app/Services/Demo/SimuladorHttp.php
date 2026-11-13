@@ -19,6 +19,11 @@ class SimuladorHttp
 {
     public static function responder(Request $peticion)
     {
+        // Lo único que sale: los pedidos firmados a producción (RelevoDemo).
+        if (RelevoDemo::esPeticionDelRelevo($peticion->url())) {
+            return null;
+        }
+
         Log::info('Demo: petición cortada (Http)', ['metodo' => $peticion->method(), 'url' => $peticion->url()]);
 
         return Http::response(

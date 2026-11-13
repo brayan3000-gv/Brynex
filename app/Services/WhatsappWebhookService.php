@@ -163,6 +163,13 @@ class WhatsappWebhookService
                     ));
                 }
 
+                // Quien prueba la demo pública le escribe «DEMO 1234» al número de
+                // BryNex para recibir ahí los envíos de prueba. Se verifica aquí y el
+                // mensaje sigue de largo a la bandeja (así queda el contacto).
+                if (!empty($value['messages']) && \App\Services\Demo\RelevoDemo::activo() && !config('demo.activo')) {
+                    $this->verificarCodigosDemo($value, $phoneNumberId);
+                }
+
                 $config = WhatsappConfig::where('phone_number_id', $phoneNumberId)
                     ->where('activo', true)
                     ->first();
@@ -418,7 +425,11 @@ class WhatsappWebhookService
         // Asistente IA: solo si el bot está activo en esta conversación y el aliado
         // tiene la IA activada para WhatsApp. Se procesa en un Job para no bloquear
         // la respuesta al webhook de Meta (~20s de margen).
-        if ($conversacion->bot_activo && !$esRechazoPublicidad) {
+        // El «DEMO 1234» de quien prueba la demo pública ya lo contestó RelevoDemo:
+        // la IA no tiene nada que decirle a ese código.
+        $esCodigoDemo = $tipo === 'text' && \App\Services\Demo\RelevoDemo::codigoEn($dataMensaje['contenido'] ?? null) !== null;
+
+        if ($conversacion->bot_activo && !$esRechazoPublicidad && !$esCodigoDemo) {
             if ($iaActiva) {
                 if (in_array($tipo, ['text', 'button'], true) && !empty($dataMensaje['contenido'])) {
                     // Indicador de "escribiendo" — gratis, no pasa por la IA ni consume tokens.
@@ -872,6 +883,28 @@ class WhatsappWebhookService
      * Cuando múltiples aliados comparten el número Brynex,
      * buscamos a qué aliado pertenece la conversación por el número del cliente.
      */
+    /** Los «DEMO 1234» que llegan al número de BryNex (ver App\Services\Demo\RelevoDemo). */
+    private function verificarCodigosDemo(array $value, string $phoneNumberId): void
+    {
+        $brynexPhoneId = \App\Models\ConfiguracionBrynex::obtener('whatsapp_global_phone_number_id') ?: config('services.whatsapp.phone_number_id');
+        if ($phoneNumberId !== $brynexPhoneId) {
+            return;
+        }
+
+        $perfiles = collect($value['contacts'] ?? [])->mapWithKeys(fn ($c) => [($c['wa_id'] ?? '') => $c['profile']['name'] ?? null]);
+
+        foreach ($value['messages'] as $msg) {
+            if (($msg['type'] ?? '') !== 'text' || empty($msg['from'])) {
+                continue;
+            }
+            try {
+                \App\Services\Demo\RelevoDemo::verificarDesdeWhatsapp($msg['from'], $perfiles[$msg['from']] ?? null, $msg['text']['body'] ?? null);
+            } catch (\Throwable $e) {
+                Log::warning('Demo: no se pudo verificar el código', ['from' => $msg['from'], 'error' => $e->getMessage()]);
+            }
+        }
+    }
+
     private function procesarParaMultipleConfigs(array $value, array $configs): void
     {
         $mensajes = $value['messages'] ?? [];
