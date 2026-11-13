@@ -164,5 +164,26 @@ Subir la cámara nueva a la ficha (Archivos → Cámara de Comercio): reemplaza 
 Las YEVI se radicaron con cámaras del 15-oct (29 días). YEVI EXPRESS tiene la dirección
 distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó la de la cámara.
 
-Faltan las empresas de Sebastián, Karla y Yuly (ver Representantes). Yuly: ELITES
-901904750 y ELITEX 901906958, sin cámara en BryNex (hay que comprarlas).
+| ELITES CREACIONES | 901904750 | Yuly 1143961945 | Registrado + gratuito | 979f8f69… | 01080321 · Identidad validada (13-nov, con preguntas) |
+| CONSTRUCTORA ELITEX | 901906958 | Yuly | Registrado + gratuito | d07f6436… | 01080323 · Identidad validada (13-nov) |
+
+Faltan las empresas de Sebastián y Karla (ver Representantes).
+
+## Trampas que aparecieron con Yesenia y Yuly (13-nov)
+
+- **La solución gratuita guarda la sesión de la empresa anterior.** Antes de llenar la
+  solicitud del certificado, confirmar que `[name=Code]` sea el NIT esperado; si no, volver a
+  pasar por `/User/RedirectToBiller` desde el portal de la empresa correcta.
+- **«No fue posible crear el usuario: el correo … ya existe»** (`/account/UserNewEmail`): la
+  solución gratuita crea un usuario por empresa y el correo central ya está tomado. Poner
+  `seguridadsocial.brygar+<NIT>@gmail.com` y Enviar.
+- **GSE tiene una sola sesión por navegador**: si Chrome autocompleta y se entra con otra
+  cuenta (otro representante), la solicitud abierta se pierde sin finalizar (los TyC y
+  documentos sí quedan guardados). Antes de Finalizar, revisar «SUSCRIPTOR – <nombre>».
+- **El código de Firmaya cambia cada vez que se pulsa «Validar Email»** y la ventana se puede
+  cerrar sola: sacar siempre el más reciente del buzón (`from:firmaya.co
+  to:seguridadsocial.brygar+<NIT>`) y dárselo a la persona; nunca escribirlo Claude.
+- **Las 5 preguntas de identidad sí pueden salir** (salieron con Yuly en ELITES, no en ELITEX
+  ni con Luis/Yesenia). Las responde solo el representante; 3 intentos.
+- Las cámaras guardadas pueden haberse subido recién pero estar **expedidas mucho antes**:
+  mirar la «Fecha expedición» del PDF, no la fecha de subida.
