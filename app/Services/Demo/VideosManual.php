@@ -1,0 +1,119 @@
+<?php
+
+namespace App\Services\Demo;
+
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+
+/**
+ * Los videos del manual (public/manual, ver scripts/videos) puestos al alcance
+ * de quien prueba la demo: la presentación de bienvenida, el «¿Cómo funciona?»
+ * de cada módulo y el «ver cómo» de cada paso del recorrido.
+ *
+ * Lee public/manual/manual.json, el mismo índice de la página del manual, así
+ * que un video nuevo que se publique ahí aparece solo en su módulo.
+ */
+class VideosManual
+{
+    /** Qué módulo del manual corresponde a cada pantalla (patrón de Request::is). */
+    private const RUTAS = [
+        'dashboard' => 'entrada',
+        'admin/clientes*' => 'clientes',
+        'admin/contratos*' => 'contratos',
+        'admin/afiliaciones*' => 'afiliaciones',
+        'admin/gestion-arl*' => 'afiliaciones',
+        'admin/planos*' => 'planos',
+        'admin/cobros*' => 'cobros',
+        'admin/prestamos*' => 'cobros',
+        'admin/facturacion*' => 'facturacion',
+        'admin/incapacidades*' => 'incapacidades',
+        'admin/tareas*' => 'tareas',
+        'cuadre-diario*' => 'caja',
+        'visita*' => 'visita',
+        'admin/informes*' => 'informes',
+        'admin/whatsapp*' => 'comunicacion',
+        'admin/marketing*' => 'comunicacion',
+        'admin/publicidad*' => 'comunicacion',
+        'admin/cotizaciones*' => 'cotizador',
+        'admin/configuracion*' => 'administracion',
+        'admin/usuarios*' => 'administracion',
+        'admin/cartas-laborales*' => 'administracion',
+    ];
+
+    private const TITULOS = [
+        'entrada' => 'El inicio', 'clientes' => 'Clientes', 'contratos' => 'Contratos',
+        'afiliaciones' => 'Afiliaciones', 'planos' => 'Planillas', 'cobros' => 'Cobros',
+        'facturacion' => 'Facturación', 'incapacidades' => 'Incapacidades', 'tareas' => 'Tareas',
+        'caja' => 'Cuadre de caja', 'visita' => 'Cobro en visita', 'informes' => 'Informes',
+        'comunicacion' => 'WhatsApp y marketing', 'cotizador' => 'Cotizador', 'administracion' => 'Administración',
+    ];
+
+    /** El video de cada paso del recorrido (resources/views/demo/partials/franja). */
+    public const PASOS = [
+        'persona' => 'clientes-crear',
+        'contrato' => 'contratos-crear',
+        'radicar' => 'afiliaciones-arl-api',
+        'planilla' => 'planos-descargar',
+        'whatsapp' => 'whatsapp-bandeja',
+    ];
+
+    /** Todos los clips por id, prefiriendo el de escritorio cuando hay dos formatos. */
+    public static function todos(): array
+    {
+        return Cache::remember('demo_videos_manual', 600, function () {
+            $json = json_decode((string) @file_get_contents(public_path('manual/manual.json')), true) ?: [];
+            $clips = [];
+
+            foreach ($json as $c) {
+                if (empty($c['id']) || empty($c['archivo'])) {
+                    continue;
+                }
+                if (isset($clips[$c['id']]) && ($c['formato'] ?? '') !== 'escritorio') {
+                    continue;
+                }
+                $clips[$c['id']] = [
+                    'id' => $c['id'],
+                    'titulo' => $c['titulo'] ?? '',
+                    'escena' => $c['escena'] ?? '',
+                    'segundos' => (int) round((float) ($c['segundos'] ?? 0)),
+                    'pasos' => array_values((array) ($c['pasos'] ?? [])),
+                    'url' => asset('manual/'.ltrim($c['archivo'], '/')),
+                ];
+            }
+
+            return $clips;
+        });
+    }
+
+    public static function clip(string $id): ?array
+    {
+        return self::todos()[$id] ?? null;
+    }
+
+    public static function comercial(): ?array
+    {
+        $c = self::clip('comercial');
+
+        return $c ? $c + ['portada' => asset('manual/comercial-portada.jpg')] : null;
+    }
+
+    /** Los videos del módulo de esta pantalla, o null si no hay. */
+    public static function deLaPagina(Request $request): ?array
+    {
+        foreach (self::RUTAS as $patron => $escena) {
+            if ($request->is($patron)) {
+                $clips = array_values(array_filter(self::todos(), fn ($c) => $c['escena'] === $escena));
+
+                return $clips ? ['titulo' => self::TITULOS[$escena] ?? ucfirst($escena), 'clips' => $clips] : null;
+            }
+        }
+
+        return null;
+    }
+
+    /** El clip de cada paso del recorrido, por clave del paso. */
+    public static function deLosPasos(): array
+    {
+        return array_filter(array_map(fn ($id) => self::clip($id), self::PASOS));
+    }
+}

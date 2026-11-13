@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use App\Services\Demo\VideosManual;
 use Illuminate\Http\Response;
 
 /**
@@ -33,7 +34,24 @@ class InyectarDemo
             return $response;
         }
 
-        $extra = view('demo.partials.franja', ['enLogin' => $request->routeIs('login') || $request->is('login')])->render();
+        $enLogin = $request->routeIs('login') || $request->is('login');
+        $extra = view('demo.partials.franja', ['enLogin' => $enLogin])->render();
+
+        // Los videos del manual: la presentación la primera vez que se llega al
+        // inicio y el «¿Cómo funciona?» de cada módulo (ver VideosManual).
+        if (! $enLogin && auth()->check()) {
+            $bienvenida = $request->is('dashboard') && ! $request->session()->get('demo_bienvenida_vista');
+            if ($bienvenida) {
+                $request->session()->put('demo_bienvenida_vista', true);
+            }
+            $extra .= view('demo.partials.videos', [
+                'modulo' => VideosManual::deLaPagina($request),
+                'comercial' => VideosManual::comercial(),
+                'pasos' => VideosManual::deLosPasos(),
+                'bienvenida' => $bienvenida,
+                'nombre' => explode(' ', trim((string) (session('demo_prospecto')['nombre'] ?? '')))[0] ?? '',
+            ])->render();
+        }
 
         if (str_contains($html, 'id="modalRadicado"')) {
             $extra .= view('demo.partials.radicar')->render();

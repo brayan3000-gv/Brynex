@@ -17,6 +17,7 @@
         'ia' => ['Pregúntale al asistente de IA', 'El botón 🤖 de abajo a la derecha.', null],
     ];
     $listos = count(array_intersect(array_keys($pasos), $hechos));
+    $videoDelPaso = \App\Services\Demo\VideosManual::PASOS;
 @endphp
 <style>
     #demo-franja{position:fixed;left:14px;bottom:14px;z-index:2147483000;display:flex;align-items:center;gap:.5rem;cursor:pointer;
@@ -40,6 +41,7 @@
     #demo-panel .dp-btn{display:inline-flex;align-items:center;gap:.35rem;background:#16a34a;color:#fff;border-radius:8px;padding:.45rem .8rem;font-weight:700;text-decoration:none;font-size:.8rem}
     #demo-panel .dp-cod{font:800 1.05rem ui-monospace,monospace;background:#f1f5f9;border-radius:6px;padding:.1rem .45rem;letter-spacing:.06em}
     #demo-panel .dp-x{background:none;border:none;color:#9ca3af;font-size:1.1rem;cursor:pointer}
+    #demo-panel .dp-ver{color:#1d4ed8;font-weight:700;text-decoration:none;white-space:nowrap}
 </style>
 
 @if (! $enLogin && auth()->check())
@@ -69,13 +71,18 @@
                 <div>
                     @if ($enlace)<a class="dp-tit" href="{{ $enlace }}">{{ $loop->iteration }}. {{ $titulo }}</a>
                     @else<span class="dp-tit">{{ $loop->iteration }}. {{ $titulo }}</span>@endif
-                    <div class="dp-ayuda">{{ $ayuda }}</div>
+                    <div class="dp-ayuda">{{ $ayuda }}
+                        @isset($videoDelPaso[$clave])
+                            <a href="#" class="dp-ver" onclick="event.preventDefault(); window.DemoVideos && DemoVideos.abrir('{{ $videoDelPaso[$clave] }}')">▶ ver cómo</a>
+                        @endisset
+                    </div>
                 </div>
             </li>
         @endforeach
         </ol>
     </div>
-    <div class="dp-sec" style="border:none;text-align:center">
+    <div class="dp-sec" style="border:none;text-align:center;display:flex;flex-direction:column;gap:.5rem;align-items:center">
+        <a href="#" class="dp-ver" style="font-size:.82rem" onclick="event.preventDefault(); window.DemoVideos && DemoVideos.abrir('comercial')">🎬 Ver la presentación (2 min)</a>
         <a class="dp-btn" href="{{ $wa }}" target="_blank" rel="noopener">💬 Quiero BryNex para mi empresa</a>
     </div>
 </div>
