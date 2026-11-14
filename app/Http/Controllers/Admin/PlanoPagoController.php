@@ -274,20 +274,19 @@ class PlanoPagoController extends Controller
             $row->edad = $row->fecha_nacimiento
                 ? $hoy->diffInYears(sqldate($row->fecha_nacimiento))
                 : null;
-            // Tipo E - X1 va sin pensión (subtipo 04), pero la factura le cobra
-            // un día de pensión (v_afp, dentro de total_ss) por si Simple
-            // rechaza el subtipo y toca la doble planilla. Aquí se muestra como
-            // referencia y se SACA de V.AFP y del total SS: esta pantalla suma
-            // lo que se le paga al operador, y la planilla no lo lleva.
-            // Facturas de antes (nov-2026) lo traían en `otros`, con v_afp en
-            // cero: a esas se les muestra el día sin tocar nada.
-            $row->afp_dia_muestra = null;
+            // Tipo E - X1: la factura cobra un día de pensión (v_afp, dentro de
+            // total_ss) aunque la planilla vaya sin pensión (subtipo 04). Se
+            // muestra y se suma como cualquier aporte: es lo que el aliado le
+            // manda a Brygar para que BryNex haga el pago (ver
+            // PilaCotizanteEX1::diaPension). Las facturas de antes (nov-2026)
+            // lo traían en `otros` con v_afp en cero: a esas se les completa
+            // aquí, solo para mostrar, sin tocar la factura.
+            $row->afp_dia_x1 = false;
             if ($diaPensionX1 && \App\Services\PilaCotizanteEX1::esX1($row->tipo_modalidad_id)) {
-                $vAfpFactura = (int) ($row->v_afp ?? 0);
-                $row->afp_dia_muestra = $vAfpFactura > 0 ? $vAfpFactura : $diaPensionX1;
-                if ($vAfpFactura > 0) {
-                    $row->v_afp = 0;
-                    $row->total_ss = max(0, (int) ($row->total_ss ?? 0) - $vAfpFactura);
+                $row->afp_dia_x1 = true;
+                if ((int) ($row->v_afp ?? 0) === 0) {
+                    $row->v_afp = $diaPensionX1;
+                    $row->total_ss = (int) ($row->total_ss ?? 0) + $diaPensionX1;
                 }
             }
             return $row;
