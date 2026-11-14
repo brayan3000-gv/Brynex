@@ -279,6 +279,15 @@ class X1LiquidacionBrynex
         // Ya estaba liquidada (el 409 del controlador): no se duplica en el
         // operador. Se dice el número para pagarla y confirmarla.
         if ($intento['http'] === 409) {
+            // Esa planilla cubre a la tanda (mismo filtro): sus personas quedan
+            // «Liquidada, por pagar» con ese número, para pagarla y confirmarla.
+            if (! empty($data['numero_planilla']) && ($data['reemplaza'] ?? false)) {
+                $abiertas = self::filasAbiertas($aliadoId, $rsId, $nPlano, $tipoModalidadId);
+                DB::table('x1_solicitud_planos')->whereIn('id', $abiertas->pluck('id')->all())
+                    ->update(['estado' => 'liquidada', 'numero_planilla' => (string) $data['numero_planilla'], 'updated_at' => now()]);
+                self::recalcularSolicitudes($abiertas->pluck('x1_solicitud_id')->unique()->all());
+            }
+
             return [
                 'ok' => false,
                 'estado' => 'ya',
