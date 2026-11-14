@@ -39,7 +39,6 @@ class CobroContratoService
                 'caja'       => 0,
                 'parafiscales' => 0,
                 'ss'         => 0,
-                'otros'      => 0,
                 'admon'      => 0,
                 'seguro'     => $seguro,
                 'afiliacion' => 0,
@@ -78,7 +77,6 @@ class CobroContratoService
         if ($esArl && !$esMesIngreso) {
             $diasCotizar = 0;
             $calcSS = ['eps' => 0, 'arl' => 0, 'afp' => 0, 'caja' => 0, 'parafiscales' => 0, 'ss' => 0];
-            $otros       = 0;
             $afiliacion  = 0;
             $seguro      = 0;
             $admon       = 0;
@@ -110,12 +108,6 @@ class CobroContratoService
                 ];
             }
 
-            // Cargo de planilla de Tipo E - X1: facturar() lo cobra en `otros`
-            // con la misma regla que la SS (nada en un mes de pura afiliación).
-            $otros = ($esAfiliacion && ! $esIndActPrimerMes)
-                ? 0
-                : PilaCotizanteEX1::otrosParaDias($contrato->tipo_modalidad_id, (int) $diasCotizar);
-
             $afiliacion  = ($esAfiliacion || $esIndActPrimerMes) ? (int) ($contrato->costo_afiliacion ?? 0) : 0;
             $seguro      = (int) ($contrato->seguro ?? 0);
             $admon       = ($esAfiliacion && !$esIndActPrimerMes) ? 0 : (int) ($contrato->administracion ?? 0);
@@ -129,7 +121,7 @@ class CobroContratoService
                 $afiliacion
             );
 
-            $total = $calcSS['ss'] + $otros + $admon + $admonAsesor + $seguro + $afiliacion + $iva;
+            $total = $calcSS['ss'] + $admon + $admonAsesor + $seguro + $afiliacion + $iva;
         }
 
         // Mora estimada. No la generan las afiliaciones (no hay pago de planilla)
@@ -157,8 +149,6 @@ class CobroContratoService
             'caja'       => $calcSS['caja'],
             'parafiscales' => $calcSS['parafiscales'],
             'ss'         => $calcSS['ss'],
-            // Cargo de planilla de Tipo E - X1; va en `total`, no en `ss` (la mora se calcula sobre la SS).
-            'otros'      => $otros,
             'admon'      => $admon + $admonAsesor,
             'seguro'     => $seguro,
             'afiliacion' => $afiliacion,

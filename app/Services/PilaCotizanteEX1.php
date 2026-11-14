@@ -80,39 +80,28 @@ class PilaCotizanteEX1
     public const OPERADOR_PILA = '88';
 
     /**
-     * Clave de configuración del antiguo cargo de planilla ($9.500 prorrateado).
-     * Ya no se lee: desde nov-2026 el cargo es el día de pensión. Se deja la
-     * constante para que quien encuentre la fila en configuración sepa qué era.
+     * Clave de configuración del antiguo cargo de planilla ($9.500 prorrateado
+     * que se facturaba en `otros`). Ya no se lee: desde nov-2026 el cargo es el
+     * día de pensión, en `v_afp`. Se deja para que quien encuentre la fila en
+     * configuración sepa qué era.
      */
     public const CONFIG_OTROS = 'otros_planilla_ex1';
 
     /**
-     * Cargo que llevan TODOS los planes de Tipo E - X1: **un día de pensión**.
+     * Un día de pensión sobre el salario mínimo vigente (16 %, redondeo PILA):
+     * $9.400 con el mínimo de 2026. Es la misma cuenta de PilaCotizanteE1.
      *
      * La X1 liquida sin pensión (subtipo 04). Si Simple deja de aceptar ese
      * subtipo, el respaldo es la doble planilla de la E-1 —planilla E de 1 día
-     * con pensión + corrección N— y ese día alguien lo tiene que pagar. Por eso
-     * se le cobra al cliente desde ya, completo, aunque el mes vaya por días.
-     *
-     * Es IBC de un día sobre el salario mínimo × 16 %, redondeo PILA: la misma
-     * cuenta de PilaCotizanteE1 ($9.400 con el mínimo de 2026). Fijo: no se
-     * prorratea ni depende del salario del contrato.
+     * con pensión + corrección N— y ese día ya queda cobrado. Se factura como
+     * pensión (`v_afp`, dentro de la seguridad social), igual que el día
+     * simbólico de las modalidades de dos pasos, para que al aliado le cuente
+     * como SS y no como ingreso suyo.
      *
      * El plano y el TXT NO cambian: la planilla que se liquida sigue sin
-     * pensión. Al facturar aterriza en `facturas.otros` (la bolsa que suma al
-     * total junto a `total_ss`), no en `v_afp`, justamente para que el plano y
-     * los totales de la planilla sigan diciendo lo que se le paga al operador.
-     * En pantalla se pinta como «Pensión (1 día)».
-     *
-     * Ojo: NO es el `otros` del tarifario (`afiliacion_arl_modalidad.otros`) ni
-     * `otros_admon`, que es administración.
+     * pensión. La vista de planos lo muestra aparte, como referencia, y lo saca
+     * de los totales que se le pagan al operador.
      */
-    public static function otrosPlanilla(): int
-    {
-        return self::diaPension();
-    }
-
-    /** Un día de pensión sobre el salario mínimo vigente (16 %, redondeo PILA). */
     public static function diaPension(): int
     {
         $smmlv = (int) \App\Models\ConfiguracionBrynex::salarioMinimo();
@@ -120,25 +109,22 @@ class PilaCotizanteEX1
         return PilaCotizanteCalculator::roundPila(PilaCotizanteE1::ibcUnDia($smmlv) * 0.16);
     }
 
-    /** ¿Esta modalidad lleva el día de pensión? Las dos caras de X1. */
-    public static function llevaOtros(?int $tipoModalidadId): bool
+    /** ¿Es una de las dos caras de Tipo E - X1? */
+    public static function esX1(?int $tipoModalidadId): bool
     {
         return in_array((int) $tipoModalidadId, TipoModalidad::IDS_EX1, true);
     }
 
     /**
-     * El cargo de un mes de `$dias` cotizados: el día de pensión completo si se
-     * cotiza al menos un día, cero si no. No se prorratea («siempre $9.400»).
-     * Lo usan facturar() y los cálculos que estiman el cobro antes de facturar
-     * (cobros, WhatsApp, bot, visita, cotizador).
+     * Pensión que se cobra en un mes de `$dias` cotizados: el día completo si
+     * se cotiza al menos un día —no se prorratea, «siempre $9.400»—, cero si no
+     * (mes de pura afiliación) o si no es X1. Lo usa Contrato::calcularCotizacion(),
+     * que es de donde lo toman la factura, cobros, WhatsApp, visita y cuenta de
+     * cobro, y el cotizador del contrato.
      */
-    public static function otrosParaDias(?int $tipoModalidadId, int $dias): int
+    public static function penParaDias(?int $tipoModalidadId, int $dias): int
     {
-        if (! self::llevaOtros($tipoModalidadId) || $dias <= 0) {
-            return 0;
-        }
-
-        return self::otrosPlanilla();
+        return (self::esX1($tipoModalidadId) && $dias > 0) ? self::diaPension() : 0;
     }
 
     /**

@@ -228,20 +228,18 @@ class CotizadorService
             $ss = $eps + $arl + $pen + $caja;
         }
 
-        // ── Cargo de planilla de Tipo E - X1 ───────────────────────────────
-        // Lo llevan sus cuatro planes. El cliente lo ve como seguridad social,
-        // así que suma dentro de $ss y no en la administración; al facturar
-        // aterriza en `facturas.otros`, que es la bolsa que suma al total junto
-        // a `total_ss` (`otros_admon` es la de administración, y no es esta).
-        // Se prorratea por días igual que el resto de la SS en una modalidad
-        // normal; en tiempo parcial va completo, como sus demás aportes.
-        // Desde nov-2026 es el día de pensión, fijo: no se prorratea.
-        $otros = 0;
-        if (PilaCotizanteEX1::llevaOtros($p['tipo_modalidad_id'] ?? null)) {
-            $otros = $esTP
-                ? PilaCotizanteEX1::otrosPlanilla()
-                : PilaCotizanteEX1::otrosParaDias($p['tipo_modalidad_id'], (int) $dias);
-            $ss += $otros;
+        // ── Tipo E - X1: un día de pensión, fijo ───────────────────────────
+        // Misma regla que Contrato::calcularCotizacion(): va en la pensión (es
+        // seguridad social) y no se prorratea. En tiempo parcial el mes va
+        // completo, así que cuenta como cotizado.
+        $penUnDia = false;
+        if ($pen == 0) {
+            $penX1 = PilaCotizanteEX1::penParaDias($p['tipo_modalidad_id'] ?? null, $esTP ? 30 : (int) $dias);
+            if ($penX1 > 0) {
+                $pen = $penMes = $penX1;
+                $ss += $penX1;
+                $penUnDia = true;
+            }
         }
 
         // Admon total = administracion + admon_asesor
@@ -277,9 +275,8 @@ class CotizadorService
             'pen' => $pen,
             'caja' => $caja,
             'ss' => $ss,
-            // Cargo propio de Tipo E - X1, ya sumado dentro de 'ss'. Se devuelve
-            // aparte para poder pintarlo como una línea más del cotizador.
-            'otros' => $otros,
+            // Tipo E - X1: la pensión es el día fijo, no el 16 % del mes.
+            'penUnDia' => $penUnDia,
             'seguro' => $seguro,
             'admon' => $admonTotal,
             'admonBase' => $admon,

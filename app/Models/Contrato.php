@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\PilaCotizanteCalculator;
 use App\Services\PilaCotizanteDosPasos;
+use App\Services\PilaCotizanteEX1;
 use App\Services\UpcAdicionalService;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -650,6 +651,15 @@ class Contrato extends BaseModel
             $pen = PilaCotizanteCalculator::roundPila(
                 PilaCotizanteDosPasos::ibcUnDia((int) round($ibc)) * ConfiguracionBrynex::pctPensionDependiente() / 100
             );
+        }
+
+        // ── Tipo E - X1: un día de pensión, fijo ───────────────────────────
+        // La planilla va sin pensión (subtipo 04), pero se cobra el día que
+        // costaría la doble planilla si Simple rechaza el subtipo. Va en `pen`
+        // —es seguridad social, no ingreso del aliado— y no se prorratea.
+        // El plano no lo lleva. Ver PilaCotizanteEX1::diaPension().
+        if ($pen === 0) {
+            $pen = PilaCotizanteEX1::penParaDias($this->tipo_modalidad_id, $dias);
         }
 
         $ss = $eps + $arl + $pen + $caja + $parafiscales;

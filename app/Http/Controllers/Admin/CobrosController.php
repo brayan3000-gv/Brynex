@@ -531,11 +531,14 @@ class CobrosController extends Controller
                 $vArl  = ($plan?->incluye_arl)    ? $r100($ibc * $pctArl / 100 * $diasAct / 30) : 0;
                 $vPen  = ($plan?->incluye_pension) ? $r100($ibc * $pctPen / 100 * $diasAct / 30) : 0;
                 $vCaja = ($plan?->incluye_caja)   ? $r100($ibc * $pctCaj / 100 * $diasAct / 30) : 0;
+                // Tipo E - X1: el día de pensión fijo (ver PilaCotizanteEX1::penParaDias).
+                if ($vPen === 0) {
+                    $vPen = \App\Services\PilaCotizanteEX1::penParaDias($c->tipo_modalidad_id, $diasAct);
+                }
                 $vSS   = $vEps + $vArl + $vPen + $vCaja;
-                $vOtros = \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasAct);
                 $cargos = $cargosAdmon($c, true, (int)($c->costo_afiliacion ?? 0));
                 [$vAdmon, $vIva] = [$cargos['admon'], $cargos['iva']];
-                $totalEstimado = $vSS + $vOtros + $cargos['total'] + (int)($c->seguro ?? 0);
+                $totalEstimado = $vSS + $cargos['total'] + (int)($c->seguro ?? 0);
             } elseif ($esAfil) {
                 $vEps = $vArl = $vPen = $vCaja = $vSS = 0;
                 $cargos = $cargosAdmon($c, false, (int)($c->costo_afiliacion ?? 0));
@@ -596,15 +599,15 @@ class CobrosController extends Controller
                         $vCaja = \App\Models\Contrato::CARGO_SIN_CCF;
                     }
                 }
+                // Tipo E - X1: el día de pensión fijo, como en facturar()
+                // (Contrato::calcularCotizacion). Va dentro de la SS.
+                if ($vPen === 0) {
+                    $vPen = \App\Services\PilaCotizanteEX1::penParaDias($c->tipo_modalidad_id, $diasCotizar);
+                }
                 $vSS   = $vEps + $vArl + $vPen + $vCaja;
-                // Cargo de planilla de Tipo E - X1: facturar() lo cobra aparte, en
-                // `otros`. Sin él la lista y el WhatsApp de cobro decían $90.300 a
-                // quien se le facturaba $99.800 (nov-2026). Fuera de $vSS: la mora
-                // se calcula sobre la seguridad social.
-                $vOtros = \App\Services\PilaCotizanteEX1::otrosParaDias($c->tipo_modalidad_id, $diasCotizar);
                 $cargos = $cargosAdmon($c, true, 0);
                 [$vAdmon, $vIva] = [$cargos['admon'], $cargos['iva']];
-                $totalEstimado = $vSS + $vOtros + $cargos['total'] + (int)($c->seguro ?? 0);
+                $totalEstimado = $vSS + $cargos['total'] + (int)($c->seguro ?? 0);
             }
 
             $vSsPorContrato[$c->id]   = $vSS;

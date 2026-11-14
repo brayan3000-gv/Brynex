@@ -263,7 +263,7 @@ class PlanoPagoController extends Controller
 
         // ── Calcular edad y nombre completo ─────────────────────────────
         $hoy = Carbon::today();
-        $diaPensionX1 = $planos->contains(fn ($r) => \App\Services\PilaCotizanteEX1::llevaOtros($r->tipo_modalidad_id))
+        $diaPensionX1 = $planos->contains(fn ($r) => \App\Services\PilaCotizanteEX1::esX1($r->tipo_modalidad_id))
             ? \App\Services\PilaCotizanteEX1::diaPension()
             : null;
         $planos = $planos->map(function ($row) use ($hoy, $diaPensionX1) {
@@ -274,14 +274,21 @@ class PlanoPagoController extends Controller
             $row->edad = $row->fecha_nacimiento
                 ? $hoy->diffInYears(sqldate($row->fecha_nacimiento))
                 : null;
-            // Tipo E - X1 va sin pensión (subtipo 04). Si Simple deja de
-            // aceptar ese subtipo, el respaldo es la doble planilla de la E-1
-            // (planilla E de 1 día con pensión + corrección N); ese día se le
-            // factura al cliente (facturas.otros) y aquí se muestra para que el
-            // aliado lo vea. SOLO se muestra: no entra al TXT ni a los totales.
+            // Tipo E - X1 va sin pensión (subtipo 04), pero la factura le cobra
+            // un día de pensión (v_afp, dentro de total_ss) por si Simple
+            // rechaza el subtipo y toca la doble planilla. Aquí se muestra como
+            // referencia y se SACA de V.AFP y del total SS: esta pantalla suma
+            // lo que se le paga al operador, y la planilla no lo lleva.
+            // Facturas de antes (nov-2026) lo traían en `otros`, con v_afp en
+            // cero: a esas se les muestra el día sin tocar nada.
             $row->afp_dia_muestra = null;
-            if ($diaPensionX1 && \App\Services\PilaCotizanteEX1::llevaOtros($row->tipo_modalidad_id) && (int) ($row->v_afp ?? 0) === 0) {
-                $row->afp_dia_muestra = $diaPensionX1;
+            if ($diaPensionX1 && \App\Services\PilaCotizanteEX1::esX1($row->tipo_modalidad_id)) {
+                $vAfpFactura = (int) ($row->v_afp ?? 0);
+                $row->afp_dia_muestra = $vAfpFactura > 0 ? $vAfpFactura : $diaPensionX1;
+                if ($vAfpFactura > 0) {
+                    $row->v_afp = 0;
+                    $row->total_ss = max(0, (int) ($row->total_ss ?? 0) - $vAfpFactura);
+                }
             }
             return $row;
         });

@@ -1211,19 +1211,19 @@
         </span>
         <strong x-text="fmt(result.arl)">$0</strong>
       </div>
-      {{-- PENSIÓN. En Tipo E - X1 `result.otros` es el día de pensión (fijo, no
-           se prorratea): la planilla va sin pensión, pero se cobra por si toca
-           la doble planilla. Ya viene sumado dentro de S. Social. Ver PilaCotizanteEX1. --}}
+      {{-- PENSIÓN. En Tipo E - X1 es el día de pensión (fijo, no se prorratea):
+           la planilla va sin pensión, pero se cobra por si toca la doble
+           planilla. Ver PilaCotizanteEX1::diaPension(). --}}
       <div class="cr" x-show="!esSeguros">
         <span style="color:#c4b5fd;">PENSIÓN <span class="cp2" x-text="'('+pctPen+'%)'"></span>
           <template x-if="esTiempoParcial && diasAfp">
             <span style="color:#f59e0b;font-size:.58rem;font-weight:700;" x-text="' · '+diasAfp+'d'"></span>
           </template>
-          <template x-if="result.otros > 0">
+          <template x-if="result.penUnDia">
             <span style="color:#f59e0b;font-size:.58rem;font-weight:700;"> · 1 día</span>
           </template>
         </span>
-        <strong x-text="fmt(result.pen + result.otros)">$0</strong>
+        <strong x-text="fmt(result.pen)">$0</strong>
       </div>
       {{-- CAJA --}}
       <div class="cr" x-show="!esSeguros">
@@ -4150,7 +4150,7 @@ function cotizador() {
         pctEps:0, pctPen:0, pctArl:0, pctCajaCalc:0,
         diasCotizar: 30,
         diasArl: 0, diasAfp: 0, diasCaja: 0,
-        result: { eps:0, arl:0, pen:0, caja:0, ss:0, otros:0, seguro:0, admon:0, iva:0, total:0 },
+        result: { eps:0, arl:0, pen:0, caja:0, ss:0, penUnDia:false, seguro:0, admon:0, iva:0, total:0 },
 
         fmt(v) {
             // Formato colombiano: punto de miles, sin decimales (ej: 1.750.905)
@@ -4872,9 +4872,8 @@ function cotizador() {
                     pen:    d.pen    ?? 0,
                     caja:   d.caja   ?? 0,
                     ss:     d.ss     ?? 0,
-                    // Día de pensión de Tipo E - X1, ya sumado dentro de ss. Va
-                    // aparte para pintarlo en la línea de PENSIÓN.
-                    otros:  d.otros  ?? 0,
+                    // Tipo E - X1: la pensión es el día fijo (marca «1 día»).
+                    penUnDia: !!d.penUnDia,
                     seguro: d.seguro ?? 0,
                     admon:  d.admon  ?? 0,
                     iva:    d.iva    ?? 0,
@@ -4950,9 +4949,6 @@ if (typeof MF !== 'undefined' && FC_CONTRATO_ID) {
         fechaIngresoDia:   FC_FECHA_ING_DIA,
         esIndependiente:   FC_ES_INDEP,
         tipoModalidadId:   FC_TIPO_MODALIDAD_ID,
-        // Piso de "Otros planilla": Tipo E - X1 cobra el día de pensión, que el
-        // usuario puede subir pero no bajar. Ver PilaCotizanteEX1.
-        otrosMin:          {{ (int) (\App\Services\PilaCotizanteEX1::llevaOtros($contrato->tipo_modalidad_id ?? null) ? \App\Services\PilaCotizanteEX1::otrosPlanilla() : 0) }},
         pagaMesActual:     FC_PAGA_MES_ACTUAL,
         costoAfiliacion:   FC_COSTO_AFIL,
         tieneIva:          FC_TIENE_IVA,
