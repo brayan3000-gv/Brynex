@@ -141,6 +141,11 @@ class CorreccionPensionFaltanteService
             })
             // …pero la factura sí cobró el aporte.
             ->where('f.v_afp', '>', 0)
+            // Tipo E - X1 va sin pensión A PROPÓSITO (subtipo 04) y su factura
+            // cobra un día de pensión por si toca la doble planilla
+            // (PilaCotizanteEX1::diaPension). Ahí la contradicción es buscada:
+            // ponerle fondo le metería pensión a la planilla.
+            ->whereNotIn('p.tipo_modalidad_id', \App\Models\TipoModalidad::IDS_EX1)
             ->select([
                 'p.id', 'p.no_identifi', 'p.cod_afp', 'p.nombre_afp',
                 'p.primer_nombre', 'p.segundo_nombre', 'p.primer_ape', 'p.segundo_ape',
