@@ -232,7 +232,7 @@
         if (params.get('asesor') && !asesor.value) { origen.value = 'asesor'; asesor.value = params.get('asesor').slice(0, 120); }
         else if (params.get('origen') && !origen.value) {
             const o = params.get('origen').toLowerCase();
-            origen.value = /redes|instagram|facebook|tiktok/.test(o) ? 'redes' : 'campana';
+            origen.value = /redes|instagram|facebook|tiktok/.test(o) ? 'redes' : (/login|manual|web/.test(o) ? 'otro' : 'campana');
             detalle.value = params.get('origen').slice(0, 120);
         }
         const mostrar = () => {

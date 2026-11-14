@@ -227,6 +227,14 @@
             <input type="hidden" name="huella" id="huella">
         </form>
 
+        {{-- Para quien aún no usa BryNex: la demo pública (no se muestra dentro de la demo). --}}
+        @unless (config('demo.activo'))
+            <a href="https://demo.brynex.co/?origen=login-brynex" target="_blank" rel="noopener"
+               style="display:block;margin-top:1rem;padding:.65rem .8rem;border:1px solid rgba(148,163,184,.35);border-radius:10px;color:#e2e8f0;text-decoration:none;font-size:.85rem;text-align:center;">
+                ¿Todavía no usas BryNex? <strong style="color:#93c5fd;">Prueba la demo gratis →</strong>
+            </a>
+        @endunless
+
         <p class="footer-txt">© {{ date('Y') }} BryNex · Sistema de Gestión</p>
     </div>
 

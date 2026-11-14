@@ -8,6 +8,19 @@
         Los que se registraron en <strong>demo.brynex.co</strong>. «WhatsApp verificado» es el número que de verdad
         le escribió a Info Avapp con su código; su conversación está en la bandeja de BryNex.
     </p>
+    @if ($resumen->isNotEmpty())
+        <div style="display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;">
+            @foreach ($resumen as $r)
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:.6rem .8rem;min-width:180px;">
+                    <div style="font-weight:700;font-size:.85rem;">{{ $r['origen'] }}</div>
+                    <div style="font-size:1.4rem;font-weight:800;color:#0f172a;line-height:1.2;">{{ $r['total'] }}
+                        <span style="font-size:.75rem;font-weight:600;color:#64748b;">{{ $r['total'] === 1 ? 'prospecto' : 'prospectos' }}</span></div>
+                    <div style="font-size:.75rem;color:#64748b;">{{ $r['verificados'] }} con WhatsApp · {{ $r['completaron'] }} completaron el recorrido</div>
+                </div>
+            @endforeach
+        </div>
+    @endif
+
     <div style="overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;">
     <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
         <thead>

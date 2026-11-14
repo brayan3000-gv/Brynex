@@ -88,9 +88,21 @@ class DemoRelevoController extends Controller
     {
         abort_unless(Auth::user()?->es_brynex, 403);
 
-        return view('demo.prospectos', [
-            'prospectos' => DemoProspecto::orderByDesc('id')->limit(500)->get(),
-        ]);
+        $prospectos = DemoProspecto::orderByDesc('id')->limit(500)->get();
+
+        // Cuántos trajo cada asesor o campaña, para las comisiones. El asesor es
+        // texto libre: «juan perez» y «Juan Pérez» se cuentan como el mismo.
+        $resumen = $prospectos->groupBy(fn ($p) => mb_strtolower(\Illuminate\Support\Str::ascii($p->origenTexto())))
+            ->map(fn ($grupo) => [
+                'origen' => $grupo->first()->origenTexto(),
+                'total' => $grupo->count(),
+                'verificados' => $grupo->whereNotNull('verificado_at')->count(),
+                'completaron' => $grupo->filter(fn ($p) => count((array) (($p->actividad ?? [])['pasos'] ?? [])) >= RelevoDemo::PASOS_RECORRIDO)->count(),
+            ])
+            ->sortByDesc('total')
+            ->values();
+
+        return view('demo.prospectos', ['prospectos' => $prospectos, 'resumen' => $resumen]);
     }
 
     private function prospecto(Request $request): DemoProspecto

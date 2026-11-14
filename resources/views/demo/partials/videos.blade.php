@@ -56,7 +56,7 @@
     #dv-bienvenida .dv-btn{border:none;border-radius:10px;padding:.7rem 1.1rem;font-weight:700;cursor:pointer;font-size:.95rem}
     #dv-bienvenida .dv-prim{background:#16a34a;color:#fff}
     #dv-bienvenida .dv-sec{background:transparent;color:#cbd5e1;border:1px solid #334155}
-    @media (max-width:640px){#dv-boton{right:76px;bottom:20px;padding:.45rem .7rem}#dv-boton span{display:none}}
+    @media (max-width:640px){#dv-boton{right:76px;bottom:20px;padding:.45rem .7rem}#dv-boton span{display:none}#dv-bienvenida .dv-solo-celular{display:block!important}}
 </style>
 
 @if ($modulo)
@@ -106,6 +106,7 @@
         <div class="dv-texto">
             <h2>¡Hola{{ $nombre ? ' '.$nombre : '' }}! Bienvenido a BryNex 👋</h2>
             <div style="color:#94a3b8">En 2 minutos te mostramos lo que BryNex hace por tu empresa de seguridad social. Después pruébalo tú: todo es simulado.</div>
+            <div class="dv-solo-celular" style="display:none;margin-top:.5rem;color:#fcd34d;font-size:.85rem">📱 BryNex se ve mejor en un computador; en el celular también funciona.</div>
         </div>
         <div class="dv-medio" id="dv-b-medio">
             <img src="{{ $comercial['portada'] }}" alt="BryNex en dos minutos">
