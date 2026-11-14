@@ -66,6 +66,7 @@ class PlanillaVigilarSubtipo4 extends Command
         {--rs-ref= : Razones sociales a sondear bajo su NIT, separadas por coma (pisa las configuradas)}
         {--credencial= : Id de la credencial de Simple con la que entra (pisa la configurada)}
         {--cada= : Minutos entre sondeos programados (pisa la configuración)}
+        {--cada-seg= : Segundos entre sondeos dentro de cada minuto (pisa la configuración; 0 = por minutos)}
         {--programado : Lo pone el planificador: respeta la cadencia configurada}
         {--medir-cada= : Segundos entre sondeos mientras la ventana está abierta}
         {--medir-max= : Minutos máximos midiendo una ventana abierta}
@@ -143,6 +144,18 @@ class PlanillaVigilarSubtipo4 extends Command
     private const CONFIG_CADA = 'vigia_subtipo4_cada_min';
 
     private const CADA_POR_DEFECTO = 5;
+
+    /**
+     * Segundos entre sondeos, para vigilar por debajo del minuto (10, 15, 20
+     * o 30). En 0 —o sin configurar— manda la cadencia por minutos.
+     *
+     * El planificador solo llama cada minuto, así que el comando se queda ese
+     * minuto haciendo varias vueltas. Tiene sentido solo con un usuario de
+     * Simple propio para el vigía (`vigia_subtipo4_credencial_id`): con el de
+     * la gente, sondear cada 15 s le tumbaría la sesión a quien esté
+     * liquidando, y también la del enlace de pago recién pedido.
+     */
+    private const CONFIG_CADA_SEG = 'vigia_subtipo4_cada_seg';
 
     /**
      * Credencial de Simple con la que entra el vigía.
@@ -250,16 +263,71 @@ class PlanillaVigilarSubtipo4 extends Command
 
         Auth::loginUsingId(2);   // ver [[feedback-usuario-brynex-comandos]]
 
+        $cadaSeg = $this->cadaSegundos();
+
+        if ($this->option('programado') && $cadaSeg > 0) {
+            $this->vueltasDelMinuto($alertas, $mes, $anio, $cadaSeg);
+
+            return self::SUCCESS;
+        }
+
         if (! $this->tocaSondear()) {
             return self::SUCCESS;
         }
 
+        $this->vuelta($alertas, $mes, $anio);
+
+        return self::SUCCESS;
+    }
+
+    /**
+     * Varias vueltas dentro del minuto que da el planificador, una cada
+     * `$cadaSeg` segundos contados desde que arrancó (a 15 s: 0, 15, 30 y 45).
+     * La última arranca a tiempo de terminar antes del minuto siguiente. Si un
+     * sondeo se demora y se come un turno, ese turno se salta en vez de
+     * encadenar sondeos seguidos. Si una vuelta encuentra el hueco, ya liquidó
+     * y midió la ventana: no se sigue.
+     */
+    private function vueltasDelMinuto(AlertaOperativaService $alertas, int $mes, int $anio, int $cadaSeg): void
+    {
+        $inicio = time();
+
+        for ($k = 0; $k * $cadaSeg <= 60 - $cadaSeg; $k++) {
+            $espera = $inicio + $k * $cadaSeg - time();
+
+            if ($espera > 0) {
+                sleep($espera);
+            } elseif ($k > 0 && -$espera >= $cadaSeg) {
+                continue;
+            }
+
+            if ($this->vuelta($alertas, $mes, $anio)) {
+                return;
+            }
+        }
+    }
+
+    /** 10, 15, 20 o 30; cualquier otra cosa (o nada) es 0 = por minutos. */
+    private function cadaSegundos(): int
+    {
+        $seg = (int) ($this->option('cada-seg')
+            ?? ConfiguracionBrynex::obtener(self::CONFIG_CADA_SEG, 0));
+
+        return in_array($seg, [10, 15, 20, 30], true) ? $seg : 0;
+    }
+
+    /**
+     * Un sondeo completo: sondea, y si el hueco está abierto liquida, avisa y
+     * mide. Devuelve si encontró el hueco.
+     */
+    private function vuelta(AlertaOperativaService $alertas, int $mes, int $anio): bool
+    {
         $cedulas = $this->cedulasAVigilar($mes, $anio);
 
         if (! $cedulas) {
             $this->info('No hay cédulas que vigilar.');
 
-            return self::SUCCESS;
+            return false;
         }
 
         $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
@@ -327,7 +395,7 @@ class PlanillaVigilarSubtipo4 extends Command
             $this->medirVentana($alertas, $cedulas, $mes, $anio, $limpias);
         }
 
-        return self::SUCCESS;
+        return (bool) $limpias;
     }
 
     /**
@@ -1016,7 +1084,16 @@ class PlanillaVigilarSubtipo4 extends Command
             (string) ConfiguracionBrynex::obtener(self::CONFIG_CEDULAS, '')
         )));
 
+        // Solo de los aliados que el vigía atiende: la gente de otro aliado no
+        // tiene ficha en el de la razón social de referencia y cada sondeo la
+        // reportaba como «sin ficha» (diez cédulas de INTEGRA, cuatro veces
+        // por minuto con la cadencia en segundos).
+        $aliados = array_values(array_filter(array_map('intval', explode(',',
+            (string) ConfiguracionBrynex::obtener(self::CONFIG_ALIADOS, self::ALIADOS_POR_DEFECTO)
+        ))));
+
         $pendientes = DB::table('planos AS p')
+            ->whereIn('p.aliado_id', $aliados ?: [0])
             ->whereIn('p.tipo_modalidad_id', TipoModalidad::IDS_EX1)
             ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
             ->whereRaw('ISNULL(p.num_dias, 0) > 0')
@@ -1082,6 +1159,15 @@ class PlanillaVigilarSubtipo4 extends Command
         if ($credId && (int) $cred->aliado_id !== (int) $rs->aliado_id) {
             $this->warn("La credencial {$credId} es del aliado {$cred->aliado_id}, "
                 ."pero la razón social de referencia es del {$rs->aliado_id}.");
+
+            return [];
+        }
+
+        // Lo mismo con una credencial de una sola razón social (el usuario del
+        // vigía es solo de HOMENURSE): con otro NIT no tiene permisos.
+        if ($credId && $cred->razon_social_id && (int) $cred->razon_social_id !== $rsRef) {
+            $this->warn("La credencial {$credId} es solo de la razón social {$cred->razon_social_id}: "
+                ."no sirve para sondear la {$rsRef}. Deje en vigia_subtipo4_rs_ref solo la {$cred->razon_social_id}.");
 
             return [];
         }

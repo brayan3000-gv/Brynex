@@ -58,8 +58,12 @@ class ValidadorSubtipoService
             return ['ok' => false, 'error' => "La razón social de referencia {$rsRef} no existe."];
         }
 
+        // La del aliado primero: una credencial de una sola razón social (la
+        // del vigía, solo HOMENURSE) no tiene permisos sobre las demás.
         $cred = OperadorCredencial::where('operador_planilla_id', 6)
-            ->where('aliado_id', $rs->aliado_id)->first();
+            ->where('aliado_id', $rs->aliado_id)
+            ->orderByRaw('CASE WHEN razon_social_id IS NULL THEN 0 ELSE 1 END')
+            ->first();
         if (! $cred) {
             return ['ok' => false, 'error' => "El aliado {$rs->aliado_id} no tiene credencial de Simple."];
         }

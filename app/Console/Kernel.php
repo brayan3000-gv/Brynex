@@ -216,11 +216,16 @@ class Kernel extends ConsoleKernel
         // una vez cada 6 h. Cuando la ventana se abre, el propio comando se
         // queda sondeando cada 30 s hasta que se cierra, para medir cuánto
         // duró: el 9-nov-2026 el aviso llegó con la ventana muerta hacía rato.
+        //
+        // Con `vigia_subtipo4_cada_seg` se queda el minuto entero sondeando
+        // cada 10-30 s: va en segundo plano para no frenar lo que viene
+        // después en la misma pasada del planificador.
         $schedule->command('planilla:vigilar-subtipo4 --programado')
             ->everyMinute()
             ->timezone('America/Bogota')
             ->name('vigia-subtipo4')
             ->withoutOverlapping(45)
+            ->runInBackground()
             ->appendOutputTo(storage_path('logs/vigia-subtipo4.log'));
 
         // Vigía de la ficha del aportante en Simple.

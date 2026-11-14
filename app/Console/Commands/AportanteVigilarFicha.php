@@ -167,8 +167,11 @@ class AportanteVigilarFicha extends Command
                 continue;
             }
 
+            // La del aliado primero: una credencial de una sola razón social
+            // (la del vigía, solo HOMENURSE) no tiene permisos sobre las demás.
             $cred = OperadorCredencial::where('aliado_id', $rs->aliado_id)
                 ->where('operador_planilla_id', 6)   // Simple
+                ->orderByRaw('CASE WHEN razon_social_id IS NULL THEN 0 ELSE 1 END')
                 ->first();
 
             if (! $cred) {
