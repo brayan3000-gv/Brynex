@@ -885,7 +885,7 @@
 <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:.6rem .8rem;margin:0 0 .6rem;font-size:.76rem;color:#4c1d95">
     <strong>🧾 {{ $x1Movidas->count() }} {{ $x1Movidas->count() === 1 ? 'persona' : 'personas' }} de Tipo E - X1
         {{ $nPlanoFiltro ? 'salieron de este plano' : 'están en un plano X1' }}.</strong>
-    Simple rechazó su subtipo 4 y BryNex las pasó a su propio plano para pagarlas cuando se abra la ventana. No están perdidas: siguen en la solicitud.
+    Siguen en la solicitud.
     <div style="display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin-top:.4rem">
         @foreach($x1Movidas as $m)
         <span style="white-space:nowrap">
