@@ -84,9 +84,11 @@ return [
         // (aliado 2), que es donde arrancó el aviso. `pendientes_copia` recibe el aviso de
         // TODOS los aliados, para que BryNex vea que a nadie lo dejan colgado.
         'pendientes_numeros' => env('WHATSAPP_PENDIENTES_NUMEROS', '3117762689'),
+        // El aliado 1 (BryNex) no va aquí: lo que le queda en la línea compartida es casi
+        // todo spam y el dueño no quiere ese aviso (14-nov-2026). Su ficha no tiene número,
+        // así que el aviso de BryNex no sale.
         'pendientes_por_aliado' => [
             2 => env('WHATSAPP_PENDIENTES_NUMEROS', '3117762689'),
-            1 => env('WHATSAPP_PENDIENTES_NUMEROS', '3117762689'),
         ],
         'pendientes_copia' => env('WHATSAPP_PENDIENTES_COPIA', ''),
 
