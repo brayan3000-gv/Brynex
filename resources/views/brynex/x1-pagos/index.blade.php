@@ -99,6 +99,37 @@
     </p>
 </div>
 
+@php $listasParaPagar = $grupos->filter(fn ($g) => $g->por_pagar); @endphp
+@if($listasParaPagar->isNotEmpty())
+{{-- Las planillas conjuntas ya liquidadas y sin pagar: lo primero que hay que hacer --}}
+<div class="bx1-card" style="border:2px solid #86efac;background:#f0fdf4">
+    <h3 style="color:#166534">💳 Listas para pagar · {{ $listasParaPagar->count() }} {{ $listasParaPagar->count() === 1 ? 'planilla' : 'planillas' }}
+        @if($listasParaPagar->sum(fn ($g) => (float) ($g->registro->valor_total ?? 0)) > 0)
+        · {{ $fmt($listasParaPagar->sum(fn ($g) => (float) ($g->registro->valor_total ?? 0))) }}
+        @endif
+    </h3>
+    <p class="bx1-ayuda" style="color:#166534">Liquidadas en Simple y sin pagar. «Pagar (PSE)» pide el enlace a Simple en ese momento (con el subtipo 4 solo lo da con la ventana abierta). Después de pagar, «Confirmar» en la tarjeta de la empresa.</p>
+    <table class="bx1-tabla">
+        <thead><tr><th>Empresa</th><th>Planilla</th><th class="num">Personas</th><th class="num">Valor en Simple</th><th></th></tr></thead>
+        <tbody>
+        @foreach($listasParaPagar as $g)
+        <tr>
+            <td><strong>{{ \Illuminate\Support\Str::limit($g->razon_social, 40, '…') }}</strong> <span class="bx1-chip plano">{{ $g->modalidad }}</span></td>
+            <td style="font-family:monospace">{{ $g->registro->numero_planilla }}</td>
+            <td class="num">{{ $g->estados['liquidada'] ?? $g->personas }}</td>
+            <td class="num">{{ $g->registro->valor_total ? $fmt($g->registro->valor_total) : '—' }}</td>
+            <td class="num" style="white-space:nowrap">
+                <a class="bx1-btn verde" target="_blank"
+                   href="{{ route('brynex.x1.pagar', ['aliado_id' => $aliadoBrygar, 'numero' => $g->registro->numero_planilla]) }}">Pagar (PSE)</a>
+                <a class="bx1-btn suave" href="#empresa-{{ $g->nit }}-{{ abs($g->tipo_modalidad_id) }}">Confirmar ↓</a>
+            </td>
+        </tr>
+        @endforeach
+        </tbody>
+    </table>
+</div>
+@endif
+
 @forelse($grupos as $g)
 @php
     $datosConjunta = ['nit' => $g->nit, 'tipo_modalidad_id' => $g->tipo_modalidad_id, 'mes' => $mes, 'anio' => $anio];
@@ -110,7 +141,7 @@
     $numeroConjunta = $g->registro->numero_planilla ?? null;
     $valorConjunta = $g->registro?->valor_total ? (int) round($g->registro->valor_total) : null;
 @endphp
-<div class="bx1-card" x-data="tandaX1(@js($datosConjunta), @js($numeroConjunta), @js($valorConjunta), null, @js($g->por_pagar), @js($urlsConjunta))">
+<div class="bx1-card" id="empresa-{{ $g->nit }}-{{ abs($g->tipo_modalidad_id) }}" x-data="tandaX1(@js($datosConjunta), @js($numeroConjunta), @js($valorConjunta), null, @js($g->por_pagar), @js($urlsConjunta))">
     <div class="bx1-sol-head">
         <div>
             <strong style="font-size:.92rem">{{ $g->razon_social }}</strong>
@@ -122,8 +153,8 @@
             </div>
         </div>
         <div style="text-align:right">
-            <strong style="font-size:.92rem">{{ $fmt($g->valor_ss) }}</strong>
-            <div class="bx1-meta">SS con día de pensión</div>
+            <strong style="font-size:.92rem">{{ $fmt($g->valor_pendiente) }}</strong>
+            <div class="bx1-meta">por pagar · total {{ $fmt($g->valor_ss) }} (SS con día de pensión)</div>
             @foreach($g->estados as $estado => $n)
             <span class="bx1-chip {{ $estado }}">{{ $etiquetasEstado[$estado] ?? $estado }} · {{ $n }}</span>
             @endforeach

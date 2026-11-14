@@ -97,6 +97,8 @@ class X1PlanillaConjunta
                     'registro' => $registro,
                     'personas' => $g->count(),
                     'valor_ss' => (int) $g->sum('valor_ss'),
+                    // Lo que falta por pagar: personas que no están cerradas.
+                    'valor_pendiente' => (int) $g->reject(fn ($f) => in_array($f->estado, X1PagosBrynex::ESTADOS_CERRADOS, true))->sum('valor_ss'),
                     'aliados' => $aliados,
                     'estados' => $g->countBy('estado')->all(),
                     'para_liquidar' => $paraLiquidar->count(),
@@ -106,7 +108,11 @@ class X1PlanillaConjunta
                     'filas' => $g->values(),
                 ];
             })
-            ->sortBy('razon_social')
+            // Arriba las que tienen más por pagar; las cerradas, al final.
+            ->sortBy([
+                fn ($a, $b) => $b->valor_pendiente <=> $a->valor_pendiente,
+                fn ($a, $b) => strcmp($a->razon_social, $b->razon_social),
+            ])
             ->values();
     }
 
