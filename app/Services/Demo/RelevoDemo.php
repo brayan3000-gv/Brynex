@@ -232,6 +232,9 @@ class RelevoDemo
             Log::warning('Demo: Meta no aceptó la bienvenida', ['prospecto' => $p->id, 'error' => $r['error'] ?? null]);
         } else {
             Cache::put($llave, true, now()->addHour());
+            // En el chat de BryNex: así Meta anota si se entregó, se leyó o falló.
+            self::anotarEnChat($numero, $p->nombre, $r['wa_message_id'] ?? null, 'template',
+                'Bienvenida de la demo (plantilla '.self::PLANTILLA_BIENVENIDA.'): «¿Quieres recibir aquí los ejemplos?»');
         }
 
         return (bool) $r['ok'];
@@ -323,7 +326,8 @@ class RelevoDemo
 
         if ($primeraVez) {
             $quedan = max(0, self::maxEnvios() - $p->envios);
-            self::enviarTexto($p, "✅ ¡Listo, {$p->nombre}! Tu WhatsApp quedó conectado a la demo de BryNex.\n\n"
+            $primerNombre = trim(explode(' ', trim($p->nombre))[0]);
+            self::enviarTexto($p, "✅ ¡Listo, {$primerNombre}! Tu WhatsApp quedó conectado a la demo de BryNex.\n\n"
                 ."Ahora, cuando en la demo envíes una planilla, un cobro o un recibo por WhatsApp, te llega aquí a ti "
                 ."(máximo {$quedan} envíos de prueba). Los datos son inventados.", contar: false);
         }
@@ -389,6 +393,54 @@ class RelevoDemo
         return ['ok' => (bool) $r['ok'], 'wa_message_id' => $r['wa_message_id'] ?? null, 'error' => $r['error'] ?? null];
     }
 
+    /**
+     * Deja el mensaje en la conversación de la bandeja de BryNex con ese número,
+     * creándola si no existe. Con el wa_message_id guardado, el webhook anota
+     * después si Meta lo entregó, lo leyó o falló (y por qué).
+     *
+     * Info Avapp es un número compartido: si ese celular ya conversa con OTRO
+     * aliado, no se le crea una en BryNex, porque el webhook encamina las
+     * respuestas a la conversación más reciente y le quitaría el contacto a ese
+     * aliado. En ese caso el mensaje sale igual, solo que sin anotar.
+     */
+    private static function anotarEnChat(string $numero, ?string $nombre, ?string $waMessageId, string $tipo, string $contenido, ?string $archivo = null): void
+    {
+        try {
+            $aliado = WhatsappBandejaCompartida::aliadoBandeja();
+            $numero = preg_replace('/\D/', '', $numero);
+
+            $conversacion = WhatsappConversacion::where('aliado_id', $aliado)->where('wa_contact_id', $numero)->first();
+
+            if (! $conversacion) {
+                $deOtro = WhatsappConversacion::where('wa_contact_id', $numero)->where('aliado_id', '<>', $aliado)->exists();
+                if ($deOtro) {
+                    return;
+                }
+                $conversacion = WhatsappConversacion::create([
+                    'aliado_id' => $aliado,
+                    'wa_contact_id' => $numero,
+                    'nombre_contacto' => $nombre ? Str::limit($nombre, 100, '') : $numero,
+                    'estado' => 'abierta',
+                ]);
+            }
+
+            WhatsappMensaje::create([
+                'conversacion_id' => $conversacion->id,
+                'aliado_id' => $aliado,
+                'wa_message_id' => $waMessageId,
+                'direccion' => 'saliente',
+                'tipo' => $tipo,
+                'contenido' => $contenido,
+                'media_nombre' => $archivo,
+                'estado' => 'enviado',
+                'es_bot' => true,
+            ]);
+            $conversacion->update(['ultimo_mensaje_at' => now()]);
+        } catch (Throwable $e) {
+            Log::warning('Demo: no se pudo anotar el mensaje en el chat', ['numero' => $numero, 'error' => $e->getMessage()]);
+        }
+    }
+
     /** La cuenta del aliado BryNex (usa el número compartido: Info Avapp). */
     private static function configBrynex(): ?WhatsappConfig
     {
@@ -408,22 +460,6 @@ class RelevoDemo
             $p->update(['envios' => $p->envios + 1, 'ultimo_envio_at' => now(), 'ultimo_uso_at' => now()]);
         }
 
-        $conversacion = WhatsappConversacion::where('aliado_id', $p->aliado_id)
-            ->where('wa_contact_id', $p->telefono_whatsapp)->first();
-
-        if ($conversacion) {
-            WhatsappMensaje::create([
-                'conversacion_id' => $conversacion->id,
-                'aliado_id' => $p->aliado_id,
-                'wa_message_id' => $r['wa_message_id'] ?? null,
-                'direccion' => 'saliente',
-                'tipo' => $tipo,
-                'contenido' => $contenido,
-                'media_nombre' => $archivo,
-                'estado' => 'enviado',
-                'es_bot' => true,
-            ]);
-            $conversacion->update(['ultimo_mensaje_at' => now()]);
-        }
+        self::anotarEnChat($p->telefono_whatsapp, $p->nombre, $r['wa_message_id'] ?? null, $tipo, $contenido, $archivo);
     }
 }
