@@ -190,93 +190,118 @@ class PlanoPilaTxtService
                 ->value('codigo');
         }
 
-        $query = DB::table('planos AS p')
-            ->leftJoin('facturas AS f', 'f.id', '=', 'p.factura_id')
-            // filtrar por aliado_id: evita duplicar filas si el cliente existe en múltiples aliados
-            ->leftJoin('clientes AS cl', function ($join) use ($aliadoId) {
-                $join->on('cl.cedula', '=', 'p.no_identifi')
-                    ->where('cl.aliado_id', '=', $aliadoId);
-            })
-            ->leftJoin('ciudades AS c', 'c.id_ciudad_t', '=', 'cl.municipio_id')
-            ->leftJoin('departamentos AS d', 'd.id', '=', 'cl.departamento_id')
-            ->leftJoin('pensiones AS afp_t', DB::raw('CAST(afp_t.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_afp'))
-            ->leftJoin('pensiones AS afp_cli', 'afp_cli.id', '=', 'cl.pension_id')
-            ->leftJoin('eps AS eps_t', DB::raw('CAST(eps_t.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_eps'))
-            ->leftJoin('cajas AS caj_t', DB::raw('CAST(caj_t.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_caja'))
-            // arl_tarifas NO se une: puede tener múltiples filas por nivel y causa duplicados
-            ->leftJoin('arls AS arl_m', DB::raw('CAST(arl_m.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_arl'))
-            ->leftJoin('tipo_modalidad AS tm', 'tm.id', '=', 'p.tipo_modalidad_id')
-            // Solo por la tarifa de caja del independiente, que se pacta por
-            // contrato (2% o 0,6%) — ver PilaCotizanteCalculator.
-            ->leftJoin('contratos AS ctr', 'ctr.id', '=', 'p.contrato_id')
-            // El plan dice qué se vendió, y en Tipo E - Extras eso es lo que
-            // decide la forma de las dos planillas. Ver PilaCotizanteDosPasos.
-            ->leftJoin('planes_contrato AS pln', 'pln.id', '=', 'ctr.plan_id')
-            // La exoneración de SENA e ICBF es del aportante, y quien tiene su
-            // NIT es la empresa del cliente: la razón social del contrato suele
-            // ser una genérica ("RAZON SOCIAL", "INDEPENDIENTE") compartida por
-            // cientos de clientes, así que ahí no se puede marcar.
-            ->leftJoin('empresas AS emp', function ($join) use ($aliadoId) {
-                $join->on('emp.id', '=', 'cl.cod_empresa')
-                    ->where('emp.aliado_id', '=', $aliadoId);
-            })
-            ->where('p.aliado_id', $aliadoId)
-            ->where('p.razon_social_id', $razonSocialId)
-            ->where('p.n_plano', $nPlano)
-            ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
-            ->whereRaw('ISNULL(p.num_dias, 0) > 0')   // excluir num_dias=0 y NULL
-            ->whereNull('p.deleted_at')
-            ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, $mesPago, $anioPago))
-            ->select([
-                'p.tipo_doc', 'p.no_identifi', 'p.tipo_modalidad_id', 'p.tipo_p', 'p.paga_mes_actual',
-                // Para ubicar la planilla que corrige una línea de tipo_p 16.
-                'p.contrato_id', 'p.mes_plano', 'p.anio_plano', 'p.n_plano',
-                // Corrección con valores: de ese plano sale la línea A.
-                'p.plano_corregido_id',
-                'p.primer_nombre', 'p.segundo_nombre', 'p.primer_ape', 'p.segundo_ape',
-                'p.cod_eps', 'p.cod_afp', 'p.cod_arl', 'p.cod_caja',
-                'p.salario_basico', 'p.num_dias', 'p.nivel_riesgo',
-                DB::raw('CONVERT(VARCHAR(10), p.fecha_ing, 23) AS fecha_ing'),
-                DB::raw('CONVERT(VARCHAR(10), p.fecha_ret, 23) AS fecha_ret'),
-                DB::raw('eps_t.codigo  AS cod_eps_pila'),
-                DB::raw('afp_t.codigo  AS cod_afp_pila'),
-                // Solo lo usa la E-1: su plan no incluye pensión, así que el
-                // plano va sin AFP y el día simbólico necesita una.
-                DB::raw('afp_cli.codigo AS cod_afp_cliente'),
-                DB::raw('arl_m.codigo  AS cod_arl_pila'),
-                DB::raw('caj_t.codigo  AS cod_caj_pila'),
-                'f.v_eps', 'f.v_afp', 'f.v_arl', 'f.v_caja', 'f.dias_cotizados',
-                'cl.genero',
-                DB::raw('DATEDIFF(YEAR, cl.fecha_nacimiento, GETDATE()) AS edad_calculada'),
-                DB::raw('d.id                    AS dep_id'),
-                DB::raw('CAST(c.Municipio AS INT) AS mun_id'),
-                // Tiempo parcial: flag y días por subsistema (ARL siempre 30)
-                // Manda el snapshot del plano y, si no lo tiene (todo lo anterior
-                // al cotizante 76), los días fijos de la modalidad.
-                DB::raw('tm.es_tiempo_parcial   AS es_tiempo_parcial'),
-                DB::raw('ISNULL(p.dias_tp_afp, ISNULL(tm.dias_afp, 30)) AS dias_afp'),
-                DB::raw('ISNULL(p.dias_tp_caja, ISNULL(p.dias_tp_afp, ISNULL(tm.dias_caja, 30))) AS dias_caja'),
-                // Tarifa de caja del independiente: la marca de la razón social
-                // es constante para todo el archivo, el porcentaje es por contrato.
-                DB::raw(((int) ($rs->es_independiente ?? 0)).' AS rs_es_independiente'),
-                'ctr.porcentaje_caja',
-                DB::raw('pln.codigo AS plan_codigo'),
-                // Fondo de Solidaridad: el grupo decide la tarifa de pensión.
-                // Manda el snapshot del plano; sin él, el del contrato.
-                DB::raw('ISNULL(p.grupo_fondo_solidaridad, ctr.grupo_fondo_solidaridad) AS grupo_fondo_solidaridad'),
-                DB::raw('emp.exonerado_parafiscales AS exonerado_parafiscales'),
-            ]);
+        // Pagos X1 por BryNex: una sola planilla de la razón social con gente
+        // de varios aliados. `grupos` = [aliado_id, razon_social_id de ESE
+        // aliado, plano_ids]; el encabezado (NIT, sucursal) sale de
+        // `aliado_id` + `razon_social_id` de los parámetros, y cada persona se
+        // lee con su propio aliado (cliente, empresa). Sin `grupos`, todo como
+        // siempre. Ver X1LiquidacionBrynex::liquidarRazonSocial.
+        $grupos = array_values(array_filter((array) ($params['grupos'] ?? []), fn ($g) => ! empty($g['plano_ids'])));
 
-        if (! empty($tiposModal)) {
-            $query->whereIn('p.tipo_modalidad_id', $tiposModal);
+        $consultar = function ($aliadoId, $razonSocialId, ?int $nPlano, array $planoIdsFiltro) use ($rs, $tiposModal, $planoIdFiltro, $mesPago, $anioPago) {
+            $query = DB::table('planos AS p')
+                ->leftJoin('facturas AS f', 'f.id', '=', 'p.factura_id')
+                // filtrar por aliado_id: evita duplicar filas si el cliente existe en múltiples aliados
+                ->leftJoin('clientes AS cl', function ($join) use ($aliadoId) {
+                    $join->on('cl.cedula', '=', 'p.no_identifi')
+                        ->where('cl.aliado_id', '=', $aliadoId);
+                })
+                ->leftJoin('ciudades AS c', 'c.id_ciudad_t', '=', 'cl.municipio_id')
+                ->leftJoin('departamentos AS d', 'd.id', '=', 'cl.departamento_id')
+                ->leftJoin('pensiones AS afp_t', DB::raw('CAST(afp_t.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_afp'))
+                ->leftJoin('pensiones AS afp_cli', 'afp_cli.id', '=', 'cl.pension_id')
+                ->leftJoin('eps AS eps_t', DB::raw('CAST(eps_t.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_eps'))
+                ->leftJoin('cajas AS caj_t', DB::raw('CAST(caj_t.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_caja'))
+                // arl_tarifas NO se une: puede tener múltiples filas por nivel y causa duplicados
+                ->leftJoin('arls AS arl_m', DB::raw('CAST(arl_m.nit AS VARCHAR(20))'), '=', DB::raw('p.cod_arl'))
+                ->leftJoin('tipo_modalidad AS tm', 'tm.id', '=', 'p.tipo_modalidad_id')
+                // Solo por la tarifa de caja del independiente, que se pacta por
+                // contrato (2% o 0,6%) — ver PilaCotizanteCalculator.
+                ->leftJoin('contratos AS ctr', 'ctr.id', '=', 'p.contrato_id')
+                // El plan dice qué se vendió, y en Tipo E - Extras eso es lo que
+                // decide la forma de las dos planillas. Ver PilaCotizanteDosPasos.
+                ->leftJoin('planes_contrato AS pln', 'pln.id', '=', 'ctr.plan_id')
+                // La exoneración de SENA e ICBF es del aportante, y quien tiene su
+                // NIT es la empresa del cliente: la razón social del contrato suele
+                // ser una genérica ("RAZON SOCIAL", "INDEPENDIENTE") compartida por
+                // cientos de clientes, así que ahí no se puede marcar.
+                ->leftJoin('empresas AS emp', function ($join) use ($aliadoId) {
+                    $join->on('emp.id', '=', 'cl.cod_empresa')
+                        ->where('emp.aliado_id', '=', $aliadoId);
+                })
+                ->where('p.aliado_id', $aliadoId)
+                ->where('p.razon_social_id', $razonSocialId)
+                ->when($nPlano !== null, fn ($q) => $q->where('p.n_plano', $nPlano))
+                ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
+                ->whereRaw('ISNULL(p.num_dias, 0) > 0')   // excluir num_dias=0 y NULL
+                ->whereNull('p.deleted_at')
+                ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, $mesPago, $anioPago))
+                ->select([
+                    'p.tipo_doc', 'p.no_identifi', 'p.tipo_modalidad_id', 'p.tipo_p', 'p.paga_mes_actual',
+                    // Para ubicar la planilla que corrige una línea de tipo_p 16.
+                    'p.contrato_id', 'p.mes_plano', 'p.anio_plano', 'p.n_plano',
+                    // Corrección con valores: de ese plano sale la línea A.
+                    'p.plano_corregido_id',
+                    'p.primer_nombre', 'p.segundo_nombre', 'p.primer_ape', 'p.segundo_ape',
+                    'p.cod_eps', 'p.cod_afp', 'p.cod_arl', 'p.cod_caja',
+                    'p.salario_basico', 'p.num_dias', 'p.nivel_riesgo',
+                    DB::raw('CONVERT(VARCHAR(10), p.fecha_ing, 23) AS fecha_ing'),
+                    DB::raw('CONVERT(VARCHAR(10), p.fecha_ret, 23) AS fecha_ret'),
+                    DB::raw('eps_t.codigo  AS cod_eps_pila'),
+                    DB::raw('afp_t.codigo  AS cod_afp_pila'),
+                    // Solo lo usa la E-1: su plan no incluye pensión, así que el
+                    // plano va sin AFP y el día simbólico necesita una.
+                    DB::raw('afp_cli.codigo AS cod_afp_cliente'),
+                    DB::raw('arl_m.codigo  AS cod_arl_pila'),
+                    DB::raw('caj_t.codigo  AS cod_caj_pila'),
+                    'f.v_eps', 'f.v_afp', 'f.v_arl', 'f.v_caja', 'f.dias_cotizados',
+                    'cl.genero',
+                    DB::raw('DATEDIFF(YEAR, cl.fecha_nacimiento, GETDATE()) AS edad_calculada'),
+                    DB::raw('d.id                    AS dep_id'),
+                    DB::raw('CAST(c.Municipio AS INT) AS mun_id'),
+                    // Tiempo parcial: flag y días por subsistema (ARL siempre 30)
+                    // Manda el snapshot del plano y, si no lo tiene (todo lo anterior
+                    // al cotizante 76), los días fijos de la modalidad.
+                    DB::raw('tm.es_tiempo_parcial   AS es_tiempo_parcial'),
+                    DB::raw('ISNULL(p.dias_tp_afp, ISNULL(tm.dias_afp, 30)) AS dias_afp'),
+                    DB::raw('ISNULL(p.dias_tp_caja, ISNULL(p.dias_tp_afp, ISNULL(tm.dias_caja, 30))) AS dias_caja'),
+                    // Tarifa de caja del independiente: la marca de la razón social
+                    // es constante para todo el archivo, el porcentaje es por contrato.
+                    DB::raw(((int) ($rs->es_independiente ?? 0)).' AS rs_es_independiente'),
+                    'ctr.porcentaje_caja',
+                    DB::raw('pln.codigo AS plan_codigo'),
+                    // Fondo de Solidaridad: el grupo decide la tarifa de pensión.
+                    // Manda el snapshot del plano; sin él, el del contrato.
+                    DB::raw('ISNULL(p.grupo_fondo_solidaridad, ctr.grupo_fondo_solidaridad) AS grupo_fondo_solidaridad'),
+                    DB::raw('emp.exonerado_parafiscales AS exonerado_parafiscales'),
+                ]);
+
+            if (! empty($tiposModal)) {
+                $query->whereIn('p.tipo_modalidad_id', $tiposModal);
+            }
+            if ($planoIdFiltro) {
+                $query->where('p.id', $planoIdFiltro);
+            }
+            if ($planoIdsFiltro) {
+                $query->whereIn('p.id', $planoIdsFiltro);
+            }
+            return $query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
+        };
+
+        if ($grupos) {
+            $planos = collect();
+            foreach ($grupos as $g) {
+                $planos = $planos->concat($consultar(
+                    (int) $g['aliado_id'], (int) $g['razon_social_id'], null,
+                    array_values(array_map('intval', (array) $g['plano_ids']))
+                ));
+            }
+            $planos = $planos
+                ->sortBy(fn ($p) => mb_strtoupper(trim(($p->primer_ape ?? '').' '.($p->primer_nombre ?? ''))))
+                ->values();
+        } else {
+            $planos = $consultar($aliadoId, $razonSocialId, $nPlano, $planoIdsFiltro);
         }
-        if ($planoIdFiltro) {
-            $query->where('p.id', $planoIdFiltro);
-        }
-        if ($planoIdsFiltro) {
-            $query->whereIn('p.id', $planoIdsFiltro);
-        }
-        $planos = $query->orderBy('p.primer_ape')->orderBy('p.primer_nombre')->get();
 
         Plano::validarPeriodoUnico($planos);
 

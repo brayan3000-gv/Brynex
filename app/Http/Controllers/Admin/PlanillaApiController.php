@@ -669,6 +669,7 @@ class PlanillaApiController extends Controller
                 'n_plano'         => $validated['n_plano'],
                 'tipos_modalidad' => $validated['tipos_modalidad'] ?? [],
                 'codigo_operador' => (string) $operador->codigo_ni,
+                'grupos'          => $this->gruposX1,
             ], $opcionesPlano));
         } catch (\RuntimeException $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
@@ -756,6 +757,7 @@ class PlanillaApiController extends Controller
                         'n_plano'         => $validated['n_plano'],
                         'tipos_modalidad' => $validated['tipos_modalidad'] ?? [],
                         'codigo_operador' => (string) $operador->codigo_ni,
+                        'grupos'          => $this->gruposX1,
                     ], $opcionesPlano));
 
                     $resultado = $api->liquidarPlanilla($rs->nit, $plano['contenido'], $plano['filename'], $opcionesApi);
@@ -783,6 +785,7 @@ class PlanillaApiController extends Controller
                     'n_plano'         => $validated['n_plano'],
                     'tipos_modalidad' => $validated['tipos_modalidad'] ?? [],
                     'codigo_operador' => (string) $operador->codigo_ni,
+                    'grupos'          => $this->gruposX1,
                 ], $opcionesPlano));
 
                 $resultado = $api->liquidarPlanilla($rs->nit, $plano['contenido'], $plano['filename'], $opcionesApi);
@@ -1609,6 +1612,20 @@ class PlanillaApiController extends Controller
     public function conCuentaBrynex(): static
     {
         $this->cuentaBrynex = true;
+
+        return $this;
+    }
+
+    /**
+     * Pagos X1 por BryNex, planilla conjunta: personas de varios aliados en una
+     * sola planilla de la razón social (ver PlanoPilaTxtService `grupos`). Solo
+     * lo usa X1LiquidacionBrynex, junto con conCuentaBrynex().
+     */
+    private array $gruposX1 = [];
+
+    public function conGruposX1(array $grupos): static
+    {
+        $this->gruposX1 = $grupos;
 
         return $this;
     }

@@ -179,6 +179,17 @@ class X1LiquidacionBrynex
             return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Esa tanda no tiene personas pendientes.'];
         }
 
+        // Personas que ya están en una planilla de otra tanda (la conjunta de
+        // la razón social): el archivo de esta tanda las volvería a meter.
+        $enOtra = $abiertas->filter(fn ($f) => $f->estado === 'liquidada' && $f->numero_planilla
+            && ! OperadorPlanillaApi::where('aliado_id', $aliadoId)->where('razon_social_id', $rsId)
+                ->where('n_plano', $nPlano)->where('numero_planilla', $f->numero_planilla)->exists());
+        if ($enOtra->isNotEmpty()) {
+            return ['ok' => false, 'estado' => 'error',
+                'mensaje' => 'Hay '.$enOtra->count().' '.($enOtra->count() === 1 ? 'persona' : 'personas').' de esta tanda en la planilla conjunta '
+                    .$enOtra->first()->numero_planilla.': págala y confírmala desde la vista «Por razón social».'];
+        }
+
         $simple = self::operadorSimpleId();
         if (! $simple) {
             return ['ok' => false, 'estado' => 'error', 'mensaje' => 'No está el operador Simple en el catálogo.'];
@@ -446,7 +457,22 @@ class X1LiquidacionBrynex
             ->join('razones_sociales AS rs', 'rs.id', '=', 'xp.razon_social_id')
             ->join('aliados AS a', 'a.id', '=', 'xp.aliado_id')
             ->where('s.mes', $mes)->where('s.anio', $anio)
-            ->whereIn('xp.estado', ['esperando_ventana', 'liquidada'])
+            // Las liquidadas solo si su planilla es de esa misma tanda: las de
+            // una planilla conjunta (X1PlanillaConjunta) van por su cuenta y
+            // liquidarlas aquí las duplicaría.
+            ->where(function ($q) {
+                $q->where('xp.estado', 'esperando_ventana')
+                    ->orWhere(function ($l) {
+                        $l->where('xp.estado', 'liquidada')
+                            ->whereExists(function ($e) {
+                                $e->select(DB::raw(1))->from('operador_planillas_api AS o')
+                                    ->whereColumn('o.aliado_id', 'xp.aliado_id')
+                                    ->whereColumn('o.razon_social_id', 'xp.razon_social_id')
+                                    ->whereColumn('o.n_plano', 'xp.n_plano')
+                                    ->whereColumn('o.numero_planilla', 'xp.numero_planilla');
+                            });
+                    });
+            })
             ->groupBy('xp.aliado_id', 'a.nombre', 'xp.razon_social_id', 'rs.razon_social', 'xp.n_plano', 'xp.tipo_modalidad_id')
             ->orderBy('xp.aliado_id')->orderBy('xp.razon_social_id')->orderBy('xp.n_plano')
             ->selectRaw('xp.aliado_id, a.nombre AS aliado, xp.razon_social_id, rs.razon_social, xp.n_plano, xp.tipo_modalidad_id, COUNT(*) AS personas')
@@ -589,7 +615,7 @@ class X1LiquidacionBrynex
     }
 
     /** Estado de pago de una planilla del aliado, preguntado con la cuenta de BryNex. */
-    private static function estadoPago(int $aliadoId, string $numero): array
+    public static function estadoPago(int $aliadoId, string $numero): array
     {
         $registro = OperadorPlanillaApi::where('aliado_id', $aliadoId)
             ->where('numero_planilla', $numero)
@@ -671,7 +697,7 @@ class X1LiquidacionBrynex
      * cualquier otro error (de empresa o de cotizante): ahí no se mueve a
      * nadie, porque el problema es otro.
      */
-    private static function rebotadasPorSubtipo(array $data): array
+    public static function rebotadasPorSubtipo(array $data): array
     {
         $empresa = $data['errores_empresa'] ?? [];
         $cotizante = collect($data['errores_cotizante'] ?? []);
@@ -688,7 +714,7 @@ class X1LiquidacionBrynex
     }
 
     /** Solo los dígitos del documento ("CC1062304870" → "1062304870"). */
-    private static function doc(string $identificacion): string
+    public static function doc(string $identificacion): string
     {
         return ltrim(preg_replace('/\D/', '', $identificacion), '0');
     }
@@ -702,7 +728,7 @@ class X1LiquidacionBrynex
     }
 
     /** Mueve personas a otro plano X1 (planos, facturas y x1_solicitud_planos) y las deja esperando. */
-    private static function moverFilas(int $aliadoId, Collection $filas, int $destino): void
+    public static function moverFilas(int $aliadoId, Collection $filas, int $destino): void
     {
         DB::transaction(function () use ($aliadoId, $filas, $destino) {
             $planoIds = $filas->pluck('plano_id')->all();
@@ -748,7 +774,7 @@ class X1LiquidacionBrynex
      * Corre `$fn` con el aliado de la tanda en la sesión y devuelve la sesión
      * a como estaba, aunque `$fn` falle: el superadmin sigue parado en su aliado.
      */
-    private static function comoAliado(int $aliadoId, callable $fn)
+    public static function comoAliado(int $aliadoId, callable $fn)
     {
         $antes = session('aliado_id_activo');
         session(['aliado_id_activo' => $aliadoId]);

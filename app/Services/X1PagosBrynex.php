@@ -62,7 +62,13 @@ class X1PagosBrynex
      */
     public const PLANO_X1_DESDE = 70;
 
-    public const PLANO_X1_HASTA = 99;
+    public const PLANO_X1_HASTA = 98;
+
+    /**
+     * Plano de la planilla conjunta por razón social (Pagos X1 por BryNex):
+     * el registro de la liquidación va a nombre de Brygar con este número.
+     */
+    public const PLANO_CONJUNTO = 99;
 
     /** Estados de cada persona que ya no esperan nada. */
     public const ESTADOS_CERRADOS = ['pagada', 'blindem', 'doble_planilla'];
