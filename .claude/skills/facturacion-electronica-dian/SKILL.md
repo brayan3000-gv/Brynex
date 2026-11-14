@@ -175,7 +175,22 @@ distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó l
 Las de Sebastián van en GSE con KR 39 # 43 - 04, Cali, sebastian.reprebyg@gmail.com y
 3158204135 (lo de la cámara).
 
-Falta Karla (CONSTRUTECH, LOGIC CENTER, LOGISTICS HOUSE).
+Karla Daniela Gómez Quirama (CC 1005878149), revisado en la DIAN el 13-nov, en pausa:
+
+| Empresa | NIT | DIAN | Recepción de facturas |
+|---|---|---|---|
+| CONSTRUTECH | 901603738 | **Habilitado** desde 2022 con Siigo (proveedor tecnológico, aceptado) | construtechbyg@gmail.com |
+| LOGIC CENTER | 901605219 | Registrado, **sin modo de operación** | brygar.token@gmail.com |
+| LOGISTICS HOUSE | 901610876 | Registrado, **sin modo de operación** | brygar.token@gmail.com |
+
+Las dos últimas ya no necesitan «Registrar»: solo asociar Software gratuito. Pendiente que el
+dueño decida si se asocia, si se cambia el correo de recepción y qué pasa con CONSTRUTECH.
+
+**Fuera de este trámite:** BRYGAR SAS, MEGA TRANSPORTES JUAMVI, AVAPP y CIT TECHNOLOGY CENTER
+ya tienen factura electrónica (dicho por el dueño, 13-nov).
+
+Antes de empezar una empresa, mirar `/Contributor/Check`: puede estar ya registrada o
+habilitada con otro proveedor.
 
 ## Trampas que aparecieron con Yesenia y Yuly (13-nov)
 
