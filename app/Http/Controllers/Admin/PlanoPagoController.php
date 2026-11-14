@@ -1098,6 +1098,23 @@ class PlanoPagoController extends Controller
         $rs = RazonSocial::where('aliado_id', $aliadoId)
             ->findOrFail($validated['razon_social_id']);
 
+        // ── Tipo E - X1: el pago lo confirma BryNex, no Planos ────────────
+        // Se confirma en Pagos X1 (BryNex), que guarda el comprobante y el
+        // estado de cada persona en su solicitud. Desde aquí le pondría el
+        // número a las X1 sin pasar por nada de eso. Ver X1PagosBrynex.
+        if (\App\Services\X1PagosBrynex::activo() && empty($validated['plano_id'])
+            && \App\Services\X1PagosBrynex::tandaTieneX1(
+                (int) $aliadoId, (int) $rs->id,
+                (int) $validated['mes_plano'], (int) $validated['anio_plano'], (int) $validated['n_plano'],
+                array_map('intval', (array) ($validated['tipos_modalidad'] ?? []))
+            )) {
+            return response()->json([
+                'ok' => false,
+                'mensaje' => 'Este plano tiene personas de Tipo E - X1: su pago lo hace y lo confirma BryNex. '
+                    .'Use «X1 → BryNex» para solicitarlo; cuando BryNex lo pague, el número de planilla aparece solo.',
+            ], 403);
+        }
+
         // ── Planilla N de corrección en $0 ─────────────────────────────
         // El retiro que se le agrega a una planilla ya pagada no cambia
         // valores: el operador la envía sin cobrar nada. Solo esa tanda —toda

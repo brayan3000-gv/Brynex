@@ -868,8 +868,15 @@
                     📥 Descargar Plano
                 </button>
                 @if(!$esIndependiente)
+                @php
+                    // Tipo E - X1: su pago lo confirma BryNex (Pagos X1), no este botón.
+                    $hayX1EnPlano = ($x1Activo ?? false) && $planos->contains(
+                        fn ($p) => in_array((int) $p->tipo_modalidad_id, \App\Models\TipoModalidad::IDS_EX1, true)
+                    );
+                @endphp
                 <button type="button" class="btn-accion btn-pagar" onclick="validarCompatibilidadYAbrir('pago')"
-                    @if($planos->count()==0) disabled style="opacity:.4;cursor:not-allowed" @endif>
+                    @if($planos->count()==0 || $hayX1EnPlano) disabled style="opacity:.4;cursor:not-allowed" @endif
+                    @if($hayX1EnPlano) title="Este plano tiene personas de Tipo E - X1: su pago lo hace y lo confirma BryNex («X1 → BryNex»)." @endif>
                     ✅ Confirmar Pago
                 </button>
                 @endif
