@@ -6,9 +6,8 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * Pagos X1 por BryNex: BryNex marca que la consignación del aliado es real
- * (la vio en el banco) antes de pagar. La planilla conjunta por razón social
- * solo junta a la gente de solicitudes verificadas (Brygar no consigna: va
- * verificada sola). Ver X1LiquidacionBrynex.
+ * (la vio en el banco). Es una marca de control: no frena la liquidación, que
+ * se hace primero (Brygar no consigna: va verificada sola). Ver X1PlanillaConjunta.
  */
 return new class extends Migration
 {

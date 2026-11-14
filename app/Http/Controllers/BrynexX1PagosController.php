@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\X1LiquidacionBrynex;
 use App\Services\X1PagosBrynex;
+use App\Services\X1PlanillaConjunta;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -29,7 +30,13 @@ class BrynexX1PagosController extends Controller
         $mes = max(1, min(12, (int) $request->input('mes', now()->month)));
         $anio = max(2020, min(2100, (int) $request->input('anio', now()->year)));
 
+        $vista = in_array($request->input('vista'), ['razon', 'consignaciones', 'aliados'], true)
+            ? $request->input('vista') : 'razon';
+
         return view('brynex.x1-pagos.index', [
+            'vista' => $vista,
+            'grupos' => X1PlanillaConjunta::grupos($mes, $anio),
+            'aliadoBrygar' => X1PagosBrynex::ALIADO_BRYGAR,
             'mes' => $mes,
             'anio' => $anio,
             'solicitudes' => X1LiquidacionBrynex::solicitudes($mes, $anio),
@@ -100,6 +107,57 @@ class BrynexX1PagosController extends Controller
             && \Illuminate\Support\Facades\Storage::disk('local')->exists($pago->soporte_path), 404);
 
         return \Illuminate\Support\Facades\Storage::disk('local')->response($pago->soporte_path, $pago->soporte_nombre ?: null);
+    }
+
+    /** Una sola planilla de la razón social con la gente de todos los aliados. */
+    public function liquidarConjunta(Request $request)
+    {
+        $v = $request->validate([
+            'nit' => 'required|string|max:20',
+            'tipo_modalidad_id' => 'required|integer',
+            'mes' => 'required|integer|between:1,12',
+            'anio' => 'required|integer|between:2020,2100',
+        ]);
+
+        return response()->json(X1PlanillaConjunta::liquidar(
+            (string) $v['nit'], (int) $v['tipo_modalidad_id'], (int) $v['mes'], (int) $v['anio']
+        ));
+    }
+
+    public function confirmarConjunta(Request $request)
+    {
+        $v = $request->validate([
+            'nit' => 'required|string|max:20',
+            'tipo_modalidad_id' => 'required|integer',
+            'mes' => 'required|integer|between:1,12',
+            'anio' => 'required|integer|between:2020,2100',
+            'numero_planilla' => 'required|string|max:30',
+            'estado' => 'required|in:pagada,doble_planilla,blindem',
+            'valor' => 'required|integer|min:1',
+            'comprobante' => 'nullable|string|max:60',
+            'fecha_pago' => 'nullable|date',
+            'soporte' => 'nullable|file|mimes:jpg,jpeg,png,webp,heic,pdf|max:10240',
+            'observacion' => 'nullable|string|max:500',
+        ], ['valor.required' => 'Escriba el valor pagado.']);
+
+        return response()->json(X1PlanillaConjunta::confirmar(
+            (string) $v['nit'], (int) $v['tipo_modalidad_id'], (int) $v['mes'], (int) $v['anio'],
+            (string) $v['numero_planilla'], (string) $v['estado'], (int) $v['valor'],
+            $v['comprobante'] ?? null, $v['fecha_pago'] ?? null, $request->file('soporte'), $v['observacion'] ?? null
+        ));
+    }
+
+    /** Marca que la consignación de la solicitud es real (o lo quita). */
+    public function verificar(Request $request)
+    {
+        $v = $request->validate([
+            'solicitud_id' => 'required|integer',
+            'verificada' => 'required|boolean',
+        ]);
+
+        $r = X1PlanillaConjunta::verificarConsignacion((int) $v['solicitud_id'], (bool) $v['verificada']);
+
+        return back()->with($r['ok'] ? 'success' : 'warning', $r['mensaje']);
     }
 
     /** Brygar no consigna: sus X1 del período se pasan a la cola sin foto. */

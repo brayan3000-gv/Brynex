@@ -25,8 +25,8 @@ use Illuminate\Support\Facades\Storage;
  * liquidación va a nombre de Brygar en el plano X1PagosBrynex::PLANO_CONJUNTO,
  * así que el 409 que evita duplicar sigue funcionando.
  *
- * Solo entra gente de solicitudes con la consignación verificada (Brygar va
- * verificado solo: no consigna). Lo demás —rebotes por el subtipo 4, enlace de
+ * La consignación de cada solicitud se puede marcar como verificada, pero eso
+ * no frena la liquidación: se paga primero y se verifica después. Lo demás —rebotes por el subtipo 4, enlace de
  * pago, confirmación con comprobante— sigue las mismas reglas que la tanda de
  * un aliado (X1LiquidacionBrynex).
  */
@@ -112,7 +112,7 @@ class X1PlanillaConjunta
 
     /**
      * Liquida en Simple una sola planilla de la razón social con la gente
-     * verificada de todos los aliados.
+     * pendiente de todos los aliados.
      *
      * @return array{ok: bool, estado: string, mensaje: string, numero_planilla?: string,
      *               valor_total?: float|null, url_pago?: string|null, errores?: array}
@@ -172,7 +172,7 @@ class X1PlanillaConjunta
 
         $filas = self::filasParaLiquidar($nit, $tipoModalidadId, $mes, $anio, $registro);
         if ($filas->isEmpty()) {
-            return ['ok' => false, 'estado' => 'error', 'mensaje' => 'No hay personas verificadas para liquidar en esta razón social.'];
+            return ['ok' => false, 'estado' => 'error', 'mensaje' => 'No hay personas pendientes para liquidar en esta razón social.'];
         }
 
         $intento = self::llamar($rsBrygar, $simple, $tipoModalidadId, $mes, $anio, $filas, $reliquidar);
@@ -411,16 +411,14 @@ class X1PlanillaConjunta
     }
 
     /**
-     * Entra a la conjunta: verificada y pendiente, o ya en la conjunta anterior
+     * Entra a la conjunta: pendiente, o ya en la conjunta anterior
      * sin pagar (al rehacerla vuelve a ir). Las liquidadas en la tanda de su
      * aliado no: tienen su propia planilla.
      */
     private static function entraALaConjunta(object $f, ?OperadorPlanillaApi $registro): bool
     {
-        if (! self::esVerificada($f)) {
-            return false;
-        }
-
+        // La verificación de la consignación NO frena: el dueño liquida y paga
+        // primero y confirma las consignaciones después (15-nov-2026).
         return in_array($f->estado, self::ESTADOS_PARA_LIQUIDAR, true)
             || ($registro && $f->estado === 'liquidada' && $f->numero_planilla === $registro->numero_planilla);
     }

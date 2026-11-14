@@ -919,6 +919,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/x1-pagos/pagar', [$bx1, 'pagar'])->name('x1.pagar');
         Route::post('/x1-pagos/confirmar', [$bx1, 'confirmar'])->name('x1.confirmar');
         Route::get('/x1-pagos/comprobante/{id}', [$bx1, 'soportePago'])->whereNumber('id')->name('x1.soporte_pago');
+        Route::post('/x1-pagos/conjunta/liquidar', [$bx1, 'liquidarConjunta'])->name('x1.conjunta.liquidar');
+        Route::post('/x1-pagos/conjunta/confirmar', [$bx1, 'confirmarConjunta'])->name('x1.conjunta.confirmar');
+        Route::post('/x1-pagos/verificar', [$bx1, 'verificar'])->name('x1.verificar');
         Route::post('/x1-pagos/cola-brygar', [$bx1, 'colaBrygar'])->name('x1.cola_brygar');
         Route::post('/x1-pagos/admon', [$bx1, 'admon'])->name('x1.admon');
 
