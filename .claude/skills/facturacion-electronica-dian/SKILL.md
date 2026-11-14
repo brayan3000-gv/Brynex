@@ -140,8 +140,11 @@ Subir la cámara nueva a la ficha (Archivos → Cámara de Comercio): reemplaza 
 6. «Validar Email» → el código llega de **firmaya.co** (no de gse.com.co) → lo pone la persona.
 7. **Finalizar** → «Solicitud Radicada Exitosamente». Las preguntas de identidad no salieron
    en ninguna (13-nov): pasó directo a «Identidad Validada – Pendiente de Verificación».
-8. Luego «Verificado pendiente por Emisión» y la emisión (~3 días hábiles). El certificado
-   aparece solo en la solución gratuita (vigencia 2 años).
+8. Luego «Verificado pendiente por Emisión» y la emisión. LALA GROUP salió el **mismo día**
+   (radicada 13:40, emitida 15:02). Llega un correo de `notificaciones-ra@gse.com.co`
+   «Certificado emitido DIAN» al +NIT, con la constancia y `Certificado.zip`; el certificado
+   ya queda instalado en la solución gratuita (Menú de configuración → Certificados
+   digitales), vigencia 2 años. Para saber cuáles salieron, buscar ese remitente en el buzón.
 
 ## 7. Pendiente de documentar (aún no se ha hecho)
 
@@ -154,7 +157,7 @@ Subir la cámara nueva a la ficha (Archivos → Cámara de Comercio): reemplaza 
 
 | Empresa | NIT | Representante | DIAN | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
-| LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · Verificado, pendiente por emisión (13-nov) |
+| LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · **Certificado emitido** 13-nov 15:02 (ya instalado en la solución gratuita); sigue el set de pruebas |
 | LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · Identidad validada (13-nov) |
 | LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · Identidad validada (13-nov) |
 | LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · Identidad validada (13-nov) |
