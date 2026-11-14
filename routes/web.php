@@ -688,6 +688,13 @@ Route::middleware('auth')->group(function () {
             Route::patch('/operador-cliente', [$pp, 'asignarOperadorCliente'])->name('operador_cliente.asignar');
             Route::patch('/mover-masivo', [$pp, 'moverPlanoMasivo'])->name('mover_masivo');
             Route::patch('/{id}/mover', [$pp, 'moverPlano'])->name('mover');
+
+            // Tipo E - X1: el aliado no la liquida, le solicita el pago a BryNex
+            // (ver App\Services\X1PagosBrynex).
+            $x1 = \App\Http\Controllers\Admin\X1SolicitudController::class;
+            Route::get('/x1', [$x1, 'index'])->name('x1.index');
+            Route::post('/x1/solicitar', [$x1, 'solicitar'])->name('x1.solicitar');
+            Route::get('/x1/soporte/{id}', [$x1, 'soporte'])->whereNumber('id')->name('x1.soporte');
             Route::post('/confirmar-pago', [$pp, 'confirmarPago'])->name('confirmar_pago');
             // La correccion se filtra dentro del controlador: admin (gastos.gestionar)
             // o el usuario que confirmo ese pago.

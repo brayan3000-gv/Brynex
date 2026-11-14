@@ -682,6 +682,19 @@
             <span id="badge-nplano-val">{{ $nPlanoActual }}</span>
         </span>
         @endif
+        @if($x1Activo ?? false)
+        {{-- Tipo E - X1: el aliado no la liquida, le solicita el pago a BryNex --}}
+        <a href="{{ route('admin.planos.x1.index', ['mes' => $mes, 'anio' => $anio]) }}"
+           title="Las personas de Tipo E - X1 las paga BryNex: aquí se solicitan con la foto de la consignación"
+           style="display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .8rem;
+                  border-radius:8px;border:1px solid #c4b5fd;background:#f5f3ff;
+                  color:#6d28d9;font-size:.78rem;font-weight:700;text-decoration:none">
+            🧾 X1 → BryNex
+            @if(($x1Pendientes ?? 0) > 0)
+            <span style="background:#7c3aed;color:#fff;border-radius:20px;padding:0 .4rem;font-size:.68rem">{{ $x1Pendientes }}</span>
+            @endif
+        </a>
+        @endif
         <button type="button" id="btn-resumen-planos"
             onclick="abrirResumenPlanos()"
             style="display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .8rem;
@@ -1000,6 +1013,12 @@
             <td id="planilla-{{ $p->id }}" style="text-align:center" data-order="{{ $p->numero_planilla ?? '' }}">
                 @if($p->numero_planilla)
                 @include('admin.planos._chip_planilla', ['p' => $p])
+                @elseif($p->x1_estado ?? null)
+                <a href="{{ route('admin.planos.x1.index', ['mes' => $mes, 'anio' => $anio]) }}"
+                   title="Tipo E - X1 solicitada a BryNex (solicitud #{{ $p->x1_solicitud_id }})"
+                   style="display:inline-block;background:{{ $p->x1_estado === 'esperando_ventana' ? '#ede9fe;color:#5b21b6' : '#fef3c7;color:#92400e' }};border-radius:20px;padding:.08rem .5rem;font-size:.64rem;font-weight:700;text-decoration:none;white-space:nowrap">
+                    {{ \App\Services\X1PagosBrynex::ETIQUETAS_ESTADO_PLANO[$p->x1_estado] ?? $p->x1_estado }}
+                </a>
                 @else
                 <span style="color:#cbd5e1">—</span>
                 @endif

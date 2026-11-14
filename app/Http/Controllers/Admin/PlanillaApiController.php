@@ -373,6 +373,24 @@ class PlanillaApiController extends Controller
             ], 422);
         }
 
+        // ── Tipo E - X1: la liquida BryNex, no el aliado ─────────────────
+        // El aliado solicita el pago desde Planos → X1 (X1PagosBrynex). Solo el
+        // superadmin de BryNex y el vigía (consola) llegan al operador.
+        if (! \App\Services\X1PagosBrynex::puedeLiquidar(auth()->user())
+            && \App\Services\X1PagosBrynex::tandaTieneX1(
+                (int) $aliadoId,
+                (int) $validated['razon_social_id'],
+                (int) $validated['mes'],
+                (int) $validated['anio'],
+                (int) $validated['n_plano'],
+                $validated['tipos_modalidad'] ?? []
+            )) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Las personas de Tipo E - X1 las paga BryNex. Use el botón «X1 → BryNex» de Planos para solicitar el pago con la foto de la consignación.',
+            ], 403);
+        }
+
         // Multi-tenant: la razón social debe ser del aliado activo.
         $rs = RazonSocial::where('aliado_id', $aliadoId)
             ->find($validated['razon_social_id']);

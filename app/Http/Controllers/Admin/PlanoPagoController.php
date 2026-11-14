@@ -138,6 +138,10 @@ class PlanoPagoController extends Controller
                 ->leftJoin('planillas_pago_operador AS ppo', function ($join) {
                     $join->on('ppo.numero_planilla', '=', 'p.numero_planilla')->on('ppo.aliado_id', '=', 'p.aliado_id');
                 })
+                // Tipo E - X1 solicitada a BryNex (X1PagosBrynex): su estado
+                ->leftJoin('x1_solicitud_planos AS x1sp', function ($join) {
+                    $join->on('x1sp.plano_id', '=', 'p.id')->on('x1sp.aliado_id', '=', 'p.aliado_id');
+                })
                 ->where('p.aliado_id', $aliadoId)
                 ->whereNull('p.deleted_at')
                 ->where(function ($q) use ($nPlanoFiltro) {
@@ -215,6 +219,8 @@ class PlanoPagoController extends Controller
                     'pv.estado                AS verif_estado',
                     'pv.mensaje               AS verif_mensaje',
                     'ppo.fecha_pago           AS pago_operador_fecha',
+                    'x1sp.estado              AS x1_estado',
+                    'x1sp.x1_solicitud_id     AS x1_solicitud_id',
                     // Empresa del cliente
                     'em.empresa AS nombre_empresa',
                     // Tipo modalidad
@@ -419,7 +425,15 @@ class PlanoPagoController extends Controller
             ->pluck('id')
             ->all();
 
+        // Tipo E - X1: cuántas personas del período faltan por solicitarle a
+        // BryNex (botón «X1 → BryNex»). Ver X1PagosBrynex.
+        $x1Activo = \App\Services\X1PagosBrynex::activo();
+        $x1Pendientes = $x1Activo
+            ? \App\Services\X1PagosBrynex::pendientes((int) $aliadoId, (int) $mes, (int) $anio)->count()
+            : 0;
+
         return view('admin.planos.index', compact(
+            'x1Activo', 'x1Pendientes',
             'planos', 'razonesSociales', 'tiposModalidad', 'modalidadesDispon',
             'cantPorRs', 'diaHoy',
             'anio', 'mes', 'mesVencido', 'anioVencido',
