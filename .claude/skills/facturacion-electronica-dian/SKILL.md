@@ -167,7 +167,15 @@ distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó l
 | ELITES CREACIONES | 901904750 | Yuly 1143961945 | Registrado + gratuito | 979f8f69… | 01080321 · Identidad validada (13-nov, con preguntas) |
 | CONSTRUCTORA ELITEX | 901906958 | Yuly | Registrado + gratuito | d07f6436… | 01080323 · Identidad validada (13-nov) |
 
-Faltan las empresas de Sebastián y Karla (ver Representantes).
+| GLOBAL CONTACT | 901709476 | Sebastián 1006168815 | Registrado + gratuito | d5a8dae2… | 01080369 · Identidad validada (13-nov) |
+| HOMENURSE | 901753748 | Sebastián | Registrado + gratuito | f0265dfa… | 01080384 · Identidad validada (13-nov) |
+| WORK AT HOME | 901716074 | Sebastián | Registrado + gratuito | 000dfddf… | 01080390 · Identidad validada (13-nov) |
+| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · Finalizar pulsado 13-nov 17:40; confirmar en la lista |
+
+Las de Sebastián van en GSE con KR 39 # 43 - 04, Cali, sebastian.reprebyg@gmail.com y
+3158204135 (lo de la cámara).
+
+Falta Karla (CONSTRUTECH, LOGIC CENTER, LOGISTICS HOUSE).
 
 ## Trampas que aparecieron con Yesenia y Yuly (13-nov)
 
@@ -187,3 +195,14 @@ Faltan las empresas de Sebastián y Karla (ver Representantes).
   ni con Luis/Yesenia). Las responde solo el representante; 3 intentos.
 - Las cámaras guardadas pueden haberse subido recién pero estar **expedidas mucho antes**:
   mirar la «Fecha expedición» del PDF, no la fecha de subida.
+
+## Trampas que aparecieron con Sebastián (13-nov)
+
+- **El nombre de la empresa que precarga GSE desde la DIAN puede traer espacios duros**
+  (carácter 160) y el formulario responde «Caracteres permitidos» sin decir cuál. Antes de
+  Validar Email, reemplazar `\u00a0` por espacio normal en todos los campos.
+- **La sesión de GSE caduca** (y a veces se cierra sola al pulsar Finalizar): si la pestaña
+  queda en `/logout`, la persona vuelve a entrar y se revisa el estado en la lista; los
+  documentos ya subidos se conservan, pero puede tocar subirlos de nuevo si no se guardaron.
+- **Llamadas largas de JavaScript cortan la conexión con Chrome**: clics con
+  `setTimeout(() => btn.click(), 100)` y esperas cortas, en llamadas separadas.
