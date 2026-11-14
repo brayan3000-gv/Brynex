@@ -34,9 +34,15 @@ class BrynexController extends Controller
             ->keyBy('aliado_id');
         $totalWaConfigurados = $whatsappConfigs->where('activo', 1)->count();
 
+        // Pagos X1: solicitudes de los aliados que BryNex todavía no termina.
+        $x1Puede = \App\Services\X1LiquidacionBrynex::puedeOperar($user);
+        $x1Abiertas = $x1Puede
+            ? DB::table('x1_solicitudes')->where('estado', '!=', 'pagada')->count()
+            : 0;
+
         return view('brynex.hub', compact(
             'aliados', 'totalAliados', 'activos', 'usuariosBrynex',
-            'whatsappConfigs', 'totalWaConfigurados'
+            'whatsappConfigs', 'totalWaConfigurados', 'x1Puede', 'x1Abiertas'
         ));
     }
 

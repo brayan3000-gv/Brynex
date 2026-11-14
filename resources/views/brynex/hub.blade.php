@@ -148,6 +148,28 @@
         </div>
         @endcan
 
+        {{-- ── Pagos X1: BryNex liquida y paga la X1 de los aliados ─────────── --}}
+        @if($x1Puede ?? false)
+        <div class="hub-section" style="border:1px solid #ddd6fe">
+            <div class="hub-section-title" style="color:#6d28d9">🧾 Pagos X1 <span class="badge-sa">Solo Superadmin</span></div>
+            <div class="hub-cards">
+                <a href="{{ route('brynex.x1.index') }}" class="hub-card" style="border-color:#ddd6fe;background:#f5f3ff">
+                    <div class="hc-icon">🧾</div>
+                    <div class="hc-body">
+                        <div class="hc-name" style="color:#6d28d9">
+                            Solicitudes de pago Tipo E - X1
+                            @if($x1Abiertas > 0)
+                            <span style="background:#7c3aed;color:#fff;border-radius:20px;padding:0 .45rem;font-size:.7rem;margin-left:.25rem">{{ $x1Abiertas }}</span>
+                            @endif
+                        </div>
+                        <div class="hc-desc">Lo que consignaron los aliados para su X1 · Liquidar en Simple con la cuenta de BryNex, pagar por PSE y confirmar con el número real · Admon X1 por aliado</div>
+                    </div>
+                    <div class="hc-arrow" style="color:#6d28d9">→</div>
+                </a>
+            </div>
+        </div>
+        @endif
+
         {{-- ── Supervisión de planilla ─────────────────────────────────────── --}}
         @can('brynex_cierre.ver')
         <div class="hub-section" style="border:1px solid #c7d2fe">
