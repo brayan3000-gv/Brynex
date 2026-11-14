@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Storage;
  * ## No toca los planos normales
  *
  * Al solicitar, las personas X1 de cada razón social pasan a su propio plano
- * (el siguiente libre del período) si estaban compartiendo con alguien más. El
+ * (del rango X1, desde el P70) si estaban compartiendo con alguien más. El
  * resto del plano del aliado queda igual. Todo lo demás vive en tablas propias
  * (`x1_solicitudes`, `x1_solicitud_planos`): si la X1 se retira, se apaga
  * `x1_pagos_brynex_activo` y los planos normales no dependieron nunca de esto.
@@ -54,8 +54,22 @@ class X1PagosBrynex
 
     public const ESTADO_PLANO_EN_SOLICITUD = 'en_solicitud';
 
+    /**
+     * Las X1 que cambian de plano van a un rango propio, desde el P70: los
+     * planos normales no pasan de P40 y el P100 es el de ingreso-retiro. Así
+     * el contador de la razón social (rs.n_plano, donde caen las facturas
+     * nuevas) nunca apunta a un plano X1 y no se le mezcla gente normal.
+     */
+    public const PLANO_X1_DESDE = 70;
+
+    public const PLANO_X1_HASTA = 99;
+
+    /** Estados de cada persona que ya no esperan nada. */
+    public const ESTADOS_CERRADOS = ['pagada', 'blindem', 'doble_planilla'];
+
     public const ETIQUETAS_ESTADO_PLANO = [
         'en_solicitud' => 'En solicitud',
+        'liquidada' => 'Liquidada, por pagar',
         'pagada' => 'Pagada',
         'esperando_ventana' => 'Esperando ventana',
         'blindem' => 'Pagada por Blindem',
@@ -160,6 +174,75 @@ class X1PagosBrynex
             ]);
 
         return $q->get()->map(fn ($r) => self::conDiaPension($r));
+    }
+
+    /**
+     * Personas X1 sin solicitar por aliado en el período, para que BryNex vea
+     * quién falta (Brygar incluido: sus X1 se pasan a la cola desde ahí).
+     *
+     * @return Collection<int, object> aliado_id, aliado, personas
+     */
+    public static function pendientesPorAliado(int $mes, int $anio): Collection
+    {
+        return DB::table('planos AS p')
+            ->join('aliados AS a', 'a.id', '=', 'p.aliado_id')
+            ->leftJoin('facturas AS f', function ($j) {
+                $j->on('f.id', '=', 'p.factura_id')->on('f.aliado_id', '=', 'p.aliado_id');
+            })
+            ->leftJoin('x1_solicitud_planos AS xp', 'xp.plano_id', '=', 'p.id')
+            ->whereIn('p.tipo_modalidad_id', TipoModalidad::IDS_EX1)
+            ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
+            ->where('p.num_dias', '>', 0)
+            ->whereNull('p.deleted_at')
+            ->whereNull('f.deleted_at')
+            ->where(fn ($w) => $w->whereNull('p.numero_planilla')->orWhere('p.numero_planilla', ''))
+            ->whereNull('xp.id')
+            ->tap(fn ($w) => Plano::filtrarPeriodoDePago($w, $mes, $anio))
+            ->groupBy('p.aliado_id', 'a.nombre')
+            ->orderBy('a.nombre')
+            ->selectRaw('p.aliado_id, a.nombre AS aliado, COUNT(*) AS personas')
+            ->get();
+    }
+
+    /**
+     * Aliados que tienen o tuvieron X1 (contratos), con su admon X1 actual,
+     * para la tabla de configuración de BryNex.
+     *
+     * @return Collection<int, object> aliado_id, aliado, admon, propia
+     */
+    public static function admonPorAliados(): Collection
+    {
+        $porAliado = json_decode((string) ConfiguracionBrynex::obtener(self::CONFIG_ADMON_ALIADOS, ''), true) ?: [];
+
+        return DB::table('contratos AS c')
+            ->join('aliados AS a', 'a.id', '=', 'c.aliado_id')
+            ->whereIn('c.tipo_modalidad_id', TipoModalidad::IDS_EX1)
+            ->groupBy('c.aliado_id', 'a.nombre')
+            ->orderBy('a.nombre')
+            ->selectRaw('c.aliado_id, a.nombre AS aliado')
+            ->get()
+            ->map(function ($a) use ($porAliado) {
+                $a->admon = self::admonPorPersona((int) $a->aliado_id);
+                $a->propia = array_key_exists((string) $a->aliado_id, $porAliado);
+                $a->es_brygar = self::esBrygar((int) $a->aliado_id);
+
+                return $a;
+            });
+    }
+
+    /** Guarda la admon X1 por defecto y la de cada aliado (vacío = la de defecto). */
+    public static function guardarAdmon(int $porDefecto, array $porAliado): void
+    {
+        $limpio = [];
+        foreach ($porAliado as $aliadoId => $valor) {
+            if ($valor === null || $valor === '' || self::esBrygar((int) $aliadoId)) {
+                continue;
+            }
+            $limpio[(string) (int) $aliadoId] = max(0, (int) $valor);
+        }
+
+        ConfiguracionBrynex::establecer(self::CONFIG_ADMON, max(0, $porDefecto));
+        ConfiguracionBrynex::establecer(self::CONFIG_ADMON_ALIADOS, json_encode($limpio));
     }
 
     /**
@@ -356,8 +439,9 @@ class X1PagosBrynex
      *
      * Se quedan donde están solo si ese plano es solo de ellas: un único
      * n_plano sin nadie más (ni gente normal ni X1 de otra solicitud). Si no,
-     * van al siguiente número libre del período, para que el plano normal del
-     * aliado se pueda liquidar y cerrar sin esperar a BryNex.
+     * van al siguiente plano libre del rango X1 (desde el P70, ver
+     * PLANO_X1_DESDE), para que el plano normal del aliado se pueda liquidar y
+     * cerrar sin esperar a BryNex.
      */
     private static function planoX1Destino(int $aliadoId, int $rsId, int $mes, int $anio, Collection $filas): int
     {
@@ -377,7 +461,26 @@ class X1PagosBrynex
             }
         }
 
-        return (int) $base()->max('p.n_plano') + 1;
+        return self::planoX1Libre($aliadoId, $rsId, $mes, $anio);
+    }
+
+    /** El siguiente plano libre del rango X1 (P70–P99) para la razón social y el período. */
+    public static function planoX1Libre(int $aliadoId, int $rsId, int $mes, int $anio): int
+    {
+        $max = (int) DB::table('planos AS p')
+            ->where('p.aliado_id', $aliadoId)
+            ->where('p.razon_social_id', $rsId)
+            ->whereBetween('p.n_plano', [self::PLANO_X1_DESDE, self::PLANO_X1_HASTA])
+            ->whereNull('p.deleted_at')
+            ->tap(fn ($w) => Plano::filtrarPeriodoDePago($w, $mes, $anio))
+            ->max('p.n_plano');
+
+        $libre = max(self::PLANO_X1_DESDE, $max + 1);
+        if ($libre > self::PLANO_X1_HASTA) {
+            throw new \RuntimeException('La razón social ya usó todos los planos X1 del período (P70–P99).');
+        }
+
+        return $libre;
     }
 
     /** Mueve los registros al plano X1 y sincroniza facturas.n_plano (como moverPlanoMasivo). */

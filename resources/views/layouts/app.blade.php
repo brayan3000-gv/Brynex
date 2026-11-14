@@ -1037,6 +1037,11 @@
                         <div class="pi">🔎</div> Consulta DIAN
                     </a>
                     @endcan
+                    @if(\App\Services\X1LiquidacionBrynex::puedeOperar(Auth::user()))
+                    <a href="{{ route('brynex.x1.index') }}" class="panel-item {{ request()->routeIs('brynex.x1*') ? 'activo' : '' }}">
+                        <div class="pi">🧾</div> Pagos X1
+                    </a>
+                    @endif
 
                     <div class="panel-sep"></div>
                     <div class="panel-header" style="margin-top:0.2rem">Operaciones</div>

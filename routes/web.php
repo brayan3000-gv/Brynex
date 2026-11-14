@@ -911,6 +911,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/validador-subtipo', [$bval, 'index'])->name('validador.index');
         Route::post('/validador-subtipo', [$bval, 'verificar'])->name('validador.verificar');
 
+        // Pagos X1: BryNex liquida y paga la Tipo E - X1 que le solicitan los
+        // aliados. Solo superadmin de BryNex (lo revisa el controlador).
+        $bx1 = \App\Http\Controllers\BrynexX1PagosController::class;
+        Route::get('/x1-pagos', [$bx1, 'index'])->name('x1.index');
+        Route::post('/x1-pagos/liquidar', [$bx1, 'liquidar'])->name('x1.liquidar');
+        Route::get('/x1-pagos/pagar', [$bx1, 'pagar'])->name('x1.pagar');
+        Route::post('/x1-pagos/confirmar', [$bx1, 'confirmar'])->name('x1.confirmar');
+        Route::post('/x1-pagos/cola-brygar', [$bx1, 'colaBrygar'])->name('x1.cola_brygar');
+        Route::post('/x1-pagos/admon', [$bx1, 'admon'])->name('x1.admon');
+
         // Conciliación de afiliados contra ARL Sura. Vive en BryNex y no en los
         // informes del aliado porque cruza una póliza contra los contratos de
         // todos los aliados que comparten ese NIT.

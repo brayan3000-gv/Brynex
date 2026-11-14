@@ -1572,8 +1572,28 @@ class PlanillaApiController extends Controller
     /** Operador que se sugiere para Tipo E - Extras. Ver operadorSugerido(). */
     private const OPERADOR_EXTRAS = 'SIMPLE';
 
+    /**
+     * Pagos X1 por BryNex (X1PagosBrynex): el superadmin de BryNex liquida y
+     * paga la X1 de otro aliado con la cuenta de Simple de BryNex. Lo enciende
+     * solo ese servicio, después de verificar quién es el usuario. Cambia dos
+     * cosas: la credencial (la de BryNex primero) y los operadores (los
+     * globales activos, aunque el aliado haya apagado Simple en su lista).
+     */
+    private bool $cuentaBrynex = false;
+
+    public function conCuentaBrynex(): static
+    {
+        $this->cuentaBrynex = true;
+
+        return $this;
+    }
+
     private function operadoresConApi(int $aliadoId)
     {
+        if ($this->cuentaBrynex) {
+            return $this->operadoresApiIndependiente();
+        }
+
         return OperadorPlanilla::paraAliado($aliadoId)
             ->whereIn('codigo', array_keys(SuaporteApiService::HOSTS))
             ->get();
@@ -1940,11 +1960,22 @@ class PlanillaApiController extends Controller
 
     private function credencial(int $aliadoId, int $operadorId, ?int $razonSocialId): ?OperadorCredencial
     {
+        // Pagos X1 por BryNex: manda la cuenta de BryNex aunque el aliado tenga
+        // la suya. Si BryNex no la tiene para esa empresa, sigue lo de siempre.
+        if ($this->cuentaBrynex && ($deCasa = $this->credencialDeCasa($aliadoId, $operadorId, $razonSocialId))) {
+            return $deCasa;
+        }
+
         $propia = OperadorCredencial::paraOperador($aliadoId, $operadorId, $razonSocialId)->first();
         if ($propia) {
             return $propia;
         }
 
+        return $this->credencialDeCasa($aliadoId, $operadorId, $razonSocialId);
+    }
+
+    private function credencialDeCasa(int $aliadoId, int $operadorId, ?int $razonSocialId): ?OperadorCredencial
+    {
         // Sin credencial propia, un usuario de BryNex usa la de su aliado, pero
         // solo para las empresas de BryNex (la misma razón social, por NIT, en
         // su aliado): la planilla es del aportante, y su usuario ya está
