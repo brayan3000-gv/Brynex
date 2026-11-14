@@ -76,11 +76,15 @@ class X1LiquidacionBrynex
         $filas = DB::table('x1_solicitud_planos AS xp')
             ->join('planos AS p', 'p.id', '=', 'xp.plano_id')
             ->join('razones_sociales AS rs', 'rs.id', '=', 'xp.razon_social_id')
+            ->leftJoin('facturas AS f', function ($j) {
+                $j->on('f.id', '=', 'p.factura_id')->on('f.aliado_id', '=', 'p.aliado_id');
+            })
             ->whereIn('xp.x1_solicitud_id', $solicitudes->pluck('id')->all())
             ->orderBy('rs.razon_social')->orderBy('xp.n_plano')->orderBy('p.primer_ape')
             ->get([
                 'xp.*', 'rs.razon_social', 'p.tipo_doc', 'p.no_identifi', 'p.primer_nombre', 'p.primer_ape',
-                'p.numero_planilla AS planilla_plano',
+                'p.num_dias', 'p.numero_planilla AS planilla_plano',
+                'f.v_eps', 'f.v_arl', 'f.v_caja',
             ]);
 
         $simple = self::operadorSimpleId();

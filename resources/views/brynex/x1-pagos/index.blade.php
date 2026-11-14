@@ -33,6 +33,11 @@
 .bx1-confirmar input, .bx1-confirmar select { border:1px solid #cbd5e1; border-radius:6px; padding:.2rem .35rem; font-size:.72rem; }
 .bx1-personas summary { cursor:pointer; color:#1d4ed8; font-size:.7rem; font-weight:600; }
 .bx1-personas ul { margin:.3rem 0 0; padding-left:1rem; font-size:.7rem; color:#334155; }
+.bx1-detalle { border-collapse:collapse; margin-top:.4rem; font-size:.7rem; min-width:100%; }
+.bx1-detalle th { font-size:.58rem; text-transform:uppercase; letter-spacing:.03em; color:#64748b; padding:.28rem .4rem; border-bottom:1px solid #e2e8f0; text-align:left; white-space:nowrap; }
+.bx1-detalle td { padding:.28rem .4rem; border-bottom:1px solid #f1f5f9; color:#334155; }
+.bx1-detalle .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.bx1-detalle tfoot td { font-weight:800; border-top:1px solid #e2e8f0; border-bottom:none; }
 </style>
 @endpush
 
@@ -150,12 +155,51 @@
                     <div class="bx1-meta">{{ $t->modalidad }}</div>
                     <details class="bx1-personas">
                         <summary>Personas</summary>
-                        <ul>
-                            @foreach($t->filas as $f)
-                            <li>{{ $f->tipo_doc }} {{ $f->no_identifi }} · {{ nombre_oracion(trim($f->primer_nombre.' '.$f->primer_ape)) }}
-                                · {{ $fmt($f->valor_ss) }} · <span class="bx1-chip {{ $f->estado }}">{{ $etiquetasEstado[$f->estado] ?? $f->estado }}</span></li>
-                            @endforeach
-                        </ul>
+                        <div style="overflow-x:auto">
+                        <table class="bx1-detalle">
+                            <thead>
+                                <tr>
+                                    <th>Persona</th>
+                                    <th class="num">Días</th>
+                                    <th class="num">EPS</th>
+                                    <th class="num">ARL</th>
+                                    <th class="num">Caja</th>
+                                    <th class="num" title="Un día de pensión: por si toca la doble planilla">Pensión (1 día)</th>
+                                    <th class="num">Admon BryNex</th>
+                                    <th class="num">Total</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($t->filas as $f)
+                                <tr>
+                                    <td style="white-space:nowrap">{{ $f->tipo_doc }} {{ $f->no_identifi }} · {{ nombre_oracion(trim($f->primer_nombre.' '.$f->primer_ape)) }}</td>
+                                    <td class="num">{{ $f->num_dias }}</td>
+                                    <td class="num">{{ $fmt($f->v_eps) }}</td>
+                                    <td class="num">{{ $fmt($f->v_arl) }}</td>
+                                    <td class="num">{{ $fmt($f->v_caja) }}</td>
+                                    <td class="num">{{ $fmt($f->valor_afp) }}</td>
+                                    <td class="num">{{ $fmt($s->admon_por_persona) }}</td>
+                                    <td class="num"><strong>{{ $fmt($f->valor_ss + $s->admon_por_persona) }}</strong></td>
+                                    <td><span class="bx1-chip {{ $f->estado }}">{{ $etiquetasEstado[$f->estado] ?? $f->estado }}</span></td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td>Total</td>
+                                    <td></td>
+                                    <td class="num">{{ $fmt($t->filas->sum('v_eps')) }}</td>
+                                    <td class="num">{{ $fmt($t->filas->sum('v_arl')) }}</td>
+                                    <td class="num">{{ $fmt($t->filas->sum('v_caja')) }}</td>
+                                    <td class="num">{{ $fmt($t->filas->sum('valor_afp')) }}</td>
+                                    <td class="num">{{ $fmt($s->admon_por_persona * $t->personas) }}</td>
+                                    <td class="num">{{ $fmt($t->valor_ss + $s->admon_por_persona * $t->personas) }}</td>
+                                    <td></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        </div>
                     </details>
                 </td>
                 <td>
