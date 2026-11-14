@@ -170,7 +170,7 @@ class X1PagosBrynex
                 'p.id', 'p.razon_social_id', 'p.n_plano', 'p.tipo_modalidad_id', 'p.tipo_doc',
                 'p.no_identifi', 'p.primer_nombre', 'p.primer_ape', 'p.num_dias',
                 'rs.razon_social', 'rs.nit AS rs_nit', 'rs.dia_habil AS rs_dia_habil',
-                'f.v_afp', 'f.total_ss',
+                'f.v_eps', 'f.v_arl', 'f.v_caja', 'f.v_afp', 'f.total_ss',
             ]);
 
         return $q->get()->map(fn ($r) => self::conDiaPension($r));

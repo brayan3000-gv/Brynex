@@ -20,6 +20,11 @@
 .x1-chip.plano { background:#e0f2fe; color:#0369a1; }
 .x1-personas summary { cursor:pointer; color:#1d4ed8; font-size:.72rem; font-weight:600; }
 .x1-personas ul { margin:.35rem 0 0; padding-left:1rem; font-size:.72rem; color:#334155; }
+.x1-detalle { border-collapse:collapse; margin-top:.4rem; font-size:.72rem; min-width:100%; }
+.x1-detalle th { font-size:.6rem; text-transform:uppercase; letter-spacing:.03em; color:#64748b; padding:.3rem .45rem; border-bottom:1px solid #e2e8f0; text-align:left; white-space:nowrap; }
+.x1-detalle td { padding:.3rem .45rem; border-bottom:1px solid #f1f5f9; color:#334155; }
+.x1-detalle .num { text-align:right; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.x1-detalle tfoot td { font-weight:800; border-top:1px solid #e2e8f0; border-bottom:none; }
 .x1-total-bar { display:flex; align-items:center; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-top:.9rem; padding:.75rem .9rem; background:#f0f9ff; border:1px solid #bae6fd; border-radius:10px; }
 .x1-total-bar .x1-total { font-size:1.15rem; font-weight:800; color:#0c4a6e; }
 .x1-btn { display:inline-flex; align-items:center; gap:.35rem; padding:.5rem 1.1rem; border-radius:8px; border:none; background:#1e40af; color:#fff; font-weight:700; font-size:.8rem; cursor:pointer; }
@@ -117,13 +122,53 @@
                         <strong>{{ $r['razon_social'] }}</strong>
                         <details class="x1-personas">
                             <summary>Ver personas</summary>
-                            <ul>
-                                @foreach($r['filas'] as $f)
-                                <li>{{ $f->tipo_doc }} {{ $f->no_identifi }} · {{ nombre_oracion(trim($f->primer_nombre.' '.$f->primer_ape)) }}
-                                    · {{ (int) $f->tipo_modalidad_id === \App\Models\TipoModalidad::ID_EX1_TP ? 'X1 TP14' : 'X1' }}
-                                    · {{ $f->num_dias }} d · {{ $fmt($f->valor_ss) }}</li>
-                                @endforeach
-                            </ul>
+                            <div style="overflow-x:auto">
+                            <table class="x1-detalle">
+                                <thead>
+                                    <tr>
+                                        <th>Persona</th>
+                                        <th class="num">Días</th>
+                                        <th class="num">EPS</th>
+                                        <th class="num">ARL</th>
+                                        <th class="num">Caja</th>
+                                        <th class="num" title="Un día de pensión: por si toca la doble planilla">Pensión (1 día)</th>
+                                        <th class="num">Admon BryNex</th>
+                                        <th class="num">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($r['filas'] as $f)
+                                    <tr>
+                                        <td style="white-space:nowrap">{{ $f->tipo_doc }} {{ $f->no_identifi }} · {{ nombre_oracion(trim($f->primer_nombre.' '.$f->primer_ape)) }}
+                                            @if((int) $f->tipo_modalidad_id === \App\Models\TipoModalidad::ID_EX1_TP)<span class="x1-chip plano">TP14</span>@endif
+                                        </td>
+                                        <td class="num">{{ $f->num_dias }}</td>
+                                        <td class="num">{{ $fmt($f->v_eps) }}</td>
+                                        <td class="num">{{ $fmt($f->v_arl) }}</td>
+                                        <td class="num">{{ $fmt($f->v_caja) }}</td>
+                                        <td class="num">{{ $fmt($f->valor_afp) }}</td>
+                                        <td class="num">{{ $fmt($admonPorPersona) }}</td>
+                                        <td class="num"><strong>{{ $fmt($f->valor_ss + $admonPorPersona) }}</strong></td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                                <tfoot>
+                                    <tr>
+                                        <td>Total</td>
+                                        <td></td>
+                                        <td class="num">{{ $fmt($r['filas']->sum('v_eps')) }}</td>
+                                        <td class="num">{{ $fmt($r['filas']->sum('v_arl')) }}</td>
+                                        <td class="num">{{ $fmt($r['filas']->sum('v_caja')) }}</td>
+                                        <td class="num">{{ $fmt($r['filas']->sum('valor_afp')) }}</td>
+                                        <td class="num">{{ $fmt($r['valor_admon']) }}</td>
+                                        <td class="num">{{ $fmt($r['valor_ss'] + $r['valor_admon']) }}</td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                            </div>
+                            @if($r['valor_mora'] > 0)
+                            <div style="font-size:.7rem;color:#b91c1c;margin-top:.25rem">Más {{ $fmt($r['valor_mora']) }} de mora estimada de la empresa.</div>
+                            @endif
                         </details>
                     </td>
                     <td class="x1-ocultable">
