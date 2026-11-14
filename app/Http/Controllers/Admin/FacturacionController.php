@@ -1177,15 +1177,15 @@ class FacturacionController extends Controller
                 // ── Cargo de planilla de Tipo E - X1 ───────────────────
                 // Lo llevan sus cuatro planes. No es del lote ni se escribe a
                 // mano: es del contrato, y sigue la misma regla que la seguridad
-                // social —en un mes de pura afiliación no se cobra, y si el mes
-                // va por días se prorratea igual—. Se suma a la bolsa "otros"
+                // social en un mes de pura afiliación no se cobra. Es el día de
+                // pensión y NO se prorratea. Se suma a la bolsa "otros"
                 // más abajo, junto con la del lote. Ver PilaCotizanteEX1.
                 if (\App\Services\PilaCotizanteEX1::llevaOtros($c->tipo_modalidad_id ?? null)
                     && (! $esAfiliacion || $esIndActPrimerMes)) {
-                    $otrosMesEx1 = \App\Services\PilaCotizanteEX1::otrosPlanilla();
-                    $otrosEx1PorContrato[$cId] = $diasCotizar >= 30
-                        ? $otrosMesEx1
-                        : (int) (ceil($otrosMesEx1 * max(0, $diasCotizar) / 30 / 100) * 100);
+                    // El día de pensión va completo aunque el mes vaya por días.
+                    $otrosEx1PorContrato[$cId] = \App\Services\PilaCotizanteEX1::otrosParaDias(
+                        $c->tipo_modalidad_id, (int) $diasCotizar
+                    );
                 }
 
                 $afiliacion = ($esAfiliacion || $esIndActPrimerMes) ? (int) ($c->costo_afiliacion ?? 0) : 0;
@@ -4952,17 +4952,12 @@ class FacturacionController extends Controller
         // El IVA NO se redondea a centena: es impuesto, va exacto como se factura.
         $rIva = fn ($v) => (int) round($v ?? 0);
 
-        // Cargo de planilla de Tipo E - X1: el cliente lo ve como seguridad
+        // Día de pensión de Tipo E - X1: el cliente lo ve como seguridad
         // social, así que la cuenta de cobro lo tiene que incluir en el total o
-        // mostraría menos de lo que se va a facturar. Sigue la misma regla que
-        // la SS: se prorratea por días. Ver PilaCotizanteEX1.
+        // mostraría menos de lo que se va a facturar. No se prorratea.
+        // Ver PilaCotizanteEX1.
         $otrosEx1 = function ($contrato, int $dias): int {
-            if (! \App\Services\PilaCotizanteEX1::llevaOtros($contrato->tipo_modalidad_id ?? null)) {
-                return 0;
-            }
-            $mes = \App\Services\PilaCotizanteEX1::otrosPlanilla();
-
-            return $dias >= 30 ? $mes : (int) (ceil($mes * max(0, $dias) / 30 / 100) * 100);
+            return \App\Services\PilaCotizanteEX1::otrosParaDias($contrato->tipo_modalidad_id ?? null, $dias);
         };
 
         // ── Pre-calcular mora estimada por contrato en lote ──

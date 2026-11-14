@@ -981,10 +981,22 @@
                 {{ $p->nombre_caja ? \Illuminate\Support\Str::limit($p->nombre_caja, 9, '…') : ($p->cod_caja ? \Illuminate\Support\Str::limit($p->cod_caja,9,'…') : '—') }}
             </td>
             <td data-order="{{ $p->v_caja ?? 0 }}">{{ number_format($p->v_caja ?? 0,0,',','.') }}</td>
+            @if($p->afp_dia_muestra ?? null)
+            {{-- Tipo E - X1: 1 día de pensión SOLO de muestra (no va en el plano ni en los totales).
+                 Es lo que costaría la doble planilla si Simple rechaza el subtipo 04. --}}
+            @php $tipDiaAfp = 'Tipo E - X1 va sin pensión. Si Simple no deja pagar el subtipo 04, se hace doble planilla (E de 1 día con pensión + corrección N) y ese día cuesta $'.number_format($p->afp_dia_muestra,0,',','.').'. Solo informativo: no está en el plano ni en el total.'; @endphp
+            <td title="{{ $tipDiaAfp }}" style="font-size:.72rem;white-space:nowrap;color:#7c3aed" data-order="">
+                <span style="background:#ede9fe;border-radius:3px;padding:.02rem .3rem;font-weight:600">1 día</span>
+            </td>
+            <td title="{{ $tipDiaAfp }}" data-order="0" style="color:#7c3aed;font-style:italic;white-space:nowrap">
+                {{ number_format($p->afp_dia_muestra,0,',','.') }}<sup style="font-size:.6rem">ref</sup>
+            </td>
+            @else
             <td title="{{ $p->nombre_afp ?? $p->cod_afp }}" style="font-size:.72rem;white-space:nowrap" data-order="{{ $p->nombre_afp ?? $p->cod_afp ?? '' }}">
                 {{ $p->nombre_afp ? \Illuminate\Support\Str::limit($p->nombre_afp, 9, '…') : ($p->cod_afp ?? '—') }}
             </td>
             <td data-order="{{ $p->v_afp ?? 0 }}">{{ number_format($p->v_afp ?? 0,0,',','.') }}</td>
+            @endif
             <td style="font-weight:700;color:var(--azul-vivo)" data-order="{{ $p->total_ss ?? 0 }}">
                 {{ number_format($p->total_ss ?? 0,0,',','.') }}
             </td>
@@ -1081,7 +1093,15 @@
             <td>{{ number_format($planos->sum(fn($p) => (int)(ceil(($p->v_caja??0)/100)*100)),0,',','.') }}</td>
             <td></td>
             {{-- AFP --}}
-            <td>{{ number_format($planos->sum(fn($p) => (int)(ceil(($p->v_afp??0)/100)*100)),0,',','.') }}</td>
+            @php $afpDiaMuestraTotal = $planos->sum(fn($p) => (int) ($p->afp_dia_muestra ?? 0)); @endphp
+            <td>{{ number_format($planos->sum(fn($p) => (int)(ceil(($p->v_afp??0)/100)*100)),0,',','.') }}
+                @if($afpDiaMuestraTotal > 0)
+                <div style="color:#7c3aed;font-style:italic;font-weight:400;font-size:.68rem;white-space:nowrap"
+                     title="Suma del día de pensión de muestra de Tipo E - X1 (doble planilla). No entra al total.">
+                    ref {{ number_format($afpDiaMuestraTotal,0,',','.') }}
+                </div>
+                @endif
+            </td>
             <td></td>{{-- TOTAL SS: se muestra en el resumen inferior --}}
             {{-- Empresas: Planilla + Empresa + Envío · Independientes: Operador + Pago + Envío --}}
             <td colspan="3"></td>

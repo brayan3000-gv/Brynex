@@ -235,10 +235,12 @@ class CotizadorService
         // a `total_ss` (`otros_admon` es la de administración, y no es esta).
         // Se prorratea por días igual que el resto de la SS en una modalidad
         // normal; en tiempo parcial va completo, como sus demás aportes.
+        // Desde nov-2026 es el día de pensión, fijo: no se prorratea.
         $otros = 0;
         if (PilaCotizanteEX1::llevaOtros($p['tipo_modalidad_id'] ?? null)) {
-            $otrosMes = PilaCotizanteEX1::otrosPlanilla();
-            $otros = $esTP ? $otrosMes : (int) $r($otrosMes * $dias / 30);
+            $otros = $esTP
+                ? PilaCotizanteEX1::otrosPlanilla()
+                : PilaCotizanteEX1::otrosParaDias($p['tipo_modalidad_id'], (int) $dias);
             $ss += $otros;
         }
 

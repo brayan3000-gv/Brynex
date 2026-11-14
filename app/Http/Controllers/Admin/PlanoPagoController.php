@@ -263,7 +263,10 @@ class PlanoPagoController extends Controller
 
         // ── Calcular edad y nombre completo ─────────────────────────────
         $hoy = Carbon::today();
-        $planos = $planos->map(function ($row) use ($hoy) {
+        $diaPensionX1 = $planos->contains(fn ($r) => \App\Services\PilaCotizanteEX1::llevaOtros($r->tipo_modalidad_id))
+            ? \App\Services\PilaCotizanteEX1::diaPension()
+            : null;
+        $planos = $planos->map(function ($row) use ($hoy, $diaPensionX1) {
             $row->nombre_completo = trim(
                 $row->primer_nombre . ' ' . $row->segundo_nombre . ' ' .
                 $row->primer_ape   . ' ' . $row->segundo_ape
@@ -271,6 +274,15 @@ class PlanoPagoController extends Controller
             $row->edad = $row->fecha_nacimiento
                 ? $hoy->diffInYears(sqldate($row->fecha_nacimiento))
                 : null;
+            // Tipo E - X1 va sin pensión (subtipo 04). Si Simple deja de
+            // aceptar ese subtipo, el respaldo es la doble planilla de la E-1
+            // (planilla E de 1 día con pensión + corrección N); ese día se le
+            // factura al cliente (facturas.otros) y aquí se muestra para que el
+            // aliado lo vea. SOLO se muestra: no entra al TXT ni a los totales.
+            $row->afp_dia_muestra = null;
+            if ($diaPensionX1 && \App\Services\PilaCotizanteEX1::llevaOtros($row->tipo_modalidad_id) && (int) ($row->v_afp ?? 0) === 0) {
+                $row->afp_dia_muestra = $diaPensionX1;
+            }
             return $row;
         });
 

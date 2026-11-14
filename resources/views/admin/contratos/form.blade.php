@@ -1211,14 +1211,19 @@
         </span>
         <strong x-text="fmt(result.arl)">$0</strong>
       </div>
-      {{-- PENSIÓN --}}
+      {{-- PENSIÓN. En Tipo E - X1 `result.otros` es el día de pensión (fijo, no
+           se prorratea): la planilla va sin pensión, pero se cobra por si toca
+           la doble planilla. Ya viene sumado dentro de S. Social. Ver PilaCotizanteEX1. --}}
       <div class="cr" x-show="!esSeguros">
         <span style="color:#c4b5fd;">PENSIÓN <span class="cp2" x-text="'('+pctPen+'%)'"></span>
           <template x-if="esTiempoParcial && diasAfp">
             <span style="color:#f59e0b;font-size:.58rem;font-weight:700;" x-text="' · '+diasAfp+'d'"></span>
           </template>
+          <template x-if="result.otros > 0">
+            <span style="color:#f59e0b;font-size:.58rem;font-weight:700;"> · 1 día</span>
+          </template>
         </span>
-        <strong x-text="fmt(result.pen)">$0</strong>
+        <strong x-text="fmt(result.pen + result.otros)">$0</strong>
       </div>
       {{-- CAJA --}}
       <div class="cr" x-show="!esSeguros">
@@ -1228,13 +1233,6 @@
           </template>
         </span>
         <strong x-text="fmt(result.caja)">$0</strong>
-      </div>
-      {{-- OTROS: cargo de planilla propio de Tipo E - X1. Va ARRIBA de la línea
-           de S. Social porque está sumado dentro de ella: el cliente lo ve como
-           seguridad social, no como administración. Ver PilaCotizanteEX1. --}}
-      <div class="cr" x-show="!esSeguros && result.otros > 0">
-        <span style="color:#fdba74;">OTROS <span class="cp2">(planilla)</span></span>
-        <strong x-text="fmt(result.otros)">$0</strong>
       </div>
       {{-- S. Social --}}
       <div class="cr" x-show="!esSeguros" style="border-bottom:2px solid rgba(255,255,255,0.18);padding-bottom:0.35rem;margin-bottom:0.1rem;font-weight:700;">
@@ -4874,8 +4872,8 @@ function cotizador() {
                     pen:    d.pen    ?? 0,
                     caja:   d.caja   ?? 0,
                     ss:     d.ss     ?? 0,
-                    // Cargo propio de Tipo E - X1, ya sumado dentro de ss. Va
-                    // aparte para poder pintarlo como una línea más.
+                    // Día de pensión de Tipo E - X1, ya sumado dentro de ss. Va
+                    // aparte para pintarlo en la línea de PENSIÓN.
                     otros:  d.otros  ?? 0,
                     seguro: d.seguro ?? 0,
                     admon:  d.admon  ?? 0,
@@ -4952,7 +4950,7 @@ if (typeof MF !== 'undefined' && FC_CONTRATO_ID) {
         fechaIngresoDia:   FC_FECHA_ING_DIA,
         esIndependiente:   FC_ES_INDEP,
         tipoModalidadId:   FC_TIPO_MODALIDAD_ID,
-        // Piso de "Otros planilla": Tipo E - X1 cobra un cargo propio que el
+        // Piso de "Otros planilla": Tipo E - X1 cobra el día de pensión, que el
         // usuario puede subir pero no bajar. Ver PilaCotizanteEX1.
         otrosMin:          {{ (int) (\App\Services\PilaCotizanteEX1::llevaOtros($contrato->tipo_modalidad_id ?? null) ? \App\Services\PilaCotizanteEX1::otrosPlanilla() : 0) }},
         pagaMesActual:     FC_PAGA_MES_ACTUAL,

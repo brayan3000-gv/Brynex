@@ -79,54 +79,66 @@ class PilaCotizanteEX1
     /** Código PILA del único operador que liquida esta modalidad. */
     public const OPERADOR_PILA = '88';
 
-    /** Clave de configuración del cargo de planilla propio de la modalidad. */
+    /**
+     * Clave de configuración del antiguo cargo de planilla ($9.500 prorrateado).
+     * Ya no se lee: desde nov-2026 el cargo es el día de pensión. Se deja la
+     * constante para que quien encuentre la fila en configuración sepa qué era.
+     */
     public const CONFIG_OTROS = 'otros_planilla_ex1';
 
-    /** Valor por defecto del cargo, si nadie lo ha configurado. */
-    public const OTROS_POR_DEFECTO = 9500;
-
     /**
-     * Cargo de planilla que llevan TODOS los planes de Tipo E - X1.
+     * Cargo que llevan TODOS los planes de Tipo E - X1: **un día de pensión**.
      *
-     * El cliente lo ve como seguridad social —va dentro del total de S. Social
-     * del cotizador, no en la administración— y al facturar aterriza en
-     * `facturas.otros`, que es la bolsa que suma al total junto a `total_ss`.
-     * `otros_admon` es la otra, la de administración, y no es esta.
+     * La X1 liquida sin pensión (subtipo 04). Si Simple deja de aceptar ese
+     * subtipo, el respaldo es la doble planilla de la E-1 —planilla E de 1 día
+     * con pensión + corrección N— y ese día alguien lo tiene que pagar. Por eso
+     * se le cobra al cliente desde ya, completo, aunque el mes vaya por días.
      *
-     * Ojo: NO es el `otros` del tarifario (`afiliacion_arl_modalidad.otros`).
-     * Ese es un reparto de la afiliación —público menos retiro, otros y
-     * asesor— y meterle este valor descuadraría esa cuenta.
+     * Es IBC de un día sobre el salario mínimo × 16 %, redondeo PILA: la misma
+     * cuenta de PilaCotizanteE1 ($9.400 con el mínimo de 2026). Fijo: no se
+     * prorratea ni depende del salario del contrato.
      *
-     * Vive en configuración para poder cambiarlo sin desplegar.
+     * El plano y el TXT NO cambian: la planilla que se liquida sigue sin
+     * pensión. Al facturar aterriza en `facturas.otros` (la bolsa que suma al
+     * total junto a `total_ss`), no en `v_afp`, justamente para que el plano y
+     * los totales de la planilla sigan diciendo lo que se le paga al operador.
+     * En pantalla se pinta como «Pensión (1 día)».
+     *
+     * Ojo: NO es el `otros` del tarifario (`afiliacion_arl_modalidad.otros`) ni
+     * `otros_admon`, que es administración.
      */
     public static function otrosPlanilla(): int
     {
-        return (int) \App\Models\ConfiguracionBrynex::obtener(
-            self::CONFIG_OTROS, self::OTROS_POR_DEFECTO
-        );
+        return self::diaPension();
     }
 
-    /** ¿Esta modalidad lleva el cargo de planilla? Las dos caras de X1. */
+    /** Un día de pensión sobre el salario mínimo vigente (16 %, redondeo PILA). */
+    public static function diaPension(): int
+    {
+        $smmlv = (int) \App\Models\ConfiguracionBrynex::salarioMinimo();
+
+        return PilaCotizanteCalculator::roundPila(PilaCotizanteE1::ibcUnDia($smmlv) * 0.16);
+    }
+
+    /** ¿Esta modalidad lleva el día de pensión? Las dos caras de X1. */
     public static function llevaOtros(?int $tipoModalidadId): bool
     {
         return in_array((int) $tipoModalidadId, TipoModalidad::IDS_EX1, true);
     }
 
     /**
-     * El cargo que lleva un mes de `$dias` cotizados, con la regla de
-     * FacturacionController::facturar(): completo desde 30 días y si no
-     * prorrateado a la centena de arriba. Lo usan los cálculos que estiman el
-     * cobro antes de facturar (cobros, WhatsApp, bot, visita), que sin él
-     * anunciaban $9.500 menos de lo que después se facturaba.
+     * El cargo de un mes de `$dias` cotizados: el día de pensión completo si se
+     * cotiza al menos un día, cero si no. No se prorratea («siempre $9.400»).
+     * Lo usan facturar() y los cálculos que estiman el cobro antes de facturar
+     * (cobros, WhatsApp, bot, visita, cotizador).
      */
     public static function otrosParaDias(?int $tipoModalidadId, int $dias): int
     {
-        if (! self::llevaOtros($tipoModalidadId)) {
+        if (! self::llevaOtros($tipoModalidadId) || $dias <= 0) {
             return 0;
         }
-        $mes = self::otrosPlanilla();
 
-        return $dias >= 30 ? $mes : (int) (ceil($mes * max(0, $dias) / 30 / 100) * 100);
+        return self::otrosPlanilla();
     }
 
     /**
