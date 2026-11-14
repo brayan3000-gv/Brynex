@@ -420,7 +420,7 @@ class X1LiquidacionBrynex
     /** Usuario con el que el vigía opera los pagos X1 (superadmin de BryNex). */
     public const CONFIG_USUARIO = 'x1_usuario_vigia';
 
-    private static function comoUsuarioBrynex(callable $fn)
+    public static function comoUsuarioBrynex(callable $fn)
     {
         $antes = Auth::user();
         if (! self::puedeOperar($antes)) {

@@ -566,6 +566,19 @@ class PlanillaVigilarSubtipo4 extends Command
             $this->tandasDesdePlanos($mes, $anio)
         );
 
+        // Planilla conjunta por razón social (X1PlanillaConjunta): una por
+        // empresa con la gente de todos los aliados. Va primero, y las tandas
+        // sueltas de las empresas que cubre se quitan: liquidarlas además
+        // duplicaría a esas personas en Simple.
+        if (\App\Services\X1PlanillaConjunta::vigiaConjunta()) {
+            $conjuntas = \App\Services\X1PlanillaConjunta::tandasParaVigia($mes, $anio);
+            $cubre = array_flip($conjuntas['cubre']);
+            $todas = array_merge(
+                $conjuntas['tandas'],
+                array_values(array_filter($todas, fn ($t) => ! isset($cubre[((int) $t['aliado']).'|'.((int) $t['rs'])])))
+            );
+        }
+
         $vistas = [];
         $tandas = [];
         $this->sinPagar = [];
@@ -584,6 +597,8 @@ class PlanillaVigilarSubtipo4 extends Command
                 'n_plano' => (int) ($t['n_plano'] ?? 1),
                 'mods' => $mods,
                 'brynex' => (bool) ($t['brynex'] ?? false),
+                'conjunta' => (bool) ($t['conjunta'] ?? false),
+                'nit' => (string) ($t['nit'] ?? ''),
             ];
 
             $llave = implode('|', [$t['aliado'], $t['rs'], $t['mes'], $t['anio'], $t['n_plano'], implode(',', $mods)]);
@@ -828,6 +843,22 @@ class PlanillaVigilarSubtipo4 extends Command
     private function intentarLiquidar(array $t, string $etiqueta): array
     {
         try {
+            // Planilla conjunta por razón social: una sola planilla con la
+            // gente de todos los aliados. Ver X1PlanillaConjunta.
+            if (! empty($t['conjunta'])) {
+                $r = \App\Services\X1PlanillaConjunta::paraVigia(
+                    (string) $t['nit'], (int) ($t['mods'][0] ?? 0), (int) $t['mes'], (int) $t['anio']
+                );
+
+                if ($r[0] === 'liquidada') {
+                    Log::warning('vigia-subtipo4: liquidó la planilla conjunta en la ventana', [
+                        'tanda' => $etiqueta, 'planilla' => $r[2] ?? null,
+                    ]);
+                }
+
+                return $r;
+            }
+
             // Pagos X1 por BryNex: liquida con la cuenta de BryNex y deja el
             // estado de cada persona en su solicitud. Ver X1LiquidacionBrynex.
             if (! empty($t['brynex'])) {

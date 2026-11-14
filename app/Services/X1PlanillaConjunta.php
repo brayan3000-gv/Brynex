@@ -117,7 +117,7 @@ class X1PlanillaConjunta
      * @return array{ok: bool, estado: string, mensaje: string, numero_planilla?: string,
      *               valor_total?: float|null, url_pago?: string|null, errores?: array}
      */
-    public static function liquidar(string $nit, int $tipoModalidadId, int $mes, int $anio): array
+    public static function liquidar(string $nit, int $tipoModalidadId, int $mes, int $anio, bool $moverRebotados = true): array
     {
         if (! X1LiquidacionBrynex::puedeOperar(Auth::user())) {
             return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Solo el superadmin de BryNex liquida las X1.'];
@@ -185,6 +185,13 @@ class X1PlanillaConjunta
             if ($rebote['solo_subtipo'] && $rebote['documentos']) {
                 $rebotadas = $filas->filter(fn ($f) => in_array(X1LiquidacionBrynex::doc($f->no_identifi), $rebote['documentos'], true));
 
+                // Vigía: si alguien rebota dentro de la ventana es que se cerró;
+                // no se mueve a nadie (solo los pasearía de plano en plano).
+                if (! $moverRebotados) {
+                    return ['ok' => false, 'estado' => 'esperando',
+                        'mensaje' => 'Simple rechazó el subtipo 4 (eo.val.2.655) a '.$rebotadas->count().' de '.$filas->count().': la ventana se cerró.'];
+                }
+
                 foreach ($rebotadas->groupBy('aliado_id') as $aliadoId => $deAliado) {
                     foreach ($deAliado->groupBy('razon_social_id') as $rsId => $deRs) {
                         $destino = X1PagosBrynex::planoX1Libre((int) $aliadoId, (int) $rsId, $mes, $anio);
@@ -239,6 +246,88 @@ class X1PlanillaConjunta
                 .(string) ($data['message'] ?? 'Simple no liquidó la planilla.'),
             'errores' => $errores,
         ];
+    }
+
+    // ── Vigía del subtipo 4 ────────────────────────────────────────────────
+
+    /** ¿El vigía liquida por razón social (una planilla por empresa)? */
+    public const CONFIG_VIGIA = 'vigia_subtipo4_conjunta';
+
+    public static function vigiaConjunta(): bool
+    {
+        return (bool) (int) \App\Models\ConfiguracionBrynex::obtener(self::CONFIG_VIGIA, 1);
+    }
+
+    /**
+     * Tandas conjuntas para el vigía: una por empresa (NIT) y modalidad con
+     * gente pendiente o con su planilla conjunta sin pagar. Van a nombre de
+     * Brygar en el plano conjunto, así que el vigía reconoce la planilla ya
+     * liquidada (y le pide enlace nuevo) con su búsqueda de siempre.
+     *
+     * `cubre` es la lista de [aliado_id, razon_social_id] que la conjunta
+     * reemplaza: el vigía no debe liquidarlas además por su tanda suelta.
+     *
+     * @return array{tandas: array<int, array<string, mixed>>, cubre: array<int, string>}
+     */
+    public static function tandasParaVigia(int $mes, int $anio): array
+    {
+        $tandas = [];
+        $cubre = [];
+
+        foreach (self::grupos($mes, $anio) as $g) {
+            if (! $g->rs_brygar) {
+                continue;
+            }
+
+            foreach ($g->filas as $f) {
+                $cubre[] = $f->aliado_id.'|'.$f->razon_social_id;
+            }
+            // Las X1 de Brygar de esa empresa que aún no estaban en la cola
+            // también las mete la conjunta (colaBrygar).
+            $cubre[] = X1PagosBrynex::ALIADO_BRYGAR.'|'.$g->rs_brygar;
+
+            if ($g->para_liquidar === 0 && ! $g->por_pagar) {
+                continue;
+            }
+
+            $nAliados = $g->aliados->count();
+            $tandas[] = [
+                'etiqueta' => sprintf('%s · %s · conjunta (%d %s de %d %s)',
+                    mb_strimwidth($g->razon_social, 0, 34, '…'), $g->modalidad,
+                    $g->para_liquidar ?: $g->personas, ($g->para_liquidar ?: $g->personas) === 1 ? 'persona' : 'personas',
+                    $nAliados, $nAliados === 1 ? 'aliado' : 'aliados'),
+                'aliado' => X1PagosBrynex::ALIADO_BRYGAR,
+                'rs' => (int) $g->rs_brygar,
+                'mes' => $mes,
+                'anio' => $anio,
+                'n_plano' => X1PagosBrynex::PLANO_CONJUNTO,
+                'mods' => [(int) $g->tipo_modalidad_id],
+                'brynex' => true,
+                'conjunta' => true,
+                'nit' => $g->nit,
+            ];
+        }
+
+        return ['tandas' => $tandas, 'cubre' => array_values(array_unique($cubre))];
+    }
+
+    /**
+     * El vigía liquida una conjunta: entra como el usuario de BryNex de los
+     * comandos y no mueve a nadie si rebota. Devuelve lo que entiende
+     * PlanillaVigilarSubtipo4::intentarLiquidar: [estado, texto, planilla, valor].
+     */
+    public static function paraVigia(string $nit, int $tipoModalidadId, int $mes, int $anio): array
+    {
+        return X1LiquidacionBrynex::comoUsuarioBrynex(function () use ($nit, $tipoModalidadId, $mes, $anio) {
+            $r = self::liquidar($nit, $tipoModalidadId, $mes, $anio, false);
+
+            return match ($r['estado']) {
+                'liquidada' => ['liquidada', 'planilla '.$r['numero_planilla'], (string) $r['numero_planilla'], $r['valor_total'] ?? null],
+                'ya' => ['ya', $r['mensaje']],
+                'transitorio' => ['transitorio', $r['mensaje']],
+                default => ['rechazada', $r['mensaje']],
+            };
+        });
     }
 
     /** Enlace de pago fresco de la planilla conjunta (cuenta de BryNex). */
