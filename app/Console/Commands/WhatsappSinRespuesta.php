@@ -214,32 +214,56 @@ class WhatsappSinRespuesta extends Command
         return $minutos < 60 ? "{$minutos}min" : intdiv($minutos, 60).'h';
     }
 
-    /** Una sola tira: la plantilla aplana los saltos de línea. */
+    /**
+     * Una persona por renglón, con un icono que dice qué tan urgente es.
+     *
+     * Con la ventana abierta el aviso sale como texto libre y los saltos se respetan. Si
+     * toca plantilla, Meta no admite saltos en las variables: AlertaOperativaService los
+     * aplana a " · ", y el mensaje sigue leyéndose bien.
+     */
     private function resumen(array $esperando): string
     {
         $total = count($esperando);
         $urgentes = count(array_filter($esperando, fn ($e) => $e['urgente']));
         $cabeza = ($total === 1 ? '1 persona espera respuesta' : "{$total} personas esperan respuesta")
-            .($urgentes > 0 ? " ({$urgentes} con la ventana por vencer)" : '').': ';
+            .($urgentes > 0 ? " (⏳ {$urgentes} con la ventana por vencer)" : '');
 
         $partes = [];
         $largo = mb_strlen($cabeza);
-        foreach ($esperando as $i => $e) {
-            $item = ($i + 1).') '.($e['asesor'] ? 'ASESOR ' : '').($e['urgente'] ? '⏳ ' : '')
-                .$e['nombre'].' '.$e['telefono'].' '.$this->hace($e['desde'])
-                .' «'.mb_substr($e['dijo'], 0, 38).'»'
-                .($e['ventana'] === 'vencida' ? ' [ventana vencida]' : ($e['urgente'] ? ' [vence en '.$e['ventana'].']' : ''));
+        foreach ($esperando as $e) {
+            $item = $this->icono($e).' '.($e['asesor'] ? 'ASESOR ' : '').'*'.$this->sinFormato($e['nombre']).'*'
+                .' · +'.$e['telefono'].' · hace '.$this->hace($e['desde'])
+                .($e['ventana'] === 'vencida' ? ' · ventana vencida' : ($e['urgente'] ? ' · vence en '.$e['ventana'] : ''))
+                ."\n      «".trim($this->sinFormato(mb_substr($e['dijo'], 0, 38))).'»';
             // Se reserva sitio para el "y N más" del final.
-            if ($largo + mb_strlen($item) + 20 > self::MAX_CARACTERES) {
+            if ($largo + mb_strlen($item) + 30 > self::MAX_CARACTERES) {
                 break;
             }
             $partes[] = $item;
-            $largo += mb_strlen($item) + 1;
+            $largo += mb_strlen($item) + 2;
         }
 
         $faltan = $total - count($partes);
 
-        return $cabeza.implode(' ', $partes).($faltan > 0 ? " y {$faltan} más en el chat." : '');
+        return $cabeza."\n\n".implode("\n\n", $partes).($faltan > 0 ? "\n\n➕ y {$faltan} más en el chat." : '');
+    }
+
+    /** El mismo orden de la lista: asesor, ventana por vencer, pasado a persona, resto, vencida. */
+    private function icono(array $e): string
+    {
+        return match (true) {
+            $e['asesor'] => '🤝',
+            $e['urgente'] => '⏳',
+            $e['ventana'] === 'vencida' => '🔴',
+            $e['pendiente'] => '🙋',
+            default => '💬',
+        };
+    }
+
+    /** Un * o _ en el nombre o en el mensaje del cliente rompería las negritas de WhatsApp. */
+    private function sinFormato(string $texto): string
+    {
+        return str_replace(['*', '_', '~', '`'], '', $texto);
     }
 
     private function mostrar(array $esperando): void
