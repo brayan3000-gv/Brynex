@@ -882,8 +882,14 @@
 {{-- ── Tipo E - X1 que BryNex sacó de este plano ─────────────────────── --}}
 @if(($x1Movidas ?? collect())->isNotEmpty())
 <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:.5rem .8rem;margin:0 0 .6rem;font-size:.76rem;color:#4c1d95">
+    @php
+        $x1Destinos = $x1Movidas->pluck('n_plano')->map(fn ($n) => (int) $n)->unique()->sort()->values();
+        $x1Enlaces = $x1Destinos->map(fn ($n) => '<a href="'.e(route('admin.planos.index', ['anio' => $anio, 'mes' => $mes, 'razon_social_id' => $rsSeleccionada->id, 'n_plano' => $n, 'estado_pago' => 'todas'])).'" style="color:#6d28d9">P'.$n.'</a>');
+        $x1Lista = $x1Enlaces->count() > 1 ? $x1Enlaces->slice(0, -1)->implode(', ').' y '.$x1Enlaces->last() : $x1Enlaces->first();
+    @endphp
     <strong>🧾 {{ $x1Movidas->count() }} {{ $x1Movidas->count() === 1 ? 'persona' : 'personas' }} de Tipo E - X1
-        {{ $nPlanoFiltro ? 'salieron de este plano' : 'están en un plano X1' }}.</strong>
+        {{ $nPlanoFiltro ? ($x1Movidas->count() === 1 ? 'salió de este plano y quedó' : 'salieron de este plano y quedaron') : ($x1Movidas->count() === 1 ? 'está' : 'están') }}
+        en {{ $x1Destinos->count() > 1 ? 'los' : 'el' }} {!! $x1Lista !!}.</strong>
     Siguen en la solicitud.
     <a href="{{ route('admin.planos.x1.index', ['mes' => $mes, 'anio' => $anio]) }}" style="color:#6d28d9;margin-left:.35rem">Ver todas mis solicitudes X1 →</a>
 </div>
