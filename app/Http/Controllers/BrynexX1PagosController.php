@@ -73,12 +73,32 @@ class BrynexX1PagosController extends Controller
         $v = $this->tanda($request, [
             'numero_planilla' => 'required|string|max:30',
             'estado' => 'required|in:pagada,doble_planilla,blindem',
+            'valor' => 'required|integer|min:1',
+            'comprobante' => 'nullable|string|max:60',
+            'fecha_pago' => 'nullable|date',
+            'soporte' => 'nullable|file|mimes:jpg,jpeg,png,webp,heic,pdf|max:10240',
+            'observacion' => 'nullable|string|max:500',
+        ], [
+            'valor.required' => 'Escriba el valor pagado.',
+            'soporte.mimes' => 'El comprobante tiene que ser una foto (JPG, PNG, WEBP) o un PDF.',
         ]);
 
         return response()->json(X1LiquidacionBrynex::confirmar(
             $v['aliado_id'], $v['razon_social_id'], $v['n_plano'], $v['tipo_modalidad_id'],
-            (string) $v['numero_planilla'], (string) $v['estado']
+            (string) $v['numero_planilla'], (string) $v['estado'],
+            (int) $v['valor'], $v['comprobante'] ?? null, $v['fecha_pago'] ?? null,
+            $request->file('soporte'), $v['observacion'] ?? null
         ));
+    }
+
+    /** El comprobante de un pago X1 (foto o PDF), para la contabilidad. */
+    public function soportePago(int $id)
+    {
+        $pago = \Illuminate\Support\Facades\DB::table('x1_pagos')->where('id', $id)->first();
+        abort_unless($pago && $pago->soporte_path
+            && \Illuminate\Support\Facades\Storage::disk('local')->exists($pago->soporte_path), 404);
+
+        return \Illuminate\Support\Facades\Storage::disk('local')->response($pago->soporte_path, $pago->soporte_nombre ?: null);
     }
 
     /** Brygar no consigna: sus X1 del período se pasan a la cola sin foto. */
@@ -114,7 +134,7 @@ class BrynexX1PagosController extends Controller
         return back()->with('success', 'Administración X1 guardada.');
     }
 
-    private function tanda(Request $request, array $extra = []): array
+    private function tanda(Request $request, array $extra = [], array $mensajes = []): array
     {
         $v = $request->validate(array_merge([
             'aliado_id' => 'required|integer',
@@ -123,7 +143,7 @@ class BrynexX1PagosController extends Controller
             'tipo_modalidad_id' => 'required|integer',
             'mes' => 'required|integer|between:1,12',
             'anio' => 'required|integer|between:2020,2100',
-        ], $extra));
+        ], $extra), $mensajes);
 
         foreach (['aliado_id', 'razon_social_id', 'n_plano', 'tipo_modalidad_id', 'mes', 'anio'] as $k) {
             $v[$k] = (int) $v[$k];

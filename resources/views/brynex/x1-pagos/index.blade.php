@@ -148,8 +148,9 @@
                 $datosTanda = ['aliado_id' => $t->aliado_id, 'razon_social_id' => $t->razon_social_id, 'n_plano' => $t->n_plano,
                                'tipo_modalidad_id' => $t->tipo_modalidad_id, 'mes' => $mes, 'anio' => $anio];
                 $numeroRegistro = $t->registro->numero_planilla ?? null;
+                $valorRegistro = $t->registro?->valor_total ? (int) round($t->registro->valor_total) : null;
             @endphp
-            <tr x-data="tandaX1(@js($datosTanda), @js($numeroRegistro))">
+            <tr x-data="tandaX1(@js($datosTanda), @js($numeroRegistro), @js($valorRegistro))">
                 <td>
                     <strong>{{ \Illuminate\Support\Str::limit($t->razon_social, 34, '…') }}</strong>
                     <div class="bx1-meta">{{ $t->modalidad }}</div>
@@ -221,6 +222,21 @@
                     @else
                         —
                     @endif
+                    @if($t->otra_planilla)
+                    <div style="font-family:sans-serif;margin-top:.3rem;background:#fff7ed;color:#9a3412;border-radius:6px;padding:.25rem .35rem;font-size:.66rem;line-height:1.35"
+                         title="Liquidada con otro filtro (no por BryNex). Liquidar aquí está frenado para no duplicar.">
+                        ⚠ Ya tiene la {{ $t->otra_planilla->numero_planilla }}
+                        @if($t->otra_planilla->valor_total)({{ $fmt($t->otra_planilla->valor_total) }})@endif
+                        del {{ \Carbon\Carbon::parse($t->otra_planilla->created_at)->format('d/m H:i') }}, no liquidada por BryNex. Revise en Simple si se pagó.
+                    </div>
+                    @endif
+                    @foreach($t->pagos as $pg)
+                    <div style="font-family:sans-serif;margin-top:.3rem;background:#f0fdf4;color:#166534;border-radius:6px;padding:.25rem .35rem;font-size:.66rem;line-height:1.35">
+                        ✅ Pagada {{ \Carbon\Carbon::parse($pg->fecha_pago)->format('d/m') }} · {{ $fmt($pg->valor) }}
+                        @if($pg->comprobante)<br>Comprobante {{ $pg->comprobante }}@endif
+                        @if($pg->soporte_path)<br><a href="{{ route('brynex.x1.soporte_pago', $pg->id) }}" target="_blank">Ver comprobante</a>@endif
+                    </div>
+                    @endforeach
                 </td>
                 <td>
                     @if($t->abierta)
@@ -234,15 +250,34 @@
                         </template>
                         <button type="button" class="bx1-btn suave" @click="abrirConfirmar = !abrirConfirmar">Confirmar</button>
                     </div>
-                    <div class="bx1-confirmar" x-show="abrirConfirmar" x-cloak>
-                        <input type="text" x-model="numeroConfirmar" placeholder="N° planilla real" style="width:120px">
-                        <select x-model="estadoConfirmar">
-                            <option value="pagada">Pagada (Simple)</option>
-                            <option value="doble_planilla">Doble planilla</option>
-                            <option value="blindem">Blindem</option>
-                        </select>
-                        <button type="button" class="bx1-btn verde" @click="confirmar()" :disabled="ocupado">
-                            <span x-text="ocupado === 'confirmar' ? 'Guardando…' : 'Guardar'">Guardar</span>
+                    <div class="bx1-confirmar" x-show="abrirConfirmar" x-cloak style="flex-direction:column;align-items:stretch;max-width:320px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:.5rem">
+                        <label class="bx1-meta">N° de planilla
+                            <input type="text" x-model="numeroConfirmar" placeholder="Ej: 1086803618" style="width:100%">
+                        </label>
+                        <label class="bx1-meta">Cómo se pagó
+                            <select x-model="estadoConfirmar" style="width:100%">
+                                <option value="pagada">Pagada (Simple)</option>
+                                <option value="doble_planilla">Doble planilla</option>
+                                <option value="blindem">Blindem</option>
+                            </select>
+                        </label>
+                        <label class="bx1-meta">Valor pagado
+                            <input type="number" min="1" x-model="valorConfirmar" placeholder="Total que salió del banco" style="width:100%">
+                        </label>
+                        <label class="bx1-meta">N° de comprobante (PSE / CUS)
+                            <input type="text" x-model="comprobanteConfirmar" maxlength="60" style="width:100%">
+                        </label>
+                        <label class="bx1-meta">Fecha de pago
+                            <input type="date" x-model="fechaConfirmar" style="width:100%">
+                        </label>
+                        <label class="bx1-meta">Foto o PDF del comprobante
+                            <input type="file" accept="image/*,application/pdf" x-ref="soporte" style="width:100%">
+                        </label>
+                        <label class="bx1-meta">Observación
+                            <input type="text" x-model="observacionConfirmar" maxlength="500" style="width:100%">
+                        </label>
+                        <button type="button" class="bx1-btn verde" @click="confirmar()" :disabled="ocupado" style="justify-content:center">
+                            <span x-text="ocupado === 'confirmar' ? 'Guardando…' : 'Guardar pago'">Guardar pago</span>
                         </button>
                     </div>
                     @else
@@ -303,12 +338,16 @@
 
 @push('scripts')
 <script>
-function tandaX1(datos, numero) {
+function tandaX1(datos, numero, valor) {
     return {
         datos,
         numero,
         numeroConfirmar: numero || '',
         estadoConfirmar: 'pagada',
+        valorConfirmar: valor || '',
+        comprobanteConfirmar: '',
+        fechaConfirmar: new Date().toLocaleDateString('en-CA'),
+        observacionConfirmar: '',
         abrirConfirmar: false,
         ocupado: false,
         mensaje: '',
@@ -319,17 +358,23 @@ function tandaX1(datos, numero) {
             this.mensaje = '';
             this.errores = [];
             try {
+                // FormData para que el comprobante (foto/PDF) viaje con lo demás.
+                const fd = new FormData();
+                Object.entries(Object.assign({}, this.datos, extra)).forEach(([k, v]) => {
+                    if (v !== null && v !== undefined && v !== '') fd.append(k, v);
+                });
                 const r = await fetch(url, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json',
-                               'X-CSRF-TOKEN': '{{ csrf_token() }}' },
-                    body: JSON.stringify(Object.assign({}, this.datos, extra)),
+                    headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                    body: fd,
                 });
                 const d = await r.json().catch(() => ({ ok: false, mensaje: 'Respuesta no válida (HTTP ' + r.status + ').' }));
                 this.ok = !!d.ok;
                 this.mensaje = d.mensaje || d.message || (r.ok ? 'Listo.' : 'Error HTTP ' + r.status);
                 this.errores = d.errores || [];
                 if (d.numero_planilla) { this.numero = d.numero_planilla; this.numeroConfirmar = d.numero_planilla; }
+                if (d.valor_total) { this.valorConfirmar = Math.round(d.valor_total); }
+                if (!r.ok && d.errors) { this.errores = Object.values(d.errors).flat(); }
                 return d;
             } catch (e) {
                 this.ok = false;
@@ -344,8 +389,14 @@ function tandaX1(datos, numero) {
         },
         async confirmar() {
             if (!this.numeroConfirmar) { this.ok = false; this.mensaje = 'Escriba el número de planilla.'; return; }
-            const d = await this.enviar('{{ route('brynex.x1.confirmar') }}',
-                { numero_planilla: this.numeroConfirmar, estado: this.estadoConfirmar }, 'confirmar');
+            if (!this.valorConfirmar) { this.ok = false; this.mensaje = 'Escriba el valor pagado.'; return; }
+            const extra = {
+                numero_planilla: this.numeroConfirmar, estado: this.estadoConfirmar, valor: this.valorConfirmar,
+                comprobante: this.comprobanteConfirmar, fecha_pago: this.fechaConfirmar, observacion: this.observacionConfirmar,
+            };
+            const archivo = this.$refs.soporte?.files?.[0];
+            if (archivo) extra.soporte = archivo;
+            const d = await this.enviar('{{ route('brynex.x1.confirmar') }}', extra, 'confirmar');
             if (d && d.ok) setTimeout(() => location.reload(), 900);
         },
     };

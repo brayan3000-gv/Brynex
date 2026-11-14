@@ -113,7 +113,29 @@ class X1LiquidacionBrynex
             ->latest('id')
             ->first(['numero_planilla', 'valor_total', 'updated_at']) : null;
 
+        // Una planilla de este mismo plano liquidada con otro filtro (por el
+        // aliado, antes de que la X1 pasara a BryNex): se avisa, porque volver
+        // a liquidar podría duplicar gente en Simple. Ver liquidar().
+        $otra = $simple ? OperadorPlanillaApi::where('aliado_id', $s->aliado_id)
+            ->where('razon_social_id', $f->razon_social_id)
+            ->where('operador_planilla_id', $simple)
+            ->where('anio', $anio)->where('mes', $mes)
+            ->where('n_plano', $f->n_plano)
+            ->where('paso', 1)
+            ->where('estado', 'validada')
+            ->whereNotNull('numero_planilla')
+            ->whereRaw("ISNULL(tipos_modalidad, '') <> ?", [(string) $f->tipo_modalidad_id])
+            ->latest('id')
+            ->first(['numero_planilla', 'valor_total', 'created_at']) : null;
+
+        $pagoIds = $g->pluck('x1_pago_id')->filter()->unique()->values()->all();
+        $pagos = $pagoIds
+            ? DB::table('x1_pagos')->whereIn('id', $pagoIds)->orderBy('id')->get()
+            : collect();
+
         return (object) [
+            'otra_planilla' => $otra,
+            'pagos' => $pagos,
             'aliado_id' => (int) $s->aliado_id,
             'razon_social_id' => (int) $f->razon_social_id,
             'razon_social' => trim((string) $f->razon_social),
@@ -160,6 +182,33 @@ class X1LiquidacionBrynex
         $simple = self::operadorSimpleId();
         if (! $simple) {
             return ['ok' => false, 'estado' => 'error', 'mensaje' => 'No está el operador Simple en el catálogo.'];
+        }
+
+        // Freno: el plano ya tiene una planilla liquidada en Simple con OTRO
+        // filtro (p. ej. «Todos», liquidada por el aliado antes de que la X1
+        // pasara a BryNex). El 409 del controlador solo mira el mismo filtro,
+        // así que liquidar aquí podría duplicar a esas personas en Simple.
+        $otra = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+            ->where('razon_social_id', $rsId)
+            ->where('operador_planilla_id', $simple)
+            ->where('anio', $anio)->where('mes', $mes)
+            ->where('n_plano', $nPlano)
+            ->where('paso', 1)
+            ->where('estado', 'validada')
+            ->whereNotNull('numero_planilla')
+            ->whereRaw("ISNULL(tipos_modalidad, '') <> ?", [(string) $tipoModalidadId])
+            ->latest('id')
+            ->first();
+
+        if ($otra) {
+            return [
+                'ok' => false,
+                'estado' => 'rechazada',
+                'mensaje' => "Este plano ya tiene la planilla {$otra->numero_planilla} liquidada en Simple"
+                    .($otra->valor_total ? ' por $'.number_format((float) $otra->valor_total, 0, ',', '.') : '')
+                    .' el '.optional($otra->created_at)->format('d/m H:i')
+                    .' (no por BryNex). Revise en Simple si ya se pagó antes de volver a liquidar: podría duplicar a esas personas.',
+            ];
         }
 
         $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple);
@@ -369,8 +418,19 @@ class X1LiquidacionBrynex
      * que decide una persona). No crea gasto en el aliado: el aliado consignó
      * a Brygar y BryNex pagó; la contabilidad de eso va aparte.
      */
-    public static function confirmar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, string $numero, string $estado): array
-    {
+    public static function confirmar(
+        int $aliadoId,
+        int $rsId,
+        int $nPlano,
+        int $tipoModalidadId,
+        string $numero,
+        string $estado,
+        int $valor = 0,
+        ?string $comprobante = null,
+        ?string $fechaPago = null,
+        ?\Illuminate\Http\UploadedFile $soporte = null,
+        ?string $observacion = null
+    ): array {
         if (! self::puedeOperar(Auth::user())) {
             return ['ok' => false, 'mensaje' => 'Solo el superadmin de BryNex confirma pagos X1.'];
         }
@@ -384,29 +444,67 @@ class X1LiquidacionBrynex
             return ['ok' => false, 'mensaje' => 'Escriba el número de planilla real.'];
         }
 
+        if ($valor <= 0) {
+            return ['ok' => false, 'mensaje' => 'Escriba el valor pagado.'];
+        }
+
         $filas = self::filasAbiertas($aliadoId, $rsId, $nPlano, $tipoModalidadId);
         if ($filas->isEmpty()) {
             return ['ok' => false, 'mensaje' => 'Esa tanda no tiene personas pendientes.'];
         }
 
-        DB::transaction(function () use ($filas, $aliadoId, $numero, $estado) {
-            DB::table('planos')->whereIn('id', $filas->pluck('plano_id')->all())
-                ->where('aliado_id', $aliadoId)
-                ->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''))
-                ->update(['numero_planilla' => $numero, 'updated_at' => now()]);
+        // El comprobante va al disco local (storage/app): es un soporte bancario.
+        $soportePath = $soporte
+            ? $soporte->store("x1-pagos/{$aliadoId}/".now()->format('Y-m'), 'local')
+            : null;
 
-            DB::table('x1_solicitud_planos')->whereIn('id', $filas->pluck('id')->all())
-                ->update(['estado' => $estado, 'numero_planilla' => $numero, 'updated_at' => now()]);
-        });
+        try {
+            $pagoId = DB::transaction(function () use ($filas, $aliadoId, $rsId, $nPlano, $tipoModalidadId, $numero, $estado, $valor, $comprobante, $fechaPago, $soporte, $soportePath, $observacion) {
+                $pagoId = DB::table('x1_pagos')->insertGetId([
+                    'aliado_id' => $aliadoId,
+                    'razon_social_id' => $rsId,
+                    'n_plano' => $nPlano,
+                    'tipo_modalidad_id' => $tipoModalidadId,
+                    'numero_planilla' => $numero,
+                    'forma' => $estado,
+                    'valor' => $valor,
+                    'comprobante' => $comprobante !== null && trim($comprobante) !== '' ? mb_substr(trim($comprobante), 0, 60) : null,
+                    'fecha_pago' => $fechaPago ?: today()->toDateString(),
+                    'soporte_path' => $soportePath,
+                    'soporte_nombre' => $soporte ? mb_substr($soporte->getClientOriginalName(), 0, 200) : null,
+                    'observacion' => $observacion !== null && trim($observacion) !== '' ? mb_substr(trim($observacion), 0, 500) : null,
+                    'personas' => $filas->count(),
+                    'usuario_id' => Auth::id(),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                DB::table('planos')->whereIn('id', $filas->pluck('plano_id')->all())
+                    ->where('aliado_id', $aliadoId)
+                    ->where(fn ($q) => $q->whereNull('numero_planilla')->orWhere('numero_planilla', ''))
+                    ->update(['numero_planilla' => $numero, 'updated_at' => now()]);
+
+                DB::table('x1_solicitud_planos')->whereIn('id', $filas->pluck('id')->all())
+                    ->update(['estado' => $estado, 'numero_planilla' => $numero, 'x1_pago_id' => $pagoId, 'updated_at' => now()]);
+
+                return $pagoId;
+            });
+        } catch (\Throwable $e) {
+            if ($soportePath) {
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($soportePath);
+            }
+            throw $e;
+        }
 
         self::recalcularSolicitudes($filas->pluck('x1_solicitud_id')->unique()->all());
 
         Log::warning('x1-pagos: pago confirmado por BryNex', [
-            'aliado' => $aliadoId, 'rs' => $rsId, 'n_plano' => $nPlano, 'planilla' => $numero,
-            'estado' => $estado, 'personas' => $filas->count(), 'usuario' => Auth::id(),
+            'pago' => $pagoId, 'aliado' => $aliadoId, 'rs' => $rsId, 'n_plano' => $nPlano, 'planilla' => $numero,
+            'estado' => $estado, 'valor' => $valor, 'personas' => $filas->count(), 'usuario' => Auth::id(),
         ]);
 
-        return ['ok' => true, 'mensaje' => 'Planilla '.$numero.' confirmada para '.$filas->count().' '.($filas->count() === 1 ? 'persona' : 'personas').'.'];
+        return ['ok' => true, 'mensaje' => 'Planilla '.$numero.' confirmada para '.$filas->count().' '.($filas->count() === 1 ? 'persona' : 'personas')
+            .' por $'.number_format($valor, 0, ',', '.').'.'];
     }
 
     /** Personas de la tanda que todavía no están cerradas. */
