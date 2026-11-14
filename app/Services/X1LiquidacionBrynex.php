@@ -164,7 +164,7 @@ class X1LiquidacionBrynex
      * @return array{ok: bool, estado: string, mensaje: string, numero_planilla?: string,
      *               valor_total?: float|null, movidas?: int, errores?: array}
      */
-    public static function liquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, bool $moverRebotados = true, bool $ignorarOtra = false): array
+    public static function liquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, bool $moverRebotados = true, bool $ignorarOtra = false, bool $revisarPagada = true): array
     {
         if (! self::puedeOperar(Auth::user())) {
             return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Solo el superadmin de BryNex liquida las X1.'];
@@ -223,6 +223,67 @@ class X1LiquidacionBrynex
 
         $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple);
         $movidas = 0;
+        $reliquidando = false;
+
+        // ── Ya estaba liquidada con este mismo filtro: ¿se pagó? ──────────
+        // Se le pregunta a Simple. Pagada → no se toca, se confirma. Vigente
+        // → su enlace de pago. Sin pagar y sin enlace (la liquidaron en una
+        // ventana que ya se cerró: Simple revalida el subtipo 4 al dar el
+        // enlace y dice «contiene errores») → se liquida una nueva, que es la
+        // única forma de sacar un enlace. Si no se sabe (pago en tránsito, red
+        // caída) no se toca: liquidar otra podría pagarla dos veces.
+        if ($revisarPagada && $intento['http'] === 409 && ($intento['data']['reemplaza'] ?? false)
+            && ! empty($intento['data']['numero_planilla'])) {
+            $previa = (string) $intento['data']['numero_planilla'];
+            $pago = self::estadoPago($aliadoId, $previa);
+            $mensajeOperador = (string) ($pago['mensaje'] ?? $pago['message'] ?? '');
+
+            if (($pago['success'] ?? false) && ($pago['pagada'] ?? null) === true) {
+                self::marcarLiquidada($aliadoId, $rsId, $nPlano, $tipoModalidadId, $previa);
+
+                return [
+                    'ok' => false,
+                    'estado' => 'ya',
+                    'numero_planilla' => $previa,
+                    'mensaje' => "Simple dice que la planilla {$previa} ya está pagada. No se volvió a liquidar: confírmala con su comprobante.",
+                ];
+            }
+
+            if (! empty($pago['url_pago'])) {
+                self::marcarLiquidada($aliadoId, $rsId, $nPlano, $tipoModalidadId, $previa);
+
+                return [
+                    'ok' => true,
+                    'estado' => 'liquidada',
+                    'numero_planilla' => $previa,
+                    'valor_total' => isset($pago['total_pagar']) ? (float) $pago['total_pagar'] : null,
+                    'url_pago' => $pago['url_pago'],
+                    'mensaje' => "La planilla {$previa} sigue vigente y sin pagar: Simple dio el enlace de pago. Págala y confirma.",
+                ];
+            }
+
+            $sinPagar = ($pago['success'] ?? false) && ($pago['pagada'] ?? null) === false;
+            $conErrores = str_contains(mb_strtolower($mensajeOperador), 'errores');
+
+            if (! $sinPagar && ! $conErrores) {
+                return [
+                    'ok' => false,
+                    'estado' => 'ya',
+                    'numero_planilla' => $previa,
+                    'mensaje' => "No se pudo saber si la planilla {$previa} está pagada"
+                        .($mensajeOperador !== '' ? " (Simple: {$mensajeOperador})" : '')
+                        .'. No se volvió a liquidar para no pagarla dos veces. Revísela en Simple.',
+                ];
+            }
+
+            Log::warning('x1-pagos: se reliquida una tanda X1 cuya planilla quedó sin pagar', [
+                'aliado' => $aliadoId, 'rs' => $rsId, 'n_plano' => $nPlano,
+                'anterior' => $previa, 'simple' => $mensajeOperador, 'usuario' => Auth::id(),
+            ]);
+
+            $reliquidando = true;
+            $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple, true);
+        }
 
         // Rebotó por el subtipo 4 a una parte: esas esperan la ventana en otro
         // plano X1 y se liquida una vez más con el resto.
@@ -250,7 +311,7 @@ class X1LiquidacionBrynex
                     self::moverFilas($aliadoId, $rebotadas, $destino);
                     $movidas = $rebotadas->count();
 
-                    $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple);
+                    $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple, $reliquidando);
                 }
             }
         }
@@ -264,6 +325,7 @@ class X1LiquidacionBrynex
             return [
                 'ok' => true,
                 'estado' => 'liquidada',
+                'url_pago' => $intento['data']['url_pago'] ?? null,
                 'mensaje' => 'Planilla '.$intento['numero'].' liquidada'
                     .($intento['valor'] !== null ? ' por $'.number_format($intento['valor'], 0, ',', '.') : '')
                     .($movidas ? ". {$movidas} ".($movidas === 1 ? 'persona rebotó' : 'personas rebotaron').' por el subtipo 4 y quedaron esperando la ventana' : '')
@@ -327,7 +389,7 @@ class X1LiquidacionBrynex
     public static function paraVigia(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio): array
     {
         return self::comoUsuarioBrynex(function () use ($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio) {
-            $r = self::liquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, false);
+            $r = self::liquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, false, false, false);
 
             return match ($r['estado']) {
                 'liquidada' => ['liquidada', 'planilla '.$r['numero_planilla'], (string) $r['numero_planilla'], $r['valor_total'] ?? null],
@@ -526,6 +588,32 @@ class X1LiquidacionBrynex
             .' por $'.number_format($valor, 0, ',', '.').'.'];
     }
 
+    /** Estado de pago de una planilla del aliado, preguntado con la cuenta de BryNex. */
+    private static function estadoPago(int $aliadoId, string $numero): array
+    {
+        $registro = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+            ->where('numero_planilla', $numero)
+            ->orderByDesc('updated_at')
+            ->first();
+
+        if (! $registro) {
+            return ['success' => false, 'message' => 'No se encontró la planilla '.$numero.'.'];
+        }
+
+        return self::comoAliado($aliadoId, fn () => app(PlanillaApiController::class)
+            ->conCuentaBrynex()
+            ->estadoPagoRegistro($registro, $aliadoId));
+    }
+
+    /** Las personas abiertas de la tanda quedan «Liquidada, por pagar» con ese número. */
+    private static function marcarLiquidada(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, string $numero): void
+    {
+        $abiertas = self::filasAbiertas($aliadoId, $rsId, $nPlano, $tipoModalidadId);
+        DB::table('x1_solicitud_planos')->whereIn('id', $abiertas->pluck('id')->all())
+            ->update(['estado' => 'liquidada', 'numero_planilla' => $numero, 'updated_at' => now()]);
+        self::recalcularSolicitudes($abiertas->pluck('x1_solicitud_id')->unique()->all());
+    }
+
     /** Personas de la tanda que todavía no están cerradas. */
     private static function filasAbiertas(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId): Collection
     {
@@ -540,18 +628,19 @@ class X1LiquidacionBrynex
             ->get(['xp.*', 'p.no_identifi']);
     }
 
-    private static function llamarLiquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, int $simple): array
+    private static function llamarLiquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, int $simple, bool $reliquidar = false): array
     {
         try {
-            $resp = self::comoAliado($aliadoId, function () use ($rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple) {
-                $req = Request::create('/admin/planos/api-operador/liquidar', 'POST', [
+            $resp = self::comoAliado($aliadoId, function () use ($rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple, $reliquidar) {
+                $req = Request::create('/admin/planos/api-operador/liquidar', 'POST', array_filter([
                     'razon_social_id' => $rsId,
                     'operador_planilla_id' => $simple,
                     'mes' => $mes,
                     'anio' => $anio,
                     'n_plano' => $nPlano,
                     'tipos_modalidad' => [$tipoModalidadId],
-                ]);
+                    'reliquidar' => $reliquidar ?: null,
+                ], fn ($v) => $v !== null));
                 $req->setLaravelSession(app('session.store'));
                 $req->setUserResolver(fn () => Auth::user());
 

@@ -1420,6 +1420,31 @@ class PlanillaApiController extends Controller
         return ['success' => false, 'message' => $pago['message'] ?? null];
     }
 
+    /**
+     * ¿La planilla ya se pagó? Pregunta al operador (consultarEstadoPago):
+     * `pagada` true/false/null (null = no se supo; tratarlo como desconocido)
+     * y, si sigue vigente, el enlace de pago fresco, que se guarda.
+     *
+     * @return array{success: bool, pagada?: bool|null, url_pago?: string, mensaje?: string, message?: string}
+     */
+    public function estadoPagoRegistro(OperadorPlanillaApi $registro, int $aliadoId): array
+    {
+        try {
+            $sesion = $this->abrirSesion($registro, $aliadoId);
+            $estado = ($sesion['success'] ?? false)
+                ? $sesion['api']->consultarEstadoPago((int) $registro->numero_planilla)
+                : ['success' => false, 'message' => $sesion['message'] ?? null];
+        } catch (\Throwable $e) {
+            $estado = ['success' => false, 'message' => $e->getMessage()];
+        }
+
+        if (! empty($estado['url_pago'])) {
+            $registro->update(['url_pago' => $estado['url_pago']]);
+        }
+
+        return $estado;
+    }
+
     public function inconsistencias(Request $request, int $codigoPlanilla)
     {
         $aliadoId = session('aliado_id_activo');

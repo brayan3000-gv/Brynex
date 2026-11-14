@@ -104,7 +104,8 @@
 <div class="bx1-card">
     <h3>Solicitudes</h3>
     <p class="bx1-ayuda">
-        <strong>Liquidar</strong> entra a Simple con la cuenta de BryNex. Si Simple rechaza el subtipo 4 a una parte (eo.val.2.655),
+        <strong>Liquidar</strong> entra a Simple con la cuenta de BryNex. Si la tanda ya tenía planilla, primero pregunta si se pagó: pagada → confirmar;
+        vigente → enlace de pago; sin pagar y sin enlace → liquida una nueva. Si Simple rechaza el subtipo 4 a una parte (eo.val.2.655),
         esas personas pasan al siguiente plano X1 «Esperando ventana» y se liquida el resto. Después <strong>Pagar (PSE)</strong> pide un enlace nuevo,
         y <strong>Confirmar</strong> graba el número real de planilla en los planos del aliado (sin gasto en el aliado).
         Las que esperan ventana se confirman igual cuando se paguen, por Simple, doble planilla o Blindem.
@@ -248,7 +249,11 @@
                             <button type="button" class="bx1-btn suave" style="border-color:#fdba74;color:#9a3412"
                                     @click="liquidar(true)" :disabled="ocupado">No está pagada: liquidar igual</button>
                         </template>
-                        <template x-if="numero">
+                        <template x-if="urlPago">
+                            <a class="bx1-btn verde" target="_blank" rel="noopener" :href="urlPago"
+                               title="Enlace recién entregado por Simple: caduca en minutos">Pagar ahora</a>
+                        </template>
+                        <template x-if="numero && !urlPago">
                             <a class="bx1-btn verde" target="_blank"
                                :href="'{{ route('brynex.x1.pagar') }}?aliado_id={{ $t->aliado_id }}&numero=' + encodeURIComponent(numero)">Pagar (PSE)</a>
                         </template>
@@ -353,6 +358,7 @@ function tandaX1(datos, numero, valor, otra) {
         fechaConfirmar: new Date().toLocaleDateString('en-CA'),
         observacionConfirmar: '',
         otraPlanilla: otra || null,
+        urlPago: null,
         abrirConfirmar: false,
         ocupado: false,
         mensaje: '',
@@ -380,6 +386,7 @@ function tandaX1(datos, numero, valor, otra) {
                 if (d.numero_planilla) { this.numero = d.numero_planilla; this.numeroConfirmar = d.numero_planilla; }
                 if (d.valor_total) { this.valorConfirmar = Math.round(d.valor_total); }
                 if (accion === 'liquidar') this.otraPlanilla = d.otra_planilla || null;
+                if (accion === 'liquidar') this.urlPago = d.url_pago || null;
                 if (!r.ok && d.errors) { this.errores = Object.values(d.errors).flat(); }
                 return d;
             } catch (e) {
