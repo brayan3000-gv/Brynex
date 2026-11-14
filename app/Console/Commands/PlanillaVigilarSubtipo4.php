@@ -123,6 +123,15 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private array $aportantesAbiertos = [];
 
+    /**
+     * Tandas que ya tienen planilla liquidada y siguen sin pagar, con su
+     * registro. Las llena tandasEnEspera() y liquidarPendientes() les pide a
+     * Simple un enlace de pago nuevo mientras el hueco está abierto.
+     *
+     * @var array<int, array{0: array<string, mixed>, 1: OperadorPlanillaApi}>
+     */
+    private array $sinPagar = [];
+
     /** Cédulas que se vigilan siempre, aunque no tengan plano pendiente. */
     private const CONFIG_CEDULAS = 'vigia_subtipo4_cedulas';
 
@@ -269,8 +278,9 @@ class PlanillaVigilarSubtipo4 extends Command
             : [];
 
         $hechas = array_filter($resultados, fn ($r) => $r['estado'] === 'liquidada');
+        $enlaces = array_filter($resultados, fn ($r) => $r['estado'] === 'enlace');
 
-        if (($limpias || $hechas) && ! $this->option('sin-aviso')) {
+        if (($limpias || $hechas || $enlaces) && ! $this->option('sin-aviso')) {
             $abiertos = $this->nombresRs($this->aportantesAbiertos);
 
             $mensaje = "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
@@ -288,6 +298,16 @@ class PlanillaVigilarSubtipo4 extends Command
                 // No hay riesgo de repetirlo: cada planilla nace una sola vez
                 // (el 409 del controlador y tandasEnEspera() lo impiden).
                 $alertas->enviar('Vigía subtipo 4', $mensaje);
+            } elseif ($enlaces) {
+                // Enlace nuevo para una planilla que ya existía: si el hueco dura
+                // varios minutos, el planificador vuelve a entrar y lo vuelve a
+                // pedir. Un aviso por planilla cada 20 minutos basta.
+                $alertas->enviarUnaVez(
+                    'vigia-subtipo4-pago-'.implode('-', array_column($enlaces, 'planilla')),
+                    'Vigía subtipo 4',
+                    $mensaje,
+                    20
+                );
             } else {
                 // Una vez cada 6 h: si la ventana dura, no conviene repetir el
                 // aviso cada media hora, pero sí recordarlo si sigue abierta un
@@ -369,7 +389,7 @@ class PlanillaVigilarSubtipo4 extends Command
 
         $tandas = $this->tandasEnEspera($mes, $anio);
 
-        if (! $tandas) {
+        if (! $tandas && ! $this->sinPagar) {
             $this->line(now()->format('d-m H:i:s').'  (sin tandas X1 esperando el hueco)');
 
             return [];
@@ -384,7 +404,67 @@ class PlanillaVigilarSubtipo4 extends Command
             ];
         }
 
+        // Después de las nuevas: lo primero que el hueco tiene que alcanzar es
+        // a crear las planillas que faltan.
+        foreach ($this->sinPagar as [$t, $registro]) {
+            $resultados[] = $this->renovarPago($t, $registro);
+        }
+
         return $resultados;
+    }
+
+    /**
+     * Pide a Simple un enlace de pago nuevo para una X1 liquidada y sin pagar.
+     *
+     * Simple vuelve a validar la planilla antes de entregar el enlace: fuera
+     * del hueco responde «La planilla contiene errores» (el 2.655), y el enlace
+     * que dio al liquidar caduca —el de la 1086799346, del 13-nov a las 17:47,
+     * a las 20:38 ya mandaba al login—. Así que una X1 liquidada en un hueco y
+     * no pagada a tiempo solo se puede pagar en el siguiente, y este es el
+     * momento de pedirle el enlace: el aviso lo lleva y hay que pagar ya.
+     *
+     * @param  array<string, mixed>  $t
+     * @return array<string, mixed>
+     */
+    private function renovarPago(array $t, OperadorPlanillaApi $registro): array
+    {
+        $base = [
+            'etiqueta' => $t['etiqueta'],
+            'enlace' => $this->enlaceDelPlano($t),
+            'planilla' => (string) $registro->numero_planilla,
+            'valor' => $registro->valor_total !== null ? (float) $registro->valor_total : null,
+        ];
+
+        try {
+            session(['aliado_id_activo' => $t['aliado']]);
+            $pago = app(\App\Http\Controllers\Admin\PlanillaApiController::class)
+                ->renovarUrlPago($registro, $t['aliado']);
+        } catch (\Throwable $e) {
+            $pago = ['success' => false, 'message' => $e->getMessage()];
+        }
+
+        $sello = now()->format('d-m H:i:s');
+
+        if ($pago['success']) {
+            Log::warning('vigia-subtipo4: enlace de pago renovado en la ventana', [
+                'tanda' => $t['etiqueta'], 'planilla' => $registro->numero_planilla,
+            ]);
+            $this->line("{$sello}  >> {$t['etiqueta']} planilla {$registro->numero_planilla} → enlace de pago nuevo");
+
+            return $base + ['estado' => 'enlace', 'texto' => 'enlace de pago nuevo'];
+        }
+
+        $mensaje = (string) ($pago['message'] ?? '(sin mensaje)');
+        $this->line("{$sello}  >> {$t['etiqueta']} planilla {$registro->numero_planilla} → sin enlace · ".substr($mensaje, 0, 120));
+
+        $pagada = str_contains(mb_strtolower($mensaje), 'pagada') || str_contains(mb_strtolower($mensaje), 'proceso de pago');
+
+        return $base + [
+            'estado' => $pagada ? 'pagada' : 'sin_enlace',
+            'texto' => $pagada
+                ? "planilla {$registro->numero_planilla}: Simple dice que ya está pagada o en proceso de pago. Si se pagó, confírmala con «Ya pagué»."
+                : "planilla {$registro->numero_planilla} sin pagar, Simple no dio enlace · ".substr($mensaje, 0, 120),
+        ];
     }
 
     /**
@@ -411,6 +491,7 @@ class PlanillaVigilarSubtipo4 extends Command
 
         $vistas = [];
         $tandas = [];
+        $this->sinPagar = [];
 
         foreach ($todas as $t) {
             $mods = array_map('intval', (array) ($t['mods'] ?? []));
@@ -435,7 +516,14 @@ class PlanillaVigilarSubtipo4 extends Command
             $vistas[$llave] = true;
 
             if ($previa = $this->planillaYaLiquidada($t)) {
-                $this->line(now()->format('d-m H:i:s')."  >> {$t['etiqueta']} ya tiene planilla {$previa}, no se toca");
+                $this->line(now()->format('d-m H:i:s')."  >> {$t['etiqueta']} ya tiene planilla "
+                    .($previa->numero_planilla ?: '(sin número)').', no se vuelve a liquidar');
+
+                // El plano se queda sin número hasta que se confirma el pago:
+                // si sigue aquí, la planilla está liquidada y sin pagar.
+                if ($previa->numero_planilla) {
+                    $this->sinPagar[] = [$t, $previa];
+                }
 
                 continue;
             }
@@ -522,7 +610,7 @@ class PlanillaVigilarSubtipo4 extends Command
      *
      * @param  array<string, mixed>  $t
      */
-    private function planillaYaLiquidada(array $t): ?string
+    private function planillaYaLiquidada(array $t): ?OperadorPlanillaApi
     {
         if (! $t['mods']) {
             return null;
@@ -540,9 +628,9 @@ class PlanillaVigilarSubtipo4 extends Command
             ->where('estado', 'validada')
             ->where(fn ($q) => $q->whereNull('tipos_modalidad')->orWhere('tipos_modalidad', $filtro))
             ->latest('id')
-            ->first(['numero_planilla']);
+            ->first();
 
-        return $previo ? (string) ($previo->numero_planilla ?: '(sin número)') : null;
+        return $previo;
     }
 
     /**
@@ -579,6 +667,15 @@ class PlanillaVigilarSubtipo4 extends Command
      */
     private function lineaDelAviso(array $r): string
     {
+        if ($r['estado'] === 'enlace') {
+            return "💳 {$r['etiqueta']}\n"
+                ."Planilla {$r['planilla']}"
+                .($r['valor'] ? ' · $'.number_format((float) $r['valor'], 0, ',', '.') : '')
+                ." — liquidada antes y sin pagar. Simple volvió a dar el enlace: págala YA, "
+                ."fuera del hueco no deja pagarla.\n"
+                ."Pagar con PSE: {$r['enlace']}";
+        }
+
         if ($r['estado'] !== 'liquidada') {
             return "• {$r['etiqueta']}: {$r['texto']}";
         }
@@ -586,6 +683,7 @@ class PlanillaVigilarSubtipo4 extends Command
         return "✅ {$r['etiqueta']}\n"
             ."Planilla {$r['planilla']}"
             .($r['valor'] ? ' · $'.number_format((float) $r['valor'], 0, ',', '.') : '')."\n"
+            ."Págala YA: cuando el hueco se cierra, Simple no deja pagarla.\n"
             ."Pagar con PSE: {$r['enlace']}";
     }
 

@@ -1337,10 +1337,57 @@ class PlanillaApiController extends Controller
             abort(404, 'Planilla no encontrada.');
         }
 
+        $pago = $this->renovarUrlPago($registro, $aliadoId);
+
+        if ($pago['success']) {
+            return redirect()->away($pago['url_pago']);
+        }
+
+        Log::warning('Enlace API: no se pudo renovar la URL de pago', [
+            'planilla' => $numeroPlanilla,
+            'message'  => $pago['message'] ?? null,
+        ]);
+
+        // Antes se abría el enlace guardado sin decir nada. Ese enlace caduca
+        // —el de la 1086799346, liquidada a las 17:47 del 13-nov, a las 20:38
+        // ya mandaba al login de Simple— y el usuario quedaba frente a una
+        // pantalla pidiéndole usuario y clave sin saber por qué. Se dice lo que
+        // contestó el operador y el guardado queda como opción, con su hora.
+        $mensaje = (string) ($pago['message'] ?? 'el operador no entregó el enlace de pago.');
+        $html = '<div style="font-family:sans-serif;padding:2rem;max-width:640px;line-height:1.45">'
+            .'<h2 style="margin-top:0">No se pudo abrir el pago de la planilla '.e((string) $numeroPlanilla).'</h2>'
+            .'<p>El operador respondió: <strong>'.e($mensaje).'</strong></p>';
+
+        if (str_contains(mb_strtolower($mensaje), 'contiene errores')) {
+            $html .= '<p>El operador vuelve a validar la planilla antes de dar el enlace de pago. '
+                .'Si es Tipo E - X1, solo lo entrega mientras está abierto el hueco de la '
+                .'validación de la UGPP: el vigía del subtipo 4 lo pide solo en el próximo hueco '
+                .'y avisa por WhatsApp para pagarla en ese momento.</p>';
+        }
+
+        if ($registro->url_pago) {
+            $html .= '<p><a href="'.e($registro->url_pago).'" target="_blank" rel="noopener">'
+                .'Abrir el enlace guardado</a> (último del '
+                .e(optional($registro->updated_at)->format('Y-m-d H:i') ?? '?')
+                .'). Si ya caducó, el operador pide usuario y clave.</p>';
+        }
+
+        return response($html.'</div>', 422);
+    }
+
+    /**
+     * Pide al operador un enlace de pago nuevo para una planilla ya liquidada
+     * y lo guarda en el registro. Lo usan el botón «Pagar con PSE» y el vigía
+     * del subtipo 4, que lo pide en el hueco para las X1 que siguen sin pagar.
+     *
+     * @return array{success: bool, url_pago?: string, message?: string}
+     */
+    public function renovarUrlPago(OperadorPlanillaApi $registro, int $aliadoId): array
+    {
         try {
             $sesion = $this->abrirSesion($registro, $aliadoId);
             $pago = ($sesion['success'] ?? false)
-                ? $sesion['api']->obtenerUrlPago($numeroPlanilla)
+                ? $sesion['api']->obtenerUrlPago((int) $registro->numero_planilla)
                 : ['success' => false, 'message' => $sesion['message'] ?? null];
         } catch (\Throwable $e) {
             $pago = ['success' => false, 'message' => $e->getMessage()];
@@ -1349,26 +1396,10 @@ class PlanillaApiController extends Controller
         if (($pago['success'] ?? false) && ! empty($pago['url_pago'])) {
             $registro->update(['url_pago' => $pago['url_pago']]);
 
-            return redirect()->away($pago['url_pago']);
+            return ['success' => true, 'url_pago' => $pago['url_pago']];
         }
 
-        Log::warning('Enlace API: no se pudo renovar la URL de pago, se abre la guardada', [
-            'planilla' => $numeroPlanilla,
-            'message'  => $pago['message'] ?? null,
-        ]);
-
-        if ($registro->url_pago) {
-            return redirect()->away($registro->url_pago);
-        }
-
-        // Sin enlace nuevo ni guardado: el operador suele decir por qué (ya
-        // pagada, vencida). Se muestra tal cual en vez de una página en blanco.
-        return response(
-            '<p style="font-family:sans-serif;padding:2rem">No se pudo abrir el pago de la planilla '
-            .e((string) $numeroPlanilla).': '.e($pago['message'] ?? 'el operador no entregó el enlace de pago.')
-            .'</p>',
-            422
-        );
+        return ['success' => false, 'message' => $pago['message'] ?? null];
     }
 
     public function inconsistencias(Request $request, int $codigoPlanilla)
