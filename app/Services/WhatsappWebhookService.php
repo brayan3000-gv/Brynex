@@ -884,11 +884,13 @@ class WhatsappWebhookService
      * Cuando múltiples aliados comparten el número Brynex,
      * buscamos a qué aliado pertenece la conversación por el número del cliente.
      */
-    /** Los «DEMO 1234» que llegan al número de BryNex (ver App\Services\Demo\RelevoDemo). */
+    /** Los «DEMO 1234» y los botones de la bienvenida de la demo (ver App\Services\Demo\RelevoDemo). */
     private function verificarCodigosDemo(array $value, string $phoneNumberId): void
     {
+        // El número por el que sale la demo (Brygar); se sigue aceptando Info Avapp
+        // por los prospectos que se registraron cuando la demo salía por ahí.
         $brynexPhoneId = \App\Models\ConfiguracionBrynex::obtener('whatsapp_global_phone_number_id') ?: config('services.whatsapp.phone_number_id');
-        if ($phoneNumberId !== $brynexPhoneId) {
+        if (! in_array($phoneNumberId, array_filter([\App\Services\Demo\RelevoDemo::phoneNumberIdEnvio(), $brynexPhoneId]), true)) {
             return;
         }
 

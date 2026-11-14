@@ -31,7 +31,8 @@ use Throwable;
  *   - dentro de las 24 h desde que escribió (la ventana de Meta para mensajes
  *     libres: sin plantillas, sin costo).
  *
- * Sale por el número de BryNex (Info Avapp), el mismo que usa su bandeja.
+ * Sale por el número de BRYGAR (config demo.relevo.aliado_envio), el mismo del
+ * botón «Quiero BryNex»: el prospecto tiene un solo chat y ahí lo atiende el bot.
  */
 class RelevoDemo
 {
@@ -42,7 +43,8 @@ class RelevoDemo
      * La plantilla que le llega al celular que escribió al registrarse, con dos
      * botones. Tocar «Sí» verifica sin escribir ningún código; un desconocido
      * cuyo número alguien escribió recibe solo este mensaje y puede ignorarlo.
-     * Creada en la cuenta de Info Avapp el 13-nov-2026 (categoría UTILITY).
+     * Existe con el mismo nombre en la cuenta de Info Avapp y en la de Brygar
+     * (13-nov-2026, UTILITY): sale por la de demo.relevo.aliado_envio.
      */
     public const PLANTILLA_BIENVENIDA = 'demo_bienvenida_brynex';
 
@@ -204,7 +206,7 @@ class RelevoDemo
     public static function enviarBienvenida(DemoProspecto $p): bool
     {
         $numero = WhatsappApiService::normalizarNumero($p->celular);
-        $config = self::configBrynex();
+        $config = self::configEnvio();
 
         if (strlen($numero) < 11 || ! $config) {
             return false;
@@ -361,7 +363,7 @@ class RelevoDemo
 
     private static function enviarTexto(DemoProspecto $p, string $texto, bool $contar = true): array
     {
-        $config = self::configBrynex();
+        $config = self::configEnvio();
         if (! $config) {
             return ['ok' => false, 'motivo' => 'sin_config'];
         }
@@ -374,7 +376,7 @@ class RelevoDemo
 
     private static function enviarDocumento(DemoProspecto $p, string $contenido, string $nombre, string $mime, string $caption): array
     {
-        $config = self::configBrynex();
+        $config = self::configEnvio();
         if (! $config || $contenido === '' || strlen($contenido) > 8 * 1024 * 1024) {
             return ['ok' => false, 'motivo' => 'documento_invalido'];
         }
@@ -394,25 +396,31 @@ class RelevoDemo
     }
 
     /**
-     * Deja el mensaje en la conversación de la bandeja de BryNex con ese número,
-     * creándola si no existe. Con el wa_message_id guardado, el webhook anota
-     * después si Meta lo entregó, lo leyó o falló (y por qué).
+     * Deja el mensaje en la conversación de la cuenta que lo envió (Brygar) con
+     * ese número, creándola si no existe. Con el wa_message_id guardado, el
+     * webhook anota después si Meta lo entregó, lo leyó o falló (y por qué), y
+     * lo que el prospecto conteste cae en esa misma conversación, donde atiende
+     * el bot.
      *
-     * Info Avapp es un número compartido: si ese celular ya conversa con OTRO
-     * aliado, no se le crea una en BryNex, porque el webhook encamina las
-     * respuestas a la conversación más reciente y le quitaría el contacto a ese
-     * aliado. En ese caso el mensaje sale igual, solo que sin anotar.
+     * Si la cuenta fuera un número compartido (usa_cuenta_brynex) y ese celular
+     * ya conversara con OTRO aliado, no se le crea una: el webhook encamina las
+     * respuestas a la conversación más reciente y le quitaría el contacto.
      */
     private static function anotarEnChat(string $numero, ?string $nombre, ?string $waMessageId, string $tipo, string $contenido, ?string $archivo = null): void
     {
         try {
-            $aliado = WhatsappBandejaCompartida::aliadoBandeja();
+            $config = self::configEnvio();
+            if (! $config) {
+                return;
+            }
+            $aliado = (int) $config->aliado_id;
             $numero = preg_replace('/\D/', '', $numero);
 
             $conversacion = WhatsappConversacion::where('aliado_id', $aliado)->where('wa_contact_id', $numero)->first();
 
             if (! $conversacion) {
-                $deOtro = WhatsappConversacion::where('wa_contact_id', $numero)->where('aliado_id', '<>', $aliado)->exists();
+                $deOtro = $config->usa_cuenta_brynex
+                    && WhatsappConversacion::where('wa_contact_id', $numero)->where('aliado_id', '<>', $aliado)->exists();
                 if ($deOtro) {
                     return;
                 }
@@ -441,10 +449,18 @@ class RelevoDemo
         }
     }
 
-    /** La cuenta del aliado BryNex (usa el número compartido: Info Avapp). */
-    private static function configBrynex(): ?WhatsappConfig
+    /** La cuenta por la que sale el WhatsApp de la demo (config demo.relevo.aliado_envio: Brygar). */
+    private static function configEnvio(): ?WhatsappConfig
     {
-        return WhatsappConfig::where('aliado_id', WhatsappBandejaCompartida::aliadoBandeja())->where('activo', true)->first();
+        return WhatsappConfig::where('aliado_id', (int) config('demo.relevo.aliado_envio', 2))->where('activo', true)->first();
+    }
+
+    /** El phone_number_id de esa cuenta: el webhook verifica los códigos y botones que lleguen a él. */
+    public static function phoneNumberIdEnvio(): ?string
+    {
+        $config = self::configEnvio();
+
+        return $config ? (string) ($config->credencialesEfectivas()['phone_number_id'] ?? '') ?: null : null;
     }
 
     /** Cuenta el envío y lo deja en la conversación de la bandeja, para que se vea qué se le mandó. */

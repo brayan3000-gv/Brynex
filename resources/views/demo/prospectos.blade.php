@@ -6,7 +6,8 @@
     <h2 style="margin:0 0 .3rem;font-size:1.2rem;">🧪 Quiénes probaron la demo</h2>
     <p style="margin:0 0 1rem;color:#64748b;font-size:.85rem;">
         Los que se registraron en <strong>demo.brynex.co</strong>. «WhatsApp verificado» es el número que de verdad
-        le escribió a Info Avapp con su código; su conversación está en la bandeja de BryNex.
+        tocó «Sí, quiero los ejemplos» (o escribió su código) en el WhatsApp de Brygar; su conversación
+        está en la bandeja de Brygar, donde lo atiende el bot.
     </p>
     @if ($resumen->isNotEmpty())
         <div style="display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem;">

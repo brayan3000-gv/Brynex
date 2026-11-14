@@ -40,7 +40,11 @@ return [
     'relevo' => [
         'secreto' => env('DEMO_RELEVO_SECRETO'),
         'url' => env('DEMO_RELEVO_URL', 'https://brynex.co'),   // lo usa la demo
-        'numero' => env('DEMO_RELEVO_NUMERO', '573334315129'),   // Info Avapp, el de BryNex
+        // Por dónde sale y se verifica el WhatsApp de la demo: el de BRYGAR, el mismo
+        // del botón «Quiero BryNex», donde el bot atiende (decisión del dueño, 13-nov-2026).
+        // Así el prospecto tiene UN solo chat. Antes era Info Avapp, sin IA.
+        'aliado_envio' => (int) env('DEMO_RELEVO_ALIADO', 2),
+        'numero' => env('DEMO_RELEVO_NUMERO', '573205400870'),
         'max_envios' => (int) env('DEMO_RELEVO_MAX_ENVIOS', 5),
     ],
 ];
