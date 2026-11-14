@@ -12,5 +12,33 @@
    "Listo: el radicado queda en OK, con su número y el certificado adjunto.",
    "En la demo todo es simulado: el PDF dice muestra y nada sale a la ARL."
   ]
+ },
+ "demo-eps-api": {
+  "archivo": "demo/demo-eps-api.mp4",
+  "titulo": "Radicar en la EPS por API",
+  "segundos": 36,
+  "pasos": [
+   "La EPS también se radica desde aquí. Este radicado está pendiente.",
+   "BryNex entra al portal de empleadores de la EPS por ti.",
+   "Revisa los datos del trabajador y del empleador antes de radicar.",
+   "Consulta al afiliado, llena la novedad de ingreso, adjunta el formulario y radica.",
+   "Queda radicado, con su número y la constancia en PDF.",
+   "Lo mismo funciona con la caja de compensación y el fondo de pensión."
+  ],
+  "escena": "afiliaciones"
+ },
+ "planos-descargar": {
+  "archivo": "demo/planos-descargar.mp4",
+  "titulo": "Liquidar la planilla por API y pagar por PSE",
+  "segundos": 38.5,
+  "pasos": [
+   "En Planos está la planilla del mes de cada razón social, con lo de cada persona.",
+   "BryNex arma el plano con los valores que ya calculó: aquí, el total a pagar.",
+   "Con un clic lo envía al operador de planilla y recibe el número de planilla.",
+   "Liquidada: con su número de planilla y el valor a pagar.",
+   "El pago va por PSE, desde el mismo botón.",
+   "En la demo es una pasarela de prueba: aquí no se mueve plata.",
+   "Pagada. Después, el soporte de cada persona se le envía por WhatsApp."
+  ]
  }
 }

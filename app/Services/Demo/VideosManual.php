@@ -62,7 +62,7 @@ class VideosManual
     {
         $enDemo = (bool) config('demo.activo');
 
-        return Cache::remember('videos_manual_v3_'.($enDemo ? 'demo' : 'app'), 600, function () use ($enDemo) {
+        return Cache::remember('videos_manual_v4_'.($enDemo ? 'demo' : 'app'), 600, function () use ($enDemo) {
             $json = json_decode((string) @file_get_contents(public_path('manual/manual.json')), true) ?: [];
             $clips = [];
 
@@ -87,19 +87,32 @@ class VideosManual
             // escenas/demo-*.mjs) reemplazan al clip del manual con el mismo id:
             // muestran el flujo que ve el prospecto (p. ej. la afiliación simulada).
             // Solo en la demo: en brynex.co se ve el flujo real del manual.
+            // Los que no existen en el manual (p. ej. demo-eps-api) entran como
+            // clips nuevos del módulo de su `escena`, de primeros.
             $propios = $enDemo ? (json_decode((string) @file_get_contents(public_path('manual/demo/demo.json')), true) ?: []) : [];
+            $nuevos = [];
             foreach ($propios as $id => $c) {
-                if (isset($clips[$id]) && ! empty($c['archivo']) && is_file(public_path('manual/'.$c['archivo']))) {
-                    $clips[$id] = [
-                        'titulo' => $c['titulo'] ?? $clips[$id]['titulo'],
-                        'segundos' => (int) round((float) ($c['segundos'] ?? $clips[$id]['segundos'])),
-                        'pasos' => array_values(array_filter((array) ($c['pasos'] ?? []))),
-                        'url' => asset('manual/'.ltrim($c['archivo'], '/')),
-                    ] + $clips[$id];
+                if (empty($c['archivo']) || ! is_file(public_path('manual/'.$c['archivo']))) {
+                    continue;
+                }
+                $base = $clips[$id] ?? ['id' => $id, 'titulo' => '', 'escena' => $c['escena'] ?? '', 'segundos' => 0];
+                if (! isset($clips[$id]) && $base['escena'] === '') {
+                    continue;
+                }
+                $clip = [
+                    'titulo' => $c['titulo'] ?? $base['titulo'],
+                    'segundos' => (int) round((float) ($c['segundos'] ?? $base['segundos'])),
+                    'pasos' => array_values(array_filter((array) ($c['pasos'] ?? []))),
+                    'url' => asset('manual/'.ltrim($c['archivo'], '/')),
+                ] + $base;
+                if (isset($clips[$id])) {
+                    $clips[$id] = $clip;
+                } else {
+                    $nuevos[$id] = $clip;
                 }
             }
 
-            return $clips;
+            return $nuevos + $clips;
         });
     }
 
