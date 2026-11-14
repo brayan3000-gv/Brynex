@@ -32,6 +32,12 @@
 .bx1-confirmar { display:flex; gap:.3rem; flex-wrap:wrap; align-items:center; margin-top:.35rem; }
 .bx1-confirmar input, .bx1-confirmar select { border:1px solid #cbd5e1; border-radius:6px; padding:.2rem .35rem; font-size:.72rem; }
 .bx1-personas summary { cursor:pointer; color:#1d4ed8; font-size:.7rem; font-weight:600; }
+.bx1-compacta td { padding:.42rem .45rem; vertical-align:middle; }
+.bx1-compacta tbody { border-bottom:1px solid #e2e8f0; }
+.bx1-compacta .bx1-fila:hover td { background:#f8fafc; }
+.bx1-detalle-fila td { background:#f8fafc; padding:.5rem .6rem .7rem; }
+.bx1-toggle { border:none; background:none; cursor:pointer; color:#64748b; font-size:.8rem; padding:0 .2rem 0 0; }
+.bx1-aliado { display:inline-flex; align-items:center; gap:.2rem; font-size:.72rem; white-space:nowrap; margin:0 .5rem .1rem 0; }
 .bx1-personas ul { margin:.3rem 0 0; padding-left:1rem; font-size:.7rem; color:#334155; }
 .bx1-detalle { border-collapse:collapse; margin-top:.4rem; font-size:.7rem; min-width:100%; }
 .bx1-detalle th { font-size:.58rem; text-transform:uppercase; letter-spacing:.03em; color:#64748b; padding:.28rem .4rem; border-bottom:1px solid #e2e8f0; text-align:left; white-space:nowrap; }
@@ -90,34 +96,30 @@
 
 @if($vista === 'razon')
 {{-- ── Por razón social: una planilla con la gente de todos los aliados ── --}}
-<div class="bx1-card">
-    <h3>Por razón social · {{ $mesesNombre[$mes] }} {{ $anio }}</h3>
-    <p class="bx1-ayuda">
-        Cada empresa junta a las personas X1 de <strong>todos los aliados</strong> en <strong>una sola planilla</strong>, con la sucursal de Brygar:
-        un solo pago PSE y un solo comprobante. Quien rebote por el subtipo 4 pasa al plano X1 de su aliado «Esperando ventana».
-        La consignación se puede verificar después, en la pestaña Consignaciones.
-    </p>
-</div>
+<p class="bx1-ayuda" style="margin:0 0 .6rem">
+    <strong>Por razón social · {{ $mesesNombre[$mes] }} {{ $anio }}</strong> — cada empresa va en <strong>una sola planilla</strong> con la gente de todos los aliados (sucursal Brygar).
+    Quien rebote por el subtipo 4 pasa al plano X1 de su aliado. Ordenadas por lo que falta pagar.
+</p>
 
 @php $listasParaPagar = $grupos->filter(fn ($g) => $g->por_pagar); @endphp
 @if($listasParaPagar->isNotEmpty())
-{{-- Las planillas conjuntas ya liquidadas y sin pagar: lo primero que hay que hacer --}}
-<div class="bx1-card" style="border:2px solid #86efac;background:#f0fdf4">
-    <h3 style="color:#166534">💳 Listas para pagar · {{ $listasParaPagar->count() }} {{ $listasParaPagar->count() === 1 ? 'planilla' : 'planillas' }}
-        @if($listasParaPagar->sum(fn ($g) => (float) ($g->registro->valor_total ?? 0)) > 0)
-        · {{ $fmt($listasParaPagar->sum(fn ($g) => (float) ($g->registro->valor_total ?? 0))) }}
-        @endif
-    </h3>
-    <p class="bx1-ayuda" style="color:#166534">Liquidadas en Simple y sin pagar. «Pagar (PSE)» pide el enlace a Simple en ese momento (con el subtipo 4 solo lo da con la ventana abierta). Después de pagar, «Confirmar» en la tarjeta de la empresa.</p>
+<div class="bx1-card" style="border:2px solid #86efac;background:#f0fdf4;padding:.6rem .8rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.3rem">
+        <strong style="color:#166534">💳 Listas para pagar · {{ $listasParaPagar->count() }} {{ $listasParaPagar->count() === 1 ? 'planilla' : 'planillas' }}
+            @if($listasParaPagar->sum(fn ($g) => (float) ($g->registro->valor_total ?? 0)) > 0)
+            · {{ $fmt($listasParaPagar->sum(fn ($g) => (float) ($g->registro->valor_total ?? 0))) }}
+            @endif
+        </strong>
+        <span class="bx1-meta" style="color:#166534">Pagar (PSE) pide el enlace en ese momento · luego Confirmar</span>
+    </div>
     <table class="bx1-tabla">
-        <thead><tr><th>Empresa</th><th>Planilla</th><th class="num">Personas</th><th class="num">Valor en Simple</th><th></th></tr></thead>
         <tbody>
         @foreach($listasParaPagar as $g)
         <tr>
-            <td><strong>{{ \Illuminate\Support\Str::limit($g->razon_social, 40, '…') }}</strong> <span class="bx1-chip plano">{{ $g->modalidad }}</span></td>
+            <td><strong>{{ \Illuminate\Support\Str::limit($g->razon_social, 44, '…') }}</strong> <span class="bx1-chip plano">{{ $g->modalidad }}</span></td>
             <td style="font-family:monospace">{{ $g->registro->numero_planilla }}</td>
-            <td class="num">{{ $g->estados['liquidada'] ?? $g->personas }}</td>
-            <td class="num">{{ $g->registro->valor_total ? $fmt($g->registro->valor_total) : '—' }}</td>
+            <td class="num">{{ $g->estados['liquidada'] ?? $g->personas }} pers.</td>
+            <td class="num"><strong>{{ $g->registro->valor_total ? $fmt($g->registro->valor_total) : '—' }}</strong></td>
             <td class="num" style="white-space:nowrap">
                 <a class="bx1-btn verde" target="_blank"
                    href="{{ route('brynex.x1.pagar', ['aliado_id' => $aliadoBrygar, 'numero' => $g->registro->numero_planilla]) }}">Pagar (PSE)</a>
@@ -130,127 +132,125 @@
 </div>
 @endif
 
-@forelse($grupos as $g)
-@php
-    $datosConjunta = ['nit' => $g->nit, 'tipo_modalidad_id' => $g->tipo_modalidad_id, 'mes' => $mes, 'anio' => $anio];
-    $urlsConjunta = [
-        'liquidar' => route('brynex.x1.conjunta.liquidar'),
-        'confirmar' => route('brynex.x1.conjunta.confirmar'),
-        'pagar' => route('brynex.x1.pagar').'?aliado_id='.$aliadoBrygar.'&numero=',
-    ];
-    $numeroConjunta = $g->registro->numero_planilla ?? null;
-    $valorConjunta = $g->registro?->valor_total ? (int) round($g->registro->valor_total) : null;
-@endphp
-<div class="bx1-card" id="empresa-{{ $g->nit }}-{{ abs($g->tipo_modalidad_id) }}" x-data="tandaX1(@js($datosConjunta), @js($numeroConjunta), @js($valorConjunta), null, @js($g->por_pagar), @js($urlsConjunta))">
-    <div class="bx1-sol-head">
-        <div>
-            <strong style="font-size:.92rem">{{ $g->razon_social }}</strong>
-            <span class="bx1-chip plano">{{ $g->modalidad }}</span>
-            <div class="bx1-meta">
-                {{ $g->aliados->count() }} {{ $g->aliados->count() === 1 ? 'aliado' : 'aliados' }} · {{ $g->personas }} {{ $g->personas === 1 ? 'persona' : 'personas' }}
-                · NIT {{ $g->nit }}
-                @if($g->rs_brygar) · sucursal Brygar @endif
-            </div>
-        </div>
-        <div style="text-align:right">
-            <strong style="font-size:.92rem">{{ $fmt($g->valor_pendiente) }}</strong>
-            <div class="bx1-meta">por pagar · total {{ $fmt($g->valor_ss) }} (SS con día de pensión)</div>
-            @foreach($g->estados as $estado => $n)
-            <span class="bx1-chip {{ $estado }}">{{ $etiquetasEstado[$estado] ?? $estado }} · {{ $n }}</span>
-            @endforeach
-        </div>
-    </div>
-
-    <div style="overflow-x:auto">
-    <table class="bx1-tabla">
-        <thead><tr><th>Aliado</th><th class="num">Personas</th><th>Consignación</th><th>Estado</th><th class="num">SS</th></tr></thead>
-        <tbody>
-        @foreach($g->aliados as $a)
+@if($grupos->isEmpty())
+<div class="bx1-card"><div class="bx1-meta">No hay personas X1 solicitadas en este período.</div></div>
+@else
+<div class="bx1-card" style="padding:.4rem .5rem">
+<div style="overflow-x:auto">
+<table class="bx1-tabla bx1-compacta">
+    <thead>
         <tr>
-            <td>{{ $a->nombre }}</td>
-            <td class="num">{{ $a->personas }}</td>
+            <th>Empresa</th>
+            <th>Aliados · consignación</th>
+            <th>Estado</th>
+            <th class="num">Por pagar</th>
+            <th>Planilla</th>
+            <th style="text-align:right">Acciones</th>
+        </tr>
+    </thead>
+    @foreach($grupos as $g)
+    @php
+        $datosConjunta = ['nit' => $g->nit, 'tipo_modalidad_id' => $g->tipo_modalidad_id, 'mes' => $mes, 'anio' => $anio];
+        $urlsConjunta = [
+            'liquidar' => route('brynex.x1.conjunta.liquidar'),
+            'confirmar' => route('brynex.x1.conjunta.confirmar'),
+            'pagar' => route('brynex.x1.pagar').'?aliado_id='.$aliadoBrygar.'&numero=',
+        ];
+        $numeroConjunta = $g->registro->numero_planilla ?? null;
+        $valorConjunta = $g->registro?->valor_total ? (int) round($g->registro->valor_total) : null;
+    @endphp
+    <tbody id="empresa-{{ $g->nit }}-{{ abs($g->tipo_modalidad_id) }}"
+           x-data="Object.assign(tandaX1(@js($datosConjunta), @js($numeroConjunta), @js($valorConjunta), null, @js($g->por_pagar), @js($urlsConjunta)), { detalle: false })"
+           style="{{ $g->abierta ? '' : 'opacity:.6' }}">
+        <tr class="bx1-fila">
             <td>
-                @if($a->aliado_id === $aliadoBrygar)
-                    <span class="bx1-chip pagada">No aplica</span>
-                @elseif($a->verificada)
-                    <span class="bx1-chip pagada">Verificada</span>
-                @else
-                    <a class="bx1-chip en_solicitud" style="text-decoration:none"
-                       href="{{ route('brynex.x1.index', ['vista' => 'consignaciones', 'mes' => $mes, 'anio' => $anio]) }}">Por verificar · ver foto</a>
-                @endif
+                <button type="button" @click="detalle = !detalle" class="bx1-toggle" :aria-expanded="detalle" title="Ver personas y confirmar">
+                    <span x-text="detalle ? '▾' : '▸'">▸</span>
+                </button>
+                <strong title="{{ $g->razon_social }} · NIT {{ $g->nit }}">{{ \Illuminate\Support\Str::limit($g->razon_social, 34, '…') }}</strong>
+                <span class="bx1-chip plano">{{ $g->modalidad }}</span>
             </td>
             <td>
-                @foreach($a->estados as $estado => $n)
-                <span class="bx1-chip {{ $estado }}">{{ $etiquetasEstado[$estado] ?? $estado }} · {{ $n }}</span>
+                @foreach($g->aliados as $a)
+                <span class="bx1-aliado" title="{{ $a->aliado_id === $aliadoBrygar ? 'Brygar no consigna' : ($a->verificada ? 'Consignación verificada' : 'Consignación por verificar') }}">
+                    {{ $a->aliado_id === $aliadoBrygar ? '◦' : ($a->verificada ? '✅' : '🟡') }}
+                    {{ \Illuminate\Support\Str::limit(nombre_oracion($a->nombre), 18, '…') }} <b>{{ $a->personas }}</b>
+                </span>
                 @endforeach
             </td>
-            <td class="num">{{ $fmt($a->valor_ss) }}</td>
+            <td>
+                @foreach($g->estados as $estado => $n)
+                <span class="bx1-chip {{ $estado }}">{{ $etiquetasEstado[$estado] ?? $estado }} {{ $n }}</span>
+                @endforeach
+            </td>
+            <td class="num">
+                <strong>{{ $fmt($g->valor_pendiente) }}</strong>
+                @if($g->valor_pendiente !== $g->valor_ss)<div class="bx1-meta">de {{ $fmt($g->valor_ss) }}</div>@endif
+            </td>
+            <td style="font-family:monospace;font-size:.72rem;white-space:nowrap">
+                @if($g->registro)
+                    <span style="{{ $g->por_pagar ? '' : 'color:#94a3b8' }}" title="{{ $g->por_pagar ? 'Liquidada, por pagar' : 'Anterior, sin pagar' }}">{{ $g->registro->numero_planilla }}</span>
+                @else
+                    <span style="color:#cbd5e1">—</span>
+                @endif
+            </td>
+            <td style="text-align:right;white-space:nowrap">
+                @if(! $g->rs_brygar)
+                    <span class="bx1-meta" title="La empresa no está en Brygar: se paga por aliado">Por aliado</span>
+                @elseif($g->abierta)
+                    <button type="button" class="bx1-btn primario" @click="liquidar()" :disabled="ocupado"
+                            title="Una sola planilla con {{ $g->para_liquidar }} {{ $g->para_liquidar === 1 ? 'persona' : 'personas' }}">
+                        <span x-text="ocupado === 'liquidar' ? '…' : 'Liquidar {{ $g->para_liquidar ?: '' }}'">Liquidar</span>
+                    </button>
+                    <template x-if="urlPago"><a class="bx1-btn verde" target="_blank" rel="noopener" :href="urlPago">Pagar ahora</a></template>
+                    <template x-if="numero && porPagar && !urlPago"><a class="bx1-btn verde" target="_blank" :href="urls.pagar + encodeURIComponent(numero)">Pagar</a></template>
+                    <button type="button" class="bx1-btn suave" @click="detalle = true; abrirConfirmar = true">Confirmar</button>
+                @else
+                    <span class="bx1-chip pagada">Cerrada</span>
+                @endif
+            </td>
         </tr>
-        @endforeach
-        </tbody>
-    </table>
-    </div>
-
-    <details class="bx1-personas" style="margin-top:.4rem">
-        <summary>Personas ({{ $g->personas }})</summary>
-        <div style="overflow-x:auto">
-        <table class="bx1-detalle">
-            <thead><tr><th>Persona</th><th>Aliado</th><th class="num">Días</th><th class="num">EPS</th><th class="num">ARL</th><th class="num">Caja</th><th class="num">Pensión (1 día)</th><th class="num">SS</th><th>Estado</th><th>Planilla</th></tr></thead>
-            <tbody>
-            @foreach($g->filas as $f)
-            <tr>
-                <td style="white-space:nowrap">{{ $f->tipo_doc }} {{ $f->no_identifi }} · {{ nombre_oracion(trim($f->primer_nombre.' '.$f->primer_ape)) }}</td>
-                <td>{{ $f->aliado_nombre }}</td>
-                <td class="num">{{ $f->num_dias }}</td>
-                <td class="num">{{ $fmt($f->v_eps) }}</td>
-                <td class="num">{{ $fmt($f->v_arl) }}</td>
-                <td class="num">{{ $fmt($f->v_caja) }}</td>
-                <td class="num">{{ $fmt($f->valor_afp) }}</td>
-                <td class="num"><strong>{{ $fmt($f->valor_ss) }}</strong></td>
-                <td><span class="bx1-chip {{ $f->estado }}">{{ $etiquetasEstado[$f->estado] ?? $f->estado }}</span></td>
-                <td style="font-family:monospace">{{ $f->numero_planilla ?: '—' }}</td>
-            </tr>
-            @endforeach
-            </tbody>
-        </table>
-        </div>
-    </details>
-
-    <div style="display:flex;justify-content:space-between;gap:.8rem;flex-wrap:wrap;margin-top:.6rem;align-items:flex-start">
-        <div style="font-family:monospace;font-size:.74rem">
-            @if($g->registro)
-                Planilla conjunta {{ $g->registro->numero_planilla }}
-                @if($g->registro->valor_total)<span class="bx1-meta" style="font-family:sans-serif">· {{ $fmt($g->registro->valor_total) }}</span>@endif
-                @unless($g->por_pagar)<div class="bx1-meta" style="font-family:sans-serif">anterior, sin pagar</div>@endunless
-            @endif
-        </div>
-        <div>
-            @if(! $g->rs_brygar)
-                <span class="bx1-meta">Esta empresa no está en Brygar: no se puede juntar. Páguela por aliado.</span>
-            @elseif($g->abierta)
-            <div style="display:flex;gap:.3rem;flex-wrap:wrap;justify-content:flex-end">
-                <button type="button" class="bx1-btn primario" @click="liquidar()" :disabled="ocupado">
-                    <span x-text="ocupado === 'liquidar' ? 'Liquidando…' : 'Liquidar {{ $g->para_liquidar ?: '' }} en una planilla'">Liquidar en una planilla</span>
-                </button>
-                <template x-if="urlPago">
-                    <a class="bx1-btn verde" target="_blank" rel="noopener" :href="urlPago">Pagar ahora</a>
-                </template>
-                <template x-if="numero && porPagar && !urlPago">
-                    <a class="bx1-btn verde" target="_blank" :href="urls.pagar + encodeURIComponent(numero)">Pagar (PSE)</a>
-                </template>
-                <button type="button" class="bx1-btn suave" @click="abrirConfirmar = !abrirConfirmar">Confirmar</button>
-            </div>
-            @include('brynex.x1-pagos._confirmar')
-            @else
-                <span class="bx1-meta">Cerrada</span>
-            @endif
-            @include('brynex.x1-pagos._mensaje')
-        </div>
-    </div>
+        <tr x-show="mensaje" x-cloak>
+            <td colspan="6" style="padding-top:0">@include('brynex.x1-pagos._mensaje')</td>
+        </tr>
+        <tr x-show="detalle" x-cloak class="bx1-detalle-fila">
+            <td colspan="6">
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start">
+                    <div style="flex:1 1 520px;min-width:0;overflow-x:auto">
+                        <table class="bx1-detalle">
+                            <thead><tr><th>Persona</th><th>Aliado</th><th class="num">Días</th><th class="num">EPS</th><th class="num">ARL</th><th class="num">Caja</th><th class="num">Pensión</th><th class="num">SS</th><th>Estado</th></tr></thead>
+                            <tbody>
+                            @foreach($g->filas as $f)
+                            <tr>
+                                <td style="white-space:nowrap">{{ $f->no_identifi }} · {{ nombre_oracion(trim($f->primer_nombre.' '.$f->primer_ape)) }}</td>
+                                <td>{{ \Illuminate\Support\Str::limit(nombre_oracion($f->aliado_nombre), 16, '…') }}</td>
+                                <td class="num">{{ $f->num_dias }}</td>
+                                <td class="num">{{ $fmt($f->v_eps) }}</td>
+                                <td class="num">{{ $fmt($f->v_arl) }}</td>
+                                <td class="num">{{ $fmt($f->v_caja) }}</td>
+                                <td class="num">{{ $fmt($f->valor_afp) }}</td>
+                                <td class="num"><strong>{{ $fmt($f->valor_ss) }}</strong></td>
+                                <td><span class="bx1-chip {{ $f->estado }}">{{ $etiquetasEstado[$f->estado] ?? $f->estado }}</span>@if($f->numero_planilla) <span style="font-family:monospace;font-size:.66rem">{{ $f->numero_planilla }}</span>@endif</td>
+                            </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                        <div class="bx1-meta" style="margin-top:.3rem">NIT {{ $g->nit }} · {{ $g->rs_brygar ? 'sucursal Brygar' : 'no está en Brygar' }}
+                            @if($g->sin_verificar > 0) · {{ $g->sin_verificar }} de consignaciones por verificar (<a href="{{ route('brynex.x1.index', ['vista' => 'consignaciones', 'mes' => $mes, 'anio' => $anio]) }}">ver</a>)@endif
+                        </div>
+                    </div>
+                    @if($g->rs_brygar && $g->abierta)
+                    <div style="flex:0 0 300px">@include('brynex.x1-pagos._confirmar')</div>
+                    @endif
+                </div>
+            </td>
+        </tr>
+    </tbody>
+    @endforeach
+</table>
 </div>
-@empty
-<div class="bx1-card"><div class="bx1-meta">No hay personas X1 solicitadas en este período.</div></div>
-@endforelse
+</div>
+@endif
 
 @elseif($vista === 'consignaciones')
 {{-- ── Consignaciones: validar que el soporte es real ─────────────────── --}}
