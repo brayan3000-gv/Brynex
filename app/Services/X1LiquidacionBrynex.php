@@ -164,7 +164,7 @@ class X1LiquidacionBrynex
      * @return array{ok: bool, estado: string, mensaje: string, numero_planilla?: string,
      *               valor_total?: float|null, movidas?: int, errores?: array}
      */
-    public static function liquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, bool $moverRebotados = true): array
+    public static function liquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, bool $moverRebotados = true, bool $ignorarOtra = false): array
     {
         if (! self::puedeOperar(Auth::user())) {
             return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Solo el superadmin de BryNex liquida las X1.'];
@@ -200,15 +200,25 @@ class X1LiquidacionBrynex
             ->latest('id')
             ->first();
 
-        if ($otra) {
+        // Quien la revisó en Simple y vio que NO se pagó puede seguir
+        // (`$ignorarOtra`, solo desde la vista; el vigía nunca lo hace).
+        if ($otra && ! $ignorarOtra) {
             return [
                 'ok' => false,
                 'estado' => 'rechazada',
+                'otra_planilla' => (string) $otra->numero_planilla,
                 'mensaje' => "Este plano ya tiene la planilla {$otra->numero_planilla} liquidada en Simple"
                     .($otra->valor_total ? ' por $'.number_format((float) $otra->valor_total, 0, ',', '.') : '')
                     .' el '.optional($otra->created_at)->format('d/m H:i')
                     .' (no por BryNex). Revise en Simple si ya se pagó antes de volver a liquidar: podría duplicar a esas personas.',
             ];
+        }
+
+        if ($otra) {
+            Log::warning('x1-pagos: se liquida pese a otra planilla en el plano (revisada: sin pagar)', [
+                'aliado' => $aliadoId, 'rs' => $rsId, 'n_plano' => $nPlano,
+                'otra' => $otra->numero_planilla, 'usuario' => Auth::id(),
+            ]);
         }
 
         $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple);

@@ -46,7 +46,8 @@ class BrynexX1PagosController extends Controller
         $v = $this->tanda($request);
 
         return response()->json(X1LiquidacionBrynex::liquidar(
-            $v['aliado_id'], $v['razon_social_id'], $v['n_plano'], $v['tipo_modalidad_id'], $v['mes'], $v['anio']
+            $v['aliado_id'], $v['razon_social_id'], $v['n_plano'], $v['tipo_modalidad_id'], $v['mes'], $v['anio'],
+            true, $request->boolean('ignorar_otra')
         ));
     }
 

@@ -150,7 +150,7 @@
                 $numeroRegistro = $t->registro->numero_planilla ?? null;
                 $valorRegistro = $t->registro?->valor_total ? (int) round($t->registro->valor_total) : null;
             @endphp
-            <tr x-data="tandaX1(@js($datosTanda), @js($numeroRegistro), @js($valorRegistro))">
+            <tr x-data="tandaX1(@js($datosTanda), @js($numeroRegistro), @js($valorRegistro), @js($t->otra_planilla->numero_planilla ?? null))">
                 <td>
                     <strong>{{ \Illuminate\Support\Str::limit($t->razon_social, 34, '…') }}</strong>
                     <div class="bx1-meta">{{ $t->modalidad }}</div>
@@ -244,6 +244,10 @@
                         <button type="button" class="bx1-btn primario" @click="liquidar()" :disabled="ocupado">
                             <span x-text="ocupado === 'liquidar' ? 'Liquidando…' : 'Liquidar'">Liquidar</span>
                         </button>
+                        <template x-if="otraPlanilla">
+                            <button type="button" class="bx1-btn suave" style="border-color:#fdba74;color:#9a3412"
+                                    @click="liquidar(true)" :disabled="ocupado">No está pagada: liquidar igual</button>
+                        </template>
                         <template x-if="numero">
                             <a class="bx1-btn verde" target="_blank"
                                :href="'{{ route('brynex.x1.pagar') }}?aliado_id={{ $t->aliado_id }}&numero=' + encodeURIComponent(numero)">Pagar (PSE)</a>
@@ -338,7 +342,7 @@
 
 @push('scripts')
 <script>
-function tandaX1(datos, numero, valor) {
+function tandaX1(datos, numero, valor, otra) {
     return {
         datos,
         numero,
@@ -348,6 +352,7 @@ function tandaX1(datos, numero, valor) {
         comprobanteConfirmar: '',
         fechaConfirmar: new Date().toLocaleDateString('en-CA'),
         observacionConfirmar: '',
+        otraPlanilla: otra || null,
         abrirConfirmar: false,
         ocupado: false,
         mensaje: '',
@@ -374,6 +379,7 @@ function tandaX1(datos, numero, valor) {
                 this.errores = d.errores || [];
                 if (d.numero_planilla) { this.numero = d.numero_planilla; this.numeroConfirmar = d.numero_planilla; }
                 if (d.valor_total) { this.valorConfirmar = Math.round(d.valor_total); }
+                if (accion === 'liquidar') this.otraPlanilla = d.otra_planilla || null;
                 if (!r.ok && d.errors) { this.errores = Object.values(d.errors).flat(); }
                 return d;
             } catch (e) {
@@ -383,9 +389,12 @@ function tandaX1(datos, numero, valor) {
                 this.ocupado = false;
             }
         },
-        async liquidar() {
-            if (!confirm('¿Liquidar esta tanda en Simple con la cuenta de BryNex?')) return;
-            await this.enviar('{{ route('brynex.x1.liquidar') }}', {}, 'liquidar');
+        async liquidar(ignorarOtra = false) {
+            const pregunta = ignorarOtra
+                ? '¿Ya revisó en Simple que la planilla ' + this.otraPlanilla + ' NO está pagada? Si estuviera pagada, esas personas quedarían pagadas dos veces.'
+                : '¿Liquidar esta tanda en Simple con la cuenta de BryNex?';
+            if (!confirm(pregunta)) return;
+            await this.enviar('{{ route('brynex.x1.liquidar') }}', ignorarOtra ? { ignorar_otra: 1 } : {}, 'liquidar');
         },
         async confirmar() {
             if (!this.numeroConfirmar) { this.ok = false; this.mensaje = 'Escriba el número de planilla.'; return; }
