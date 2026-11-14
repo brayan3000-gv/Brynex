@@ -39,7 +39,7 @@ class RegistroOficialSimulado
         $cedula = preg_replace('/\D/', '', $cedula);
         $semilla = crc32($tipoDoc.$cedula);
 
-        $cliente = Cliente::where('aliado_id', (int) config('demo.aliado_id'))
+        $cliente = Cliente::where('aliado_id', (int) (session('aliado_id_activo') ?: config('demo.aliado_id')))
             ->where('cedula', $cedula)
             ->first();
 

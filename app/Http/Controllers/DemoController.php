@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\Demo\EspaciosDemo;
 use App\Services\Demo\PilaSimulada;
 use App\Services\Demo\RadicacionSimulada;
 use App\Services\Demo\RelevoDemo;
@@ -52,7 +53,10 @@ class DemoController extends Controller
             'ip' => $request->ip(),
         ]);
 
-        $usuario = User::where('cedula', (string) config('demo.usuario'))->where('activo', 1)->firstOrFail();
+        // Su propio espacio si hay uno libre; si no, la cuenta compartida.
+        $espacio = EspaciosDemo::asignar(preg_replace('/\D/', '', $datos['celular']));
+        $usuario = ($espacio ? EspaciosDemo::usuario($espacio) : null)
+            ?? User::where('cedula', (string) config('demo.usuario'))->where('activo', 1)->firstOrFail();
         Auth::login($usuario);
         $request->session()->regenerate();
         session()->forget('aliado_id_activo');
@@ -67,6 +71,7 @@ class DemoController extends Controller
             'verificado' => false,
             'envios' => 0,
             'max' => $r['max'] ?? RelevoDemo::maxEnvios(),
+            'espacio' => $espacio,
         ]]);
 
         return redirect()->route('dashboard');

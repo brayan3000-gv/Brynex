@@ -17,6 +17,7 @@
 #   scripts/demo/demo.sh sincronizar  # vuelve a copiar el código del repo a la copia
 #   scripts/demo/demo.sh subir        # la plantilla sin gente a netcup (ver scripts/demo/servidor)
 #   scripts/demo/demo.sh capitulos [--servidor]  # los capítulos del manual para «¿Cómo funciona?»
+#   scripts/demo/demo.sh espacios [N]  # siembra los espacios propios 1…N en la base local
 #   scripts/demo/demo.sh sql "SELECT …"
 #
 # La clave de la cuenta de la demo va en .env.demo (ignorado por git).
@@ -191,6 +192,15 @@ EOF
       en_sandbox php "$REPO/scripts/videos/demo/sembrar.php") || echo "⚠️  El sembrado tuvo errores (ver arriba)."
     sql -Q "BACKUP DATABASE BryNex_Demo TO DISK='$BAK_BASE' WITH INIT" >/dev/null
     echo "BryNex_Demo lista. Plantillas: $BAK_CATALOGOS (sin gente) y $BAK_BASE (sembrada)"
+    ;;
+  espacios)
+    # Los espacios propios de los prospectos (App\Services\Demo\EspaciosDemo) sobre
+    # la base local recién sembrada, como los hace reiniciar.sh en el servidor.
+    # Para usarlos, DEMO_ESPACIOS=N en el .env de la copia.
+    for n in $(seq 1 "${2:-2}"); do
+      (cd "$APP" && TZ=America/Bogota DEMO_PUBLICO=1 DEMO_ESPACIO="$n" VIDEOS_APP="$APP" \
+        en_sandbox php "$REPO/scripts/videos/demo/sembrar.php" | tail -2) || echo "⚠️  El espacio $n tuvo errores (ver arriba)."
+    done
     ;;
   servir)
     cd "$APP"

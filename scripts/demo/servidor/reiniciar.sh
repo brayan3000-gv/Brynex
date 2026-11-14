@@ -45,4 +45,15 @@ cd "$DEMO"
 como_demo php artisan migrate --force --no-interaction
 como_demo env DEMO_PUBLICO=1 DEMO_CLAVE="$(leer DEMO_CLAVE)" VIDEOS_APP="$DEMO" \
     php "$DEMO/scripts/videos/demo/sembrar.php"
+
+# Los espacios propios de cada prospecto (App\Services\Demo\EspaciosDemo): el
+# mismo sembrado como aliados 101, 102… Uno que falle no frena los demás: el
+# registro solo asigna espacios cuya cuenta exista, y si no, entra al compartido.
+ESPACIOS="$(leer DEMO_ESPACIOS)"
+for n in $(seq 1 "${ESPACIOS:-0}"); do
+    como_demo env DEMO_PUBLICO=1 DEMO_ESPACIO="$n" VIDEOS_APP="$DEMO" \
+        php "$DEMO/scripts/videos/demo/sembrar.php" >/tmp/brynex-demo-espacio.log 2>&1 \
+        && echo "   espacio $n listo ($(date '+%T'))" \
+        || { echo "   espacio $n FALLÓ:"; tail -5 /tmp/brynex-demo-espacio.log; }
+done
 echo "== $(date '+%F %T') listo"

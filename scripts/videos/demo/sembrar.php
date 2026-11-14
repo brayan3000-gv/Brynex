@@ -51,9 +51,17 @@ if (! $esVideos && ! $esDemo) {
     exit(1);
 }
 
-const ALIADO = 100;
-const RS_DEP = 998500101;   // razón social de los dependientes (id = NIT)
-const RS_IND = 998500102;   // la de los independientes
+// Espacios de la demo pública (App\Services\Demo\EspaciosDemo): el 0 es el
+// aliado 100 de siempre; el n es el aliado 100+n, con cédulas y NIT que
+// empiezan por 97NN en vez de 9985 y sus propios ids de empresas y clientes.
+$ESPACIO = $PUBLICO ? max(0, min(99, (int) getenv('DEMO_ESPACIO'))) : 0;
+define('ALIADO', \App\Services\Demo\EspaciosDemo::aliado($ESPACIO));
+define('PRE', \App\Services\Demo\EspaciosDemo::prefijo($ESPACIO));
+define('RS_DEP', (int) (PRE.'00101'));   // razón social de los dependientes (id = NIT)
+define('RS_IND', (int) (PRE.'00102'));   // la de los independientes
+if ($ESPACIO > 0) {
+    require __DIR__.'/../../demo/espacio.php';
+}
 
 // La respuesta oficial de Yuly en la caché con la llave que usa
 // RegistroOficialService::consultar(): al buscar su cédula, la app la encuentra
@@ -99,17 +107,17 @@ $sinId = fn (string $t, array $f) => DB::table($t)->insert($f);
 // ── 1. Usuarios: uno por rol ───────────────────────────────────────────────
 $roles = DB::table('roles')->pluck('id', 'name');
 $cuentas = [
-    'SUPERADMIN' => ['9985000001', 'Carolina Andrade Méndez', 'superadmin'],
-    'ADMIN' => ['9985000002', 'Julián Esteban Rojas Pardo', 'admin'],
-    'USUARIO' => ['9985000003', 'Daniela Restrepo Gómez', 'usuario'],
-    'CONTABLE' => ['9985000004', 'Hernán Darío Salazar Vélez', 'contable'],
-    'ASESOR' => ['9985000005', 'Valentina Ortiz Cárdenas', 'asesor'],
+    'SUPERADMIN' => [PRE.'000001', 'Carolina Andrade Méndez', 'superadmin'],
+    'ADMIN' => [PRE.'000002', 'Julián Esteban Rojas Pardo', 'admin'],
+    'USUARIO' => [PRE.'000003', 'Daniela Restrepo Gómez', 'usuario'],
+    'CONTABLE' => [PRE.'000004', 'Hernán Darío Salazar Vélez', 'contable'],
+    'ASESOR' => [PRE.'000005', 'Valentina Ortiz Cárdenas', 'asesor'],
 ];
 $lineasEnv = [];
 $usuarios = [];
 foreach ($cuentas as $clave => [$cedula, $nombre, $rol]) {
     // En la demo pública la cuenta principal es la que se muestra en el login.
-    $pass = ($PUBLICO && $clave === 'SUPERADMIN' && getenv('DEMO_CLAVE')) ? getenv('DEMO_CLAVE') : 'Video-'.bin2hex(random_bytes(5));
+    $pass = ($PUBLICO && $ESPACIO === 0 && $clave === 'SUPERADMIN' && getenv('DEMO_CLAVE')) ? getenv('DEMO_CLAVE') : 'Video-'.bin2hex(random_bytes(5));
     $id = $ins('users', [
         'aliado_id' => ALIADO, 'nombre' => $nombre, 'email' => strtolower(explode(' ', $nombre)[0]).'.'.$cedula.'@example.com',
         'password' => Hash::make($pass), 'cedula' => $cedula, 'telefono' => '399500'.substr($cedula, -4), 'es_brynex' => 0, 'activo' => 1,
@@ -131,7 +139,7 @@ $rsBase = [
     'mes_pagos' => 10, 'anio_pagos' => 2026, 'n_plano' => 1, 'dia_habil' => 9, 'forma_presentacion' => 'S',
     'codigo_sucursal' => '01', 'nombre_sucursal' => 'PRINCIPAL', 'aliado_id' => ALIADO, 'encargado_id' => $usuarios['USUARIO'],
     'tipo_persona' => 'J', 'cod_departamento' => '76', 'cod_municipio' => '001', 'rep_tipo_doc' => 'CC',
-    'cedula_rep' => '9985000001', 'nombre_rep' => 'Carolina Andrade Méndez', 'exonerado_parafiscales' => 1,
+    'cedula_rep' => PRE.'000001', 'nombre_rep' => 'Carolina Andrade Méndez', 'exonerado_parafiscales' => 1,
     'direccion' => 'Calle 5 # 38-25, oficina 301, Cali', 'telefonos' => '6029985000', 'correos' => 'nomina@example.com',
     'actividad_economica' => '8211', 'objeto_social' => 'Servicios administrativos combinados de oficina',
     'fecha_constitucion' => '2019-03-12',
@@ -154,7 +162,7 @@ $cuentaNequi = $ins('banco_cuentas', ['aliado_id' => ALIADO, 'nombre' => 'Nequi'
     'uso_personal' => 0, 'created_at' => $ahora(), 'updated_at' => $ahora()]);
 $nivelAsesor = DB::table('asesor_niveles')->where('aliado_id', ALIADO)->orderBy('orden')->value('id');
 $asesores = [];
-foreach ([['9985000901', 'Andrés Felipe Molina Ríos'], ['9985000902', 'Lorena Patricia Vargas Díaz']] as [$ced, $nom]) {
+foreach ([[PRE.'000901', 'Andrés Felipe Molina Ríos'], [PRE.'000902', 'Lorena Patricia Vargas Díaz']] as [$ced, $nom]) {
     $asesores[] = $ins('asesores', ['aliado_id' => ALIADO, 'cedula' => $ced, 'nombre' => $nom, 'celular' => '399500'.substr($ced, -4),
         'correo' => 'asesor'.substr($ced, -3).'@example.com', 'ciudad' => 'Cali', 'departamento' => 'VALLE DEL CAUCA',
         'activo' => 1, 'nivel_id' => $nivelAsesor, 'fecha_ingreso' => '2026-01-15', 'created_at' => $ahora(), 'updated_at' => $ahora()]);
@@ -163,7 +171,9 @@ foreach ([['9985000901', 'Andrés Felipe Molina Ríos'], ['9985000902', 'Lorena 
 // ── 3. Empresas cliente ────────────────────────────────────────────────────
 // La empresa 1 es «Individual», como en producción: la app la trata aparte
 // (FacturacionController la excluye con id > 1) y los independientes van ahí.
-$sinId('empresas', ['id' => 1, 'empresa' => 'Individual', 'aliado_id' => ALIADO, 'created_at' => '2026-06-01 08:00:00', 'updated_at' => $ahora()]);
+// Una sola para todos los espacios (va con el 0, que se siembra primero).
+DB::table('empresas')->where('id', 1)->exists()
+    || $sinId('empresas', ['id' => 1, 'empresa' => 'Individual', 'aliado_id' => ALIADO, 'created_at' => '2026-06-01 08:00:00', 'updated_at' => $ahora()]);
 $empresas = [];
 foreach ([
     ['PANADERÍA LA ESPIGA DORADA S.A.S.', 'Gloria Inés Cárdenas', 'Carrera 44 # 9-31'],
@@ -173,8 +183,8 @@ foreach ([
     ['FERRETERÍA EL TORNILLO FELIZ', 'Óscar Iván Bermúdez', 'Calle 15 # 32-08'],
     ['CONSTRUCCIONES ANDINAS DEMO S.A.S.', 'Ricardo Alberto Lozano', 'Carrera 100 # 11-60'],
 ] as $i => [$nombre, $contacto, $dir]) {
-    $id = $i + 2;
-    $sinId('empresas', ['id' => $id, 'nit' => (string) (998500201 + $i), 'empresa' => $nombre, 'nombre_legal' => $nombre, 'contacto' => $contacto,
+    $id = 100 * $ESPACIO + $i + 2;
+    $sinId('empresas', ['id' => $id, 'nit' => (string) ((int) (PRE.'00201') + $i), 'empresa' => $nombre, 'nombre_legal' => $nombre, 'contacto' => $contacto,
         'telefono' => '60299850'.str_pad((string) (10 + $i), 2, '0', STR_PAD_LEFT), 'celular' => '39950002'.str_pad((string) (10 + $i), 2, '0', STR_PAD_LEFT),
         'contacto_celular' => '39950002'.str_pad((string) (10 + $i), 2, '0', STR_PAD_LEFT), 'direccion' => $dir.', Cali',
         'correo' => 'empresa'.($i + 1).'@example.com', 'tipo_facturacion' => 'Recibo de Pago', 'tipo_documento' => 'NIT', 'iva' => 0,
@@ -196,7 +206,7 @@ $afpIds = [5, 8, 9, 14];
 $elegir = fn (array $a) => $a[mt_rand(0, count($a) - 1)];
 
 $clientes = [];
-$siguienteId = 1;
+$siguienteId = 1000 * $ESPACIO + 1;
 $nuevoCliente = function (array $datos) use (&$siguienteId, &$clientes, $sinId) {
     $fila = $datos + ['id' => $siguienteId++, 'aliado_id' => ALIADO, 'tipo_doc' => 'CC', 'departamento_id' => 76, 'municipio_id' => 76001,
         'created_at' => $datos['created_at'] ?? '2026-06-15 10:00:00', 'updated_at' => $datos['created_at'] ?? '2026-06-15 10:00:00'];
@@ -208,7 +218,7 @@ $nuevoCliente = function (array $datos) use (&$siguienteId, &$clientes, $sinId) 
 for ($i = 1; $i <= 62; $i++) {
     $mujer = $i % 2 === 0;
     [$n1, $n2] = array_pad(explode(' ', $elegir($mujer ? $nombresF : $nombresM), 2), 2, null);
-    $cedula = '99851'.str_pad((string) $i, 5, '0', STR_PAD_LEFT);
+    $cedula = PRE.'1'.str_pad((string) $i, 5, '0', STR_PAD_LEFT);
     $nuevoCliente([
         'cedula' => $cedula, 'primer_nombre' => $n1, 'segundo_nombre' => $n2, 'primer_apellido' => $elegir($apellidos), 'segundo_apellido' => $elegir($apellidos),
         'genero' => $mujer ? 'F' : 'M', 'fecha_nacimiento' => sprintf('%d-%02d-%02d', mt_rand(1965, 2004), mt_rand(1, 12), mt_rand(1, 28)),
@@ -230,7 +240,7 @@ $PUBLICO || $nuevoCliente([
 ]);
 foreach (array_slice($clientes, 0, 10) as $k => $cl) {
     $sinId('beneficiarios', ['aliado_id' => ALIADO, 'cc_cliente' => $cl['cedula'], 'tipo_doc' => $k % 3 ? 'RC' : 'TI',
-        'n_documento' => '99859'.str_pad((string) ($k + 1), 5, '0', STR_PAD_LEFT), 'nombres' => $elegir($nombresF).' '.$cl['primer_apellido'],
+        'n_documento' => PRE.'9'.str_pad((string) ($k + 1), 5, '0', STR_PAD_LEFT), 'nombres' => $elegir($nombresF).' '.$cl['primer_apellido'],
         'fecha_nacimiento' => sprintf('20%02d-%02d-%02d', mt_rand(12, 22), mt_rand(1, 12), mt_rand(1, 28)), 'parentesco' => 'HIJO(A)',
         'fecha_ingreso' => $fechaDe($enMes(3, 1)), 'created_at' => $ahora(), 'updated_at' => $ahora()]);
 }
@@ -247,7 +257,7 @@ if (DB::getSchemaBuilder()->hasTable('pagina_aliado_config')) {
         $sinId('pagina_faqs', ['aliado_id' => ALIADO, 'pregunta' => $p, 'respuesta' => $r, 'orden' => $k + 1, 'activo' => 1, 'created_at' => $ahora(), 'updated_at' => $ahora()]);
     }
 }
-echo "Base: ".count($usuarios)." cuentas, 2 razones sociales, ".count($empresas)." empresas, ".count($clientes)." clientes\n";
+echo ($ESPACIO ? "Espacio $ESPACIO (aliado ".ALIADO.') · ' : '')."Base: ".count($usuarios)." cuentas, 2 razones sociales, ".count($empresas)." empresas, ".count($clientes)." clientes\n";
 
 // ═══ La historia, por la app ════════════════════════════════════════════════
 $nav = new class($app)
@@ -344,7 +354,7 @@ foreach ([2, 1, 0] as $atras) {
     // Empresas: un lote por empresa. Este mes, dos empresas quedan sin pagar (cartera).
     foreach ($empresas as $e) {
         $ids = array_column(array_filter($vigentes, fn ($c) => (int) $c['empresa'] === $e), 'id');
-        if (! $ids || ($atras === 0 && in_array($e, [3, 6]))) {
+        if (! $ids || ($atras === 0 && in_array($e, [$empresas[1], $empresas[4]]))) {
             continue;
         }
         // El lote se paga después del último ingreso del mes en esa empresa.
@@ -505,9 +515,10 @@ foreach ([
 
 // ── 15. Acceso de una empresa al portal (Confecciones Lucía) ──────────────
 $claveEmpresa = 'Empresa-'.bin2hex(random_bytes(4));
-$ins('empresa_accesos', ['aliado_id' => ALIADO, 'empresa_id' => 4, 'usuario' => '998500203', 'password' => Hash::make($claveEmpresa), 'activo' => 1,
+$usuarioEmpresa = (string) ((int) (PRE.'00201') + 2);
+$ins('empresa_accesos', ['aliado_id' => ALIADO, 'empresa_id' => $empresas[2], 'usuario' => $usuarioEmpresa, 'password' => Hash::make($claveEmpresa), 'activo' => 1,
     'ver_discriminado' => 1, 'debe_cambiar_clave' => 0, 'creado_por' => $usuarios['SUPERADMIN'], 'created_at' => $enMes(2, 1), 'updated_at' => $ahora()]);
-$lineasEnv[] = 'VIDEOS_EMPRESA_CEDULA=998500203';
+$lineasEnv[] = 'VIDEOS_EMPRESA_CEDULA='.$usuarioEmpresa;
 $lineasEnv[] = "VIDEOS_EMPRESA_CLAVE=$claveEmpresa";
 
 // ── 15b. Gastos administrativos del aliado (arriendo, servicios, nómina) ────

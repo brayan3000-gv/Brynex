@@ -25,6 +25,11 @@ return [
     'usuario' => env('DEMO_USUARIO', '9985000001'),
     'clave' => env('DEMO_CLAVE'),
 
+    // Espacios propios: cada prospecto que se registra trabaja en su aliado
+    // (101, 102…) y no ve lo de los demás. Se siembran cada noche; con 0 todos
+    // entran a la cuenta compartida. Ver App\Services\Demo\EspaciosDemo.
+    'espacios' => (int) env('DEMO_ESPACIOS', 0),
+
     // A dónde escribe el prospecto que quiere BryNex de verdad.
     // El de Brygar: ahí el bot perfila a los prospectos de aliados y les ofrece
     // la alianza (decisión del dueño, 13-nov-2026). Info Avapp no tiene IA activa.

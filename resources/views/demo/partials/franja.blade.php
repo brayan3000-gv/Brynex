@@ -53,7 +53,7 @@
 <div id="demo-panel" role="dialog" aria-label="Demo de BryNex">
     <div class="dp-cab">
         <div><div style="font-weight:800">🧪 Demo de BryNex</div>
-            <div style="font-size:.72rem;color:#cbd5e1">Datos inventados · las entidades se simulan · se reinicia cada noche</div></div>
+            <div style="font-size:.72rem;color:#cbd5e1">Datos inventados · las entidades se simulan{{ ($prospecto['espacio'] ?? 0) ? ' · este espacio es solo tuyo' : '' }} · se reinicia cada noche</div></div>
         <button class="dp-x" type="button" onclick="document.getElementById('demo-panel').classList.remove('abierto')">✕</button>
     </div>
 
