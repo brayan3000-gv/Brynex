@@ -5,7 +5,9 @@
         conexión del WhatsApp de quien prueba (ver RelevoDemo).
 --}}
 @php
-    $wa = 'https://wa.me/'.config('demo.contacto_whatsapp').'?text='.rawurlencode('Hola, probé la demo de BryNex y quiero más información.');
+    // El texto le dice al bot de Brygar de una vez que es una empresa (un futuro
+    // aliado) y no alguien que quiere afiliarse: así va directo a la alianza.
+    $wa = 'https://wa.me/'.config('demo.contacto_whatsapp').'?text='.rawurlencode('Hola, probé la demo de BryNex y me interesa usarlo en mi empresa de seguridad social.');
     $prospecto = session('demo_prospecto');
     $hechos = (array) session('demo_pasos', []);
     $pasos = [

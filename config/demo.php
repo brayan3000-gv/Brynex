@@ -26,9 +26,9 @@ return [
     'clave' => env('DEMO_CLAVE'),
 
     // A dónde escribe el prospecto que quiere BryNex de verdad.
-    // Por defecto Info Avapp, el de la bandeja de BryNex: ahí la IA perfila a los
-    // prospectos de aliados y los reparte.
-    'contacto_whatsapp' => env('DEMO_CONTACTO_WHATSAPP', env('DEMO_RELEVO_NUMERO', '573334315129')),
+    // El de Brygar: ahí el bot perfila a los prospectos de aliados y les ofrece
+    // la alianza (decisión del dueño, 13-nov-2026). Info Avapp no tiene IA activa.
+    'contacto_whatsapp' => env('DEMO_CONTACTO_WHATSAPP', '573205400870'),
 
     // Las únicas bases con las que arranca en modo demo. Nunca `BryNex`.
     'bases_permitidas' => ['BryNex_Demo', 'BryNex_Videos'],
