@@ -177,16 +177,35 @@ Por JS: los select son jQuery (`jQuery(el).val(v).trigger('change')`), los modal
 `position: fixed` (no sirve `offsetParent` para saber si están abiertos) y conviene pulsar
 con `setTimeout` porque Previsualizar y Firmar recargan la página.
 
-## 8. Pendiente de documentar (aún no se ha hecho)
+## 8. Numeración real en MUISCA (hecho con LALA GROUP el 13-nov)
 
-- **Numeración real** en MUISCA (formulario 1876) y asociarla en la solución gratuita.
-- «Registrar fecha de inicio salida a producción» en el portal.
+1. `muisca.dian.gov.co/WebIdentidadLogin/` → **A nombre de un tercero**: NIT de la empresa
+   (sin DV), CC y cédula del representante; **la contraseña la escribe la persona**.
+2. Menú → Numeración de Facturación → **Solicitar Numeración de Facturación**. Puede caer en
+   una página de error con un AVISO («Recuerde tener actualizado el RUT»): Aceptar → sale
+   «Información del Contribuyente» → **Ingresar** → «Consultar Numeración de Facturación».
+3. **Autorizar Rangos** → prefijo (hasta 4 caracteres), Tipo Facturación «FACTURA ELECTRÓNICA
+   DE VENTA», desde/hasta → **Agregar** → **Borrador** → **Definitivo**.
+4. Se abre «Firmar documento»: «Solicite un código… **aquí**» manda una **clave dinámica** a
+   `comunicaciones@dian.gov.co` → buzón central (asunto «Se informa clave dinámica»). Se la
+   damos a la persona; ella escribe código + contraseña de la firma electrónica y Firma.
+5. Queda el formulario **1302** (se descarga a ~/Downloads con su número) y la solicitud en
+   estado DEFINITIVO. La consulta de MUISCA filtra por fecha y guarda la solicitud con la
+   fecha UTC (de noche sale con la de mañana): poner «Fecha Hasta» = mañana.
+
+LALA GROUP: prefijo **FE**, 1–1.000, solicitud 20360064, formulario 13028149393668
+(13-nov 20:34). Lo eligió el dueño; el resto de empresas, preguntar.
+
+## 9. Pendiente de documentar (aún no se ha hecho)
+
+- Ver la resolución/rango ya autorizado en la solución gratuita de **producción** y
+  «Registrar fecha de inicio salida a producción» en el portal.
 
 ## Estado por empresa
 
 | Empresa | NIT | Representante | DIAN | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
-| LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · Certificado emitido 13-nov 15:02 · **set de pruebas aprobado → Habilitado** (13-nov 20:45) |
+| LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · Certificado emitido 13-nov 15:02 · **set de pruebas aprobado → Habilitado** · numeración FE 1–1.000 solicitada (13-nov) |
 | LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · Identidad validada (13-nov) |
 | LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · Identidad validada (13-nov) |
 | LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · Identidad validada (13-nov) |
