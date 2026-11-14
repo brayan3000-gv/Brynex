@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\ConfiguracionBrynex;
 use App\Models\OperadorCredencial;
+use App\Models\OperadorPlanillaApi;
 use App\Models\Plano;
 use App\Models\TipoModalidad;
 use App\Services\AlertaOperativaService;
@@ -204,6 +205,25 @@ class PlanillaVigilarSubtipo4 extends Command
     private const CONFIG_TANDAS = 'vigia_subtipo4_tandas';
 
     /**
+     * Aliados cuyas tandas X1 pendientes se arman solas desde los planos, sin
+     * tener que escribirlas en `vigia_subtipo4_tandas`. Separados por coma.
+     *
+     * Antes cada mes había que copiar a mano aliado, razón social, plano y
+     * modalidad de cada tanda —y la que se olvidaba no se liquidaba en el
+     * hueco—. Ahora se toman de los planos X1 que siguen sin planilla. La lista
+     * de aliados existe porque liquidar crea una planilla real en el operador
+     * a nombre de la empresa: se hace solo para quien lo autorizó (Brygar, el
+     * 2). Un aliado sin credencial de Simple se salta aunque esté en la lista,
+     * porque X1 solo liquida por Simple.
+     */
+    private const CONFIG_ALIADOS = 'vigia_subtipo4_aliados';
+
+    private const ALIADOS_POR_DEFECTO = '2';
+
+    /** Simple: el único operador que liquida Tipo E - X1. */
+    private const OPERADOR_SIMPLE = 6;
+
+    /**
      * Reintentos de la liquidación dentro de un mismo hueco, y la espera entre
      * ellos. El hueco del 10-nov duró 36 s y se cayó al autorizar: 4 intentos
      * cada 3 s caben de sobra en esa ventana y le dan varias oportunidades al
@@ -244,29 +264,42 @@ class PlanillaVigilarSubtipo4 extends Command
         // primera ejecución de la vida sería a ciegas y de madrugada. El
         // archivo que sale es el real: si el hueco está cerrado el operador lo
         // rechaza con 2.655 y no se crea ninguna planilla.
-        $liquidadas = ($limpias || $this->option('simular-ventana'))
-            ? $this->liquidarPendientes()
+        $resultados = ($limpias || $this->option('simular-ventana'))
+            ? $this->liquidarPendientes($mes, $anio)
             : [];
 
-        if ($limpias && ! $this->option('sin-aviso')) {
-            // Una vez cada 6 h: si la ventana dura, no conviene repetir el aviso
-            // cada media hora, pero sí recordarlo si sigue abierta un rato después.
-            // La llave incluye los aportantes que abrieron: un hueco en ELITES
-            // y otro en Construtech son avisos distintos, no uno repetido.
+        $hechas = array_filter($resultados, fn ($r) => $r['estado'] === 'liquidada');
+
+        if (($limpias || $hechas) && ! $this->option('sin-aviso')) {
             $abiertos = $this->nombresRs($this->aportantesAbiertos);
 
-            $alertas->enviarUnaVez(
-                'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $limpias),
-                'Vigía subtipo 4',
-                "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
+            $mensaje = "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
                 .($abiertos ? "Aportante(s) con hueco: {$abiertos}\n" : '')
-                .'Cédulas que pasaron limpias: '.implode(', ', $limpias)."\n"
+                .($limpias ? 'Cédulas que pasaron limpias: '.implode(', ', $limpias)."\n" : '')
                 ."Período {$mes}/{$anio}.\n\n"
-                .($liquidadas
-                    ? "Liquidación automática:\n".implode("\n", $liquidadas)
-                    : 'Entra a liquidar ahora: la ventana puede cerrarse.'),
-                360
-            );
+                .($resultados
+                    ? "Liquidación automática:\n\n".implode("\n\n", array_map(
+                        fn ($r) => $this->lineaDelAviso($r), $resultados))
+                    : 'Entra a liquidar ahora: la ventana puede cerrarse.');
+
+            if ($hechas) {
+                // Con planilla nueva el aviso sale siempre: trae el enlace para
+                // pagarla y no puede quedar tapado por el de un hueco anterior.
+                // No hay riesgo de repetirlo: cada planilla nace una sola vez
+                // (el 409 del controlador y tandasEnEspera() lo impiden).
+                $alertas->enviar('Vigía subtipo 4', $mensaje);
+            } else {
+                // Una vez cada 6 h: si la ventana dura, no conviene repetir el
+                // aviso cada media hora, pero sí recordarlo si sigue abierta un
+                // rato después. La llave incluye los aportantes que abrieron: un
+                // hueco en ELITES y otro en Construtech son avisos distintos.
+                $alertas->enviarUnaVez(
+                    'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $limpias),
+                    'Vigía subtipo 4',
+                    $mensaje,
+                    360
+                );
+            }
             $this->info('Aviso enviado por WhatsApp.');
         }
 
@@ -319,9 +352,10 @@ class PlanillaVigilarSubtipo4 extends Command
      * corrida se topa con el 409 y no crea nada. Es la única barrera que
      * importa: lo demás son sondeos con freno que no liquidan jamás.
      *
-     * @return string[] una línea por tanda, para el aviso
+     * @return array<int, array{etiqueta: string, estado: string, texto: string,
+     *               planilla: ?string, valor: ?float, enlace: string}>
      */
-    private function liquidarPendientes(): array
+    private function liquidarPendientes(int $mes, int $anio): array
     {
         if ($this->option('sin-liquidar')) {
             return [];
@@ -333,34 +367,235 @@ class PlanillaVigilarSubtipo4 extends Command
             return [];
         }
 
-        $tandas = json_decode((string) ConfiguracionBrynex::obtener(self::CONFIG_TANDAS, ''), true);
+        $tandas = $this->tandasEnEspera($mes, $anio);
 
-        if (! is_array($tandas) || ! $tandas) {
-            $this->warn('Liquidación automática prendida pero sin tandas en '.self::CONFIG_TANDAS.'.');
+        if (! $tandas) {
+            $this->line(now()->format('d-m H:i:s').'  (sin tandas X1 esperando el hueco)');
 
             return [];
         }
 
-        $lineas = [];
+        $resultados = [];
 
         foreach ($tandas as $t) {
-            if (! is_array($t) || empty($t['aliado']) || empty($t['rs'])) {
-                continue;
-            }
-
-            $etiqueta = (string) ($t['etiqueta'] ?? ('rs '.$t['rs']));
-            $lineas[] = $etiqueta.': '.$this->liquidarTanda($t, $etiqueta);
+            $resultados[] = $this->liquidarTanda($t, $t['etiqueta']) + [
+                'etiqueta' => $t['etiqueta'],
+                'enlace' => $this->enlaceDelPlano($t),
+            ];
         }
 
-        return $lineas;
+        return $resultados;
     }
 
     /**
-     * Una tanda. Devuelve el texto que va al aviso y al registro.
+     * Las tandas que se intentan liquidar en este hueco.
+     *
+     * Salen de dos lados: las escritas a mano en `vigia_subtipo4_tandas` y las
+     * que arman los planos X1 que siguen sin planilla (tandasDesdePlanos). Se
+     * juntan sin repetir y se descartan las que ya tienen planilla liquidada
+     * en el operador: el plano no recibe el número hasta que se confirma el
+     * pago, así que una tanda liquidada y sin pagar sigue "pendiente" en los
+     * planos, y volver a mandarla en cada hueco solo gastaría segundos que el
+     * hueco no tiene para toparse con el 409.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function tandasEnEspera(int $mes, int $anio): array
+    {
+        $config = json_decode((string) ConfiguracionBrynex::obtener(self::CONFIG_TANDAS, ''), true);
+        $todas = array_merge(
+            array_values(array_filter(is_array($config) ? $config : [],
+                fn ($t) => is_array($t) && ! empty($t['aliado']) && ! empty($t['rs']))),
+            $this->tandasDesdePlanos($mes, $anio)
+        );
+
+        $vistas = [];
+        $tandas = [];
+
+        foreach ($todas as $t) {
+            $mods = array_map('intval', (array) ($t['mods'] ?? []));
+            sort($mods);
+
+            $t = [
+                'etiqueta' => (string) ($t['etiqueta'] ?? ('rs '.$t['rs'])),
+                'aliado' => (int) $t['aliado'],
+                'rs' => (int) $t['rs'],
+                'operador' => (int) ($t['operador'] ?? self::OPERADOR_SIMPLE),
+                'mes' => (int) ($t['mes'] ?? $mes),
+                'anio' => (int) ($t['anio'] ?? $anio),
+                'n_plano' => (int) ($t['n_plano'] ?? 1),
+                'mods' => $mods,
+            ];
+
+            $llave = implode('|', [$t['aliado'], $t['rs'], $t['mes'], $t['anio'], $t['n_plano'], implode(',', $mods)]);
+
+            if (isset($vistas[$llave])) {
+                continue;
+            }
+            $vistas[$llave] = true;
+
+            if ($previa = $this->planillaYaLiquidada($t)) {
+                $this->line(now()->format('d-m H:i:s')."  >> {$t['etiqueta']} ya tiene planilla {$previa}, no se toca");
+
+                continue;
+            }
+
+            $tandas[] = $t;
+        }
+
+        return $tandas;
+    }
+
+    /**
+     * Una tanda por cada (aliado, razón social, plano, modalidad X1) con planos
+     * de planilla o retiro que siguen sin número de planilla en el período de
+     * pago. Es el mismo criterio con el que cedulasAVigilar() elige a quién
+     * sondear, así que lo que se vigila es lo que se liquida.
+     *
+     * Cada modalidad va en su propia tanda: X1 y X1 TP14 son archivos aparte
+     * (ver CONFIG_TANDAS).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function tandasDesdePlanos(int $mes, int $anio): array
+    {
+        $aliados = array_values(array_filter(array_map('intval', explode(',',
+            (string) ConfiguracionBrynex::obtener(self::CONFIG_ALIADOS, self::ALIADOS_POR_DEFECTO)
+        ))));
+
+        if (! $aliados) {
+            return [];
+        }
+
+        $conSimple = OperadorCredencial::where('operador_planilla_id', self::OPERADOR_SIMPLE)
+            ->whereIn('aliado_id', $aliados)
+            ->pluck('aliado_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if (! $conSimple) {
+            return [];
+        }
+
+        $nombres = [TipoModalidad::ID_EX1 => 'X1', TipoModalidad::ID_EX1_TP => 'X1 TP14'];
+
+        return DB::table('planos AS p')
+            ->join('razones_sociales AS rs', function ($j) {
+                $j->on('rs.id', '=', 'p.razon_social_id')->on('rs.aliado_id', '=', 'p.aliado_id');
+            })
+            ->whereIn('p.aliado_id', $conSimple)
+            ->whereIn('p.tipo_modalidad_id', TipoModalidad::IDS_EX1)
+            ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
+            ->whereRaw('ISNULL(p.num_dias, 0) > 0')
+            ->whereNull('p.deleted_at')
+            ->whereNull('p.numero_planilla')
+            ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, $mes, $anio))
+            ->groupBy('p.aliado_id', 'p.razon_social_id', 'p.n_plano', 'p.tipo_modalidad_id', 'rs.razon_social')
+            ->orderBy('p.aliado_id')->orderBy('p.razon_social_id')->orderBy('p.n_plano')
+            ->selectRaw('p.aliado_id, p.razon_social_id, p.n_plano, p.tipo_modalidad_id, rs.razon_social, COUNT(*) AS personas')
+            ->get()
+            ->map(fn ($g) => [
+                'etiqueta' => sprintf('%s · plano %d · %s (%d %s)',
+                    mb_strimwidth(trim((string) $g->razon_social), 0, 40, '…'),
+                    (int) $g->n_plano,
+                    $nombres[(int) $g->tipo_modalidad_id] ?? $g->tipo_modalidad_id,
+                    (int) $g->personas,
+                    (int) $g->personas === 1 ? 'persona' : 'personas'),
+                'aliado' => (int) $g->aliado_id,
+                'rs' => (int) $g->razon_social_id,
+                'mes' => $mes,
+                'anio' => $anio,
+                'n_plano' => (int) $g->n_plano,
+                'mods' => [(int) $g->tipo_modalidad_id],
+            ])
+            ->all();
+    }
+
+    /**
+     * El número de planilla si la tanda ya está liquidada en el operador. Es la
+     * misma búsqueda del 409 de PlanillaApiController::liquidar —paso 1, estado
+     * validada, mismo filtro o uno viejo sin filtro—, hecha antes para no
+     * gastar una llamada en el hueco. Sin filtro de modalidades no se
+     * adelanta nada: ese caso lo resuelve el controlador.
      *
      * @param  array<string, mixed>  $t
      */
-    private function liquidarTanda(array $t, string $etiqueta): string
+    private function planillaYaLiquidada(array $t): ?string
+    {
+        if (! $t['mods']) {
+            return null;
+        }
+
+        $filtro = implode(',', $t['mods']);
+
+        $previo = OperadorPlanillaApi::where('aliado_id', $t['aliado'])
+            ->where('razon_social_id', $t['rs'])
+            ->where('operador_planilla_id', $t['operador'])
+            ->where('anio', $t['anio'])
+            ->where('mes', $t['mes'])
+            ->where('n_plano', $t['n_plano'])
+            ->where('paso', 1)
+            ->where('estado', 'validada')
+            ->where(fn ($q) => $q->whereNull('tipos_modalidad')->orWhere('tipos_modalidad', $filtro))
+            ->latest('id')
+            ->first(['numero_planilla']);
+
+        return $previo ? (string) ($previo->numero_planilla ?: '(sin número)') : null;
+    }
+
+    /**
+     * La página del plano en BryNex, donde está el botón «Pagar con PSE».
+     *
+     * El aviso lleva a la página y no al enlace del operador: el enlace que
+     * Simple entrega al liquidar caduca, y el botón pide uno nuevo desde el
+     * servidor en el momento de pagar (PlanillaApiController::abrirPago).
+     * `aliado` hace que BryNex cambie al aliado de la tanda al abrirlo. El
+     * filtro de modalidades es obligatorio: sin él la página busca la planilla
+     * de la tanda "Todos" y dice que no hay ninguna con ese filtro. `pagar=1`
+     * abre solo el bloque de la liquidación, donde está el botón.
+     *
+     * @param  array<string, mixed>  $t
+     */
+    private function enlaceDelPlano(array $t): string
+    {
+        return route('admin.planos.index', array_filter([
+            'aliado' => $t['aliado'],
+            'anio' => $t['anio'],
+            'mes' => $t['mes'],
+            'razon_social_id' => $t['rs'],
+            'n_plano' => $t['n_plano'],
+            'estado_pago' => 'todas',
+            'tipos_modalidad' => $t['mods'] ?: null,
+            'pagar' => 1,
+        ], fn ($v) => $v !== null));
+    }
+
+    /**
+     * Una tanda en el aviso de WhatsApp.
+     *
+     * @param  array<string, mixed>  $r
+     */
+    private function lineaDelAviso(array $r): string
+    {
+        if ($r['estado'] !== 'liquidada') {
+            return "• {$r['etiqueta']}: {$r['texto']}";
+        }
+
+        return "✅ {$r['etiqueta']}\n"
+            ."Planilla {$r['planilla']}"
+            .($r['valor'] ? ' · $'.number_format((float) $r['valor'], 0, ',', '.') : '')."\n"
+            ."Pagar con PSE: {$r['enlace']}";
+    }
+
+    /**
+     * Una tanda: la liquida con reintentos y devuelve cómo le fue.
+     *
+     * @param  array<string, mixed>  $t
+     * @return array{estado: string, texto: string, planilla: ?string, valor: ?float}
+     */
+    private function liquidarTanda(array $t, string $etiqueta): array
     {
         // El 10-nov-2026 el hueco de las 12:51 duró 36 s y la liquidación se
         // cayó con "Empty reply from server" al autorizarse sobre el aportante:
@@ -372,10 +607,13 @@ class PlanillaVigilarSubtipo4 extends Command
         $intentos = max(1, (int) ConfiguracionBrynex::obtener(self::CONFIG_INTENTOS, 4));
         $esperaSeg = max(1, (int) ConfiguracionBrynex::obtener(self::CONFIG_INTENTO_ESPERA, 3));
 
+        $estado = 'transitorio';
         $texto = '(sin intento)';
+        $planilla = null;
+        $valor = null;
 
         for ($i = 1; $i <= $intentos; $i++) {
-            [$estado, $texto] = $this->intentarLiquidar($t, $etiqueta);
+            [$estado, $texto, $planilla, $valor] = $this->intentarLiquidar($t, $etiqueta) + [2 => null, 3 => null];
 
             $sello = now()->format('d-m H:i:s');
             $this->line("{$sello}  >> {$etiqueta} (intento {$i}/{$intentos}) → {$texto}");
@@ -390,17 +628,18 @@ class PlanillaVigilarSubtipo4 extends Command
             sleep($esperaSeg);
         }
 
-        return $texto;
+        return ['estado' => $estado, 'texto' => $texto, 'planilla' => $planilla, 'valor' => $valor];
     }
 
     /**
-     * Un intento de liquidar una tanda. Devuelve [estado, texto].
+     * Un intento de liquidar una tanda. Devuelve [estado, texto] y, si liquidó,
+     * también [planilla, valor a pagar].
      *
      * estado: 'liquidada' | 'ya' (409) | 'rechazada' (regla, hueco cerrado) |
      *         'transitorio' (el backend se cayó; vale la pena reintentar).
      *
      * @param  array<string, mixed>  $t
-     * @return array{0: string, 1: string}
+     * @return array{0: string, 1: string, 2?: string, 3?: ?float}
      */
     private function intentarLiquidar(array $t, string $etiqueta): array
     {
@@ -432,7 +671,8 @@ class PlanillaVigilarSubtipo4 extends Command
                     'tanda' => $etiqueta, 'planilla' => $planilla,
                 ]);
 
-                return ['liquidada', "planilla {$planilla}"];
+                return ['liquidada', "planilla {$planilla}", (string) $planilla,
+                    isset($data['valor_total']) ? (float) $data['valor_total'] : null];
             }
 
             if ($http === 409) {

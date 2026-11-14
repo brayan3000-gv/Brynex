@@ -4848,5 +4848,12 @@ document.addEventListener('DOMContentLoaded', function () {
 // ya hubiera cobrado. Se consulta también al entrar, que es cuando el usuario
 // mira ese bloque. Al abrir el modal se vuelve a consultar para refrescar.
 if (CTX.razonSocialId) cargarEstadoEnlace();
+
+// El aviso de WhatsApp del vigía del subtipo 4 —planilla liquidada sola en el
+// hueco— trae ?pagar=1: se abre de una el bloque donde está «Pagar con PSE»,
+// que si no queda escondido detrás de «Descargar Plano».
+if (CTX.razonSocialId && new URLSearchParams(location.search).get('pagar') === '1') {
+    validarCompatibilidadYAbrir('descarga');
+}
 </script>
 @endpush
