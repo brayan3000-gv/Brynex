@@ -30,6 +30,10 @@ return [
     // la alianza (decisión del dueño, 13-nov-2026). Info Avapp no tiene IA activa.
     'contacto_whatsapp' => env('DEMO_CONTACTO_WHATSAPP', '573205400870'),
 
+    // En brynex.co: el ícono 🎬 con los videos del manual al lado de la IA, en
+    // cada módulo (App\Http\Middleware\InyectarVideosManual).
+    'videos_en_app' => (bool) env('VIDEOS_MANUAL_EN_APP', true),
+
     // Las únicas bases con las que arranca en modo demo. Nunca `BryNex`.
     'bases_permitidas' => ['BryNex_Demo', 'BryNex_Videos'],
 

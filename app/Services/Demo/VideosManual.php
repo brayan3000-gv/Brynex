@@ -60,7 +60,9 @@ class VideosManual
     /** Todos los clips por id, prefiriendo el de escritorio cuando hay dos formatos. */
     public static function todos(): array
     {
-        return Cache::remember('demo_videos_manual_v2', 600, function () {
+        $enDemo = (bool) config('demo.activo');
+
+        return Cache::remember('videos_manual_v3_'.($enDemo ? 'demo' : 'app'), 600, function () use ($enDemo) {
             $json = json_decode((string) @file_get_contents(public_path('manual/manual.json')), true) ?: [];
             $clips = [];
 
@@ -84,7 +86,8 @@ class VideosManual
             // Las versiones grabadas en la demo (public/manual/demo, scripts/videos/
             // escenas/demo-*.mjs) reemplazan al clip del manual con el mismo id:
             // muestran el flujo que ve el prospecto (p. ej. la afiliación simulada).
-            $propios = json_decode((string) @file_get_contents(public_path('manual/demo/demo.json')), true) ?: [];
+            // Solo en la demo: en brynex.co se ve el flujo real del manual.
+            $propios = $enDemo ? (json_decode((string) @file_get_contents(public_path('manual/demo/demo.json')), true) ?: []) : [];
             foreach ($propios as $id => $c) {
                 if (isset($clips[$id]) && ! empty($c['archivo']) && is_file(public_path('manual/'.$c['archivo']))) {
                     $clips[$id] = [

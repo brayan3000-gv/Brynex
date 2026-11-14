@@ -38,6 +38,11 @@ class DemoServiceProvider extends ServiceProvider
                 Route::group([], base_path('routes/demo-relevo.php'));
             }
 
+            // El ícono 🎬 de los videos del manual al lado de la IA (VIDEOS_MANUAL_EN_APP).
+            if (config('demo.videos_en_app')) {
+                $this->app['router']->pushMiddlewareToGroup('web', \App\Http\Middleware\InyectarVideosManual::class);
+            }
+
             return;
         }
 

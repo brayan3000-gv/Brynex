@@ -69,6 +69,7 @@ ARCHIVOS_DEMO=(
   app/Services/WhatsappWebhookService.php database/migrations/2026_11_13_160000_create_demo_prospectos_table.php
   database/migrations/2026_11_13_190000_add_actividad_to_demo_prospectos.php public/manual/demo
   database/migrations/2026_11_13_200000_add_origen_to_demo_prospectos.php
+  app/Http/Middleware/InyectarVideosManual.php resources/views/auth/login.blade.php
 )
 
 copiar_codigo() {
@@ -209,7 +210,8 @@ EOF
     ;;
   capitulos)
     # Los capítulos completos del manual, uno por módulo (los usa el «¿Cómo
-    # funciona?» de la demo, ver VideosManual). No van en git: pesan ~40 MB.
+    # funciona?» de la demo y el ícono 🎬 de brynex.co, ver VideosManual). No van
+    # en git: pesan ~40 MB. Con --servidor se suben a la demo y a producción.
     # Se comprimen a 720p desde ~/Movies/Brynex-videos/salida/capitulos.
     SRC="${VIDEOS_DIR:-$HOME/Movies/Brynex-videos}/salida/capitulos"
     CAPS="${VIDEOS_DIR:-$HOME/Movies/Brynex-videos}/salida/demo-capitulos"
@@ -234,6 +236,9 @@ json.dump(d, open("capitulos.json", "w"), ensure_ascii=False, indent=1)')
     if [ "${2:-}" = "--servidor" ]; then
       rsync -a "$CAPS/" netcup:/var/www/brynex-demo/public/manual/capitulos/
       ssh netcup 'cd /var/www/brynex-demo && chown -R root:root public/manual/capitulos && chmod 755 public/manual/capitulos && chmod 644 public/manual/capitulos/* && (grep -qxF "public/manual/capitulos/" .git/info/exclude || echo "public/manual/capitulos/" >> .git/info/exclude) && rm -f storage/framework/cache/data/*/*/* 2>/dev/null; ls public/manual/capitulos | wc -l'
+      # También en brynex.co: el ícono 🎬 de cada módulo empieza por el capítulo.
+      rsync -a "$CAPS/" netcup:/var/www/brynex/public/manual/capitulos/
+      ssh netcup 'cd /var/www/brynex && chown -R www-data:www-data public/manual/capitulos && chmod 755 public/manual/capitulos && chmod 644 public/manual/capitulos/* && (grep -qxF "public/manual/capitulos/" .git/info/exclude || echo "public/manual/capitulos/" >> .git/info/exclude); ls public/manual/capitulos | wc -l'
     fi
     echo "Capítulos listos en $APP/public/manual/capitulos${2:+ y en el servidor}"
     ;;

@@ -59,7 +59,23 @@
     @media (max-width:640px){#dv-boton{right:76px;bottom:20px;padding:.45rem .7rem}#dv-boton span{display:none}#dv-bienvenida .dv-solo-celular{display:block!important}}
 </style>
 
-@if ($modulo)
+@if ($modulo && ! empty($icono))
+    {{-- brynex.co: un círculo al lado del botón de la IA (56 px, abajo a la derecha). --}}
+    <button id="dv-icono" type="button" onclick="DemoVideos.abrir(null)" title="¿Cómo funciona? Videos de {{ $modulo['titulo'] }}" aria-label="Videos de cómo funciona este módulo">🎬</button>
+    <style>
+        #dv-icono{position:fixed;right:calc(1.25rem + 68px);bottom:calc(1.25rem + 6px);z-index:9998;width:44px;height:44px;border-radius:50%;
+            border:1px solid #e2e8f0;background:#fff;font-size:20px;cursor:pointer;box-shadow:0 4px 14px rgba(15,23,42,.18)}
+        #dv-icono:hover{transform:scale(1.06)}
+    </style>
+    <script>
+        // Sin el botón de la IA en la página, el ícono toma su lugar en la esquina.
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!document.querySelector('[x-data*="asistente"], #asistente-ia, .asistente-ia-widget')) {
+                const b = document.getElementById('dv-icono'); if (b) { b.style.right = '1.25rem'; b.style.bottom = '1.25rem'; }
+            }
+        });
+    </script>
+@elseif ($modulo)
     <button id="dv-boton" type="button" onclick="DemoVideos.abrir(null)" title="Videos de este módulo">🎬<span>¿Cómo funciona?</span></button>
 @endif
 
@@ -134,7 +150,9 @@
     const anotarPresentacion = () => {
         if (presentacionAnotada) return;
         presentacionAnotada = true;
-        fetch(@json(route('demo.actividad')), { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json',
+        const url = @json(\Illuminate\Support\Facades\Route::has('demo.actividad') ? route('demo.actividad') : null);
+        if (!url) return;
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json',
             'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content || '' }, body: JSON.stringify({ presentacion: true }) }).catch(() => {});
     };
 
