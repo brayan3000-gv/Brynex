@@ -151,7 +151,8 @@
                 $numeroRegistro = $t->registro->numero_planilla ?? null;
                 $valorRegistro = $t->registro?->valor_total ? (int) round($t->registro->valor_total) : null;
             @endphp
-            <tr x-data="tandaX1(@js($datosTanda), @js($numeroRegistro), @js($valorRegistro), @js($t->otra_planilla->numero_planilla ?? null))">
+            @php $porPagar = isset($t->estados['liquidada']); @endphp
+            <tr x-data="tandaX1(@js($datosTanda), @js($numeroRegistro), @js($valorRegistro), @js($t->otra_planilla->numero_planilla ?? null), @js($porPagar))">
                 <td>
                     <strong>{{ \Illuminate\Support\Str::limit($t->razon_social, 34, '…') }}</strong>
                     <div class="bx1-meta">{{ $t->modalidad }}</div>
@@ -217,9 +218,13 @@
                     @endforeach
                 </td>
                 <td style="font-family:monospace;font-size:.72rem">
-                    @if($t->registro)
+                    @if($t->registro && ($porPagar || ! $t->abierta))
                         {{ $t->registro->numero_planilla }}
                         @if($t->registro->valor_total)<div class="bx1-meta" style="font-family:sans-serif">{{ $fmt($t->registro->valor_total) }}</div>@endif
+                    @elseif($t->registro)
+                        {{-- Planilla vieja que ya no se puede pagar (Simple revalida el subtipo 4) --}}
+                        <span style="color:#94a3b8" title="Se liquidó en una ventana anterior y no se pagó: fuera de la ventana Simple no la deja pagar. Liquidar vuelve a intentarlo.">{{ $t->registro->numero_planilla }}</span>
+                        <div class="bx1-meta" style="font-family:sans-serif">anterior, sin pagar</div>
                     @else
                         —
                     @endif
@@ -253,7 +258,7 @@
                             <a class="bx1-btn verde" target="_blank" rel="noopener" :href="urlPago"
                                title="Enlace recién entregado por Simple: caduca en minutos">Pagar ahora</a>
                         </template>
-                        <template x-if="numero && !urlPago">
+                        <template x-if="numero && porPagar && !urlPago">
                             <a class="bx1-btn verde" target="_blank"
                                :href="'{{ route('brynex.x1.pagar') }}?aliado_id={{ $t->aliado_id }}&numero=' + encodeURIComponent(numero)">Pagar (PSE)</a>
                         </template>
@@ -347,18 +352,19 @@
 
 @push('scripts')
 <script>
-function tandaX1(datos, numero, valor, otra) {
+function tandaX1(datos, numero, valor, otra, porPagar) {
     return {
         datos,
         numero,
-        numeroConfirmar: numero || '',
+        numeroConfirmar: porPagar ? (numero || '') : '',
         estadoConfirmar: 'pagada',
-        valorConfirmar: valor || '',
+        valorConfirmar: porPagar ? (valor || '') : '',
         comprobanteConfirmar: '',
         fechaConfirmar: new Date().toLocaleDateString('en-CA'),
         observacionConfirmar: '',
         otraPlanilla: otra || null,
         urlPago: null,
+        porPagar: !!porPagar,
         abrirConfirmar: false,
         ocupado: false,
         mensaje: '',
@@ -387,6 +393,8 @@ function tandaX1(datos, numero, valor, otra) {
                 if (d.valor_total) { this.valorConfirmar = Math.round(d.valor_total); }
                 if (accion === 'liquidar') this.otraPlanilla = d.otra_planilla || null;
                 if (accion === 'liquidar') this.urlPago = d.url_pago || null;
+                // Solo hay qué pagar si quedó liquidada; esperando ventana o rechazada, no.
+                if (accion === 'liquidar') this.porPagar = d.estado === 'liquidada';
                 if (!r.ok && d.errors) { this.errores = Object.values(d.errors).flat(); }
                 return d;
             } catch (e) {

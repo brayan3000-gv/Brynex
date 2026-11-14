@@ -696,6 +696,9 @@ class X1LiquidacionBrynex
     private static function marcar(array $ids, string $estado): void
     {
         DB::table('x1_solicitud_planos')->whereIn('id', $ids)->update(['estado' => $estado, 'updated_at' => now()]);
+        self::recalcularSolicitudes(
+            DB::table('x1_solicitud_planos')->whereIn('id', $ids)->distinct()->pluck('x1_solicitud_id')->all()
+        );
     }
 
     /** Mueve personas a otro plano X1 (planos, facturas y x1_solicitud_planos) y las deja esperando. */
@@ -716,6 +719,8 @@ class X1LiquidacionBrynex
             DB::table('x1_solicitud_planos')->whereIn('id', $filas->pluck('id')->all())
                 ->update(['n_plano' => $destino, 'estado' => 'esperando_ventana', 'updated_at' => now()]);
         });
+
+        self::recalcularSolicitudes($filas->pluck('x1_solicitud_id')->unique()->all());
     }
 
     /** solicitada → en_proceso → parcial / pagada, según cómo van sus personas. */
