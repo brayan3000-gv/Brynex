@@ -788,6 +788,12 @@
                         P{{ $np }}{{ ($rsSeleccionada && $rsSeleccionada->n_plano == $np) ? ' ⭐' : '' }}
                     </option>
                     @endfor
+                    {{-- Planos X1 (P70+) de la razón social en el período --}}
+                    @foreach(($planosX1Extra ?? []) as $npX1)
+                    @if($npX1 !== $nPlanoFiltroInt)
+                    <option value="{{ $npX1 }}" style="color:#6d28d9;font-weight:700;background:#f5f3ff">P{{ $npX1 }} — X1</option>
+                    @endif
+                    @endforeach
                     @if($nPlanoFiltroInt && $nPlanoFiltroInt !== 100 && ($nPlanoFiltroInt < 1 || $nPlanoFiltroInt > $maxNp))
                     <option value="{{ $nPlanoFiltroInt }}" selected>
                         P{{ $nPlanoFiltroInt }}{{ ($rsSeleccionada && $rsSeleccionada->n_plano == $nPlanoFiltroInt) ? ' ⭐' : '' }}
@@ -872,6 +878,29 @@
         </div>
     </form>
 </div>
+
+{{-- ── Tipo E - X1 que BryNex sacó de este plano ─────────────────────── --}}
+@if(($x1Movidas ?? collect())->isNotEmpty())
+@php $etqX1 = \App\Services\X1PagosBrynex::ETIQUETAS_ESTADO_PLANO; @endphp
+<div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:.6rem .8rem;margin:0 0 .6rem;font-size:.76rem;color:#4c1d95">
+    <strong>🧾 {{ $x1Movidas->count() }} {{ $x1Movidas->count() === 1 ? 'persona' : 'personas' }} de Tipo E - X1
+        {{ $nPlanoFiltro ? 'salieron de este plano' : 'están en un plano X1' }}.</strong>
+    Simple rechazó su subtipo 4 y BryNex las pasó a su propio plano para pagarlas cuando se abra la ventana. No están perdidas: siguen en la solicitud.
+    <div style="display:flex;flex-wrap:wrap;gap:.35rem .9rem;margin-top:.4rem">
+        @foreach($x1Movidas as $m)
+        <span style="white-space:nowrap">
+            {{ $m->tipo_doc }} {{ $m->no_identifi }} · {{ nombre_oracion(trim($m->primer_nombre.' '.$m->primer_ape)) }}
+            → <a href="{{ route('admin.planos.index', ['anio' => $anio, 'mes' => $mes, 'razon_social_id' => $rsSeleccionada->id, 'n_plano' => $m->n_plano, 'estado_pago' => 'todas']) }}"
+                 style="color:#6d28d9;font-weight:700">P{{ $m->n_plano }}</a>
+            <span style="background:{{ $m->estado === 'esperando_ventana' ? '#ede9fe' : '#dcfce7' }};border-radius:20px;padding:0 .4rem;font-size:.66rem;font-weight:700">
+                {{ $etqX1[$m->estado] ?? $m->estado }}@if($m->numero_planilla) · {{ $m->numero_planilla }}@endif
+            </span>
+        </span>
+        @endforeach
+    </div>
+    <div style="margin-top:.35rem"><a href="{{ route('admin.planos.x1.index', ['mes' => $mes, 'anio' => $anio]) }}" style="color:#6d28d9">Ver todas mis solicitudes X1 →</a></div>
+</div>
+@endif
 
 {{-- ── Tabla ───────────────────────────────────────────────────────────── --}}
 <div class="tabla-wrap">

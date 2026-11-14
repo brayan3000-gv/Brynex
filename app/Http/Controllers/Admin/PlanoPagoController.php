@@ -425,6 +425,36 @@ class PlanoPagoController extends Controller
             ->pluck('id')
             ->all();
 
+        // Tipo E - X1 que BryNex sacó de este plano (rebotaron por el subtipo 4
+        // y esperan la ventana en un plano X1, desde el P70): se muestran aquí
+        // con su plano nuevo, para que el aliado no las crea perdidas.
+        $x1Movidas = collect();
+        $planosX1Extra = [];
+        if ($rsSeleccionada) {
+            $x1Movidas = DB::table('x1_solicitud_planos AS xp')
+                ->join('x1_solicitudes AS s', 's.id', '=', 'xp.x1_solicitud_id')
+                ->join('planos AS p', 'p.id', '=', 'xp.plano_id')
+                ->where('xp.aliado_id', $aliadoId)
+                ->where('xp.razon_social_id', $rsSeleccionada->id)
+                ->where('s.mes', $mes)->where('s.anio', $anio)
+                ->whereColumn('xp.n_plano', '!=', 'xp.n_plano_origen')
+                ->when($nPlanoFiltro, fn ($q) => $q->where('xp.n_plano_origen', (int) $nPlanoFiltro))
+                ->whereNull('p.deleted_at')
+                ->orderBy('p.primer_ape')
+                ->get(['xp.n_plano_origen', 'xp.n_plano', 'xp.estado', 'xp.numero_planilla',
+                       'p.tipo_doc', 'p.no_identifi', 'p.primer_nombre', 'p.primer_ape']);
+
+            // Los planos X1 (P70+) no están en la lista de P1–P40 del filtro.
+            $planosX1Extra = DB::table('planos AS p')
+                ->where('p.aliado_id', $aliadoId)
+                ->where('p.razon_social_id', $rsSeleccionada->id)
+                ->whereBetween('p.n_plano', [\App\Services\X1PagosBrynex::PLANO_X1_DESDE, \App\Services\X1PagosBrynex::PLANO_X1_HASTA])
+                ->whereNull('p.deleted_at')
+                ->tap(fn ($q) => Plano::filtrarPeriodoDePago($q, (int) $mes, (int) $anio))
+                ->distinct()->orderBy('p.n_plano')
+                ->pluck('p.n_plano')->map(fn ($n) => (int) $n)->all();
+        }
+
         // Tipo E - X1: cuántas personas del período faltan por solicitarle a
         // BryNex (botón «X1 → BryNex»). Ver X1PagosBrynex.
         $x1Activo = \App\Services\X1PagosBrynex::activo();
@@ -433,7 +463,7 @@ class PlanoPagoController extends Controller
             : 0;
 
         return view('admin.planos.index', compact(
-            'x1Activo', 'x1Pendientes',
+            'x1Activo', 'x1Pendientes', 'x1Movidas', 'planosX1Extra',
             'planos', 'razonesSociales', 'tiposModalidad', 'modalidadesDispon',
             'cantPorRs', 'diaHoy',
             'anio', 'mes', 'mesVencido', 'anioVencido',
