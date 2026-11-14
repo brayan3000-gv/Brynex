@@ -128,27 +128,34 @@ class X1LiquidacionBrynex
     /**
      * Liquida una tanda en Simple con la cuenta de BryNex.
      *
-     * @return array{ok: bool, mensaje: string, numero_planilla?: string, valor_total?: float|null,
-     *               movidas?: int, errores?: array}
+     * `$moverRebotados` en falso es el modo del vigía: dentro de una ventana
+     * no se mueve a nadie —si alguien rebota es que la ventana ya se cerró, y
+     * moverlo solo lo pasearía de plano en plano—.
+     *
+     * `estado`: liquidada | ya (409) | esperando (rebotó por el subtipo 4) |
+     * rechazada (otra regla) | transitorio (Simple no contestó bien) | error.
+     *
+     * @return array{ok: bool, estado: string, mensaje: string, numero_planilla?: string,
+     *               valor_total?: float|null, movidas?: int, errores?: array}
      */
-    public static function liquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio): array
+    public static function liquidar(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio, bool $moverRebotados = true): array
     {
         if (! self::puedeOperar(Auth::user())) {
-            return ['ok' => false, 'mensaje' => 'Solo el superadmin de BryNex liquida las X1.'];
+            return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Solo el superadmin de BryNex liquida las X1.'];
         }
 
         if (! in_array($tipoModalidadId, TipoModalidad::IDS_EX1, true)) {
-            return ['ok' => false, 'mensaje' => 'Esa tanda no es de Tipo E - X1.'];
+            return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Esa tanda no es de Tipo E - X1.'];
         }
 
         $abiertas = self::filasAbiertas($aliadoId, $rsId, $nPlano, $tipoModalidadId);
         if ($abiertas->isEmpty()) {
-            return ['ok' => false, 'mensaje' => 'Esa tanda no tiene personas pendientes.'];
+            return ['ok' => false, 'estado' => 'error', 'mensaje' => 'Esa tanda no tiene personas pendientes.'];
         }
 
         $simple = self::operadorSimpleId();
         if (! $simple) {
-            return ['ok' => false, 'mensaje' => 'No está el operador Simple en el catálogo.'];
+            return ['ok' => false, 'estado' => 'error', 'mensaje' => 'No está el operador Simple en el catálogo.'];
         }
 
         $intento = self::llamarLiquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, $simple);
@@ -162,13 +169,16 @@ class X1LiquidacionBrynex
             if ($rebote['solo_subtipo'] && $rebote['documentos']) {
                 $rebotadas = $abiertas->filter(fn ($f) => in_array(self::doc($f->no_identifi), $rebote['documentos'], true));
 
-                if ($rebotadas->count() === $abiertas->count()) {
+                if ($rebotadas->count() === $abiertas->count() || ! $moverRebotados) {
                     // Rebotaron todas: se quedan en su plano, esperando la ventana.
                     self::marcar($rebotadas->pluck('id')->all(), 'esperando_ventana');
 
                     return [
                         'ok' => false,
-                        'mensaje' => 'Simple rechazó el subtipo 4 de toda la tanda ('.self::REGLA_SUBTIPO.'). Quedan «Esperando ventana» en el P'.$nPlano.'.',
+                        'estado' => 'esperando',
+                        'mensaje' => 'Simple rechazó el subtipo 4 ('.self::REGLA_SUBTIPO.') a '
+                            .($rebotadas->count() === $abiertas->count() ? 'toda la tanda' : $rebotadas->count().' de '.$abiertas->count())
+                            .'. Quedan «Esperando ventana» en el P'.$nPlano.'.',
                     ];
                 }
 
@@ -190,6 +200,7 @@ class X1LiquidacionBrynex
 
             return [
                 'ok' => true,
+                'estado' => 'liquidada',
                 'mensaje' => 'Planilla '.$intento['numero'].' liquidada'
                     .($intento['valor'] !== null ? ' por $'.number_format($intento['valor'], 0, ',', '.') : '')
                     .($movidas ? ". {$movidas} ".($movidas === 1 ? 'persona rebotó' : 'personas rebotaron').' por el subtipo 4 y quedaron esperando la ventana' : '')
@@ -207,6 +218,8 @@ class X1LiquidacionBrynex
         if ($intento['http'] === 409) {
             return [
                 'ok' => false,
+                'estado' => 'ya',
+                'numero_planilla' => isset($data['numero_planilla']) ? (string) $data['numero_planilla'] : null,
                 'mensaje' => 'Esta tanda ya tiene la planilla '.($data['numero_planilla'] ?? '?').' liquidada en Simple. Págala y confirma el pago; no se volvió a liquidar.',
             ];
         }
@@ -215,13 +228,112 @@ class X1LiquidacionBrynex
             ->map(fn ($e) => trim(($e['identificacion'] ?? '').' '.($e['idRegla'] ?? '').' '.($e['descripcion'] ?? '')))
             ->filter()->take(15)->values()->all();
 
+        // Con reglas, el validador respondió y rechazó; sin ellas, Simple
+        // tropezó (cURL 52, 5xx…) y vale la pena reintentar.
+        $conReglas = collect(array_merge($data['errores_empresa'] ?? [], $data['errores_cotizante'] ?? []))
+            ->pluck('idRegla')->filter()->isNotEmpty();
+
         return [
             'ok' => false,
+            'estado' => $conReglas ? 'rechazada' : 'transitorio',
             'mensaje' => ($movidas ? "{$movidas} rebotaron por el subtipo 4 y quedaron esperando la ventana. " : '')
                 .(string) ($data['message'] ?? 'Simple no liquidó la planilla.'),
             'errores' => $errores,
             'movidas' => $movidas,
         ];
+    }
+
+    /**
+     * El vigía (consola, sin usuario) liquida una tanda X1 que esperaba la
+     * ventana. Entra como el usuario de BryNex de los comandos (el 2, ver
+     * CONFIG_USUARIO) para que la cuenta de Simple sea la de BryNex.
+     *
+     * Devuelve lo que entiende PlanillaVigilarSubtipo4::intentarLiquidar:
+     * [estado, texto, planilla, valor] con estado liquidada | ya | rechazada |
+     * transitorio.
+     */
+    public static function paraVigia(int $aliadoId, int $rsId, int $nPlano, int $tipoModalidadId, int $mes, int $anio): array
+    {
+        return self::comoUsuarioBrynex(function () use ($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio) {
+            $r = self::liquidar($aliadoId, $rsId, $nPlano, $tipoModalidadId, $mes, $anio, false);
+
+            return match ($r['estado']) {
+                'liquidada' => ['liquidada', 'planilla '.$r['numero_planilla'], (string) $r['numero_planilla'], $r['valor_total'] ?? null],
+                'ya' => ['ya', 'ya tenía planilla '.($r['numero_planilla'] ?? '').' (409), no se tocó'],
+                'transitorio' => ['transitorio', $r['mensaje']],
+                default => ['rechazada', $r['mensaje']],
+            };
+        });
+    }
+
+    /** Enlace de pago nuevo desde el vigía, con la cuenta de BryNex. */
+    public static function urlPagoParaVigia(int $aliadoId, string $numeroPlanilla): array
+    {
+        return self::comoUsuarioBrynex(fn () => self::urlPago($aliadoId, $numeroPlanilla));
+    }
+
+    /** Usuario con el que el vigía opera los pagos X1 (superadmin de BryNex). */
+    public const CONFIG_USUARIO = 'x1_usuario_vigia';
+
+    private static function comoUsuarioBrynex(callable $fn)
+    {
+        $antes = Auth::user();
+        if (! self::puedeOperar($antes)) {
+            $usuario = User::find((int) \App\Models\ConfiguracionBrynex::obtener(self::CONFIG_USUARIO, 2));
+            if (! self::puedeOperar($usuario)) {
+                throw new \RuntimeException('El usuario de los pagos X1 del vigía no es superadmin de BryNex.');
+            }
+            Auth::setUser($usuario);
+        }
+
+        try {
+            return $fn();
+        } finally {
+            if ($antes) {
+                Auth::setUser($antes);
+            } else {
+                Auth::forgetUser();
+            }
+        }
+    }
+
+    /**
+     * Tandas X1 que esperan la ventana o que se liquidaron y no se han pagado,
+     * de todos los aliados, para el vigía. Mismo formato que sus tandas.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function tandasParaVigia(int $mes, int $anio): array
+    {
+        $nombres = [TipoModalidad::ID_EX1 => 'X1', TipoModalidad::ID_EX1_TP => 'X1 TP14'];
+
+        return DB::table('x1_solicitud_planos AS xp')
+            ->join('x1_solicitudes AS s', 's.id', '=', 'xp.x1_solicitud_id')
+            ->join('razones_sociales AS rs', 'rs.id', '=', 'xp.razon_social_id')
+            ->join('aliados AS a', 'a.id', '=', 'xp.aliado_id')
+            ->where('s.mes', $mes)->where('s.anio', $anio)
+            ->whereIn('xp.estado', ['esperando_ventana', 'liquidada'])
+            ->groupBy('xp.aliado_id', 'a.nombre', 'xp.razon_social_id', 'rs.razon_social', 'xp.n_plano', 'xp.tipo_modalidad_id')
+            ->orderBy('xp.aliado_id')->orderBy('xp.razon_social_id')->orderBy('xp.n_plano')
+            ->selectRaw('xp.aliado_id, a.nombre AS aliado, xp.razon_social_id, rs.razon_social, xp.n_plano, xp.tipo_modalidad_id, COUNT(*) AS personas')
+            ->get()
+            ->map(fn ($g) => [
+                'etiqueta' => sprintf('%s · %s · plano %d · %s (%d %s)',
+                    mb_strimwidth(trim((string) $g->aliado), 0, 20, '…'),
+                    mb_strimwidth(trim((string) $g->razon_social), 0, 34, '…'),
+                    (int) $g->n_plano,
+                    $nombres[(int) $g->tipo_modalidad_id] ?? $g->tipo_modalidad_id,
+                    (int) $g->personas,
+                    (int) $g->personas === 1 ? 'persona' : 'personas'),
+                'aliado' => (int) $g->aliado_id,
+                'rs' => (int) $g->razon_social_id,
+                'mes' => $mes,
+                'anio' => $anio,
+                'n_plano' => (int) $g->n_plano,
+                'mods' => [(int) $g->tipo_modalidad_id],
+                'brynex' => true,
+            ])
+            ->all();
     }
 
     /** Pide a Simple un enlace de pago nuevo para la planilla de la tanda. */

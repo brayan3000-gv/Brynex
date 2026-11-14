@@ -466,9 +466,10 @@ class PlanillaVigilarSubtipo4 extends Command
         $resultados = [];
 
         foreach ($tandas as $t) {
-            $resultados[] = $this->liquidarTanda($t, $t['etiqueta']) + [
+            $r = $this->liquidarTanda($t, $t['etiqueta']);
+            $resultados[] = $r + [
                 'etiqueta' => $t['etiqueta'],
-                'enlace' => $this->enlaceDelPlano($t),
+                'enlace' => $this->enlaceDelPlano($t, $r['planilla'] ?? null),
             ];
         }
 
@@ -498,15 +499,19 @@ class PlanillaVigilarSubtipo4 extends Command
     {
         $base = [
             'etiqueta' => $t['etiqueta'],
-            'enlace' => $this->enlaceDelPlano($t),
+            'enlace' => $this->enlaceDelPlano($t, (string) $registro->numero_planilla),
             'planilla' => (string) $registro->numero_planilla,
             'valor' => $registro->valor_total !== null ? (float) $registro->valor_total : null,
         ];
 
         try {
-            session(['aliado_id_activo' => $t['aliado']]);
-            $pago = app(\App\Http\Controllers\Admin\PlanillaApiController::class)
-                ->renovarUrlPago($registro, $t['aliado']);
+            if (! empty($t['brynex'])) {
+                $pago = \App\Services\X1LiquidacionBrynex::urlPagoParaVigia($t['aliado'], (string) $registro->numero_planilla);
+            } else {
+                session(['aliado_id_activo' => $t['aliado']]);
+                $pago = app(\App\Http\Controllers\Admin\PlanillaApiController::class)
+                    ->renovarUrlPago($registro, $t['aliado']);
+            }
         } catch (\Throwable $e) {
             $pago = ['success' => false, 'message' => $e->getMessage()];
         }
@@ -551,7 +556,11 @@ class PlanillaVigilarSubtipo4 extends Command
     private function tandasEnEspera(int $mes, int $anio): array
     {
         $config = json_decode((string) ConfiguracionBrynex::obtener(self::CONFIG_TANDAS, ''), true);
+        // Primero las de Pagos X1 por BryNex (todos los aliados, con la cuenta
+        // de BryNex): si una tanda de Brygar sale también de sus planos, gana
+        // esta, que además lleva el estado de cada persona en la solicitud.
         $todas = array_merge(
+            \App\Services\X1LiquidacionBrynex::tandasParaVigia($mes, $anio),
             array_values(array_filter(is_array($config) ? $config : [],
                 fn ($t) => is_array($t) && ! empty($t['aliado']) && ! empty($t['rs']))),
             $this->tandasDesdePlanos($mes, $anio)
@@ -574,6 +583,7 @@ class PlanillaVigilarSubtipo4 extends Command
                 'anio' => (int) ($t['anio'] ?? $anio),
                 'n_plano' => (int) ($t['n_plano'] ?? 1),
                 'mods' => $mods,
+                'brynex' => (bool) ($t['brynex'] ?? false),
             ];
 
             $llave = implode('|', [$t['aliado'], $t['rs'], $t['mes'], $t['anio'], $t['n_plano'], implode(',', $mods)]);
@@ -714,8 +724,16 @@ class PlanillaVigilarSubtipo4 extends Command
      *
      * @param  array<string, mixed>  $t
      */
-    private function enlaceDelPlano(array $t): string
+    private function enlaceDelPlano(array $t, ?string $planilla = null): string
     {
+        // Pagos X1 por BryNex: el pago lo hace BryNex desde su vista, con un
+        // enlace que se pide a Simple en el momento (cuenta de BryNex).
+        if (! empty($t['brynex'])) {
+            return $planilla
+                ? route('brynex.x1.pagar', ['aliado_id' => $t['aliado'], 'numero' => $planilla])
+                : route('brynex.x1.index', ['mes' => $t['mes'], 'anio' => $t['anio']]);
+        }
+
         return route('admin.planos.index', array_filter([
             'aliado' => $t['aliado'],
             'anio' => $t['anio'],
@@ -810,6 +828,23 @@ class PlanillaVigilarSubtipo4 extends Command
     private function intentarLiquidar(array $t, string $etiqueta): array
     {
         try {
+            // Pagos X1 por BryNex: liquida con la cuenta de BryNex y deja el
+            // estado de cada persona en su solicitud. Ver X1LiquidacionBrynex.
+            if (! empty($t['brynex'])) {
+                $r = \App\Services\X1LiquidacionBrynex::paraVigia(
+                    (int) $t['aliado'], (int) $t['rs'], (int) $t['n_plano'],
+                    (int) ($t['mods'][0] ?? 0), (int) $t['mes'], (int) $t['anio']
+                );
+
+                if ($r[0] === 'liquidada') {
+                    Log::warning('vigia-subtipo4: liquidó en la ventana (pagos X1 por BryNex)', [
+                        'tanda' => $etiqueta, 'planilla' => $r[2] ?? null,
+                    ]);
+                }
+
+                return $r;
+            }
+
             // El controlador lee el aliado de la sesión, igual que con un
             // usuario en el navegador, y de ahí sale el filtro multi-tenant.
             session(['aliado_id_activo' => (int) $t['aliado']]);
