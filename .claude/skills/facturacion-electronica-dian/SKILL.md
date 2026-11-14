@@ -146,18 +146,47 @@ Subir la cámara nueva a la ficha (Archivos → Cámara de Comercio): reemplaza 
    ya queda instalado en la solución gratuita (Menú de configuración → Certificados
    digitales), vigencia 2 años. Para saber cuáles salieron, buscar ese remitente en el buzón.
 
-## 7. Pendiente de documentar (aún no se ha hecho)
+## 7. Set de pruebas (hecho con LALA GROUP el 13-nov, ~40 min)
 
-- **Set de pruebas** en la solución gratuita: configurar emisor, cliente y producto de prueba
-  y emitir los 9 documentos con prefijo SETG.
-- Estado **Habilitado** en el portal.
-- **Numeración real** en MUISCA (formulario 1876) y asociar prefijos.
+Se hace en la solución gratuita (`gratis-vpfe-hab`, entrando por `/User/RedirectToBiller`)
+apenas GSE emite el certificado. Confirmar arriba que la empresa sea la correcta.
+
+1. **Datos del usuario** (menú Solución Gratuita → Datos del usuario → Editar Información):
+   la factura avisa «Completar información de la empresa». Del RUT: responsabilidad (O-47
+   para Régimen Simple), tributo (01 IVA si tiene la 48), tipo contribuyente 1 (jurídica) y
+   CIIU (casilla 46). Guardar.
+2. **Adquiriente/comprador** → Crear nuevo: se usó BRYGAR SAS (NIT 31 · 901918923) con correo
+   `seguridadsocial.brygar@gmail.com`, para que nada salga a terceros. Marcar «Confirmo…» y
+   Guardar (`#btn-save-client`).
+3. **Producto / Servicio** → Crear nuevo: código 999 · P001, «PRODUCTO DE PRUEBA», $100.000,
+   IVA 01 al 19 %. Guardar (`#btn-save-product`).
+4. **Rangos de numeración → manual**: las notas no traen rango. Crear NC (Nota de Crédito,
+   91) y ND (Nota de Débito, 92), del 1 al 99999999. La factura ya trae SETG.
+5. **5 facturas** (Factura de Venta): medio de pago 10 Efectivo, Contado, comprador y producto
+   desde las lupas, cantidad 1 → Previsualizar (recarga la página) → **Firmar y Guardar**.
+   Quedan en Documentos Enviados como «Por distribuir» → «Distribuido».
+6. **2 notas crédito y 2 débito**: en «Referencia a documentos» poner serie SETG, número,
+   **fecha de la factura** (viene con la de mañana y entonces la lupa responde «Documento no
+   encontrado») y pulsar la lupa: carga el CUFE. Conceptos usados: NC anulación y rebaja; ND
+   gastos por cobrar e intereses.
+7. El listado a veces no muestra el último documento: recargar Documentos Enviados.
+8. En el portal de habilitación (`/Contributor/Check`) la empresa pasa sola a **Habilitado** y
+   el modo a **Aceptado** (LALA GROUP, minutos después del noveno).
+
+Por JS: los select son jQuery (`jQuery(el).val(v).trigger('change')`), los modales tienen
+`position: fixed` (no sirve `offsetParent` para saber si están abiertos) y conviene pulsar
+con `setTimeout` porque Previsualizar y Firmar recargan la página.
+
+## 8. Pendiente de documentar (aún no se ha hecho)
+
+- **Numeración real** en MUISCA (formulario 1876) y asociarla en la solución gratuita.
+- «Registrar fecha de inicio salida a producción» en el portal.
 
 ## Estado por empresa
 
 | Empresa | NIT | Representante | DIAN | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
-| LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · **Certificado emitido** 13-nov 15:02 (ya instalado en la solución gratuita); sigue el set de pruebas |
+| LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · Certificado emitido 13-nov 15:02 · **set de pruebas aprobado → Habilitado** (13-nov 20:45) |
 | LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · Identidad validada (13-nov) |
 | LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · Identidad validada (13-nov) |
 | LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · Identidad validada (13-nov) |
