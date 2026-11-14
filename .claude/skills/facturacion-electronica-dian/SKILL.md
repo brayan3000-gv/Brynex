@@ -170,7 +170,7 @@ distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó l
 | GLOBAL CONTACT | 901709476 | Sebastián 1006168815 | Registrado + gratuito | d5a8dae2… | 01080369 · Identidad validada (13-nov) |
 | HOMENURSE | 901753748 | Sebastián | Registrado + gratuito | f0265dfa… | 01080384 · Identidad validada (13-nov) |
 | WORK AT HOME | 901716074 | Sebastián | Registrado + gratuito | 000dfddf… | 01080390 · Identidad validada (13-nov) |
-| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · Finalizar pulsado 13-nov 17:40; confirmar en la lista |
+| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · Identidad validada (13-nov) |
 
 Las de Sebastián van en GSE con KR 39 # 43 - 04, Cali, sebastian.reprebyg@gmail.com y
 3158204135 (lo de la cámara).
@@ -204,5 +204,9 @@ Falta Karla (CONSTRUTECH, LOGIC CENTER, LOGISTICS HOUSE).
 - **La sesión de GSE caduca** (y a veces se cierra sola al pulsar Finalizar): si la pestaña
   queda en `/logout`, la persona vuelve a entrar y se revisa el estado en la lista; los
   documentos ya subidos se conservan, pero puede tocar subirlos de nuevo si no se guardaron.
+- **Si se cierra justo después de Finalizar**, la solicitud queda «Radicado – Pendiente de
+  validación Identidad». No se rehace nada: en la lista, el ícono «Validar identidad» (huella)
+  corre la validación y pasa a «Identidad Validada» (STRATEGY, sin preguntas). Si salieran
+  las 5 preguntas, las responde el representante.
 - **Llamadas largas de JavaScript cortan la conexión con Chrome**: clics con
   `setTimeout(() => btn.click(), 100)` y esperas cortas, en llamadas separadas.
