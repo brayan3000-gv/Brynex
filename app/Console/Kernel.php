@@ -476,14 +476,14 @@ class Kernel extends ConsoleKernel
             ->appendOutputTo(storage_path('logs/whatsapp-plantillas-sistema.log'));
 
         // ── Gente esperando respuesta en WhatsApp ────────────────────────────
-        // Cuatro veces al día en jornada, lunes a sábado, para TODOS los aliados con WhatsApp:
-        // la lista de quién escribió y lleva horas sin que una persona le conteste, con aviso
-        // de a quién se le vence la ventana de 24 h. Ahí se perdían las ventas (sep-2026), no
-        // en la pauta. La primera corrida del día manda todo; las demás solo si hay alguien
-        // nuevo o alguien a punto de vencerse. Si no hay nadie esperando no manda nada.
+        // Una vez al día, a las 8 am, lunes a sábado, para TODOS los aliados con WhatsApp: la
+        // lista de quién escribió y lleva horas sin que una persona le conteste, con aviso de
+        // a quién se le vence la ventana de 24 h. Ahí se perdían las ventas (sep-2026), no en
+        // la pauta. Corrió a las 8, 11, 14 y 17 h (oct-2026) hasta que el dueño pidió dejarlo
+        // solo a las 8 para todos (15-nov-2026). Si no hay nadie esperando no manda nada.
         // Ejecución manual: php artisan whatsapp:sin-respuesta --no-enviar
         $schedule->command('whatsapp:sin-respuesta')
-            ->cron('0 8,11,14,17 * * 1-6')
+            ->cron('0 8 * * 1-6')
             ->timezone('America/Bogota')
             ->withoutOverlapping(15)
             ->runInBackground()
