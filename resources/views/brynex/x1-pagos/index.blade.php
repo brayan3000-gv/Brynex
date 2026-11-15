@@ -143,7 +143,7 @@
             <th>Empresa</th>
             <th>Aliados · consignación</th>
             <th>Estado</th>
-            <th class="num">Por pagar</th>
+            <th class="num">Falta · pagado</th>
             <th>Planilla</th>
             <th style="text-align:right">Acciones</th>
         </tr>
@@ -184,8 +184,12 @@
                 @endforeach
             </td>
             <td class="num">
-                <strong>{{ $fmt($g->valor_pendiente) }}</strong>
-                @if($g->valor_pendiente !== $g->valor_ss)<div class="bx1-meta">de {{ $fmt($g->valor_ss) }}</div>@endif
+                @if($g->valor_pendiente > 0)
+                <div style="white-space:nowrap"><span class="bx1-meta">falta</span> <strong>{{ $fmt($g->valor_pendiente) }}</strong></div>
+                @endif
+                @if($g->valor_ss - $g->valor_pendiente > 0)
+                <div class="bx1-meta" style="white-space:nowrap;color:#166534">pagado {{ $fmt($g->valor_ss - $g->valor_pendiente) }}</div>
+                @endif
             </td>
             <td style="font-family:monospace;font-size:.72rem;white-space:nowrap">
                 @if($g->registro)
