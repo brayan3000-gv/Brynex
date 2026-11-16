@@ -257,16 +257,33 @@ distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó l
 Las de Sebastián van en GSE con KR 39 # 43 - 04, Cali, sebastian.reprebyg@gmail.com y
 3158204135 (lo de la cámara).
 
-Karla Daniela Gómez Quirama (CC 1005878149), revisado en la DIAN el 13-nov, en pausa:
+Karla Daniela Gómez Quirama (CC 1005878149), régimen ordinario, 16-nov:
 
-| Empresa | NIT | DIAN | Recepción de facturas |
-|---|---|---|---|
-| CONSTRUTECH | 901603738 | **Habilitado** desde 2022 con Siigo (proveedor tecnológico, aceptado) | construtechbyg@gmail.com |
-| LOGIC CENTER | 901605219 | Registrado, **sin modo de operación** | brygar.token@gmail.com |
-| LOGISTICS HOUSE | 901610876 | Registrado, **sin modo de operación** | brygar.token@gmail.com |
+| Empresa | NIT | DIAN | Recepción de facturas | Certificado (DIAN) | GSE |
+|---|---|---|---|---|---|
+| LOGIC CENTER | 901605219 | Registrado + gratuito (16-nov) | +901605219 | 8c53f1bb… | 01081376 · Identidad validada (16-nov) |
+| LOGISTICS HOUSE | 901610876 | Registrado + gratuito (16-nov) | +901610876 | b589cab9… | 01081377 · Identidad validada (16-nov) |
+| CONSTRUTECH | 901603738 | **Habilitado con Siigo** (2022) + gratuito agregado (16-nov) | +901603738 | 44b0f3c7… | 01081378 · Identidad validada (16-nov) |
 
-Las dos últimas ya no necesitan «Registrar»: solo asociar Software gratuito. Pendiente que el
-dueño decida si se asocia, si se cambia el correo de recepción y qué pasa con CONSTRUTECH.
+Cámaras compradas el 16-nov (orden 38128688, código C6F7BY4, $36.300). La cámara de LOGIC CENTER
+trae el correo `logiccenterbygsas@gmai.com` (sin la «l») y GSE lo exige igual.
+
+- **El correo de recepción de facturas se cambia en el portal sin firma**: Configuración
+  (`/Contributor/Configuration`) → «Correo electrónico para recepción de facturas» → Guardar.
+  Ese era el que tenían en `brygar.token@gmail.com`. CONSTRUTECH: solo se cambió en habilitación;
+  producción (catalogo-vpfe sin -hab) puede tener otro.
+- **Cambiar el correo del RUT no se pudo**: son «obligadas a llevar contabilidad» (42) y la DIAN
+  exige la casilla 89 de la hoja 2 con el grupo NIIF (Grupo III según la cámara) para cualquier
+  actualización; la lista de esa casilla no carga en el visor de MUISCA desde este Chrome (y el
+  modal de mensajes falla con «Cannot read properties of null (reading 'focus')»). Quedó un
+  formulario guardado sin firmar para LOGIC CENTER (141291957519). Lo debe hacer el contador.
+- Cambiar de empresa en el portal cierra la sesión de la solución gratuita: una solicitud de
+  certificado a medio llenar se pierde.
+- En GSE, si después de validar el correo la página vuelve a la lista, el formulario se vacía
+  (los documentos sí quedan): volver a llenarlo y pedir otro código.
+- GSE pregunta «¿Deseas aumentar el tiempo activo de sesión?» al rato: Sí.
+- El número de solicitud de GSE se asocia a la empresa por la hora de asignación vs. la hora del
+  correo «Registro de usuario» de cada +NIT.
 
 **Fuera de este trámite:** BRYGAR SAS, MEGA TRANSPORTES JUAMVI, AVAPP y CIT TECHNOLOGY CENTER
 ya tienen factura electrónica (dicho por el dueño, 13-nov).
