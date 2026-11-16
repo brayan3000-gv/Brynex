@@ -193,7 +193,21 @@ con `setTimeout` porque Previsualizar y Firmar recargan la página.
    estado DEFINITIVO. La consulta de MUISCA filtra por fecha y guarda la solicitud con la
    fecha UTC (de noche sale con la de mañana): poner «Fecha Hasta» = mañana.
 
-LALA GROUP: prefijo **FE**, 1–1.000, solicitud 20360064, formulario 13028149393668
+**Trampas de la tanda del 16-nov (11 numeraciones, ~45 min):**
+- **Chrome cambia el NIT del tercero** al elegir la contraseña guardada: entra a la empresa
+  anterior. Pedir que la escriban a mano y, antes de tocar nada, mirar el nombre de la empresa
+  en el encabezado del tablero. Si es otra, «Cerrar Sesion» y repetir.
+- Si después de firmar no sale el aviso de éxito ni se descarga el PDF, la solicitud puede haber
+  quedado en **BORRADOR**: consultar (Tipo AUTORIZACIÓN, Fecha Hasta = hoy) → «Modificar y/o
+  Generar Definitivo» → Definitivo → código nuevo.
+- Firmado de verdad = aviso «guardado de forma exitosa» **y** la tabla de rangos vacía («No se
+  encontraron registros»). El mismo aviso sale tras el Borrador, con la tabla llena.
+- La clave dinámica la da el buzón con `from:comunicaciones@dian.gov.co subject:clave` (sin tilde
+  ni comillas: X-GM-RAW revienta con «BAD Could not parse command»).
+- El formulario de autorización cambia de altura según el largo del nombre del autorizado
+  (dos líneas → todo baja ~14 px).
+
+Todas las 12: prefijo **FE**, 1–1.000 (decisión del dueño, 16-nov). LALA GROUP: prefijo **FE**, 1–1.000, solicitud 20360064, formulario 13028149393668
 (13-nov 20:34). Lo eligió el dueño; el resto de empresas, preguntar.
 
 ### Tanda del 15-nov (11 empresas en ~2 h)
@@ -223,22 +237,22 @@ LALA GROUP: prefijo **FE**, 1–1.000, solicitud 20360064, formulario 1302814939
 | Empresa | NIT | Representante | DIAN | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
 | LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · Certificado emitido 13-nov 15:02 · **set de pruebas aprobado → Habilitado** · numeración FE 1–1.000 solicitada (13-nov) |
-| LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| YEVI CONSTRUCCIONES | 902062049 | Yesenia 1144132276 | Registrado + gratuito | d4eee986… | 01080278 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| YEVI EXPRESS | 902077391 | Yesenia | Registrado + gratuito | a2c25a58… | 01080295 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418056) |
+| LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418174) |
+| LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418278) |
+| YEVI CONSTRUCCIONES | 902062049 | Yesenia 1144132276 | Registrado + gratuito | d4eee986… | 01080278 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418341) |
+| YEVI EXPRESS | 902077391 | Yesenia | Registrado + gratuito | a2c25a58… | 01080295 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418404) |
 
 Las YEVI se radicaron con cámaras del 15-oct (29 días). YEVI EXPRESS tiene la dirección
 distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó la de la cámara.
 
-| ELITES CREACIONES | 901904750 | Yuly 1143961945 | Registrado + gratuito | 979f8f69… | 01080321 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| CONSTRUCTORA ELITEX | 901906958 | Yuly | Registrado + gratuito | d07f6436… | 01080323 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| ELITES CREACIONES | 901904750 | Yuly 1143961945 | Registrado + gratuito | 979f8f69… | 01080321 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418450) |
+| CONSTRUCTORA ELITEX | 901906958 | Yuly | Registrado + gratuito | d07f6436… | 01080323 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418531) |
 
-| GLOBAL CONTACT | 901709476 | Sebastián 1006168815 | Registrado + gratuito | d5a8dae2… | 01080369 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| HOMENURSE | 901753748 | Sebastián | Registrado + gratuito | f0265dfa… | 01080384 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| WORK AT HOME | 901716074 | Sebastián | Registrado + gratuito | 000dfddf… | 01080390 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
-| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| GLOBAL CONTACT | 901709476 | Sebastián 1006168815 | Registrado + gratuito | d5a8dae2… | 01080369 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418579) |
+| HOMENURSE | 901753748 | Sebastián | Registrado + gratuito | f0265dfa… | 01080384 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418619) |
+| WORK AT HOME | 901716074 | Sebastián | Registrado + gratuito | 000dfddf… | 01080390 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418681) |
+| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) · numeración FE 1–1.000 firmada 16-nov (1302 n.º 13028149418769) |
 
 Las de Sebastián van en GSE con KR 39 # 43 - 04, Cali, sebastian.reprebyg@gmail.com y
 3158204135 (lo de la cámara).
