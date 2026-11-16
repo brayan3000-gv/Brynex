@@ -196,6 +196,23 @@ con `setTimeout` porque Previsualizar y Firmar recargan la página.
 LALA GROUP: prefijo **FE**, 1–1.000, solicitud 20360064, formulario 13028149393668
 (13-nov 20:34). Lo eligió el dueño; el resto de empresas, preguntar.
 
+### Tanda del 15-nov (11 empresas en ~2 h)
+
+- GSE emitió los 11 certificados el 14-nov entre 8:02 y 10:33 (correo «Certificado emitido» de
+  `notificaciones-ra@gse.com.co` al +NIT).
+- **Sin la responsabilidad 48 (IVA) en el RUT** (LALA EXPRESS, YEVI EXPRESS): tributo **ZZ – No
+  aplica** en Datos del usuario y producto **sin impuesto** → total $100.000 en vez de $119.000.
+- CIIU y responsabilidades se sacan del RUT de cada empresa en el Drive; ojo, en algunas carpetas
+  hay también el RUT personal del representante (no usar ese).
+- Las rutinas de JS se guardaron en `localStorage` del dominio `gratis-vpfe-hab` (bxDatos,
+  bxClient, bxProduct, bxFolios, bxFill, bxSave) y se llaman con
+  `await (new Function(localStorage.bxFill))()('119000', {num, fecha, con, raz})`.
+- Tandas de más de ~6 documentos en un solo `browser_batch` se cortan: ir de a 3.
+- A veces la página tarda en cargar y la rutina falla con «Cannot set properties of null»:
+  esperar 2 s después de navegar. Si «Firmar y Guardar» devuelve false, el documento no salió.
+- El listado de Documentos Enviados muestra el último con retraso; el portal pasa a
+  Habilitado aunque falte el último en la lista.
+
 ## 9. Pendiente de documentar (aún no se ha hecho)
 
 - Ver la resolución/rango ya autorizado en la solución gratuita de **producción** y
@@ -206,22 +223,22 @@ LALA GROUP: prefijo **FE**, 1–1.000, solicitud 20360064, formulario 1302814939
 | Empresa | NIT | Representante | DIAN | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
 | LALA GROUP | 902103391 | Luis 1130666712 | Registrado + gratuito | 44e067ee… | 01080061 · Certificado emitido 13-nov 15:02 · **set de pruebas aprobado → Habilitado** · numeración FE 1–1.000 solicitada (13-nov) |
-| LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · Identidad validada (13-nov) |
-| LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · Identidad validada (13-nov) |
-| LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · Identidad validada (13-nov) |
-| YEVI CONSTRUCCIONES | 902062049 | Yesenia 1144132276 | Registrado + gratuito | d4eee986… | 01080278 · Identidad validada (13-nov) |
-| YEVI EXPRESS | 902077391 | Yesenia | Registrado + gratuito | a2c25a58… | 01080295 · Identidad validada (13-nov) |
+| LALA CONSTRUCCIONES | 902061990 | Luis | Registrado + gratuito | 3bf2dcd1… | 01080172 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| LALA EXPRESS | 902062055 | Luis | Registrado + gratuito | 64e63c9b… | 01080180 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| LALA CONFECCIONES | 902103184 | Luis | Registrado + gratuito | 3eb028b4… | 01080166 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| YEVI CONSTRUCCIONES | 902062049 | Yesenia 1144132276 | Registrado + gratuito | d4eee986… | 01080278 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| YEVI EXPRESS | 902077391 | Yesenia | Registrado + gratuito | a2c25a58… | 01080295 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
 
 Las YEVI se radicaron con cámaras del 15-oct (29 días). YEVI EXPRESS tiene la dirección
 distinta en RUT (CR 39 43 04) y cámara (CALLE 12 NORTE #6N-8): en GSE se usó la de la cámara.
 
-| ELITES CREACIONES | 901904750 | Yuly 1143961945 | Registrado + gratuito | 979f8f69… | 01080321 · Identidad validada (13-nov, con preguntas) |
-| CONSTRUCTORA ELITEX | 901906958 | Yuly | Registrado + gratuito | d07f6436… | 01080323 · Identidad validada (13-nov) |
+| ELITES CREACIONES | 901904750 | Yuly 1143961945 | Registrado + gratuito | 979f8f69… | 01080321 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| CONSTRUCTORA ELITEX | 901906958 | Yuly | Registrado + gratuito | d07f6436… | 01080323 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
 
-| GLOBAL CONTACT | 901709476 | Sebastián 1006168815 | Registrado + gratuito | d5a8dae2… | 01080369 · Identidad validada (13-nov) |
-| HOMENURSE | 901753748 | Sebastián | Registrado + gratuito | f0265dfa… | 01080384 · Identidad validada (13-nov) |
-| WORK AT HOME | 901716074 | Sebastián | Registrado + gratuito | 000dfddf… | 01080390 · Identidad validada (13-nov) |
-| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · Identidad validada (13-nov) |
+| GLOBAL CONTACT | 901709476 | Sebastián 1006168815 | Registrado + gratuito | d5a8dae2… | 01080369 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| HOMENURSE | 901753748 | Sebastián | Registrado + gratuito | f0265dfa… | 01080384 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| WORK AT HOME | 901716074 | Sebastián | Registrado + gratuito | 000dfddf… | 01080390 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
+| STRATEGY | 901711321 | Sebastián | Registrado + gratuito | 53677d1f… | 01080399 · certificado 14-nov · **set aprobado → Habilitado** (15-nov) |
 
 Las de Sebastián van en GSE con KR 39 # 43 - 04, Cali, sebastian.reprebyg@gmail.com y
 3158204135 (lo de la cámara).
