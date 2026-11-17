@@ -417,6 +417,9 @@ try {
     }
     if (!marco) throw new Error('No se abrió la pantalla de reingresos para esta persona.');
 
+    // Los avisos de ESTA persona: en un lote el arreglo trae los de las anteriores.
+    const avisosDesde = alertas.length;
+
     // ── Persona ──
     vaPor('documento');
     const tipo = TIPOS[String(persona.tipo || 'CC').toUpperCase()] || '1';
@@ -460,6 +463,22 @@ try {
         // corresponde es un traslado, que no se hace por esta pantalla.
         esReingreso: !!nombre,
         campos: despues, alertas, texto: enPantalla.slice(0, 900),
+      };
+    }
+
+    // Sin nombre la persona no está en SURA: el formulario de la novedad no se
+    // despliega y lo que corresponde es un traslado o una afiliación nueva, que
+    // no se hacen por esta pantalla. Antes se seguía de largo y el trámite
+    // moría con «falta el salario, la fecha de ingreso, el asesor», que hacía
+    // buscar el problema en el contrato (Guido Carvajal, LALA GROUP, 17-nov-2026:
+    // «La persona no existe en la base de datos»).
+    if (!nombre) {
+      const aviso = alertas.slice(avisosDesde).join(' | ').trim();
+
+      return {
+        ok: false, modo, paso: 'buscar persona', nombre: null, noExisteEnSura: true,
+        error: 'La persona no está en EPS SURA, así que no es un reingreso: hay que hacer traslado o afiliación nueva por formulario.'
+          + (aviso ? ` El portal dijo: ${aviso}` : ''),
       };
     }
 
