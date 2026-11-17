@@ -19,9 +19,17 @@
   // `arlEfectivaNombre` lo resuelve el controlador con ResuelveArlEfectiva:
   // en los independientes manda el `arl_id` del contrato y en las empresas
   // el `arl_nit` de la razón social.
+  // Colmena también lo baja por API; ahí lo que abre la sesión es la clave de
+  // la empresa en el módulo de claves, no una póliza.
+  $arlEfectivaMayus = mb_strtoupper($arlEfectivaNombre ?? '');
+  $certArlEntidad = match (true) {
+      str_contains($arlEfectivaMayus, 'SURA') && (bool) $contrato->razonSocial?->arl_poliza => 'sura',
+      str_contains($arlEfectivaMayus, 'COLMENA') && $contrato->razonSocial?->nit
+          && \App\Services\ArlColmena\ColmenaSesionService::credencialPara((string) $contrato->razonSocial->nit) => 'colmena',
+      default => null,
+  };
   $puedeCertificadoArl = $esEdicion
-      && str_contains(mb_strtoupper($arlEfectivaNombre ?? ''), 'SURA')
-      && $contrato->razonSocial?->arl_poliza
+      && $certArlEntidad
       && auth()->user()?->can('gestion_arl.ver')
       && auth()->user()?->can('automatizar-arl');
   // intval evita que PHP emita "1750905.00" que rompe el JS de Alpine
@@ -566,7 +574,7 @@
              la misma fila y cualquier diferencia de alto tuerce el renglón.
              Aquí solo se pone el color. --}}
         <button type="button" id="btn-cert-arl" class="chip-ss" onclick="descargarCertificadoArl(this)"
-            title="Bajar del portal de Sura el certificado de afiliación y el carné al día"
+            title="{{ $certArlEntidad === 'colmena' ? 'Bajar del portal de Colmena el certificado de afiliación' : 'Bajar del portal de Sura el certificado de afiliación y el carné al día' }}"
             style="background:#dcfce7;color:#166534;cursor:pointer;transition:background .15s;"
             onmouseover="this.style.background='#bbf7d0'" onmouseout="this.style.background='#dcfce7'">
           <svg width="10" height="12" viewBox="0 0 12 14" fill="none" style="flex:none" aria-hidden="true">
@@ -2462,7 +2470,7 @@ async function descargarCertificadoArl(btn) {
     const alarma = setTimeout(() => corte.abort(), 280000);
 
     try {
-        const res = await fetch(`/admin/gestion-arl/{{ $contrato->id }}/certificado`, {
+        const res = await fetch(`/admin/gestion-arl/{{ $contrato->id }}/{{ ($certArlEntidad ?? null) === 'colmena' ? 'certificado-colmena' : 'certificado' }}`, {
             headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content || '' },
             signal: corte.signal,
         });

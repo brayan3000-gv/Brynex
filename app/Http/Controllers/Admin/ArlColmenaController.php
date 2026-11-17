@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Bitacora;
 use App\Models\Contrato;
+use App\Models\DocumentoCliente;
 use App\Services\ArlColmena\ColmenaAfiliacionService;
 use App\Services\ArlColmena\ColmenaProgreso;
 use App\Services\ArlColmena\ColmenaSesionService;
+use App\Services\ArlSura\ArlAfiliacionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 /**
@@ -212,6 +215,58 @@ class ArlColmenaController extends Controller
             'ok' => true,
             'mensaje' => 'Retiro radicado en ARL Colmena.',
         ]);
+    }
+
+    /**
+     * El certificado de afiliación, para el botón junto al nivel de riesgo en
+     * la ficha del contrato. Mismo contrato que el de ARL Sura: PDF si salió,
+     * JSON con `mensaje` si no.
+     *
+     * El de hoy se reutiliza: el portal tarda en abrir sesión y el papel no
+     * cambia dentro del mismo día.
+     */
+    public function certificado(Request $request, int $contratoId)
+    {
+        $this->sinLimiteDeTiempo();
+
+        $contrato = $this->contrato($request, $contratoId);
+
+        $dehoy = DocumentoCliente::where('aliado_id', $contrato->aliado_id)
+            ->where('cc_cliente', $contrato->cedula)
+            ->where('tipo_documento', ArlAfiliacionService::DOC_SOPORTE)
+            ->whereDate('created_at', now()->toDateString())
+            ->latest('id')
+            ->first();
+
+        if ($dehoy && Storage::disk('local')->exists($dehoy->ruta)) {
+            return Storage::disk('local')->download($dehoy->ruta, $dehoy->nombre_archivo);
+        }
+
+        if (! ColmenaSesionService::credencialPara((string) $contrato->razonSocial?->nit)) {
+            return response()->json([
+                'ok' => false,
+                'mensaje' => 'Esta empresa no tiene clave de Colmena en el módulo de claves.',
+            ], 422);
+        }
+
+        try {
+            $documento = ColmenaAfiliacionService::paraContrato($contrato)->archivarCertificado($contrato, Auth::id());
+        } catch (Throwable $e) {
+            Log::warning('ARL Colmena: certificado falló', ['contrato' => $contrato->id, 'error' => $e->getMessage()]);
+
+            return response()->json(['ok' => false, 'mensaje' => $e->getMessage()], 422);
+        }
+
+        Bitacora::registrar(
+            'created',
+            'Contrato',
+            $contrato->id,
+            'Certificado ARL Colmena descargado del portal',
+            ['documento_id' => $documento->id],
+            (int) $contrato->aliado_id
+        );
+
+        return Storage::disk('local')->download($documento->ruta, $documento->nombre_archivo);
     }
 
     // ─── Apoyo ───────────────────────────────────────────────────────
