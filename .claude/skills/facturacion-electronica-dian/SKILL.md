@@ -296,6 +296,24 @@ trae el correo `logiccenterbygsas@gmai.com` (sin la «l») y GSE lo exige igual.
 - El número de solicitud de GSE se asocia a la empresa por la hora de asignación vs. la hora del
   correo «Registro de usuario» de cada +NIT.
 
+Sebastián, tanda del 17-nov (empresas que estaban «Registrado» desde 2023/may-2026):
+
+| Empresa | NIT | DIAN | Recepción | Certificado (DIAN) | GSE |
+|---|---|---|---|---|---|
+| MEGATRANSPORTES BYG | 901673613-0 | Registrado + gratuito (13-may-2026) | +901673613 (antes megatransportesbyg@) | ea8763af… | 01082405 · Identidad validada (17-nov) |
+| INDEPENDIENTES BYG | 901675606-8 | Registrado; gratuito asociado 17-nov | +901675606 (antes brygar.token@) | d0d614e0… | 01082394 · Identidad validada (17-nov) |
+
+Cámaras 17-nov (orden 38132062, código C6F8ZZ4, $24.200): **teléfono 3168944117**, no el 3158204135
+de las otras de Sebastián. INDEPENDIENTES figura Inactiva en BryNex pero Activa en la cámara
+(renovada 31-mar-2026). En INDEPENDIENTES **sí salieron las 5 preguntas de identidad** (las
+respondió Sebastián); en MEGATRANSPORTES no. Ambas: régimen ordinario con IVA (48), sin RST →
+en el set van con R-99-PN y tributo 01. CIIU: MEGATRANSPORTES 4922, INDEPENDIENTES 4690.
+
+**Sin hacer (otros representantes, su RUT personal no tiene el correo central):** MAQUITEXTIL DEL
+VALLE 902061000-3 (Carlos Enrique Avendaño Bocanegra, RST), y las de la carpeta FECOP: AML CONTACT
+CENTER 901915931-8 y AML CONSTRUCCIONES 901916894-8 (Yulli Vanessa López Izquierdo), AML EXPRESS
+901917846-9 y FASHION ANTONELLAS 901917198-4 (Antonella Molina López). Todas RST con IVA.
+
 **Fuera de este trámite:** BRYGAR SAS, MEGA TRANSPORTES JUAMVI, AVAPP y CIT TECHNOLOGY CENTER
 ya tienen factura electrónica (dicho por el dueño, 13-nov).
 
