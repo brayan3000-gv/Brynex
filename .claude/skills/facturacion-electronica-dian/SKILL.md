@@ -261,16 +261,20 @@ Karla Daniela Gómez Quirama (CC 1005878149), régimen ordinario, 16-nov:
 
 | Empresa | NIT | DIAN | Recepción de facturas | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
-| LOGIC CENTER | 901605219 | Registrado + gratuito (16-nov) | +901605219 | 8c53f1bb… | 01081376 · certificado 17-nov · **set aprobado → Habilitado** (17-nov) · CIIU 5612 |
-| LOGISTICS HOUSE | 901610876 | Registrado + gratuito (16-nov) | +901610876 | b589cab9… | 01081377 · certificado 17-nov · **set aprobado → Habilitado** (17-nov) · **sin IVA** (ZZ), CIIU 8699 |
-| CONSTRUTECH | 901603738 | **Habilitado con Siigo** (2022) + gratuito agregado (16-nov) | +901603738 | 44b0f3c7… | 01081378 · certificado 17-nov · **set aprobado → gratuito Aceptado** (17-nov) · CIIU 4330 |
+| LOGIC CENTER | 901605219 | Registrado + gratuito (16-nov) | +901605219 | 8c53f1bb… | 01081376 · certificado 17-nov · **set aprobado → Habilitado** (17-nov) · CIIU 5612 · numeración FE 1–1.000 firmada 17-nov |
+| LOGISTICS HOUSE | 901610876 | Registrado + gratuito (16-nov) | +901610876 | b589cab9… | 01081377 · certificado 17-nov · **set aprobado → Habilitado** (17-nov) · **sin IVA** (ZZ), CIIU 8699 · numeración FE 1–1.000 firmada 17-nov |
+| CONSTRUTECH | 901603738 | **Habilitado con Siigo** (2022) + gratuito agregado (16-nov) | +901603738 | 44b0f3c7… | 01081378 · certificado 17-nov · **set aprobado → gratuito Aceptado** (17-nov) · CIIU 4330 · numeración FE 1–1.000 firmada 17-nov |
 
 **Régimen ordinario en el set de pruebas (17-nov):** en Datos del usuario la responsabilidad
 va **R-99-PN – No responsable** (la lista solo trae O-13, O-15, O-23, O-47 y R-99-PN; las
 responsabilidades 05/07/14/42 del RUT no están). La rutina `bxDatos` fija O-47, así que se usó
 `bxDatos2` (misma rutina con un 4.º parámetro): `(new Function(localStorage.bxDatos2))()(NIT,
 TRIB, CIIU, 'R-99-PN')`. GSE emitió los 3 certificados al día siguiente (7:40–9:57) y los 3 sets
-salieron sin rechazos en ~25 min. Numeración FE en MUISCA: pendiente (firma Daniela).
+salieron sin rechazos en ~25 min. Numeración FE 1–1.000 firmada el mismo día (~20 min las 3).
+CONSTRUTECH ya tenía con Siigo el prefijo **FEC** 1–2.500 (resolución 18764033288351, 10-ago-2022):
+antes de pedir rango a una empresa que ya facturaba, revisar Numeración de Facturación → Consultas →
+«Consulta por NIT y Rango de Fechas de Expedición» → Consultar → «Toggle Row» de la resolución.
+Esta vez el 1302 no se descargó solo; el éxito se confirma con el aviso y la tabla de rangos vacía.
 
 Cámaras compradas el 16-nov (orden 38128688, código C6F7BY4, $36.300). La cámara de LOGIC CENTER
 trae el correo `logiccenterbygsas@gmai.com` (sin la «l») y GSE lo exige igual.
