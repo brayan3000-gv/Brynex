@@ -174,11 +174,10 @@ línea», Regresar). Mientras el menú se anima, las coordenadas cambian: pulsar
 
 «Diligenciar / Presentar» con código 260 responde «Servicio no disponible»: no sirve para consultar.
 
-⚠️ **«Obligación Financiera» (`WebRecaudacion`) se queda con la primera empresa de la sesión del
-navegador.** Al entrar después con otro NIT, sigue mostrando la empresa anterior en el encabezado y en
-los datos. Las apps 2593 y 260 sí cambian. Por eso, para las empresas siguientes, el IVA se cierra con
-la 260 en cero (sin ingresos no hay operaciones gravadas), y no con esa consulta. Mirar siempre el
-encabezado de cada página antes de leer datos.
+⚠️ **«Obligación Financiera» (`WebRecaudacion`) puede mostrar otra empresa de la misma sesión del
+navegador**: cada recarga cae en un nodo distinto. Recargar hasta que el encabezado diga la empresa
+correcta y volver a mirarlo después de cada clic (así se leyó CONSTRUTECH el 17-nov-2026). Las apps
+2593, 260, 300 y 110 sí cambian bien. Mirar siempre el encabezado antes de leer datos.
 
 **Reglas para cerrar el checklist** (aprobadas por el dueño el 17-nov-2026). Se aplican solo después de
 mirar la empresa en MUISCA. Cada renglón lleva su razón en `observacion`:
@@ -201,6 +200,45 @@ certificado en BryNex).
 Para bajar muchos 2593 de una vez: `document.body.style.zoom='0.45'` y quitar `overflow`/`height`
 a los contenedores de las tarjetas (`container-cards`, `mat-sidenav-content`, `mat-sidenav-container`)
 para que todas quepan en pantalla; luego clic real en cada ícono, con 4 s de espera.
+
+## 5c. Empresas del régimen ordinario (revisión del 17-nov-2026)
+
+- **Apps por formulario** (todas Angular, cambian bien de empresa, se bajan igual que el 2593):
+  renta `WebDilIngresoFormRenta110`, IVA `WebDilIngresoFormIva300`, retención
+  `WebDilIngresoFormReteFuente350`. La lista completa está en el «Selector de formularios»
+  (`WebDilGestorFormularios`, menú ☰ de cualquiera de estas apps). Es la forma confiable de ver qué
+  presentó cada empresa; mejor que «Obligación Financiera».
+- La renta está en `muisca.dian.gov.co/WebDilIngresoFormRenta110/`: Presentados, se baja igual que
+  el 2593. El enlace «Presentar Declaración de Renta» del tablero lleva a la **210** (personas
+  naturales), no sirve. `WebDilIngresoForm110` y `WebDilIngresoForm350` dan 404.
+- ⚠️ **«Pagar» NO dice si algo está pagado.** Arma el 490 con los valores de la declaración más
+  intereses a hoy, aunque ya se haya pagado (con CONSTRUTECH 2022-C2 dio $6.644.000 y estaba al día).
+  Solo «No hay valores monetarios» es útil: la declaración salió en cero.
+- **Para saber si algo está pagado: «Obligación Financiera»** (`WebRecaudacion`). Agrupa por DEUDA
+  VENCIDA / AL DÍA / SALDO A FAVOR con la lupa de cada grupo. Cada recarga puede caer en otro nodo
+  con otra empresa de la sesión: **recargar hasta que el encabezado diga la empresa correcta y
+  volver a mirarlo después de cada clic**. Con LOGIC CENTER/LOGISTICS se rindió antes de saber esto.
+  **Verificar el NIT dentro del PDF** de cada documento antes de subirlo (casilla 5).
+- Una DEUDA VENCIDA no siempre es plata que se debe: si la declaración imputó el saldo a favor del
+  período anterior (casilla 84 del 300) y la DIAN no lo cruzó, el período anterior queda como SALDO A
+  FAVOR y este como deuda por el mismo valor. Comparar con las casillas 84/88/89 del PDF antes de
+  pagar; si cuadra, no se paga: se pide a la DIAN la corrección de la imputación.
+- Al entrar como tercero, Chrome cambia el NIT si se elige la contraseña guardada (le pasó a Karla):
+  escribirla a mano y mirar el encabezado antes de leer nada.
+- El ICA anual de Cali es municipal: no aparece en MUISCA; queda pendiente con nota.
+
+Resultado de las tres de Karla: LOGIC CENTER, rentas 2022-2025 en $0 (sanciones de 2022 y 2024
+pagadas), IVA y retención no aplican. LOGISTICS HOUSE: **renta AG2024 omisa**; las demás en $0.
+CONSTRUTECH: ingresos de $34,7M (2022) y $30,9M (2023). IVA presentado de 2022-C2 a 2024-C1, todo el
+21-22 may-2024 con sanción de $471.000 cada uno. 2022-C2 ($3.412.000) está pagado: Obligación
+Financiera lo da AL DÍA. Los saldos a favor se encadenan: 2022-C3 $178.000 → 2023-C1 $1.740.000 →
+2023-C2 $1.269.000 → 2023-C3 (lo usa en la casilla 84 y queda en $798.000) → 2024-C1 $798.000. La DIAN
+no cruzó el paso de 2023-C2 a 2023-C3: muestra **deuda vencida de $1.269.000 en 2023-C3** (obligación
+100223016407057) y saldo a favor del mismo valor en 2023-C2. No se debe: hay que pedir la corrección
+de la imputación. Queda un saldo a favor real de $798.000 (2024-C1). Desde 2024-C2 sin IVA (ingresos
+$0). **Ningún 350** presentado y la DIAN no le tiene obligación de retención: si el contador dice que
+se pagaron retenciones, pedirle los formularios. La renta 2024 se presentó tarde (28-jul-2025) sin
+sanción.
 
 ## 6. Después
 
