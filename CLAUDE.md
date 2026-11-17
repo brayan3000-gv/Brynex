@@ -158,6 +158,7 @@ antes de tocar un módulo de negocio:
 - [[ia-brynex]] — asistente de IA, proveedores, tools, conocimiento
 - [[razones-sociales-brynex]] — obligaciones DIAN, claves y consolidado por NIT (módulo del contable de BryNex)
 - [[facturacion-electronica-dian]] — habilitar facturación electrónica (solución gratuita DIAN): enlace del representante, certificado GSE, cámara, set de pruebas
+- [[declaracion-simple-2593]] — anticipo bimestral del SIMPLE en MUISCA: en cero para las que no facturan, Brygar y JUAMVI con ingresos y pensión, 490 y PSE
 - [[finanzas-brynex]] — finanzas personales del dueño (módulo aparte, acceso exclusivo)
 - [[permisos-brynex]] — roles Spatie, `es_brynex`, aliado activo en sesión
 - [[blade-alpine-brynex]] — patrones de UI (Blade + Alpine.js)
