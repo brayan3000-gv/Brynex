@@ -121,8 +121,10 @@ $15.000 de anticipo, $10.000 eran ICA.
 5. El recibo pasa a «Consulta - Borradores Definitivos». En cero, «Pagar» responde «No hay valores
    monetario…»: no hay 490. La Resolución 57 de 2019 (art. 2) dice que el recibo «quedará formalizado
    con la realización del pago, cuando resulten valores a cargo»: en cero no hay pago que hacer. Los de
-   Angela de la mañana ya salían en «Presentados» con fecha del día. Los de la tarde (ELITES, ELITEX y
-   LALA CONFECCIONES) seguían en definitivos. **Revisar al día siguiente que pasen a Presentados.**
+   Angela de la mañana ya salían en «Presentados» con fecha del día. Los de la tarde (ELITES, ELITEX)
+   pasaron solos a «Presentados» esa misma noche (vistos a las 21:00 del 17-nov-2026, con la casilla 81
+   = fecha del día). **Volver a mirar unas horas después y bajar el PDF ya presentado** (el del
+   definitivo dice «490 asociado: 0» y no sirve de soporte).
 
 **Varios bimestres seguidos** (LALA EXPRESS B2→B5, 17-nov-2026): abrir cada uno directo por
 `WebFormSimple2593v6/?concepto=inicial&anio=2026&periodicidad=bimestral&periodo=N`. Desde el segundo
@@ -157,8 +159,10 @@ tarifa 93 (10,62) la pone la DIAN. El CIIU sale del RUT en `documentos_cliente` 
 «No hay valores monetario para generar el recibo de Pago», y abrir el formulario
 (`WebFormSimple2593v6/?…&periodo=N` carga el definitivo existente) solo ofrece PDF y Pagar: no hay firmar
 ni presentar. Las bandejas de tareas y alarmas están vacías. Un presentado en cero lleva en la casilla 81
-la fecha del 490 asociado; el definitivo, «490 asociado: 0». Hipótesis: la DIAN los pasa a Presentados
-más tarde, como el pago de Brygar. Volver a mirar antes de tocar nada; **no Anular**.
+la fecha del 490 asociado; el definitivo, «490 asociado: 0». **Confirmado:** la DIAN los pasa sola a
+Presentados unas horas después (ELITES y ELITEX B1–B5, el mismo 17-nov). No hacer nada; **no Anular**.
+Al bajarlos de nuevo, Chrome los guarda como «<número> (1).pdf» si quedó el del definitivo en
+Descargas: apartar los viejos antes.
 
 Los botones del menú naranja se encuentran por `mattooltip` (Guardar, PDF, Pagar, «Crédito en
 línea», Regresar). Mientras el menú se anima, las coordenadas cambian: pulsar por JS con `setTimeout`.
@@ -332,8 +336,8 @@ El bimestre 5 vence en noviembre según el último dígito del NIT: 1→11, 2→
 | HOMENURSE | 901753748 | B1 | **Checklist completo al 17-nov**: 2593 de 2023-B5 a 2026-B5 y 260 de 2023-2025, todo en cero (CIIU 8699), subidos; IVA y exógena «no aplica». Falta B6 |
 | STRATEGY | 901711321 | B1 | **Checklist completo al 17-nov**: 2593 de 2023-B3 a 2026-B5 y 260 de 2023-2025, todo en cero, subidos; IVA, exógena, retención (33 meses) y 2023-B2 «no aplica». No existe app 350 en MUISCA (`WebDilIngresoForm350` da 404). Falta B6 |
 | WORK AT HOME | 901716074 | B1 | **B1–B5 presentados en cero el 17-nov** (25936616694771, …694898, …695065, …695176, …695311), con ICA Cali CIIU 6810. Los presentó Angela. **Checklist completo al 17-nov**: 2593 2023-B3 a 2026-B5 y 260 2023-2025 (todo en cero) subidos; IVA, exógena y retención (32 meses) «no aplica». Falta B6 (enero) |
-| ELITES CREACIONES | 901904750 | B1 | 2025 completo (2593 B1–B6 y 260 en cero, subidos; IVA, exógena y retención «no aplica»). **2026 B1–B5 en «Borradores Definitivos» en cero, SIN presentar** (25936616700691, …701111, …701261, …701405, …701490): falta «Pagar» (490 de $0). Solo dejan Descargar, Anular o Pagar |
-| CONSTRUCTORA ELITEX | 901906958 | B1 | 2025 completo (2593 B1–B6 y 260 en cero, subidos; IVA «no aplica»; su exógena 2025 está borrada en BryNex desde ago-2026). **2026 B1–B5 en «Borradores Definitivos» en cero, SIN presentar** (25936616708031, …708631, …708878, …709061, …709797), igual que ELITES |
+| ELITES CREACIONES | 901904750 | B1 | 2025 completo (2593 B1–B6 y 260 en cero, subidos; IVA, exógena y retención «no aplica»). 2026 B1–B5 en cero **presentados el 17-nov-2026** (25936616700691, …701111, …701261, …701405, …701490), PDF subidos |
+| CONSTRUCTORA ELITEX | 901906958 | B1 | 2025 completo (2593 B1–B6 y 260 en cero, subidos; IVA «no aplica»; su exógena 2025 está borrada en BryNex desde ago-2026). 2026 B1–B5 en cero **presentados el 17-nov-2026** (25936616708031, …708631, …708878, …709061, …709797), PDF subidos |
 | YEVI CONSTRUCCIONES | 902062049 | B2 | **2026 B2–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4111): definitivos 25936616720255, …720420, …720549, …720674 |
 | YEVI EXPRESS | 902077391 | **B3** | **2026 B3–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4923): definitivos 25936616721436, …721593, …721744. B2 «no aplica» (rechazado por la DIAN) |
 | LALA CONSTRUCCIONES | 902061990 | B2 | **2026 B2–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4111): definitivos 25936616719000, …719129, …719301, …719451 |
