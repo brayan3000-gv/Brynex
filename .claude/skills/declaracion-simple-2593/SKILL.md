@@ -176,7 +176,12 @@ línea», Regresar). Mientras el menú se anima, las coordenadas cambian: pulsar
 
 ⚠️ **«Obligación Financiera» (`WebRecaudacion`) puede mostrar otra empresa de la misma sesión del
 navegador**: cada recarga cae en un nodo distinto. Recargar hasta que el encabezado diga la empresa
-correcta y volver a mirarlo después de cada clic (así se leyó CONSTRUTECH el 17-nov-2026). Las apps
+correcta y volver a mirarlo después de cada clic (así se leyó CONSTRUTECH el 17-nov-2026). La
+empresa nueva puede salir 1 de cada 20 cargas: más rápido con `fetch(location.href)` en bucle hasta
+que el HTML traiga el nombre, y leer las filas `tr` del consolidado con `DOMParser`. El detalle
+(lupa) es otro postback y puede caer en otra empresa aunque el encabezado diga la correcta: si no
+cuadra, quedarse con el consolidado. Una renta omisa no sale como deuda (no hay obligación sin
+declaración). Las apps
 2593, 260, 300 y 110 sí cambian bien. Mirar siempre el encabezado antes de leer datos.
 
 **Reglas para cerrar el checklist** (aprobadas por el dueño el 17-nov-2026). Se aplican solo después de
