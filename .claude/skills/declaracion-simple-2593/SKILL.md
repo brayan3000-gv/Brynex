@@ -340,10 +340,10 @@ El bimestre 5 vence en noviembre según el último dígito del NIT: 1→11, 2→
 | CONSTRUCTORA ELITEX | 901906958 | B1 | 2025 completo (2593 B1–B6 y 260 en cero, subidos; IVA «no aplica»; su exógena 2025 está borrada en BryNex desde ago-2026). 2026 B1–B5 en cero **presentados el 17-nov-2026** (25936616708031, …708631, …708878, …709061, …709797), PDF subidos |
 | YEVI CONSTRUCCIONES | 902062049 | B2 | **2026 B2–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4111): definitivos 25936616720255, …720420, …720549, …720674 |
 | YEVI EXPRESS | 902077391 | **B3** | **2026 B3–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4923): definitivos 25936616721436, …721593, …721744. B2 «no aplica» (rechazado por la DIAN) |
-| LALA CONSTRUCCIONES | 902061990 | B2 | **2026 B2–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4111): definitivos 25936616719000, …719129, …719301, …719451 |
-| LALA EXPRESS | 902062055 | B2 | **2026 B2–B5 hechos por Claude el 17-nov** en cero (ICA Cali CIIU 4923): definitivos 25936616717566, …717907, …718066, …718231. A la espera de verlos en Presentados |
-| LALA GROUP | 902103391 | B5 | **2026-B5 hecho por Claude el 17-nov** en cero (ICA Cali CIIU 4791): definitivo 25936616719870 (extemporáneo, vencía el 11-nov) |
-| LALA CONFECCIONES | 902103184 | B5 | **2026-B5 hecho por Claude el 17-nov** (día del vencimiento): borrador definitivo 25936616716013 en cero, ICA Cali CIIU 1410. A la espera de verlo en Presentados |
+| LALA CONSTRUCCIONES | 902061990 | B2 | **2026 B2–B5 hechos por Claude y presentados el 17-nov** en cero (ICA Cali CIIU 4111): 25936616719000, …719129, …719301, …719451, PDF subidos |
+| LALA EXPRESS | 902062055 | B2 | **2026 B2–B5 hechos por Claude y presentados el 17-nov** en cero (ICA Cali CIIU 4923): 25936616717566, …717907, …718066, …718231, PDF subidos |
+| LALA GROUP | 902103391 | B5 | **2026-B5 hecho por Claude y presentado el 17-nov** en cero (ICA Cali CIIU 4791): 25936616719870 (extemporáneo, vencía el 11-nov), PDF subido |
+| LALA CONFECCIONES | 902103184 | B5 | **2026-B5 hecho por Claude y presentado el 17-nov** (día del vencimiento): 25936616716013 en cero, ICA Cali CIIU 1410, PDF subido |
 
 **Desde qué bimestre presenta una empresa nueva**: desde el bimestre de su **inscripción en el RUT con
 la responsabilidad 47** (casilla 76 «Fecha de registro» del RUT; códigos en la casilla 53), no desde la
