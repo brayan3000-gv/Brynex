@@ -238,7 +238,20 @@ no cruzó el paso de 2023-C2 a 2023-C3: muestra **deuda vencida de $1.269.000 en
 de la imputación. Queda un saldo a favor real de $798.000 (2024-C1). Desde 2024-C2 sin IVA (ingresos
 $0). **Ningún 350** presentado y la DIAN no le tiene obligación de retención: si el contador dice que
 se pagaron retenciones, pedirle los formularios. La renta 2024 se presentó tarde (28-jul-2025) sin
-sanción.
+sanción. La corrección de la imputación se pidió por PQSR el 17-nov-2026: radicado 2026DP000416552,
+código M5D9C6 (anotado en el renglón 335 de BryNex).
+
+**Petición PQSR a la DIAN** (`muisca.dian.gov.co/WebSolicitudesexternas/DefInicioSolicitudNS.faces`,
+sin login): Diligenciar solicitud → «Con datos de identificación» → solicitante = representante legal,
+«¿Representa un tercero?» Sí → Persona Jurídica con NIT y DV. Para un cruce de cartera:
+«Petición de interés particular» → Tributario → temática «Obligaciones con la DIAN» → asunto
+«Errores en cuenta corriente», sede del RUT. La sección de la sede se colapsa al elegir temática:
+clic en su título. Cloudflare a veces se traba en la pestaña de la extensión y recarga la página (se
+pierde todo); en otra pestaña pasó solo. En las listas, clic en la opción (escribir y Enter elige la
+primera). Anexos: el `input[type=file]` aparece al pulsar «Cargar archivo» por JS (`button.click()`),
+luego `file_upload`, descripción y «Adjuntar archivo a la solicitud», uno por uno. Envía con «Enviar
+solicitud» y muestra Nro. de solicitud + código de autenticación: guardarlos. La observación de una
+obligación en BryNex admite máximo 500 caracteres.
 
 ## 6. Después
 
