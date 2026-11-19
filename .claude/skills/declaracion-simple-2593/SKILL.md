@@ -316,6 +316,18 @@ obligación en BryNex admite máximo 500 caracteres.
   Razones sociales → JUAMVI → **Claves** (tipo «Otro portal», entidad «Dataico»: account id y token).
   **No** en la configuración de Dataico de Facturación: hay una por aliado, y JUAMVI está en el mismo
   aliado que Brygar, así que pisaría la que emite las facturas de Brygar.
+- **Clave guardada (19-nov-2026)** en la ficha 12 → Claves → «Dataico (API)»: el token va en la
+  contraseña (el Account Id no hace falta; Dataico resuelve la cuenta por el token). Las llaves se ven
+  en Dataico → Configuración → Llaves API (cuenta juamvi2@hotmail.com).
+- **Ingresos: `php artisan dataico:ingresos-bimestre 2026 N --ficha=12`.** La primera vez trae del API
+  todas sus FE (FE1 del 10-oct-2024 a FE112 del 17-nov-2026) y las guarda en
+  `storage/app/dataico/901856351.json`; después solo consulta las nuevas. No ve notas crédito.
+  2026: B1 $88.017.629 · B2 $127.012.376 · B3 $106.900.528 · B4 $87.418.566 · B5 $80.785.273.
+- Tarifa: grupo transporte (casilla 30), bimestral 0–1.000 UVT 3,1 %, **1.000–2.500 UVT 3,4 %** (todos
+  los bimestres de 2026 caen aquí), 2.500–5.000 4,0 %. ICA Cali 10,62 ‰.
+- Pensión del empleador en BryNex (razón social 36): 9 a 19 aportes al mes en 2026, unos $2,1M–$4,2M
+  al mes, de sobra para cubrir la parte nacional (≈ $1,9M–$3M por bimestre). El contador usaba una
+  pensión fija de $1.709.000 por bimestre en 2025.
 - Recibos de 2025 del contador: pensión fija de $1.709.000 por bimestre, casilla 30, ICA Cali 10,62.
 - No se ha revisado su 2026 en MUISCA (falta la sesión de Julia, CC del representante en la ficha 12).
 
