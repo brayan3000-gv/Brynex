@@ -290,15 +290,19 @@ obligación en BryNex admite máximo 500 caracteres.
 ## Brygar: de dónde salen los números
 
 - **Ingresos = la administración facturada, por fecha de factura** (decisión del dueño, 17-nov).
-- **En BryNex las fechas de FE100 a FE1184 no sirven.** FE100–FE999 (930 facturas, $47,5M) están
-  todas con `enviado_at` del 31-may-2026, y FE1001–FE1184 (180, $14,6M) con el 15-ago. Fueron
-  cargas de una vez, sin `payload`. FE1 a FE99 no están. Desde FE1185 (27-ago) `payload.invoice.issue_date`
-  sí es la fecha real.
-- En mayo se facturaron varios meses juntos para ponerse al día. Por eso el plan de Brygar 2026 se
-  arma con la fecha real de cada factura, sacada de la DIAN o de Dataico, y **se cuadra contra la
-  contabilidad**.
-- El contador puso **$962.000 en el bimestre 2** (marzo–abril), aunque Dataico no tiene facturas de
-  esos meses. Ese valor sale de su contabilidad: entenderlo antes de hacer el 3.
+- **Cada bimestre: `php artisan dataico:ingresos-bimestre 2026 3`** (en netcup). Suma
+  `dataico_envios.base_admon` (admon + afiliación; la seguridad social nunca va en la FE) por
+  `enviado_at`, resta las notas crédito y lista los **huecos** de la numeración (FE que no pasaron
+  por BryNex). No consulta Dataico. Luego se baja el informe de facturas de Dataico del bimestre y
+  se compara con `--comparar=<total del informe>`: si no cuadra, la diferencia está en los huecos.
+- **Las fechas de BryNex sí sirven** (verificado contra el API de Dataico el 19-nov-2026): la DIAN
+  solo acepta FE fechadas el día de la firma (regla FAD09e), y las cargas en tanda se emitieron esos
+  días: FE70–FE1000 el 31-may y FE1001–FE1184 el 15-ago. En mayo y agosto se facturaron varios meses
+  juntos para ponerse al día; cuentan en el bimestre de la fecha de la factura.
+- **FE que no están en BryNex:** las 13 de abril de 2026 (entre FE1 y FE69, $962.000: son las que
+  el contador declaró en el B2), FE198 (mayo), FE1153, FE1166, FE1181, FE1182 (agosto; con ellas
+  Dataico da $15.170.700 para FE1001–FE1184), FE1185 (la rechazada por FAD09e) y FE2397–FE2400.
+- **El contador usa la fecha de la factura**: su B2 de $962.000 son exactamente las 13 FE de abril.
 - Pensión: contratos de las razones sociales 42 (aliado BRYGAR: 9 vigentes y 6 retirados al 17-nov) y
   11282 (aliado BryNex: 1). Solo el 12 % del empleador, de planillas **pagadas** dentro del bimestre.
 
