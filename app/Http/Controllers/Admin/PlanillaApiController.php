@@ -2039,6 +2039,47 @@ class PlanillaApiController extends Controller
     }
 
     /**
+     * Deja caliente en caché el token de Simple del usuario que liquidaría esta
+     * tanda, SIN tomar la sesión de ningún aportante: solo hace login.
+     *
+     * Lo usa el vigía del subtipo 4 antes de cada sondeo: cuando el hueco cae y
+     * dura pocos segundos (el del 18-nov-2026 se cerró en menos de 5 s), el
+     * cuello es que el usuario de liquidación llega frío y gasta esos segundos
+     * cifrando la clave y logueándose. Con el token ya en caché, liquidar()
+     * salta el login y arranca en consultarAportante.
+     *
+     * Reutiliza $this->credencial(), la misma resolución que liquidar(), así que
+     * respeta conCuentaBrynex() para las X1 conjuntas. Nunca consulta aportante
+     * ni autoriza: eso sí consume la única sesión por usuario y atropellaría el
+     * trabajo manual en Simple. autenticar() además lee de caché, así que solo
+     * hace un login real cuando el token anterior expiró (~10 min), no en cada
+     * sondeo, y el freno de credencial rechazada evita martillar una clave mala.
+     *
+     * @return array{success: bool, message?: string}
+     */
+    public function calentarSesion(int $aliadoId, ?int $razonSocialId, int $operadorId = 6): array
+    {
+        $operador = \App\Models\OperadorPlanilla::find($operadorId);
+        if (! $operador || ! array_key_exists((string) $operador->codigo, SuaporteApiService::HOSTS)) {
+            return ['success' => false, 'message' => 'el operador no tiene API'];
+        }
+
+        $credencial = $this->credencial($aliadoId, $operadorId, $razonSocialId);
+        if (! $credencial) {
+            return ['success' => false, 'message' => 'sin credencial de Simple'];
+        }
+
+        $api = new SuaporteApiService([
+            'operador'      => $operador->codigo,
+            'usuario'       => $credencial->usuario,
+            'contrasena'    => $credencial->contrasena,
+            'clave_secreta' => $credencial->clave_secreta,
+        ]);
+
+        return $api->autenticar();
+    }
+
+    /**
      * Frena el envío si alguien con caja de compensación va sin departamento
      * o municipio: la ficha del cliente no los tiene y el operador rechaza
      * la planilla entera ("el código del municipio no es válido", "la Caja no

@@ -330,6 +330,15 @@ class PlanillaVigilarSubtipo4 extends Command
             return false;
         }
 
+        // Pre-armar la cola y calentar en caché la sesión de Simple del usuario
+        // que la liquidaría, ANTES de sondear: cuando el hueco cae y dura pocos
+        // segundos, el disparo no puede gastarlos armando la cola ni
+        // autenticando en frío. El hueco del 18-nov se cerró en menos de 5 s —
+        // justo lo que tardaba el usuario de liquidación en loguearse— y las
+        // cuatro planillas salieron cuando ya estaba cerrado.
+        $tandas = $this->puedeLiquidar() ? $this->tandasEnEspera($mes, $anio) : [];
+        $this->precalentarSesiones($tandas);
+
         $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
 
         // Antes del aviso y antes de medir: los dos se llevan segundos que el
@@ -342,7 +351,7 @@ class PlanillaVigilarSubtipo4 extends Command
         // archivo que sale es el real: si el hueco está cerrado el operador lo
         // rechaza con 2.655 y no se crea ninguna planilla.
         $resultados = ($limpias || $this->option('simular-ventana'))
-            ? $this->liquidarPendientes($mes, $anio)
+            ? $this->liquidarPendientes($tandas)
             : [];
 
         $hechas = array_filter($resultados, fn ($r) => $r['estado'] === 'liquidada');
@@ -425,6 +434,70 @@ class PlanillaVigilarSubtipo4 extends Command
     }
 
     /**
+     * La liquidación automática está habilitada y esta no es una corrida de
+     * solo sondeo (--sin-liquidar). Decide tanto si se arma la cola y se
+     * calienta la sesión antes del sondeo como si se liquida al caer el hueco.
+     */
+    private function puedeLiquidar(): bool
+    {
+        return ! $this->option('sin-liquidar')
+            && (bool) (int) ConfiguracionBrynex::obtener(self::CONFIG_LIQUIDAR, 0);
+    }
+
+    /**
+     * Deja calientes en caché los tokens de Simple de los usuarios que
+     * liquidarían las tandas en espera, para que el disparo del hueco no gaste
+     * segundos autenticando en frío (el hueco del 18-nov se cerró en <5 s,
+     * justo lo que tardaba el login). Solo hace login: nunca consulta aportante
+     * ni autoriza, así que no toma la única sesión por usuario ni atropella el
+     * trabajo manual en Simple. Es una optimización: si algo falla, se anota y
+     * el vigía sigue igual que antes.
+     *
+     * @param  array<int, array<string, mixed>>  $tandas
+     */
+    private function precalentarSesiones(array $tandas): void
+    {
+        $vistos = [];
+
+        foreach ($tandas as $t) {
+            $aliado = (int) ($t['aliado'] ?? 0);
+            $rs = (int) ($t['rs'] ?? 0);
+            $op = (int) ($t['operador'] ?? self::OPERADOR_SIMPLE);
+            $porBrynex = ! empty($t['conjunta']) || ! empty($t['brynex']);
+
+            // Una sola vez por credencial: las X1 conjuntas comparten el usuario
+            // de BryNex, no tiene sentido loguearlo cuatro veces por vuelta.
+            $llave = ($porBrynex ? 'byx' : (string) $aliado).':'.$rs.':'.$op;
+            if (isset($vistos[$llave])) {
+                continue;
+            }
+            $vistos[$llave] = true;
+
+            try {
+                if ($porBrynex) {
+                    $r = \App\Services\X1LiquidacionBrynex::comoUsuarioBrynex(
+                        fn () => app(\App\Http\Controllers\Admin\PlanillaApiController::class)
+                            ->conCuentaBrynex()->calentarSesion($aliado, $rs ?: null, $op)
+                    );
+                } else {
+                    session(['aliado_id_activo' => $aliado]);
+                    $r = app(\App\Http\Controllers\Admin\PlanillaApiController::class)
+                        ->calentarSesion($aliado, $rs ?: null, $op);
+                }
+            } catch (\Throwable $e) {
+                $r = ['success' => false, 'message' => $e->getMessage()];
+            }
+
+            if (! ($r['success'] ?? false)) {
+                Log::warning('vigia-subtipo4: no se pudo precalentar la sesión', [
+                    'tanda' => $t['etiqueta'] ?? $llave,
+                    'message' => $r['message'] ?? '(sin mensaje)',
+                ]);
+            }
+        }
+    }
+
+    /**
      * Liquida las tandas que estaban esperando el hueco, en el mismo instante
      * en que el sondeo lo encuentra.
      *
@@ -443,7 +516,7 @@ class PlanillaVigilarSubtipo4 extends Command
      * @return array<int, array{etiqueta: string, estado: string, texto: string,
      *               planilla: ?string, valor: ?float, enlace: string}>
      */
-    private function liquidarPendientes(int $mes, int $anio): array
+    private function liquidarPendientes(array $tandas): array
     {
         if ($this->option('sin-liquidar')) {
             return [];
@@ -454,8 +527,6 @@ class PlanillaVigilarSubtipo4 extends Command
 
             return [];
         }
-
-        $tandas = $this->tandasEnEspera($mes, $anio);
 
         if (! $tandas && ! $this->sinPagar) {
             $this->line(now()->format('d-m H:i:s').'  (sin tandas X1 esperando el hueco)');
