@@ -307,6 +307,16 @@ obligación en BryNex admite máximo 500 caracteres.
   (FE70–FE99 $1.325.300 + FE100–FE1000 $46.261.700); BryNex da $47.527.000 y la diferencia,
   $60.000, es exactamente FE198 (LUZ MABEL HENAO SANCHEZ, CC 1005871867, aceptada por la DIAN, sin
   recibo en BryNex). En junio no hubo FE. Se declara con el total de Dataico.
+- **2026-B4 y B5 (calculado el 19-nov, B4 bloqueado hasta que se aplique el pago del B3):**
+  B4 BryNex $106.633.300 (1.187 FE de agosto; julio sin FE) + huecos FE1153/1166/1181/1182 =
+  **$107.243.300** con Dataico (FE1185 rechazada no cuenta) → 2,0 % (1.000–2.500 UVT) = $2.145.000,
+  ICA Cali 8211 $1.139.000, nacional $1.006.000. B5 BryNex $35.726.000 neto (518 FE − 9 NC por
+  $678.100); faltan FE2397–FE2400 de Dataico → 1,6 %. **Arrastre de pensión:** el B3 deja casilla 48
+  = $1.005.000 (nacional 256.000 contra 1.261.000), que casi cubre el B4 solo; con 3 trabajadores más
+  en el B4 sobrarían $1.260.000 y en el B5 (nacional ≈ $193.000) seguiría creciendo y se pierde al
+  cierre. Planillas de 42/11282 de jun a sep: 11–12 trabajadores a $210.109 con 30 días.
+  **Decisión del dueño (19-nov): 3 trabajadores siempre**, aunque se acumule excedente: B4 y B5 con
+  casilla 45 = $1.261.000 (3 × 2 × 210.109).
 - Pensión: contratos de las razones sociales 42 (aliado BRYGAR: 9 vigentes y 6 retirados al 17-nov) y
   11282 (aliado BryNex: 1). Solo el 12 % del empleador, de planillas **pagadas** dentro del bimestre.
 
@@ -338,12 +348,72 @@ obligación en BryNex admite máximo 500 caracteres.
 - **Notas crédito de JUAMVI** (el API sí las da por número: `GET …/v2/credit_notes?number=NC1`; no hay
   listado): NC1 (9-ene-2025, anula FE14 de 2024, $25.349.000) y NC2 (30-abr-2025, anula FE31 o FE32,
   duplicadas de $6.835.500) **nunca se enviaron a la DIAN**; NC3 ($7.990.100, FE36/FE37 duplicadas) y
-  NC4 ($9.626.550, FE45) sí. En 2026 no hay notas crédito.
+  NC4 ($9.626.550, FE45) sí. **NC1 y NC2 se emitieron el 19-nov-2026** (el dueño confirmó que FE14
+  y FE31 eran anulaciones reales): en Dataico eran borradores (menú ⋮ → Editar), se les cambió la
+  fecha a hoy (la DIAN no recibe documentos con fecha vieja), Guardar y luego el ícono «Enviar a la
+  DIAN» de la fila. Aceptadas con fecha 19-nov-2026 (el API sigue mostrando `issue_date` viejo; la
+  fecha real está en el XML y en `validation_date`). El informe de Dataico de nov-2026 mostrará
+  −$32.184.500 que **no se restan** en el 2026-B6: esas facturas nunca se declararon.
 - **La diferencia de 2025 cuadra peso a peso:** $514.154.624 − NC3 − NC4 − NC2 = $489.702.474, y
   menos todo el 2025-B1 ($76.161.650) da $413.540.824 ≈ los $413.541.000 declarados. O sea, el
   contador **no declaró las FE de enero y febrero de 2025**. Falta que explique por qué.
 - MUISCA revisado el 19-nov-2026 con la clave de Julia (CC 66905291): 2025-B1 a B6 presentados (los
   de 2025-B2 a B6 entre ene y abr de 2026) y **ningún 2593 de 2026**. B1–B5 de 2026 están vencidos.
+- **Corrección de la 260 de 2025 presentada el 19-nov-2026, n.º 2604602285362** (firmó Julia):
+  ingresos $489.703.000 (B1 $76.162.000 = FE15–FE22 sin restar la NC1, que anula una factura de
+  2024), impuesto $16.650.000, ICA Cali $5.202.000, nacional $11.448.000, pensión $10.082.000
+  (con $10.147.000 lo nacional quedaría en cero; por encima, saldo a favor), patrimonio $1.596.000.
+  A pagar: SIMPLE $64.000 + sanción 60 $121.000 = $185.000, y Cali $859.000 + sanción 66 $403.000 =
+  $1.262.000. **La sanción mínima es una sola por declaración** y se reparte entre 60/66/75/91 en
+  proporción a lo que aumentó cada una (instructivo del F260, Res. 000061 de 2024; MUISCA avisa «la
+  suma de las casillas 60, 66, 91 y 75 debe superar 10 UVT»). Llenar primero la 66 y luego la 60.
+  **Recibo 490 n.º 4911204776281 por $1.775.000**: MUISCA liquida intereses de $328.000 (casillas
+  bloqueadas) aunque el Decreto Legislativo 1419 de 2026 (art. 10 num. 2) eximía de intereses las
+  correcciones presentadas y pagadas a más tardar el 19-nov-2026. Pagar menos no sirve (la DIAN
+  imputa primero sanción e intereses y deja impuesto vivo); lo de los $328.000 se reclama aparte.
+  Después de presentar, el menú del formulario queda en PDF y Pagar (ícono de tarjeta).
+- **2026-B1 en definitivo n.º 25936616873334 (19-nov-2026); 490 n.º 4911204837435 por $1.064.000**
+  (ICA $935.000 + intereses $129.000), **pagado por PSE (Bancolombia) el 19-nov-2026 hacia las
+  14:45**; a las 14:47 seguía en «Borradores Definitivos» y el B2 seguía bloqueado. MUISCA cobró
+  intereses a tasa normal (≈25 % anual), no al 4,5 % del Decreto 1419 (art. 10 num. 1): la
+  diferencia, ~$107.000, se reclama junto con los $328.000 de la 260. Al recargar el borrador se pierde la
+  actividad ICA (el 935.000 queda pero sin CIIU) y «Presentar» responde «Error guardando el
+  borrador definitivo / Bad Request»: borrar las actividades (sale una «Actividad 1» fantasma),
+  agregar una sola, cerrar municipios, abrir liquidación, Guardar y Presentar sin recargar. El B2
+  sigue bloqueado con el B1 en definitivo: hace falta que el 490 esté pagado. Datos: casilla 30 $88.018.000
+  (Dataico $88.017.629), tarifa 3,4 %, impuesto $2.993.000, ICA Cali 4923 $935.000, nacional
+  $2.058.000. **Pensión 45 = $2.521.000: 6 trabajadores por mes** (decisión del dueño: «5 o 6
+  trabajadores y que vaya quedando a favor»), los que están en las dos planillas del bimestre (plano
+  dic-2025 y ene-2026: 16696574, 16645613, 1477661, 31570142, 1107090147, 1144199059, a $210.109
+  cada uno) → casilla 48 = **$463.000** que pasa al B2. En BryNex hay ≈ $7,4M pagados en el
+  bimestre (17 y 19 aportes). A pagar: solo el ICA $935.000 más intereses, que MUISCA calcula al
+  generar el 490. Casillas 46, 51 y 52 en 0 (la 260 corregida ya no deja saldo a favor).
+- **B2–B5 de 2026, listos para llenar (no se pueden crear borradores hasta que el anterior esté
+  presentado o en definitivo: MUISCA responde «No se encontró el recibo Electrónico Simple del
+  periodo anterior» y carga el formulario vacío).** Pensión 45 = $2.521.000 en cada uno (6
+  trabajadores a $210.109 × 2 planillas; cada mes de feb a sep hay al menos 6 con 30 días: usar los
+  de 30 días, no los de 1 día). Planillas que cuentan: B2 = planos feb+mar, B3 = abr+may,
+  B4 = jun+jul, B5 = ago+sep.
+
+  | Bim. | Casilla 30 / 84 / 92 | Impuesto 3,4 % | ICA 10,62 ‰ | Nacional | 46 (arrastre) | 48 (sobra) |
+  |---|---|---|---|---|---|---|
+  | B2 | 127.012.000 | 4.318.000 | 1.349.000 | 2.969.000 | 463.000 | 15.000 |
+  | B3 | 106.901.000 | 3.635.000 | 1.135.000 | 2.500.000 | 15.000 | 36.000 |
+  | B4 | 87.419.000 | 2.972.000 | 928.000 | 2.044.000 | 36.000 | 513.000 |
+  | B5 | 80.785.000 | 2.747.000 | 858.000 | 1.889.000 | 513.000 | 1.145.000 |
+
+  (cálculo propio; MUISCA redondea y calcula los intereses de cada uno). A pagar en cada bimestre:
+  solo el ICA más intereses. Lo que sobre al cierre de 2026 se pierde.
+- **La 260 de corrección con un bimestre nuevo es frágil.** Lo que funcionó, en este orden y sin
+  guardar a mitad: Ajustes a Bimestres → bimestre → «Ajuste Bimestral Componente ICA Territorial» →
+  consultar Cali → Base (219) → Discriminación → **una sola** actividad (4923, ingresos, 10,62) →
+  Valores a pagar ICA → abrir «Ajuste Bimestral Componente SIMPLE nacional» (ahí recién se llena la
+  189, ICA del bimestre) → Información por Municipios → consultar Cali (135 se recalcula) → abrir
+  Liquidación (47/48/58 se recalculan) → sanción → Guardar. El ICA anual (47) es la suma de las 189;
+  si se guarda antes, la 189 del bimestre nuevo queda en 0 y el ICA se va a la parte nacional.
+  Guardar borra las actividades de los ajustes en pantalla (luego salen errores «bimestre N … no
+  registra tarifa» o «al menos 1 municipio con CIIU»): recargar la página y rehacer solo el bimestre
+  nuevo. Un «+» de más deja una «Actividad 2» vacía que bloquea el guardado. Verificar en el PDF.
 
 ## Representantes (cada uno firma lo suyo)
 
@@ -364,7 +434,7 @@ El bimestre 5 vence en noviembre según el último dígito del NIT: 1→11, 2→
 
 | Empresa | NIT | Desde | Estado al 17-nov-2026 |
 |---|---|---|---|
-| BRYGAR | 901918923 | B1 | B1 presentado en 0 (27-ago, form. 25936614962304). B2: definitivo 25936616614861, $962k de ingresos, pensión 420k; **490 n.º 4911202382625 por $11.000 pagado por PSE el 17-nov**, presentado (visto el 19-nov). **B3: definitivo 25936616858676 (19-nov)** con $47.587.000, pensión de 3 trabajadores ($1.261.000), ICA Cali 8211 $505.000; 490 n.º 4911204511080 por $552.000 generado y **no pagado**: queda pendiente de revisión del contador (al aprobarlo, generar otro 490). Criterio del dueño: declarar solo la pensión de 3 trabajadores por mes, para no acumular excedente que se pierde. B4–B6 pendientes. Soportes de 2025-B2 a B6 y 2026-B1/B2 subidos a BryNex; el 2025-B1 (25936605170005) no tiene renglón porque la ficha arranca en abril de 2025 |
+| BRYGAR | 901918923 | B1 | B1 presentado en 0 (27-ago, form. 25936614962304). B2: definitivo 25936616614861, $962k de ingresos, pensión 420k; **490 n.º 4911202382625 por $11.000 pagado por PSE el 17-nov**, presentado (visto el 19-nov). **B3: definitivo 25936616858676 (19-nov)** con $47.587.000, pensión de 3 trabajadores ($1.261.000), ICA Cali 8211 $505.000; 490 n.º 4911204511080 por $552.000 generado en la mañana y reemplazado a las 14:52 por el **490 n.º 4911204864601** (ICA $505.000 + intereses $47.000 = $552.000), que el dueño decidió pagar el mismo 19-nov sin esperar al contador (Decreto 1419: el B3 vencía antes del 10-ago). Criterio del dueño: declarar solo la pensión de 3 trabajadores por mes, para no acumular excedente que se pierde. B4–B6 pendientes. Soportes de 2025-B2 a B6 y 2026-B1/B2 subidos a BryNex; el 2025-B1 (25936605170005) no tiene renglón porque la ficha arranca en abril de 2025 |
 | MEGA TRANSPORTES JUAMVI | 901856351 | B1 | 2026 sin revisar en MUISCA. Soportes 2024-B4 y 2025-B1, B2, B3, B4, B6 subidos a BryNex (salieron de las Descargas de Brayan); faltan 2024-B5/B6 y 2025-B5 |
 | GLOBAL CONTACT | 901709476 | B1 | **Checklist completo al 17-nov** (2593 2023-2026, 260 2023-2025, cámara; IVA, retención y exógena «no aplica»). **B1–B5 presentados el 14-nov** (25936616624019, …624610, …624818, …624950, …625056). Los presentó Angela, en cero con ICA Cali CIIU 8220. Soportes subidos a BryNex. Falta B6 |
 | HOMENURSE | 901753748 | B1 | **Checklist completo al 17-nov**: 2593 de 2023-B5 a 2026-B5 y 260 de 2023-2025, todo en cero (CIIU 8699), subidos; IVA y exógena «no aplica». Falta B6 |
