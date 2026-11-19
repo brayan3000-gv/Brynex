@@ -300,8 +300,8 @@ Sebastián, tanda del 17-nov (empresas que estaban «Registrado» desde 2023/may
 
 | Empresa | NIT | DIAN | Recepción | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
-| MEGATRANSPORTES BYG | 901673613-0 | Registrado + gratuito (13-may-2026) | +901673613 (antes megatransportesbyg@) | ea8763af… | 01082405 · certificado 17-nov 12:49 · **set aprobado → Habilitado** (19-nov) |
-| INDEPENDIENTES BYG | 901675606-8 | Registrado; gratuito asociado 17-nov | +901675606 (antes brygar.token@) | d0d614e0… | 01082394 · certificado 17-nov 14:19 · **set aprobado → Habilitado** (19-nov) |
+| MEGATRANSPORTES BYG | 901673613-0 | Registrado + gratuito (13-may-2026) | +901673613 (antes megatransportesbyg@) | ea8763af… | 01082405 · certificado 17-nov 12:49 · **set aprobado → Habilitado** (19-nov) · numeración FE 1–1.000 firmada 19-nov (solicitud 20382281; a las 2 pm aún no salía en «Consulta por NIT y Rango», revisar) |
+| INDEPENDIENTES BYG | 901675606-8 | Registrado; gratuito asociado 17-nov | +901675606 (antes brygar.token@) | d0d614e0… | 01082394 · certificado 17-nov 14:19 · **set aprobado → Habilitado** (19-nov) · **numeración PENDIENTE**: solicitud 20382291 en DEFINITIVO sin firmar |
 
 Cámaras 17-nov (orden 38132062, código C6F8ZZ4, $24.200): **teléfono 3168944117**, no el 3158204135
 de las otras de Sebastián. INDEPENDIENTES figura Inactiva en BryNex pero Activa en la cámara
@@ -311,6 +311,17 @@ en el set van con R-99-PN y tributo 01. CIIU: MEGATRANSPORTES 4922, INDEPENDIENT
 GSE emitió las dos el **mismo día** de la radicación (≈10 min y ≈1,5 h). Numeración FE en MUISCA:
 pendiente (firma Sebastián). En INDEPENDIENTES la ND2 no apareció en Documentos Enviados y aun así
 quedó Habilitado. Cloudflare del login a veces tarda >20 s: esperar a que el token llegue antes de Entrar.
+
+**Trampas de la numeración del 19-nov (INDEPENDIENTES quedó sin firmar):**
+- **El módulo de numeración guarda la empresa anterior.** Tras cerrar sesión y entrar con otro
+  tercero, el tablero decía INDEPENDIENTES pero «Consultar Numeración» seguía en MEGATRANSPORTES.
+  Volver al tablero y entrar otra vez por el mosaico lo corrigió. Revisar SIEMPRE el NIT de
+  «Información del Contribuyente» antes de Autorizar Rangos.
+- **«aquí» no manda otra clave mientras haya una vigente** (vale 2 h): responde con una alerta
+  «Firma Cancelada» que bloquea Chrome (la cierra la persona). Reusar la clave vigente en esa misma
+  ventana dio 400 «Parámetro opcional es requerido» y, al reabrir con Definitivo, 401 «Verificación
+  de autorización fallida». Para firmar dos empresas seguidas, esperar a que venza la clave o
+  firmar la segunda otro día. Pendiente probar: cerrar sesión de MUISCA del todo y entrar de nuevo.
 
 **Sin hacer (otros representantes, su RUT personal no tiene el correo central):** MAQUITEXTIL DEL
 VALLE 902061000-3 (Carlos Enrique Avendaño Bocanegra, RST), y las de la carpeta FECOP: AML CONTACT
