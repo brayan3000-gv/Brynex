@@ -329,7 +329,21 @@ obligación en BryNex admite máximo 500 caracteres.
   al mes, de sobra para cubrir la parte nacional (≈ $1,9M–$3M por bimestre). El contador usaba una
   pensión fija de $1.709.000 por bimestre en 2025.
 - Recibos de 2025 del contador: pensión fija de $1.709.000 por bimestre, casilla 30, ICA Cali 10,62.
-- No se ha revisado su 2026 en MUISCA (falta la sesión de Julia, CC del representante en la ficha 12).
+- **Renta SIMPLE 2025 (260 n.º 2604601620929) por corregir, sin corrección al 19-nov-2026:**
+  patrimonio $77.866.000 en efectivo cuando lo real era $1.596.000 (así se reportó a la Cámara el
+  19-sep-2026), e ingresos $413.541.000 cuando Dataico de Mega tiene **$514.154.624** en 54 FE aceptadas
+  de 2025 (por bimestre: 76,2 · 57,1 · 93,8 · 107,5 · 101,8 · 77,8 millones; el contador no declaró
+  ingresos en 2025-B1). Antes de presentar los 2593 de 2026, aclararlo con el contador: el saldo a
+  favor de $180.000 de esa 260 se arrastra al 2026-B1 (casilla 52) y cambia si se corrige.
+- **Notas crédito de JUAMVI** (el API sí las da por número: `GET …/v2/credit_notes?number=NC1`; no hay
+  listado): NC1 (9-ene-2025, anula FE14 de 2024, $25.349.000) y NC2 (30-abr-2025, anula FE31 o FE32,
+  duplicadas de $6.835.500) **nunca se enviaron a la DIAN**; NC3 ($7.990.100, FE36/FE37 duplicadas) y
+  NC4 ($9.626.550, FE45) sí. En 2026 no hay notas crédito.
+- **La diferencia de 2025 cuadra peso a peso:** $514.154.624 − NC3 − NC4 − NC2 = $489.702.474, y
+  menos todo el 2025-B1 ($76.161.650) da $413.540.824 ≈ los $413.541.000 declarados. O sea, el
+  contador **no declaró las FE de enero y febrero de 2025**. Falta que explique por qué.
+- MUISCA revisado el 19-nov-2026 con la clave de Julia (CC 66905291): 2025-B1 a B6 presentados (los
+  de 2025-B2 a B6 entre ene y abr de 2026) y **ningún 2593 de 2026**. B1–B5 de 2026 están vencidos.
 
 ## Representantes (cada uno firma lo suyo)
 
