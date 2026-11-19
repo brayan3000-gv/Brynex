@@ -303,6 +303,10 @@ obligación en BryNex admite máximo 500 caracteres.
   el contador declaró en el B2), FE198 (mayo), FE1153, FE1166, FE1181, FE1182 (agosto; con ellas
   Dataico da $15.170.700 para FE1001–FE1184), FE1185 (la rechazada por FAD09e) y FE2397–FE2400.
 - **El contador usa la fecha de la factura**: su B2 de $962.000 son exactamente las 13 FE de abril.
+- **2026-B3 cuadrado contra Dataico (19-nov):** Dataico tiene 931 FE del 31-may por **$47.587.000**
+  (FE70–FE99 $1.325.300 + FE100–FE1000 $46.261.700); BryNex da $47.527.000 y la diferencia,
+  $60.000, es exactamente FE198 (LUZ MABEL HENAO SANCHEZ, CC 1005871867, aceptada por la DIAN, sin
+  recibo en BryNex). En junio no hubo FE. Se declara con el total de Dataico.
 - Pensión: contratos de las razones sociales 42 (aliado BRYGAR: 9 vigentes y 6 retirados al 17-nov) y
   11282 (aliado BryNex: 1). Solo el 12 % del empleador, de planillas **pagadas** dentro del bimestre.
 
@@ -334,7 +338,7 @@ El bimestre 5 vence en noviembre según el último dígito del NIT: 1→11, 2→
 
 | Empresa | NIT | Desde | Estado al 17-nov-2026 |
 |---|---|---|---|
-| BRYGAR | 901918923 | B1 | B1 presentado en 0 (27-ago, form. 25936614962304). B2: definitivo 25936616614861, $962k de ingresos, pensión 420k; **490 n.º 4911202382625 por $11.000 pagado por PSE el 17-nov**, a la espera de que pase a Presentados (en BryNex ya figura pagada). B3–B6 pendientes. Soportes de 2025-B2 a B6 y 2026-B1/B2 subidos a BryNex; el 2025-B1 (25936605170005) no tiene renglón porque la ficha arranca en abril de 2025 |
+| BRYGAR | 901918923 | B1 | B1 presentado en 0 (27-ago, form. 25936614962304). B2: definitivo 25936616614861, $962k de ingresos, pensión 420k; **490 n.º 4911202382625 por $11.000 pagado por PSE el 17-nov**, presentado (visto el 19-nov). **B3: definitivo 25936616858676 (19-nov)** con $47.587.000, pensión de 3 trabajadores ($1.261.000), ICA Cali 8211 $505.000; 490 n.º 4911204511080 por $552.000 generado y **no pagado**: queda pendiente de revisión del contador (al aprobarlo, generar otro 490). Criterio del dueño: declarar solo la pensión de 3 trabajadores por mes, para no acumular excedente que se pierde. B4–B6 pendientes. Soportes de 2025-B2 a B6 y 2026-B1/B2 subidos a BryNex; el 2025-B1 (25936605170005) no tiene renglón porque la ficha arranca en abril de 2025 |
 | MEGA TRANSPORTES JUAMVI | 901856351 | B1 | 2026 sin revisar en MUISCA. Soportes 2024-B4 y 2025-B1, B2, B3, B4, B6 subidos a BryNex (salieron de las Descargas de Brayan); faltan 2024-B5/B6 y 2025-B5 |
 | GLOBAL CONTACT | 901709476 | B1 | **Checklist completo al 17-nov** (2593 2023-2026, 260 2023-2025, cámara; IVA, retención y exógena «no aplica»). **B1–B5 presentados el 14-nov** (25936616624019, …624610, …624818, …624950, …625056). Los presentó Angela, en cero con ICA Cali CIIU 8220. Soportes subidos a BryNex. Falta B6 |
 | HOMENURSE | 901753748 | B1 | **Checklist completo al 17-nov**: 2593 de 2023-B5 a 2026-B5 y 260 de 2023-2025, todo en cero (CIIU 8699), subidos; IVA y exógena «no aplica». Falta B6 |
