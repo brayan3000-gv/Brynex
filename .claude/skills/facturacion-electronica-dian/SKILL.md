@@ -328,8 +328,21 @@ VALLE 902061000-3 (Carlos Enrique Avendaño Bocanegra, RST), y las de la carpeta
 CENTER 901915931-8 y AML CONSTRUCCIONES 901916894-8 (Yulli Vanessa López Izquierdo), AML EXPRESS
 901917846-9 y FASHION ANTONELLAS 901917198-4 (Antonella Molina López). Todas RST con IVA.
 
-**Fuera de este trámite:** BRYGAR SAS, MEGA TRANSPORTES JUAMVI, AVAPP y CIT TECHNOLOGY CENTER
+**Fuera de este trámite:** BRYGAR SAS, MEGA TRANSPORTES JUAMVI y CIT TECHNOLOGY CENTER
 ya tienen factura electrónica (dicho por el dueño, 13-nov).
+
+**AVAPP 901671203-5 (Julia Amparo Vidal Pérez, CC 66905291), pasa de Dataico al gratuito (19-nov):**
+Dataico con suscripción vencida y numeración FE 1–1000 vencida el 16-sep-2026 (6 FE en total, FE1–FE6).
+En habilitación ya estaba **Habilitado** (17-sep-2024, Dataico) y el gratuito asociado desde el
+20-nov-2025 «En proceso»; GSE tenía una solicitud vieja `00617818` «Aplazado por Verificación –
+Pendiente Validación Documental» que no se tocó. Hecho: solicitud de certificado `3606bc86…`,
+cámara nueva (orden 38152653, código C6F9BAY, $12.100), GSE `DIAN_RSAP10JFD_01085870` radicada
+16:19 (salieron las 5 preguntas de identidad; las respondió el dueño con Julia). Cámara: correo
+`avaapp.sas@gmail.com` (doble «a»), teléfono 3168944117 — así van en GSE. Falta: emisión, set de
+pruebas (R-99-PN, tributo 01; FE2 de Dataico sí llevaba IVA) y numeración en MUISCA.
+- **El enlace de la DIAN de Julia NO llega al buzón central**: su RUT personal dice
+  `megatransportesjuamvi.1@gmail.com` (BryNex aún dice juamvi2@hotmail.com, está mal). Se abre
+  desde el Gmail de Chrome (`mail.google.com/mail/u/2`). El código de Firmaya sí llega al +NIT.
 
 Antes de empezar una empresa, mirar `/Contributor/Check`: puede estar ya registrada o
 habilitada con otro proveedor.
