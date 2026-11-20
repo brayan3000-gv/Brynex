@@ -429,8 +429,27 @@ VALLE 902061000-3 (Carlos Enrique Avendaño Bocanegra, RST), y las de la carpeta
 CENTER 901915931-8 y AML CONSTRUCCIONES 901916894-8 (Yulli Vanessa López Izquierdo), AML EXPRESS
 901917846-9 y FASHION ANTONELLAS 901917198-4 (Antonella Molina López). Todas RST con IVA.
 
-**Fuera de este trámite:** BRYGAR SAS, MEGA TRANSPORTES JUAMVI y CIT TECHNOLOGY CENTER
-ya tienen factura electrónica (dicho por el dueño, 13-nov).
+**Fuera de este trámite:** BRYGAR SAS y MEGA TRANSPORTES JUAMVI ya tienen factura electrónica
+(dicho por el dueño, 13-nov).
+
+**CIT TECHNOLOGY CENTER 901175588-8 (Julia, CC 66905291), de Dataico al gratuito el 20-nov-2026,
+conservando su numeración:** ya era facturador (habilitado 2021 con Siigo, Dataico desde 7-mar-2026,
+producción desde 25-08-2022) con **FVE 8–500, resolución 18764106885901, vence 06-03-2027**; solo
+había emitido la FVE10 (7-mar-2026, $17.850.000). Pasos: Asociar «Software gratuito» en
+habilitación (`/Contributor/ConfigureOperationModes/17527641`) → certificado (solicitud
+`6502aae9…`, GSE `DIAN_RSAP10JFD_01086680`, sin preguntas de identidad; la cuenta GSE de AVAPP pidió
+«activar usuario», así que se activó la del alias +901175588) → GSE emitió a las 13:00 (2 h) → set
+con las rutinas `bx*` (en NC/ND hay que elegir el prefijo `NC_1_99999999`/`ND_1_99999999` antes de
+`bxFill`, porque CIT tenía también un rango SETG de notas y el select quedaba vacío; y esperar ~5 s
+entre `bxFill` y `bxSave`) → «Aceptado» → Sincronizar (no pidió fecha: ya tenía producción) → en
+producción `AddNumberRange`: **⊗ quitar FVE de Dataico** y Agregar con «Facturador gratuito»
+(la sesión de producción se cae a menudo: repetir con enlace nuevo) → gratuita de producción:
+datos R-99-PN / 01 / CIIU 4741, NC y ND manuales, FVE con **número actual 10** (`Editar`, para no
+repetir la FVE10; la 8 y la 9 nunca se usaron) y se eliminó de la lista el rango viejo FVE 1–500
+(18764034611463, vencido 26-08-2023). El enlace de la DIAN de Julia llega a
+`megatransportesjuamvi.1@gmail.com` (Gmail `u/2` en Chrome), no al buzón central: se abre desde ahí
+sin copiar el token. **En «Documentos enviados» las fechas van en los campos ocultos
+`StartDate`/`EndDate`** (cambiar solo el datepicker devuelve 0 registros).
 
 **AVAPP 901671203-5 (Julia Amparo Vidal Pérez, CC 66905291), pasa de Dataico al gratuito (19-nov):**
 Dataico con suscripción vencida y numeración FE 1–1000 vencida el 16-sep-2026 (6 FE en total, FE1–FE6).
