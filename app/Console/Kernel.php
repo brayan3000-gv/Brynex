@@ -489,6 +489,19 @@ class Kernel extends ConsoleKernel
             ->runInBackground()
             ->appendOutputTo(storage_path('logs/whatsapp-sin-respuesta.log'));
 
+        // ── Segundo aviso de lo que la IA pasó a una persona ────────────────
+        // Cada 30 min de 7 a. m. a 7 p. m., lunes a sábado: los casos que la IA pasó (pidió una
+        // persona, dio su cédula o su comprobante) y llevan más de 2 h sin respuesta. Una sola vez
+        // por caso, a quien lo tiene asignado y con copia a Brayan (config atencion). No es la
+        // lista de las 8 a. m.: solo traspasos de la IA (20-nov-2026).
+        // Ejecución manual: php artisan whatsapp:avisar-traspasos --no-enviar
+        $schedule->command('whatsapp:avisar-traspasos')
+            ->cron('*/30 7-18 * * 1-6')
+            ->timezone('America/Bogota')
+            ->withoutOverlapping(10)
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/whatsapp-avisar-traspasos.log'));
+
         // ── Informe diario de la pauta ───────────────────────────────────────
         // Diario a las 20:00, con el día ya corrido: qué se gastó y qué trajo.
         // Va a esa hora y no en la mañana porque las métricas de Meta llegan con

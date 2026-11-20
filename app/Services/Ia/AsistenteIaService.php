@@ -159,7 +159,8 @@ class AsistenteIaService
             (float) (\App\Models\ConfiguracionAliado::paraAliado($alidoId)?->plan_sin_pension_valor ?? 0),
             self::resolverPerfil($waConversacion, $clienteInfo, $piezaOrigen),
             self::reglaMora($alidoId),
-            self::equipoAtencion($alidoId)
+            self::equipoAtencion($alidoId),
+            self::cuentasPago($alidoId)
         );
         $tools = $this->construirToolsWhatsapp($credenciales);
         // modo_prueba: usado por el simulador de conversación (/brynex/ia/simulador) para que las
@@ -338,6 +339,14 @@ class AsistenteIaService
             .($seg > $min ? ", si pasan más días sube a {$f($seg)}" : '')
             .', y en un atraso mayor es el interés de mora de ley sobre el valor de su seguridad social. El valor exacto de su '
             .'caso sale de consultar_cliente o lo confirma el equipo: nunca lo calcules tú.';
+    }
+
+    /** Las cuentas donde el cliente paga (BancoCuenta::paraCobro), en una línea para el prompt. */
+    public static function cuentasPago(int $aliadoId): string
+    {
+        return \App\Models\BancoCuenta::paraCobro($aliadoId)
+            ->map(fn ($b) => trim(($b->banco ?? '').' '.($b->tipo_cuenta ?? '').' '.$b->numero_cuenta).($b->nombre ? ' a nombre de '.$b->nombre : ''))
+            ->implode('; ');
     }
 
     /**
@@ -809,7 +818,8 @@ class AsistenteIaService
         float $planSinPension = 0,
         string $perfil = self::PERFIL_CLIENTE,
         string $reglaMora = '',
-        string $equipo = ''
+        string $equipo = '',
+        string $cuentasPago = ''
     ): array {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
         $perfil = in_array($perfil, [...self::PERFILES, self::PERFIL_SERVICIO], true) ? $perfil : self::PERFIL_CLIENTE;
@@ -879,6 +889,7 @@ class AsistenteIaService
         $contextoPlanSinPension = '';
         $vienePorPlanSinPension = false;
         if ($planSinPension > 0 && ! $empresa && in_array($perfil, [self::PERFIL_CLIENTE, self::PERFIL_SERVICIO], true)) {
+            $cuentasPagoTexto = $cuentasPago !== '' ? $cuentasPago : 'las cuentas se las confirma el equipo (pásalo con hablar_con_asesor)';
             $valorPlan = '$'.number_format($planSinPension, 0, ',', '.');
             $vienePorPlanSinPension = $piezaOrigen && self::esPiezaPlanSinPension($piezaOrigen);
             $contextoPlanSinPension = <<<PLAN
@@ -911,9 +922,16 @@ class AsistenteIaService
             - ANTES de que pague, en una sola frase y sin enredarlo: las incapacidades aplican solo si está
               exento de pensión, es decir, si es pensionado, mujer de 50 años o más, hombre de 55 o más, o tiene
               cédula de extranjería o PPT. Nunca le prometas incapacidades a nadie más.
-            - Para avanzar pídele la cédula, el nombre completo y si va a afiliar beneficiarios. En cuanto quiera
-              seguir, pásalo con hablar_con_asesor con el motivo «Plan EPS sin pensión {$valorPlan}: revisar vía
-              (exento, subtipo 4 o ingreso y retiro)». El asesor confirma la EPS y recibe el pago.
+            - Cuando quiera afiliarse (o te dé la cédula), avanza tú la venta en UN mensaje, sin pasarlo todavía:
+              pídele la foto de su cédula y, si afilia beneficiarios, el registro civil de los hijos o la cédula del
+              cónyuge; dale dónde pagar los {$valorPlan}: {$cuentasPagoTexto}; y dile que mande el comprobante por
+              aquí, que el día que pague lo afiliamos y le enviamos el radicado. No le pidas dirección, EPS de
+              preferencia ni otros datos: eso lo confirma el equipo. Hasta el 20-nov-2026 se pasaba apenas daba la
+              cédula y esperaba días a que alguien le escribiera; así paga cuando está decidido.
+            - Las fotos de documentos y comprobantes que mande pasan solas al equipo de ventas. Si te dice que ya
+              pagó, que paga otro día, que quiere hablar con una persona o tiene una duda que no está aquí, usa
+              hablar_con_asesor con «Plan EPS sin pensión {$valorPlan}: [pagó / paga el … / quiere hablar: …] —
+              revisar vía (exento, subtipo 4 o ingreso y retiro)». El equipo confirma la EPS y lo afilia.
             - Si ya tiene EPS y quiere cambiarse, es un traslado: consulta los tiempos con buscar_conocimiento
               antes de prometer el de 2 o 3 días.
 
@@ -1498,7 +1516,8 @@ class AsistenteIaService
         - PERO si ya dijo que SÍ («sí me gustaría», «listo», «ese quiero», «me interesa», «¿cómo hago?»), eso
           confirma el plan y el presupuesto a la vez: NO le preguntes si el valor le cabe ni le repitas el precio.
           Pídele en ese mismo mensaje la cédula y el nombre completo (y si va a afiliar beneficiarios), y en cuanto
-          los dé, pásalo con hablar_con_asesor. El 12-nov-2026 una clienta que llegó por el anuncio del plan sin
+          los dé, pásalo con hablar_con_asesor. Si es el plan EPS sin pensión, sigue los pasos de ese bloque (documentos,
+          cuentas y comprobante) antes de pasarlo. El 12-nov-2026 una clienta que llegó por el anuncio del plan sin
           pensión preguntó el valor con pensión, respondió «Ok si me gustaría», le preguntamos si le cabía en el
           presupuesto y no volvió a contestar.
         - Si llegó por el plan EPS sin pensión y pregunta por el plan con pensión, dale los dos valores lado a lado

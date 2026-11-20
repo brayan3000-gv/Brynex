@@ -58,7 +58,18 @@ class WhatsappEscalarMultimediaJob implements ShouldQueue
         $config = WhatsappConfig::paraAliado($conversacion->aliado_id);
         if (!$config->credencialesCompletas()) return;
 
-        $conversacion->escalarAHumano(mb_substr($this->motivo ?? self::MOTIVOS[$this->tipo] ?? 'Envió un archivo que la IA no puede leer.', 0, 255));
+        $motivo = mb_substr($this->motivo ?? self::MOTIVOS[$this->tipo] ?? 'Envió un archivo que la IA no puede leer.', 0, 255);
+        $conversacion->escalarAHumano($motivo);
+        // El comprobante o los documentos de un cliente nuevo son una venta: van a quien atiende
+        // las ventas, asignados y con aviso (20-nov-2026, ver AtencionVentas).
+        try {
+            $ventas = app(\App\Services\AtencionVentas::class);
+            if ($ventas->esVenta($conversacion)) {
+                $ventas->pasar($conversacion, $motivo);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('IA WhatsApp: no se pudo pasar a ventas', ['conversacion_id' => $conversacion->id, 'error' => $e->getMessage()]);
+        }
 
         $iaConfig = \App\Models\IaConfiguracionAliado::where('aliado_id', $conversacion->aliado_id)->first();
         $nombreBot = $iaConfig?->nombreBot() ?? 'Asistente Virtual';

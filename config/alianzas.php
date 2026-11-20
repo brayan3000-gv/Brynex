@@ -55,7 +55,9 @@ return [
         2 => [ // Brygar
             'mayores_de' => 50,
             'mayor' => ['nombre' => 'Brayan García', 'numero' => '3117762689', 'user_id' => 2, 'compartir' => true],
-            'menor' => ['nombre' => 'Angela Ortiz', 'numero' => '3123561665', 'user_id' => null, 'compartir' => false],
+            // user_id 3 desde el 20-nov-2026: sin él los prospectos quedaban «para Angela» pero sin
+            // asignar en la bandeja, y el segundo aviso no sabía a quién le tocaban.
+            'menor' => ['nombre' => 'Angela Ortiz', 'numero' => '3123561665', 'user_id' => 3, 'compartir' => false],
         ],
     ],
 

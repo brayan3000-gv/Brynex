@@ -45,6 +45,14 @@ class HablarConAsesorTool implements IaToolInterface
             $responsable = $conv && empty($contexto['modo_prueba'])
                 ? app(ProspectoAliadoService::class)->pasarAlResponsable($conv, $motivo)
                 : null;
+            // Un cliente nuevo que la IA deja listo va a quien atiende las ventas, asignado y
+            // avisado, no a la bandeja general sin dueño (20-nov-2026, ver AtencionVentas).
+            if (! $responsable && $conv && empty($contexto['modo_prueba'])) {
+                $ventas = app(\App\Services\AtencionVentas::class);
+                if ($ventas->esVenta($conv)) {
+                    $responsable = $ventas->pasar($conv, $motivo);
+                }
+            }
             if ($conv && ! $responsable && empty($contexto['modo_prueba'])) {
                 $conv->escalarAHumano($motivo);
             }
