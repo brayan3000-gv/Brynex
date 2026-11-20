@@ -146,8 +146,10 @@ class PlanillaVigilarSubtipo4 extends Command
     private const CADA_POR_DEFECTO = 5;
 
     /**
-     * Segundos entre sondeos, para vigilar por debajo del minuto (10, 15, 20
-     * o 30). En 0 —o sin configurar— manda la cadencia por minutos.
+     * Segundos entre sondeos, para vigilar por debajo del minuto (5, 10, 15,
+     * 20 o 30). En 0 —o sin configurar— manda la cadencia por minutos. A 5 s
+     * se sondea casi sin pausa (cada sondeo tarda ~2,5-3,4 s), para no perder
+     * los huecos cortos de pocos segundos.
      *
      * El planificador solo llama cada minuto, así que el comando se queda ese
      * minuto haciendo varias vueltas. Tiene sentido solo con un usuario de
@@ -307,13 +309,13 @@ class PlanillaVigilarSubtipo4 extends Command
         }
     }
 
-    /** 10, 15, 20 o 30; cualquier otra cosa (o nada) es 0 = por minutos. */
+    /** 5, 10, 15, 20 o 30; cualquier otra cosa (o nada) es 0 = por minutos. */
     private function cadaSegundos(): int
     {
         $seg = (int) ($this->option('cada-seg')
             ?? ConfiguracionBrynex::obtener(self::CONFIG_CADA_SEG, 0));
 
-        return in_array($seg, [10, 15, 20, 30], true) ? $seg : 0;
+        return in_array($seg, [5, 10, 15, 20, 30], true) ? $seg : 0;
     }
 
     /**
