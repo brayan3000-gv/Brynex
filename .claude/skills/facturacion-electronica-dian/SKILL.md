@@ -199,8 +199,42 @@ vacía, pero la solicitud sigue en **«Formalice la Solicitud Numeración de Fac
 la consulta) con botones Firmar/Anular, y **no tiene número de resolución**. Hay que darle **Firmar
 en esa lista** (misma clave dinámica si sigue vigente) y entonces aparece la resolución
 (1876…) en la columna «Numeración Facturación» y sale de la lista. Sin eso no se puede asociar el
-prefijo en producción. **Revisar todas las empresas firmadas antes del 19-nov** (MEGATRANSPORTES
-20382281 seguro está así).
+prefijo en producción. Así habían quedado **todas** las firmadas del 13 al 19-nov; se
+formalizaron el 19 y 20-nov (tabla abajo).
+
+**Resoluciones de numeración (FE 1–1.000 salvo AVAPP), formalizadas 19/20-nov-2026:**
+
+| Empresa | Solicitud | Resolución |
+|---|---|---|
+| AVAPP | 20385512 (habilitación FE 7–1000) | 18764118908033 |
+| INDEPENDIENTES BYG | 20382291 | 18764118907669 |
+| MEGATRANSPORTES BYG | 20382281 | 18764118877059 |
+| GLOBAL CONTACT | 20362875 | 18764118696441 |
+| HOMENURSE | 20362956 | 18764118696498 |
+| WORK AT HOME | 20362960 | 18764118696552 |
+| STRATEGY | 20362963 | 18764118696624 |
+| LALA GROUP | 20360064 | 18764118672511 |
+| LALA CONSTRUCCIONES | 20362841 | 18764118695966 |
+| LALA EXPRESS | 20362843 | 18764118696119 |
+| LALA CONFECCIONES | 20362866 | 18764118696158 |
+| YEVI CONSTRUCCIONES | 20362868 | 18764118696244 |
+| YEVI EXPRESS | 20362869 | 18764118696283 |
+| ELITES CREACIONES | 20362871 | 18764118696323 |
+| CONSTRUCTORA ELITEX | 20362873 | 18764118696402 |
+| LOGIC CENTER | 20366363 | 18764118729952 |
+| LOGISTICS HOUSE | 20366449 | 18764118730992 |
+| CONSTRUTECH | 20366495 | 18764118731478 |
+
+Falta asociar cada prefijo FE al «DIAN – Facturador gratuito» en producción
+(`/Software/AddNumberRange`) cuando la resolución propague.
+
+**Cómo se hizo la tanda del 20-nov (~3 min por empresa):** tercero → Numeración de Facturación →
+Solicitar → Aceptar aviso → Ingresar → la fila de «Formalice» → Firmar → «aquí» → código del
+buzón central (`seguridadsocial.brygar@`; lector con hora de corte para no tomar el de la empresa
+anterior) → el representante firma → Consultar muestra la resolución. Si «aquí» no aparece y
+hay cuenta regresiva, el código ya salió: leer el más reciente. Al firmar se abre sola una
+pestaña de Comunicados: cerrarla antes de entrar a la siguiente empresa. El PHP local necesita
+`DYLD_LIBRARY_PATH=/opt/homebrew/opt/openssl@3/lib` para llegar a la BD (OpenSSL 4 rompe el ODBC).
 
 **Seguir la numeración vieja en vez de pedir una nueva: «Habilitar Rangos»** (no Autorizar). Lista
 la resolución vencida (AVAPP: FE 1–1000 de Dataico, «VENCIDO»), lápiz → «Rango Desde» = siguiente
