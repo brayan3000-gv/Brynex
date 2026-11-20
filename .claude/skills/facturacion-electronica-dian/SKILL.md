@@ -322,7 +322,11 @@ Datos por empresa (BryNex `responsabilidades_rut` y `razones_sociales.actividad_
 | YEVI CONSTRUCCIONES | O-47 | 01 | 4111 |
 | YEVI EXPRESS | O-47 | ZZ | 4923 |
 | STRATEGY | O-47 | 01 | 4641 |
-| ELITES, ELITEX, GLOBAL CONTACT, HOMENURSE, WORK AT HOME | O-47 | 01 | leer en hab (BryNex no lo tiene) |
+| ELITES | O-47 | 01 | 4923 |
+| ELITEX | O-47 | 01 | 4111 |
+| GLOBAL CONTACT | O-47 | 01 | 8220 |
+| HOMENURSE | O-47 | 01 | 8699 |
+| WORK AT HOME | O-47 | 01 | 6810 |
 | MEGATRANSPORTES | R-99-PN | 01 | 4922 |
 | INDEPENDIENTES | R-99-PN | 01 | 4690 |
 | LOGIC CENTER | R-99-PN | 01 | 5612 |
@@ -330,8 +334,31 @@ Datos por empresa (BryNex `responsabilidades_rut` y `razones_sociales.actividad_
 | CONSTRUTECH | R-99-PN | 01 | 4330 |
 | AVAPP | R-99-PN | 01 | 7320 |
 
-Estado 20-nov 10:30: las 17 sincronizadas; LALA GROUP con datos y NC/ND en producción; falta en
-todas el prefijo FE (propagación) y en las otras 16 los datos y NC/ND.
+(Los CIIU de ELITES, ELITEX, GLOBAL CONTACT, HOMENURSE y WORK AT HOME salieron del RUT guardado en
+el servidor: `storage/app/documentos_razones/2/<NIT>/rut_*.pdf`, casilla 46.)
+
+**Estado 20-nov-2026, 15:05: las 18 listas para facturar con el gratuito** (las 17 + AVAPP, más CIT
+con FVE). Las resoluciones FE firmadas a las 9–10 a.m. aparecieron en `AddNumberRange` hacia las
+2 p.m. (unas 4–5 h). Cada FE quedó asociado al «Facturador gratuito» con vencimiento 20-11-2028 (AVAPP
+19-11-2028, FE 7–1000, número actual 6 → la próxima es FE7). Falta solo, al facturar por primera vez,
+crear el cliente y el producto reales.
+
+**Trampas de la tanda de prefijos (20-nov tarde):**
+- CompanyLogin de producción: escribir cédula y NIT y **esperar a que `cf-turnstile-response` tenga
+  valor** (~750 caracteres) antes de «Entrar»; si no, la página se recarga vacía y no manda enlace.
+- Entre una empresa y otra, **`/Account/LogOff` de gratis-vpfe**: si no, `RedirectToBiller` deja la
+  gratuita en la empresa anterior (pasó con ELITES, que abrió YEVI EXPRESS; `bxProdDatos` compara el
+  NIT y no guardó nada).
+- La primera vez que entra cada representante a la gratuita de producción sale
+  `/account/UserNewEmail` («el correo seguridadsocial.brygar@gmail.com ya existe»): se crea el usuario
+  con `seguridadsocial.brygar+<cédula>@gmail.com` (Yuly 1143961945, Sebastián 1006168815, Karla
+  1005878149; Luis y Yesenia no lo pidieron). Lo aprobó el dueño.
+- Rango manual: «Número Actual» debe estar **entre Desde y Hasta** (se pone 1 y la tabla muestra 0;
+  la próxima nota sale con 1). Con 0 da «datos no válidos».
+- Rutinas guardadas en `localStorage` de `gratis-vpfe` (producción): `bxProdDatos(NIT,RESP,TRIB,CIIU)`
+  y `bxProdFolios()` (abrir antes «Rangos de numeración manual» con un clic real en el encabezado).
+- CONSTRUTECH tiene además en la lista el rango viejo FEC 1–2500 de Siigo (vencido 10-08-2023); no se
+  quitó porque es otro prefijo.
 
 ## Estado por empresa
 
