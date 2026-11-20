@@ -1286,7 +1286,12 @@ class FacturacionController extends Controller
         $aplicarSaldo = ! array_key_exists('aplicar_saldo', $validated)
             || (bool) $validated['aplicar_saldo'];
 
-        if ($empresaId && $esMasivo && $aplicarSaldo) {
+        // Basta con que venga de la empresa, aunque sea UN solo trabajador. Antes
+        // se exigía más de un contrato: el modal de la empresa mostraba el saldo
+        // a favor y dejaba el "Saldo a pagar" en $0, pero al guardar se ignoraba
+        // y la factura se rechazaba por pago incompleto (Iliana Salcedo, empresa
+        // 879 de GiMave, 20-nov-2026: $313.200 a favor que no se tomaron).
+        if ($empresaId && $aplicarSaldo) {
             // ── Saldo neto REAL de la empresa (sin filtro de fecha) ──────────
             // Se debe sumar TODOS los saldo_proximo de empresa_id, incluyendo
             // los del mes actual ya facturados. Razón: al facturar un lote
@@ -4069,8 +4074,12 @@ class FacturacionController extends Controller
                 ->with('cliente')
                 ->first();
             if ($primerContrato) {
-                // Buscar empresa_id desde clientes.cod_empresa
+                // Buscar empresa_id desde clientes.cod_empresa. Con el aliado:
+                // la misma cédula puede ser cliente de otro aliado con otra
+                // empresa (Iliana Salcedo está en GiMave y en el aliado 9), y
+                // sin el filtro el saldo salía de una empresa al azar.
                 $empresaId = DB::table('clientes')
+                    ->where('aliado_id', $aliadoId)
                     ->where('cedula', $primerContrato->cedula)
                     ->value('cod_empresa');
             }
