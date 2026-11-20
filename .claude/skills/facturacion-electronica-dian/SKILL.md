@@ -293,6 +293,46 @@ Todas las 12: prefijo **FE**, 1–1.000 (decisión del dueño, 16-nov). LALA GRO
    tributo, CIIU), rangos NC/ND manuales y comprador/producto reales. Las rutinas `bx*` del
    `localStorage` están solo en `gratis-vpfe-hab`.
 
+**Tanda del 20-nov (las 17, ~3 min cada una, sin contraseñas):** CompanyLogin de habilitación
+(hay que pulsar «Representante legal» primero) → `brynex:enlace-dian` → al entrar sale el modal
+**«Registrar fecha de inicio salida a producción»** (habilitación = fecha del set, producción =
+hoy) → Aceptar → aviso «la responsabilidad 52 del RUT será actualizada con la fecha registrada…
+no se puede modificar» → Aceptar → «Responsabilidad 52-Facturador Electrónico fue ejecutada
+satisfactoriamente». Luego `/Contributor/View/<pk>` (muestra la empresa de la sesión, sea cual
+sea el número) → «Sincronizar Contribuyente a producción» → Aceptar. El dueño aprobó la fecha
+20-11-2026 para todas, **también CONSTRUTECH** (tenía habilitación Siigo 10-ago-2022 y la fecha
+de producción «Sin registrar»). Todo se puede pulsar por JS buscando el botón «Aceptar» visible.
+
+En producción, minutos después, `RedirectToBiller` ya deja entrar a la solución gratuita (justo
+después de sincronizar da 401 «No autorizado»). Datos de la Empresa vienen **vacíos**: Editar
+Información → selects `Responsabilidad`, `ResponsabilidadTributaria`, `TipoContribuyente`, `CIIU`
+con `jQuery(el).val(v).trigger('change')` → Guardar → «La actualización fue realizada
+correctamente». Rangos manuales (Factura Electrónica → Rangos de Numeración → manual → Crear
+nuevo): `DocumentTypeId` 91 prefijo **NC** y 92 prefijo **ND**, `FolioFrom` 1, `FolioTo` 99999999.
+La resolución FE firmada a las 9:23 del 20-nov **a las 10:25 aún no** salía en AddNumberRange.
+
+Datos por empresa (BryNex `responsabilidades_rut` y `razones_sociales.actividad_economica`):
+
+| Empresa | Resp. | Tributo | CIIU |
+|---|---|---|---|
+| LALA GROUP | O-47 | 01 | 4791 |
+| LALA CONSTRUCCIONES | O-47 | 01 | 4111 |
+| LALA EXPRESS | O-47 | ZZ | 4923 |
+| LALA CONFECCIONES | O-47 | 01 | 1410 |
+| YEVI CONSTRUCCIONES | O-47 | 01 | 4111 |
+| YEVI EXPRESS | O-47 | ZZ | 4923 |
+| STRATEGY | O-47 | 01 | 4641 |
+| ELITES, ELITEX, GLOBAL CONTACT, HOMENURSE, WORK AT HOME | O-47 | 01 | leer en hab (BryNex no lo tiene) |
+| MEGATRANSPORTES | R-99-PN | 01 | 4922 |
+| INDEPENDIENTES | R-99-PN | 01 | 4690 |
+| LOGIC CENTER | R-99-PN | 01 | 5612 |
+| LOGISTICS HOUSE | R-99-PN | ZZ | 8699 |
+| CONSTRUTECH | R-99-PN | 01 | 4330 |
+| AVAPP | R-99-PN | 01 | 7320 |
+
+Estado 20-nov 10:30: las 17 sincronizadas; LALA GROUP con datos y NC/ND en producción; falta en
+todas el prefijo FE (propagación) y en las otras 16 los datos y NC/ND.
+
 ## Estado por empresa
 
 | Empresa | NIT | Representante | DIAN | Certificado (DIAN) | GSE |
