@@ -117,6 +117,11 @@ class X1PagosBrynex
             ->where('p.razon_social_id', $rsId)
             ->where('p.n_plano', $nPlano)
             ->whereIn('p.tipo_modalidad_id', TipoModalidad::IDS_EX1)
+            // Solo lo que la confirmación marcaría: una afiliación X1 en cero
+            // días no se paga y no debe frenar la planilla del resto (pasó con
+            // ELITEX, plano 4 de nov-2026).
+            ->whereIn('p.tipo_reg', ['planilla', 'retiro'])
+            ->where('p.num_dias', '>', 0)
             ->whereNull('p.deleted_at')
             ->tap(fn ($w) => Plano::filtrarPeriodoDePago($w, $mes, $anio))
             ->exists();
