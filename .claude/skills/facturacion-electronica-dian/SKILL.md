@@ -340,8 +340,15 @@ cámara nueva (orden 38152653, código C6F9BAY, $12.100), GSE `DIAN_RSAP10JFD_01
 16:19 (salieron las 5 preguntas de identidad; las respondió el dueño con Julia). Cámara: correo
 `avaapp.sas@gmail.com` (doble «a»), teléfono 3168944117 — así van en GSE. **Certificado emitido
 16:58 (39 min)**; set de pruebas el mismo día (R-99-PN, tributo 01, CIIU 7320): 5 FE + 2 NC + 2 ND
-→ gratuito **Aceptado**. Falta la numeración en MUISCA: **ojo con el prefijo**, Dataico ya usó
-FE1–FE6 con la resolución vencida el 16-sep-2026.
+→ gratuito **Aceptado**. **Numeración firmada 19-nov 21:13: FE 1001–2000** (solicitud 20385380).
+MUISCA no deja volver a pedir FE 1–1000 aunque la resolución de Dataico (18764079607181, FE 1–1000)
+haya vencido: «El rango presenta un cruce con el rango (1, 1000). Debe iniciar en (1001)». Mismo
+prefijo = seguir desde el siguiente bloque. Hay una solicitud vieja 18417377 (nov-2025, 1–100 sin
+prefijo) en DEFINITIVO sin firmar; no estorba.
+- **«Verificación de autorización fallida» (401) al pedir la clave = sesión de MUISCA vieja**
+  (llevaba ~5 h). Cerrar sesión, volver a entrar y repetir: la clave llegó y firmó a la primera.
+  Así se destraba también INDEPENDIENTES. La clave de Julia llega al Gmail de Mega y a
+  Bandeja de Salida → Comunicados de MUISCA (se lee ahí sin abrir el correo).
 - Con la conexión de Chrome inestable, `await bxFill(...)` corta el batch (Previsualizar recarga
   la página): lanzarlo con `setTimeout(()=>…bxFill…,50)`, esperar ~20 s y luego `bxSave`.
 - **El enlace de la DIAN de Julia NO llega al buzón central**: su RUT personal dice
