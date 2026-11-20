@@ -382,11 +382,10 @@ class ComfandiApi
         // que no es del trabajador (pasó con Brayan: salió un cert a nombre de
         // «KAREN»). Si se puede leer texto del PDF y NO aparece la cédula del
         // trabajador, no es su certificado → se trata como «en proceso». Si no se
-        // puede leer el texto (fuentes embebidas), NO se rechaza, para no botar un
-        // certificado bueno.
+        // puede leer el texto, NO se rechaza, para no botar un certificado bueno.
         $digitos = self::digitosDelPdf($bin);
         if (strlen($digitos) >= 20 && ! str_contains($digitos, $cedula)) {
-            Log::info('Comfandi certificado: el PDF no menciona la cédula del trabajador (¿placeholder?)', [
+            Log::warning('Comfandi certificado: el PDF no menciona la cédula del trabajador (¿placeholder?)', [
                 'cedula' => $cedula, 'status' => $status, 'digitos_leidos' => strlen($digitos),
             ]);
 
@@ -402,27 +401,19 @@ class ComfandiApi
 
     /**
      * Los dígitos del texto visible de un PDF, para comprobar que el certificado
-     * sea del trabajador (que aparezca su cédula). Descomprime los streams
-     * (FlateDecode) y, si alguno viene sin comprimir pero es texto, también lo
-     * suma; los streams binarios (imágenes/fuentes) se ignoran. Devuelve '' si no
-     * se pudo leer nada, y entonces el llamador NO rechaza el PDF.
+     * sea del trabajador (que aparezca su cédula). Usa smalot/pdfparser, que
+     * traduce las fuentes CID (Identity-H) con su ToUnicode: Comfandi escribe el
+     * texto como glifos en hexadecimal, así que descomprimir los streams a mano
+     * solo daba los números de coordenadas y la cédula nunca aparecía (rechazaba
+     * TODOS los certificados buenos, nov-2026). Devuelve '' si no se pudo leer,
+     * y entonces el llamador NO rechaza el PDF.
      */
     private static function digitosDelPdf(string $bin): string
     {
-        $texto = '';
-        if (preg_match_all('/stream\r?\n?(.*?)\r?\n?endstream/s', $bin, $m)) {
-            foreach ($m[1] as $s) {
-                $plano = @gzuncompress($s);
-                if (! is_string($plano)) {
-                    $plano = @gzinflate($s);
-                }
-                if (! is_string($plano)) {
-                    // ¿stream de texto sin comprimir? Se suma si es casi todo imprimible.
-                    $imprimible = strlen((string) preg_replace('/[^\x20-\x7E]/', '', $s));
-                    $plano = ($s !== '' && $imprimible / max(1, strlen($s)) > 0.7) ? $s : '';
-                }
-                $texto .= ' '.$plano;
-            }
+        try {
+            $texto = (new \Smalot\PdfParser\Parser())->parseContent($bin)->getText();
+        } catch (\Throwable $e) {
+            return '';
         }
 
         return (string) preg_replace('/\D+/', '', $texto);
