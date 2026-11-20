@@ -227,10 +227,22 @@ Todas las 12: prefijo **FE**, 1–1.000 (decisión del dueño, 16-nov). LALA GRO
 - El listado de Documentos Enviados muestra el último con retraso; el portal pasa a
   Habilitado aunque falte el último en la lista.
 
-## 9. Pendiente de documentar (aún no se ha hecho)
+## 9. Paso a producción (hecho con AVAPP el 19-nov, ya habilitada antes con Dataico)
 
-- Ver la resolución/rango ya autorizado en la solución gratuita de **producción** y
-  «Registrar fecha de inicio salida a producción» en el portal.
+1. Portal de **habilitación** → `/Contributor/View/<id>` → **«Sincronizar Contribuyente a
+   producción»** → Aceptar → «Contribuyente se envió a activar a producción con éxito».
+2. Entrar a `catalogo-vpfe.dian.gov.co` (sin -hab) igual que a habilitación (otro enlace al
+   correo del RUT del representante). En producción **no se agregan modos**; «Modos de
+   operación» (`/Contributor/OperationModes/<id>`) ya mostró el gratuito con fecha del día.
+3. El certificado de GSE ya aparece en la solución gratuita de producción
+   (`gratis-vpfe.dian.gov.co/Certificate`, entrando por `/User/RedirectToBiller`).
+4. **Asociar el prefijo**: Configuración → «Rangos de numeración» (`/Software/AddNumberRange`) →
+   Proveedor-Software «DIAN – Facturador gratuito» + prefijo → Agregar. Con AVAPP, a la hora de
+   firmar la resolución nueva (FE 1001–2000) salía «no tiene más prefijos de numeración para
+   asociar»: la resolución tarda en propagarse desde MUISCA. **Pendiente** volver a mirar.
+5. Después: en la solución gratuita de producción llenar Datos de la empresa (R-99-PN / O-47,
+   tributo, CIIU), rangos NC/ND manuales y comprador/producto reales. Las rutinas `bx*` del
+   `localStorage` están solo en `gratis-vpfe-hab`.
 
 ## Estado por empresa
 
