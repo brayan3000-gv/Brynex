@@ -22,7 +22,7 @@ return [
     'numeros' => [
         2 => '3117762689',  // Brayan García
         3 => '3123561665',  // Angela Ortiz
-        14 => null,         // Daniela Ariza: falta su WhatsApp
+        14 => '3158204135', // Daniela Ariza («Daniela 1 (Brygar)», el «otro chat»)
     ],
 
     'copia' => [
