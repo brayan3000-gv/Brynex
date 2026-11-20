@@ -390,7 +390,10 @@ obligación en BryNex admite máximo 500 caracteres.
   generar el 490. Casillas 46, 51 y 52 en 0 (la 260 corregida ya no deja saldo a favor).
 - **B2–B5 de 2026, listos para llenar (no se pueden crear borradores hasta que el anterior esté
   presentado o en definitivo: MUISCA responde «No se encontró el recibo Electrónico Simple del
-  periodo anterior» y carga el formulario vacío).** Pensión 45 = $2.521.000 en cada uno (6
+  periodo anterior» y carga el formulario vacío). Ojo: el 20-nov a las 9:50 (≈19 h después del PSE)
+  el B2 ya abría sin ese aviso pero con la casilla 46 en 0, y el B1 seguía en «Borradores
+  Definitivos»; lo mismo con el B4 de Brygar. No llenar hasta que la 46 traiga el saldo del
+  anterior (463.000 Mega / 1.005.000 Brygar): presentado así, ese saldo se pierde.** Pensión 45 = $2.521.000 en cada uno (6
   trabajadores a $210.109 × 2 planillas; cada mes de feb a sep hay al menos 6 con 30 días: usar los
   de 30 días, no los de 1 día). Planillas que cuentan: B2 = planos feb+mar, B3 = abr+may,
   B4 = jun+jul, B5 = ago+sep.
