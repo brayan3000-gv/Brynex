@@ -1649,6 +1649,10 @@ async function abrirModalWhatsAppMasivo() {
                     <span>ya enviados hoy:</span>
                     <strong>${resumen.ya_enviados_hoy} omitidos</strong>
                 </div>
+                ${resumen.con_comprobante ? `<div style="display:flex;justify-content:space-between;border-bottom:1px dashed rgba(22,101,52,.12);padding:.2rem 0;color:#1d4ed8;">
+                    <span>🧾 Mandaron comprobante y falta facturar:</span>
+                    <strong>${resumen.con_comprobante} no se les envía</strong>
+                </div>` : ''}
                 <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.82rem;margin-top:.3rem;color:#15803d;">
                     <strong>💬 TOTAL ENVÍOS REALES:</strong>
                     <strong>${resumen.envios_validos} de ${resumen.total_destinatarios}</strong>

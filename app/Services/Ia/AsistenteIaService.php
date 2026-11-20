@@ -158,7 +158,8 @@ class AsistenteIaService
             $retomaAliado,
             (float) (\App\Models\ConfiguracionAliado::paraAliado($alidoId)?->plan_sin_pension_valor ?? 0),
             self::resolverPerfil($waConversacion, $clienteInfo, $piezaOrigen),
-            self::reglaMora($alidoId)
+            self::reglaMora($alidoId),
+            self::equipoAtencion($alidoId)
         );
         $tools = $this->construirToolsWhatsapp($credenciales);
         // modo_prueba: usado por el simulador de conversación (/brynex/ia/simulador) para que las
@@ -337,6 +338,27 @@ class AsistenteIaService
             .($seg > $min ? ", si pasan más días sube a {$f($seg)}" : '')
             .', y en un atraso mayor es el interés de mora de ley sobre el valor de su seguridad social. El valor exacto de su '
             .'caso sale de consultar_cliente o lo confirma el equipo: nunca lo calcules tú.';
+    }
+
+    /**
+     * Nombres de quienes atienden el WhatsApp del aliado (los que escribieron a mano en los últimos
+     * 60 días). El 17-nov-2026 una clienta pidió «con la señorita Angela» y la IA le preguntó si el
+     * número estaba equivocado: no sabía que Angela es del equipo.
+     */
+    public static function equipoAtencion(int $aliadoId): string
+    {
+        return \Illuminate\Support\Facades\Cache::remember("ia_equipo_atencion_{$aliadoId}", now()->addHours(12), function () use ($aliadoId) {
+            $ids = WhatsappMensaje::where('aliado_id', $aliadoId)
+                ->where('direccion', 'saliente')
+                ->where('es_bot', false)
+                ->whereNotNull('usuario_id')
+                ->where('created_at', '>=', now()->subDays(60))
+                ->distinct()
+                ->pluck('usuario_id');
+
+            return \App\Models\User::whereIn('id', $ids)->where('activo', true)->pluck('nombre')
+                ->filter()->map(fn ($n) => trim((string) $n))->unique()->sort()->implode(', ');
+        });
     }
 
     /**
@@ -786,7 +808,8 @@ class AsistenteIaService
         string $retomaAliado = '',
         float $planSinPension = 0,
         string $perfil = self::PERFIL_CLIENTE,
-        string $reglaMora = ''
+        string $reglaMora = '',
+        string $equipo = ''
     ): array {
         $fecha = now()->translatedFormat('d \d\e F \d\e Y');
         $perfil = in_array($perfil, [...self::PERFILES, self::PERFIL_SERVICIO], true) ? $perfil : self::PERFIL_CLIENTE;
@@ -1297,6 +1320,15 @@ class AsistenteIaService
         - No discutas ni le expliques por qué tiene razón el sistema, aunque creas que el cobro está bien. Reconoce
           su molestia en una frase, dile que le pasas el caso a una persona para que lo revise, y usa hablar_con_asesor
           con el motivo empezando por «⚠️ Queja:» y un resumen de lo que reclama (valores y fechas que dio).
+
+        ## Quiénes somos y dónde estamos
+        - Si pregunta dónde quedan, la dirección o si tienen oficina, búscalo con buscar_conocimiento: BRYGAR tiene sede
+          en Cali y atiende a todo el país por WhatsApp. Nunca digas que somos «solo virtuales» ni que no tenemos
+          oficina (el 19-nov-2026 se lo dijimos a una clienta que llegó por el anuncio).
+        - Personas del equipo que atienden este WhatsApp: {$equipo}. Si alguien pide hablar con una de ellas por su
+          nombre («con la señorita Angela», «con Dani»), es alguien del equipo: no digas que no la conoces ni que el
+          número está equivocado. Dile que le pasas el mensaje y usa hablar_con_asesor con «Pide hablar con [nombre]:
+          …» y lo que necesita.
 
         ## Si pregunta de dónde salió su número, o pide que no le escriban más:
         - Es normal que un prospecto frío pregunte esto — no te pongas a la defensiva ni des detalles internos.

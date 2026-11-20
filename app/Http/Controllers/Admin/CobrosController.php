@@ -1711,6 +1711,7 @@ class CobrosController extends Controller
 
         // Excluir ya pagados
         $contratos = $contratos->filter(fn($c) => !($c->fact_pagada ?? false))->values();
+        [$contratos, $cantConComprobante] = $this->sinComprobantePendiente($contratos, (int) $aliadoId);
         $cantClientes = $contratos->count();
 
         // Solo un celular colombiano de verdad. Lo demás («3», un fijo, dos
@@ -1886,6 +1887,7 @@ class CobrosController extends Controller
                 'varios'              => $cantVariosContratos,
                 'sin_celular'         => $cantSinCelular,
                 'ya_enviados_hoy'     => $cantYaEnviadosHoy,
+                'con_comprobante'     => $cantConComprobante,
                 'envios_validos'      => $totalEnviosValidos,
                 'total_destinatarios' => $cantClientes,
             ],
@@ -2035,6 +2037,37 @@ class CobrosController extends Controller
      *  - Excluye clientes con factura pagada del mes.
      *  - Clientes sin celular → detalle en estado 'fallido'.
      */
+    /**
+     * Saca del recordatorio a quien ya mandó un comprobante por WhatsApp (leído por la IA) desde el
+     * 1.º del mes y todavía no tiene la factura pagada: pagó y falta registrarlo. Desde el 1.º y no
+     * más atrás, para no dejar sin recordatorio a quien solo pagó el mes anterior. El 17-nov-2026
+     * el recordatorio les llegó a Luis Muñoz (pagó el 6), Fernando Gómez (el 10), Gloria Libreros y
+     * Sara López (el 14), porque sus pagos se facturaron minutos u horas después del envío.
+     *
+     * @return array{0: \Illuminate\Support\Collection, 1: int} contratos que siguen y cuántos salieron
+     */
+    private function sinComprobantePendiente(\Illuminate\Support\Collection $contratos, int $aliadoId): array
+    {
+        $conComprobante = DB::table('whatsapp_mensajes as m')
+            ->join('whatsapp_conversaciones as c', 'c.id', '=', 'm.conversacion_id')
+            ->where('m.aliado_id', $aliadoId)
+            ->where('m.direccion', 'entrante')
+            ->where('m.created_at', '>=', now()->startOfMonth())
+            ->where('m.contenido', 'like', '%Comprobante de pago leído por la IA%')
+            ->pluck('c.wa_contact_id')
+            ->map(fn ($n) => substr(preg_replace('/\D/', '', (string) $n), -10))
+            ->filter()
+            ->flip();
+
+        if ($conComprobante->isEmpty()) {
+            return [$contratos, 0];
+        }
+
+        $siguen = $contratos->reject(fn ($c) => isset($conComprobante[substr(preg_replace('/\D/', '', (string) ($c->cliente?->celular ?? '')), -10)]))->values();
+
+        return [$siguen, $contratos->count() - $siguen->count()];
+    }
+
     public function enviarFiltroWhatsApp(Request $request)
     {
         $aliadoId = session('aliado_id_activo');
@@ -2094,6 +2127,7 @@ class CobrosController extends Controller
 
         // ── Excluir ya pagados ───────────────────────────────────────────
         $contratos = $contratos->filter(fn($c) => !($c->fact_pagada ?? false))->values();
+        [$contratos] = $this->sinComprobantePendiente($contratos, (int) $aliadoId);
 
         if ($contratos->isEmpty()) {
             return response()->json(['ok' => false, 'mensaje' => 'No hay clientes pendientes de pago para enviar cobros.'], 422);
