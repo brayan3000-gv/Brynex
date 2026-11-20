@@ -193,6 +193,21 @@ con `setTimeout` porque Previsualizar y Firmar recargan la página.
    estado DEFINITIVO. La consulta de MUISCA filtra por fecha y guarda la solicitud con la
    fecha UTC (de noche sale con la de mañana): poner «Fecha Hasta» = mañana.
 
+**⚠️ La firma tiene DOS pasos (descubierto con AVAPP el 19-nov).** Firmar desde el formulario
+(Definitivo → «Firmar documento») solo guarda: sale «guardado de forma exitosa» y la tabla queda
+vacía, pero la solicitud sigue en **«Formalice la Solicitud Numeración de Facturación»** (arriba de
+la consulta) con botones Firmar/Anular, y **no tiene número de resolución**. Hay que darle **Firmar
+en esa lista** (misma clave dinámica si sigue vigente) y entonces aparece la resolución
+(1876…) en la columna «Numeración Facturación» y sale de la lista. Sin eso no se puede asociar el
+prefijo en producción. **Revisar todas las empresas firmadas antes del 19-nov** (MEGATRANSPORTES
+20382281 seguro está así).
+
+**Seguir la numeración vieja en vez de pedir una nueva: «Habilitar Rangos»** (no Autorizar). Lista
+la resolución vencida (AVAPP: FE 1–1000 de Dataico, «VENCIDO»), lápiz → «Rango Desde» = siguiente
+número sin usar (7) → chulo → marcar la fila → Borrador → Definitivo → firmar y luego firmar en
+«Formalice». AVAPP quedó con **FE 7–1000, resolución 18764118908033** (solicitud 20385512). Con
+Autorizar, MUISCA obliga a empezar después del último rango autorizado (FE1001).
+
 **Trampas de la tanda del 16-nov (11 numeraciones, ~45 min):**
 - **Chrome cambia el NIT del tercero** al elegir la contraseña guardada: entra a la empresa
   anterior. Pedir que la escriban a mano y, antes de tocar nada, mirar el nombre de la empresa
@@ -352,7 +367,7 @@ cámara nueva (orden 38152653, código C6F9BAY, $12.100), GSE `DIAN_RSAP10JFD_01
 16:19 (salieron las 5 preguntas de identidad; las respondió el dueño con Julia). Cámara: correo
 `avaapp.sas@gmail.com` (doble «a»), teléfono 3168944117 — así van en GSE. **Certificado emitido
 16:58 (39 min)**; set de pruebas el mismo día (R-99-PN, tributo 01, CIIU 7320): 5 FE + 2 NC + 2 ND
-→ gratuito **Aceptado**. **Numeración firmada 19-nov 21:13: FE 1001–2000** (solicitud 20385380).
+→ gratuito **Aceptado**. Numeración: FE 1001–2000 (20385380) quedó sin formalizar; **la vigente es la habilitación FE 7–1000, resolución 18764118908033** (20385512).
 MUISCA no deja volver a pedir FE 1–1000 aunque la resolución de Dataico (18764079607181, FE 1–1000)
 haya vencido: «El rango presenta un cruce con el rango (1, 1000). Debe iniciar en (1001)». Mismo
 prefijo = seguir desde el siguiente bloque. Hay una solicitud vieja 18417377 (nov-2025, 1–100 sin
