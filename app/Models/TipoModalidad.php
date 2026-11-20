@@ -189,9 +189,9 @@ class TipoModalidad extends BaseModel
         self::ID_CAJA_30 => [2],
         self::ID_CAJA_14 => [2],
         self::ID_PENSION_30 => [2],
-        // Fecop (6) la vende desde el 28-oct-2026, solo en los planes que
-        // limita PLANES_POR_ALIADO.
-        self::ID_EXTRAS => [2, 6],
+        // Fecop (6) la vende desde el 28-oct-2026 e INTEGRA DUITAMA (16) desde
+        // el 20-nov-2026, solo en los planes que limita PLANES_POR_ALIADO.
+        self::ID_EXTRAS => [2, 6, 16],
     ];
 
     /**
@@ -200,11 +200,13 @@ class TipoModalidad extends BaseModel
      *
      * Fecop vende de Tipo E - Extras solo caja de 30 días y pensión: las que
      * se corrigen por API. Los de salud se corrigen por el portal y en Fecop
-     * todavía no se ha podido subir ese plano (28-oct-2026).
+     * todavía no se ha podido subir ese plano (28-oct-2026). INTEGRA DUITAMA
+     * entra con la misma regla (20-nov-2026).
      */
     const PLANES_POR_ALIADO = [
         self::ID_EXTRAS => [
             6 => ['SOLO_CCF_30', 'SOLO_AFP'],
+            16 => ['SOLO_CCF_30', 'SOLO_AFP'],
         ],
     ];
 
