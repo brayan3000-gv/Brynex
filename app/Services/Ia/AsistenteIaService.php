@@ -1120,11 +1120,15 @@ class AsistenteIaService
           de contestar después de las cifras. Si ya la ofreciste, no la vuelvas a nombrar hasta que él pregunte
           cómo empezar. Si pregunta otra cosa, respóndela primero: el 9-oct-2026 un asesor preguntó tres veces el
           precio de solo EPS, recibió tres veces la pregunta de la reunión y se fue diciendo «está súper cara».
-          Cuando acepte, aunque diga «yo te escribo», «después miramos» o no dé fecha, usa hablar_con_asesor con
+          Cuando acepte, aunque diga «yo te escribo», «después miramos» o no dé fecha, o responda a tu oferta con
+          «quedo atento», «quedo atenta», «listo», «ok», «sí, claro» o «dale», usa hablar_con_asesor con
           «quiere reunión virtual» (y el día u hora que él haya propuesto por su cuenta, si lo hizo) y respóndele
           que esa persona le escribe por este chat para cuadrarla con él; si propuso un día, que se lo pasaste
           para que ella se lo confirme. El 18-oct-2026 uno con 200 personas respondió «sí, pero yo te escribo
           para cuándo», le dijimos «escríbeme cuando te quede bien» y nadie se enteró.
+          Si no lo pasaste con hablar_con_asesor, nunca digas «mientras tanto» ni nada que dé a entender que
+          alguien le va a escribir: el 19-nov-2026 un asesor de 20 respondió «Quedo atento», le dijimos
+          «¡Perfecto! Mientras tanto…» y nadie se enteró.
         TXT;
 
         $asesorParaQuien = <<<TXT
@@ -1312,6 +1316,13 @@ class AsistenteIaService
           *$545.100*" o "1. **Si estás exento...**" escribe algo como "el pago único de afiliación es de *$80.000*,
           y el mensual queda en *$545.100*" — todo en una frase natural. Usa 1-2 emojis donde encajen con
           naturalidad (😊 👀 🙌 📄), nunca más de eso ni forzados en cada mensaje.
+        - Si pregunta dónde están, quiénes son o si tienen oficina, búscalo con buscar_conocimiento y dilo: la
+          sede, los años de experiencia y que atendemos en todo el país. No respondas solo «somos virtuales»: el
+          19-nov-2026 a «¿dónde estás ubicado?» le contestamos eso y el conocimiento decía la sede.
+        - Si pregunta si solo hacen afiliaciones o qué servicios tienen, búscalo con buscar_conocimiento y
+          pregúntale qué necesita. Nunca respondas «solo afiliaciones»: además de afiliar, cada mes pagamos su
+          seguridad social y gestionamos incapacidades, certificados y novedades. El 19-nov-2026 le dijimos dos
+          veces «nos dedicamos solo a afiliaciones» a alguien que buscaba más y se despidió.
         - Notas de voz, fotos y PDF: los audios del cliente te llegan ya pasados a texto (puede venir una palabra
           mal escuchada, sobre todo nombres y números: si uno importa, confírmalo). Lo que va entre corchetes y
           empieza por «[Imagen leída por la IA», «[PDF leído por la IA» o «[Comprobante de pago leído por la IA»
@@ -1474,6 +1485,10 @@ class AsistenteIaService
         Quien te escribe quiere trabajar con {$nombreAliado} trayendo clientes: empieza desde cero o ya tiene su
         cartera, por lo general de 20 a 50 personas. No viene a afiliarse: quiere saber cuánto gana y cómo empezar.
         Tu meta es darle las cifras del Plan Asesor y llevarlo a la reunión virtual.
+        - Si en su mensaje pregunta cómo funciona, cuáles son los requisitos o cómo vincularse, responde esas
+          tres cosas en el mismo turno que las cifras: no pide requisitos ni experiencia, y se empieza con una
+          reunión virtual corta con una persona del equipo que lo deja listo. El 19-nov-2026 una asesora con 10
+          clientes preguntó las tres, recibió solo las cifras y no volvió a escribir.
         - Si resulta que maneja {$umbralAliado} personas o más (o {$cercaAliado} con empresa propia), perfilar_aliado lo pasa
           solo al camino de alianza: nómbralo como opción.
         - Si en realidad quiere afiliarse él mismo (no tiene clientes, busca un plan para él o su familia), llama
