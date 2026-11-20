@@ -338,8 +338,12 @@ En habilitación ya estaba **Habilitado** (17-sep-2024, Dataico) y el gratuito a
 Pendiente Validación Documental» que no se tocó. Hecho: solicitud de certificado `3606bc86…`,
 cámara nueva (orden 38152653, código C6F9BAY, $12.100), GSE `DIAN_RSAP10JFD_01085870` radicada
 16:19 (salieron las 5 preguntas de identidad; las respondió el dueño con Julia). Cámara: correo
-`avaapp.sas@gmail.com` (doble «a»), teléfono 3168944117 — así van en GSE. Falta: emisión, set de
-pruebas (R-99-PN, tributo 01; FE2 de Dataico sí llevaba IVA) y numeración en MUISCA.
+`avaapp.sas@gmail.com` (doble «a»), teléfono 3168944117 — así van en GSE. **Certificado emitido
+16:58 (39 min)**; set de pruebas el mismo día (R-99-PN, tributo 01, CIIU 7320): 5 FE + 2 NC + 2 ND
+→ gratuito **Aceptado**. Falta la numeración en MUISCA: **ojo con el prefijo**, Dataico ya usó
+FE1–FE6 con la resolución vencida el 16-sep-2026.
+- Con la conexión de Chrome inestable, `await bxFill(...)` corta el batch (Previsualizar recarga
+  la página): lanzarlo con `setTimeout(()=>…bxFill…,50)`, esperar ~20 s y luego `bxSave`.
 - **El enlace de la DIAN de Julia NO llega al buzón central**: su RUT personal dice
   `megatransportesjuamvi.1@gmail.com` (BryNex aún dice juamvi2@hotmail.com, está mal). Se abre
   desde el Gmail de Chrome (`mail.google.com/mail/u/2`). El código de Firmaya sí llega al +NIT.
