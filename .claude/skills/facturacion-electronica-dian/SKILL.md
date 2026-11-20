@@ -301,7 +301,7 @@ Sebastián, tanda del 17-nov (empresas que estaban «Registrado» desde 2023/may
 | Empresa | NIT | DIAN | Recepción | Certificado (DIAN) | GSE |
 |---|---|---|---|---|---|
 | MEGATRANSPORTES BYG | 901673613-0 | Registrado + gratuito (13-may-2026) | +901673613 (antes megatransportesbyg@) | ea8763af… | 01082405 · certificado 17-nov 12:49 · **set aprobado → Habilitado** (19-nov) · numeración FE 1–1.000 firmada 19-nov (solicitud 20382281; a las 2 pm aún no salía en «Consulta por NIT y Rango», revisar) |
-| INDEPENDIENTES BYG | 901675606-8 | Registrado; gratuito asociado 17-nov | +901675606 (antes brygar.token@) | d0d614e0… | 01082394 · certificado 17-nov 14:19 · **set aprobado → Habilitado** (19-nov) · **numeración PENDIENTE**: solicitud 20382291 en DEFINITIVO sin firmar |
+| INDEPENDIENTES BYG | 901675606-8 | Registrado; gratuito asociado 17-nov | +901675606 (antes brygar.token@) | d0d614e0… | 01082394 · certificado 17-nov 14:19 · **set aprobado → Habilitado** (19-nov) · numeración FE 1–1.000 firmada 19-nov 22:02 (solicitud 20382291; destrabada cerrando sesión y entrando de nuevo) |
 
 Cámaras 17-nov (orden 38132062, código C6F8ZZ4, $24.200): **teléfono 3168944117**, no el 3158204135
 de las otras de Sebastián. INDEPENDIENTES figura Inactiva en BryNex pero Activa en la cámara
@@ -347,8 +347,11 @@ prefijo = seguir desde el siguiente bloque. Hay una solicitud vieja 18417377 (no
 prefijo) en DEFINITIVO sin firmar; no estorba.
 - **«Verificación de autorización fallida» (401) al pedir la clave = sesión de MUISCA vieja**
   (llevaba ~5 h). Cerrar sesión, volver a entrar y repetir: la clave llegó y firmó a la primera.
-  Así se destraba también INDEPENDIENTES. La clave de Julia llega al Gmail de Mega y a
-  Bandeja de Salida → Comunicados de MUISCA (se lee ahí sin abrir el correo).
+  Así se destrabó también INDEPENDIENTES (firmada 19-nov 22:02). La clave de Julia llega al
+  Gmail de Mega y a Bandeja de Salida → Comunicados de MUISCA.
+- **No abrir Comunicados por URL en otra pestaña** mientras se firma: entra como «INVITADO» y tumba
+  la sesión del tercero (la firma falla). La clave sigue sirviendo tras volver a entrar si no se
+  pidió otra con «aquí».
 - Con la conexión de Chrome inestable, `await bxFill(...)` corta el batch (Previsualizar recarga
   la página): lanzarlo con `setTimeout(()=>…bxFill…,50)`, esperar ~20 s y luego `bxSave`.
 - **El enlace de la DIAN de Julia NO llega al buzón central**: su RUT personal dice
