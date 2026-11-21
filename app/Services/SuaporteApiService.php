@@ -441,13 +441,30 @@ class SuaporteApiService
      *
      * @return array{success: bool, id?: int, aportante?: array, message?: string}
      */
-    public function consultarAportante(string $tipoDocumento, string $numeroDocumento): array
+    public function consultarAportante(string $tipoDocumento, string $numeroDocumento, bool $reintento = false): array
     {
         if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::aportante($tipoDocumento, $numeroDocumento); }
         try {
             $response = $this->http()
                 ->withHeaders($this->headers)
                 ->get("{$this->apiUrl}/gestion/aportante/{$tipoDocumento}/{$numeroDocumento}");
+
+            // La sesión de Enlace se vence a los ~10 min —o Simple la mata en la
+            // sobrecarga que abre el hueco subtipo-4— y a partir de ahí responde
+            // 401 "Unauthorized request". Igual que consultarAfiliacion, se fuerza
+            // un login nuevo y se reintenta UNA sola vez (el flag corta la
+            // recursión si la credencial ya no sirve). Sin esto, los reintentos
+            // del vigía reusaban el mismo token muerto y fallaban idénticos.
+            if ($response->status() === 401 && ! $reintento) {
+                Log::info('Suaporte: sesión vencida al consultar aportante, reautenticando', ['usuario' => $this->usuario]);
+
+                $auth = $this->autenticar(true);
+                if (! $auth['success']) {
+                    return $auth;
+                }
+
+                return $this->consultarAportante($tipoDocumento, $numeroDocumento, true);
+            }
 
             if (! $response->successful()) {
                 return [
@@ -710,7 +727,7 @@ class SuaporteApiService
      *
      * @return array{success: bool, message?: string}
      */
-    public function autorizar(int $aportanteId, string $tipoDocumento, string $numeroDocumento, ?int $aplicacion = null): array
+    public function autorizar(int $aportanteId, string $tipoDocumento, string $numeroDocumento, ?int $aplicacion = null, bool $reintento = false): array
     {
         if (config('demo.activo')) { return \App\Services\Demo\PilaSimulada::autorizar(); }
         $query = [
@@ -727,6 +744,22 @@ class SuaporteApiService
             $response = $this->http()
                 ->withHeaders($this->headers)
                 ->get("{$this->apiUrl}/gestion/authorization/user/contributor", $query);
+
+            // Si la sesión se venció (401) se fuerza un login nuevo y se reintenta
+            // una sola vez. Tras reautenticar, los headers vuelven a ser solo los
+            // de sesión y este mismo método reacumula los 4 de autorización sobre
+            // el aportante. El id del aportante no depende de la sesión, así que
+            // sigue sirviendo. El flag corta la recursión si la credencial murió.
+            if ($response->status() === 401 && ! $reintento) {
+                Log::info('Suaporte: sesión vencida al autorizar, reautenticando', ['usuario' => $this->usuario]);
+
+                $auth = $this->autenticar(true);
+                if (! $auth['success']) {
+                    return $auth;
+                }
+
+                return $this->autorizar($aportanteId, $tipoDocumento, $numeroDocumento, $aplicacion, true);
+            }
 
             if (! $response->successful()) {
                 Log::error('Suaporte: autorización fallida', [
