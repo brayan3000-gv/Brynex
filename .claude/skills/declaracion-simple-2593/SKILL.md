@@ -79,6 +79,15 @@ sin dejar rastro. Cada casilla es `input#cs_id_<renglón>`.
 **Editables:** 26-35 (ingresos por grupo), 38, 40, 45, 50, 58, 59, 66, 67, 68, 70. El resto lo
 calcula la DIAN, incluidos los intereses (54) y el arrastre de pensión (46).
 
+**Con valores, escribir un 0 a mano en TODAS las editables que no se usan** (26-35, 38, 40, 50, 52,
+58, 66, 67, 70; las secciones de consumo e IVA hay que desplegarlas). Aunque muestren «0», sin tocar
+van nulas en el JSON y Guardar responde «Error en el servidor … 50157: Error al construir un objeto
+Documento a partir del JSON. La Casilla 39 [o 48] … fue la última Casilla validada» (Brygar 2026-B4,
+21-nov-2026). Cerrar ese error **devuelve a la lista y se pierde todo lo llenado**. Escribir con clic
+real + teclado (`cs_id_<n>.scrollIntoView({block:'center'})`, clic, cmd+a, número, Tab): asignar el
+valor por JS no lo toma. Primero el municipio con su casilla 84, luego la 28: al revés sale «El valor
+de las casillas 26, 28… no puede ser mayor a la sumatoria de todas las casillas 84».
+
 | Casilla (país / exterior) | Grupo | Qué es |
 |---|---|---|
 | 26 / 27 | Grupo 1 | tiendas pequeñas, minimercados, peluquería |
@@ -317,6 +326,12 @@ obligación en BryNex admite máximo 500 caracteres.
   cierre. Planillas de 42/11282 de jun a sep: 11–12 trabajadores a $210.109 con 30 días.
   **Decisión del dueño (19-nov): 3 trabajadores siempre**, aunque se acumule excedente: B4 y B5 con
   casilla 45 = $1.261.000 (3 × 2 × 210.109).
+- **2026-B4 presentado el 21-nov-2026** (25936616966369): el pago del B3 (PSE 19-nov tarde) apareció
+  aplicado el 21-nov a las 16:25 (el 20-nov a las 11:00 aún no). Casilla 46 = **$1.420.000**, no
+  1.005.000: el B3 ya había recibido los 415.000 que sobraron del B2. 28 = 107.243.000, tarifa 2,0 %,
+  42 = 2.145.000, ICA 1.139.000, nacional 1.006.000 cubierto por pensión, 48 = **$1.675.000** al B5.
+  490 **4911206247607** por $1.197.000 (1.139.000 + 58.000 de intereses), **pagado por PSE el
+  21-nov ~16:40**. El B5 se abre cuando aplique (contar ~2 días).
 - Pensión: contratos de las razones sociales 42 (aliado BRYGAR: 9 vigentes y 6 retirados al 17-nov) y
   11282 (aliado BryNex: 1). Solo el 12 % del empleador, de planillas **pagadas** dentro del bimestre.
 
@@ -393,7 +408,11 @@ obligación en BryNex admite máximo 500 caracteres.
   periodo anterior» y carga el formulario vacío). Ojo: el 20-nov a las 9:50 (≈19 h después del PSE)
   el B2 ya abría sin ese aviso pero con la casilla 46 en 0, y el B1 seguía en «Borradores
   Definitivos»; lo mismo con el B4 de Brygar. No llenar hasta que la 46 traiga el saldo del
-  anterior (463.000 Mega / 1.005.000 Brygar): presentado así, ese saldo se pierde.** Pensión 45 = $2.521.000 en cada uno (6
+  anterior (463.000 Mega / 1.005.000 Brygar): presentado así, ese saldo se pierde.** El B1 (PSE
+  19-nov ~14:45) apareció aplicado el 21-nov a las 16:41. **B2 presentado el 21-nov-2026**
+  (25936616966494) con los valores de la tabla, 46 = 463.000, 48 = 15.000; 490 **4911206247741** por
+  $1.509.000 (ICA 1.349.000 + 160.000 de intereses), **pagado por PSE el 21-nov ~16:50**. Sin notas crédito en 2026 (NC1 y NC2 se
+  emitieron el 19-nov-2026 y caen en el B6). Pensión 45 = $2.521.000 en cada uno (6
   trabajadores a $210.109 × 2 planillas; cada mes de feb a sep hay al menos 6 con 30 días: usar los
   de 30 días, no los de 1 día). Planillas que cuentan: B2 = planos feb+mar, B3 = abr+may,
   B4 = jun+jul, B5 = ago+sep.
