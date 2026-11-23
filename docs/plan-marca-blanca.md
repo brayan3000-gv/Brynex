@@ -322,6 +322,19 @@ hay trámite con Meta. Lo que hay que revisar:
 | **Asistente de WhatsApp** | Si escribe un prospecto registrado por un distribuidor, no le ofrece el precio directo. | ½ |
 | **Marca blanca** | Los bloques de abajo. | 5 – 8 |
 
+**Mientras no exista ese código**, a cada aliado de un distribuidor se le
+cargan tramos **propios** de administración, porque la tarifa general es la del
+precio público ($800 con mínimo $180.000, tramo 22 desde el 1-nov-2026):
+
+- el mes de su Instalación: $600 por usuario **sin mínimo** (arranque), con
+  `vigente_hasta` el último día de ese mes;
+- desde el mes siguiente: $600 por usuario con **mínimo $150.000**, sin
+  `vigente_hasta`.
+
+La cuenta de cobro de esos aliados se le pasa al distribuidor a mano. Los
+aliados que ya están en BryNex siguen con su tarifa propia (ver la cláusula
+sexta del contrato).
+
 ### Bloques de la marca blanca
 
 | Bloque | Hoy | Qué hacer | Días |
