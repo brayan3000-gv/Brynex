@@ -180,7 +180,7 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
   responde como máximo por lo pagado por ese aliado en los 3 meses anteriores.
 - **Si cambia el precio público**, el piso cambia con él; el techo sigue siendo
   el doble del costo del distribuidor.
-- **Capacitación**: [10] horas sin costo antes del primer aliado.
+- **Capacitación**: [10] horas sin costo antes del primer aliado; las siguientes a $80.000 la hora.
 - **Anexo 1** (decidido 23-nov-2026): lo que paga el distribuidor por módulo.
   Lo vende sin bajar del precio público ni pasar del doble de lo que paga.
 
@@ -377,7 +377,6 @@ apuntar el dominio y poner el certificado).
 - [ ] Con el contador: si BryNex factura como Régimen Simple y las retenciones al distribuidor.
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
 - [ ] Si más adelante se da descuento al distribuidor en afiliaciones y alianzas (hoy van al precio público).
-- [ ] El valor de la hora de capacitación adicional.
 - [ ] El precio de la automatización de portales de EPS (Anexo 1, hoy en [valor]).
 - [ ] BryNex firma como persona natural (Brayan) y no cobra IVA hasta que el contador diga; si crece, pasar a una SAS (el contrato deja ceder a una sociedad suya).
 - [ ] Confirmar el soporte deficiente: $30.000 por caso desde el tercero y los umbrales de quejas.
