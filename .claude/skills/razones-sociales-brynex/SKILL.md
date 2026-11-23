@@ -95,6 +95,27 @@ Reglas que ya están implementadas y conviene no romper:
   quedan en semáforo `gris`: fuera de alertas y del tablero. **Inventar un
   vencimiento es peor que no tenerlo.**
 
+**Cuándo un renglón está cumplido (verde):** `pagada`, `no_aplica`, o
+**`presentada` con `valor_pagado = 0`** (`BrynexObligacion::presentadaEnCero()`,
+`cerrada()`): una declaración en cero no tiene nada que pagar. `valor_pagado`
+vacío significa «aún no se sabe», no cero, y la presentada vencida sigue
+amarilla. El 23-nov-2026 se puso 0 a los 140 2593/260 en cero (leídos del PDF:
+casilla 56, total ICA e IVA en 0; en el 260, ningún «a pagar»/sanción distinto
+de 0). Quedan 21 presentadas sin valor: rentas 110 e IVA 300 de AVAPP,
+CONSTRUTECH, LOGIC y LOGISTICS, y Brygar 2025-B5 (tuvo $115.000).
+
+**Cámara de comercio: se sube una sola vez, en el checklist.** Al subir el
+certificado al renglón `camara_renovacion`, `BrynexObligacionController::
+certificadoDeCamara()` lo lee con `LectorDocumentoRazonSocialService`; si es un
+certificado de este NIT con «Último año renovado» ≥ el año del renglón, lo da
+por hecho con la fecha de renovación, y si es el más reciente de la ficha lo
+copia como «Cámara de Comercio» a los documentos de cada razón social ligada
+(`brynex_razon_social_vinculos`, todos los aliados), reemplazando la anterior.
+Un recibo de pago de la cámara no trae «Último año renovado» y no se copia.
+Años anteriores con certificado «último año renovado 2026»: el año de
+constitución va `no_aplica` y los siguientes `pagada` con la fecha de la última
+renovación (la cámara no deja renovar sin los años anteriores).
+
 `fecha_constitucion` es obligatoria al poner una razón social en seguimiento
 porque está **vacía en 203 de las 249 filas** de `razones_sociales`: no se
 puede heredar.

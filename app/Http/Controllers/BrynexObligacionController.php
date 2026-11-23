@@ -8,9 +8,14 @@ use App\Models\BrynexObligacion;
 use App\Models\BrynexObligacionCatalogo;
 use App\Models\BrynexObligacionDocumento;
 use App\Models\BrynexRazonSocial;
+use App\Models\DocumentoCliente;
 use App\Services\BrynexRazonSocialService;
+use App\Services\LectorDocumentoRazonSocialService;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * El checklist: chulear una obligación, subir su soporte y mantener el
@@ -120,19 +125,136 @@ class BrynexObligacionController extends Controller
             'subido_por' => auth()->id(),
         ]);
 
-        // Subir el soporte sin mover el estado es el olvido más común: si
-        // seguía pendiente, queda al menos como presentada.
-        if ($obligacion->estado === 'pendiente') {
-            $obligacion->update(['estado' => 'presentada', 'usuario_id' => auth()->id()]);
-        }
-
         Bitacora::registrar(
             'created', 'BrynexObligacionDocumento', $documento->id,
             "Soporte «{$documento->nombre_original}» de {$obligacion->obligacion_codigo} {$obligacion->anio}",
             ['ficha_id' => $ficha->id]
         );
 
-        return back()->with('success', 'Soporte subido.');
+        $mensaje = 'Soporte subido.';
+        if ($obligacion->obligacion_codigo === 'camara_renovacion') {
+            $mensaje = $this->certificadoDeCamara($obligacion, $archivo, $ruta) ?? $mensaje;
+        }
+
+        // Subir el soporte sin mover el estado es el olvido más común: si
+        // seguía pendiente, queda al menos como presentada.
+        if ($obligacion->fresh()->estado === 'pendiente') {
+            $obligacion->update(['estado' => 'presentada', 'usuario_id' => auth()->id()]);
+        }
+
+        return back()->with('success', $mensaje);
+    }
+
+    /**
+     * El certificado de cámara se sube una sola vez, aquí, y sirve para dos
+     * cosas:
+     *
+     *  1. Si dice «Último año renovado» igual o posterior al año del renglón,
+     *     la renovación queda hecha, con la fecha de renovación del
+     *     certificado.
+     *  2. Si es el certificado más reciente de la ficha, queda también como
+     *     «Cámara de Comercio» en los documentos de cada razón social ligada
+     *     (en todos los aliados que la usan), reemplazando el que había, como
+     *     hace la pestaña Archivos de la razón social.
+     *
+     * Solo con un PDF que se lea como certificado de cámara y de este NIT: un
+     * recibo de pago subido aquí no debe reemplazar el certificado de nadie.
+     *
+     * @return string|null el mensaje para la persona, o null si no aplica
+     */
+    private function certificadoDeCamara(BrynexObligacion $obligacion, UploadedFile $archivo, string $ruta): ?string
+    {
+        if (strtolower($archivo->getClientOriginalExtension()) !== 'pdf') {
+            return null;
+        }
+
+        $ficha = $obligacion->ficha;
+        $lectura = app(LectorDocumentoRazonSocialService::class)->leer($archivo, $ficha->nit);
+
+        // «Último año renovado» es lo que distingue el certificado de un recibo
+        // de pago de la cámara, que también dice «Cámara de Comercio».
+        $renovado = (int) ($lectura['datos']['ultimo_anio_renovado'] ?? 0);
+
+        if (! $lectura['ok'] || $lectura['tipo'] !== 'CAMARA' || ! $renovado) {
+            return 'Soporte subido. No se leyó como certificado de cámara de '.$ficha->razon_social
+                .' (con «Último año renovado»), así que no se copió a la razón social ni se dio la renovación por hecha.';
+        }
+
+        $partes = ['Certificado de cámara subido'];
+
+        if ($renovado >= (int) $obligacion->anio && ! $obligacion->cerrada()) {
+            $obligacion->update([
+                'estado' => 'pagada',
+                'fecha_pago' => $lectura['datos']['fecha_renovacion'] ?? now()->toDateString(),
+                'usuario_id' => auth()->id(),
+            ]);
+            $partes[] = "último año renovado {$renovado}: renovación hecha";
+        } elseif ($renovado < (int) $obligacion->anio) {
+            $partes[] = "dice último año renovado {$renovado}, así que la de {$obligacion->anio} sigue pendiente";
+        }
+
+        // Un certificado viejo (subido al renglón de un año anterior) no
+        // reemplaza al vigente en la razón social.
+        $hayMasNuevo = BrynexObligacion::where('ficha_id', $ficha->id)
+            ->where('obligacion_codigo', 'camara_renovacion')
+            ->where('anio', '>', $obligacion->anio)
+            ->whereHas('documentos')
+            ->exists();
+
+        if (! $hayMasNuevo) {
+            $copias = $this->copiarCamaraARazonesSociales($ficha, $ruta, $archivo->getClientOriginalName());
+            if ($copias) {
+                $partes[] = "quedó como Cámara de Comercio de la razón social en {$copias} aliado(s)";
+            }
+        }
+
+        return implode('; ', $partes).'.';
+    }
+
+    /** @return int en cuántas razones sociales quedó */
+    private function copiarCamaraARazonesSociales(BrynexRazonSocial $ficha, string $ruta, string $nombre): int
+    {
+        $tipo = 'Cámara de Comercio';
+        $razones = DB::table('brynex_razon_social_vinculos as v')
+            ->join('razones_sociales as rs', 'rs.id', '=', 'v.razon_social_id')
+            ->where('v.ficha_id', $ficha->id)
+            ->get(['rs.id', 'rs.nit', 'rs.aliado_id', 'rs.razon_social']);
+
+        foreach ($razones as $rs) {
+            $nit = $rs->nit ?? $rs->id;
+            $destino = "documentos_razones/{$rs->aliado_id}/{$nit}/".Str::slug($tipo, '_').'_'.time().'_'.Str::random(6).'.pdf';
+            Storage::disk('local')->copy($ruta, $destino);
+
+            $anteriores = DocumentoCliente::where('aliado_id', $rs->aliado_id)
+                ->where('cc_cliente', $nit)
+                ->whereNull('doc_beneficiario')
+                ->where('tipo_documento', $tipo)
+                ->get();
+
+            $nuevo = DocumentoCliente::create([
+                'aliado_id' => $rs->aliado_id,
+                'cc_cliente' => $nit,
+                'doc_beneficiario' => null,
+                'tipo_documento' => $tipo,
+                'nombre_archivo' => $nombre,
+                'ruta' => $destino,
+                'subido_por' => auth()->id(),
+            ]);
+
+            foreach ($anteriores as $anterior) {
+                Storage::disk('local')->delete($anterior->ruta);
+                $anterior->delete();
+            }
+
+            Bitacora::registrar(
+                'created', 'DocumentoCliente', $nuevo->id,
+                "Cámara de Comercio de {$rs->razon_social} desde el checklist de BryNex"
+                    .($anteriores->isNotEmpty() ? ' (reemplazó la anterior)' : ''),
+                ['ficha_id' => $ficha->id, 'aliado_id' => $rs->aliado_id]
+            );
+        }
+
+        return $razones->count();
     }
 
     public function descargarDocumento(int $id)

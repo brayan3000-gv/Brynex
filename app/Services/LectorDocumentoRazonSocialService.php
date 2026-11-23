@@ -125,6 +125,9 @@ class LectorDocumentoRazonSocialService
             'telefono' => $this->uno('/Teléfono comercial 1:\s*(\d+)/u', $t),
             'ciiu' => $this->uno('/CIIU:\s*(\d+)/u', $t),
             'matricula' => $this->uno('/Matrícula No\.?:\s*([\d\-]+)/u', $t),
+            // Lo que cierra la renovación de matrícula en el checklist.
+            'ultimo_anio_renovado' => $this->uno('/[ÚU]ltimo año renovado:?\s*(\d{4})/iu', $t),
+            'fecha_renovacion' => $this->fecha($this->uno('/Fecha de renovaci[óo]n:?\s*(.+)/iu', $t)),
         ];
     }
 

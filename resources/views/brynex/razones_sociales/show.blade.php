@@ -244,7 +244,7 @@
                             <td style="padding:0.6rem;color:{{ $colorSemaforo[$sem] }};font-weight:600;white-space:nowrap;">
                                 @if($o->fecha_vencimiento)
                                     {{ $o->fecha_vencimiento->format('d/m/Y') }}
-                                    @if($dias !== null && ! in_array($o->estado, ['pagada','no_aplica']))
+                                    @if($dias !== null && ! $o->cerrada())
                                         <div style="font-size:0.68rem;font-weight:400;">
                                             {{ $dias < 0 ? 'hace ' . abs($dias) . ' días' : 'en ' . $dias . ' días' }}
                                         </div>
@@ -260,10 +260,12 @@
                                 </span>
                                 @if($cat?->esUnica() && $o->estado === 'pagada' && $o->fecha_pago)
                                     <div style="font-size:0.68rem;color:#64748b;margin-top:0.15rem;">el {{ $o->fecha_pago->format('d/m/Y') }}</div>
+                                @elseif($o->presentadaEnCero())
+                                    <div style="font-size:0.68rem;color:#64748b;margin-top:0.15rem;">sin valor a pagar</div>
                                 @endif
                             </td>
                             <td style="padding:0.6rem;text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;">
-                                {{ $o->valor_pagado ? '$' . number_format($o->valor_pagado, 0, ',', '.') : '—' }}
+                                {{ $o->valor_pagado !== null ? '$' . number_format($o->valor_pagado, 0, ',', '.') : '—' }}
                             </td>
                             <td style="padding:0.6rem;">
                                 @forelse($o->documentos as $doc)
@@ -292,7 +294,7 @@
                                                 'nombre' => $cat?->nombre ?? $o->obligacion_codigo,
                                                 'periodo' => $o->periodo_etiqueta,
                                                 'estado' => $o->estado,
-                                                'valor_pagado' => $o->valor_pagado ? (float) $o->valor_pagado : '',
+                                                'valor_pagado' => $o->valor_pagado !== null ? (float) $o->valor_pagado : '',
                                                 'fecha_pago' => $o->fecha_pago?->toDateString(),
                                                 'observacion' => $o->observacion,
                                                 'unica' => (bool) $cat?->esUnica(),
@@ -789,6 +791,9 @@
                                style="width:100%;margin-top:0.25rem;padding:0.5rem;border:1px solid #cbd5e1;border-radius:8px;font-weight:400;">
                     </label>
                 </div>
+                <p x-show="editar.estado === 'presentada'" style="color:#64748b;font-size:0.72rem;margin:0.4rem 0 0 0;">
+                    ¿Salió en cero? Deje «Presentada» con valor pagado <strong>0</strong> y el renglón queda en verde.
+                </p>
 
                 <label style="font-size:0.78rem;font-weight:700;color:#334155;display:block;margin-top:0.9rem;">
                     Observación

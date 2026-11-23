@@ -92,15 +92,37 @@ class BrynexObligacion extends BaseModel
                 now()->toDateString(),
                 now()->addDays($dias)->toDateString(),
             ])
-            ->whereNotIn("{$t}.estado", self::ESTADOS_CERRADOS);
+            ->whereNotIn("{$t}.estado", self::ESTADOS_CERRADOS)
+            // Presentada en cero ya está cumplida: no hay nada por vencer.
+            ->where(fn ($q) => $q->where("{$t}.estado", '!=', 'presentada')
+                ->orWhereNull("{$t}.valor_pagado")
+                ->orWhere("{$t}.valor_pagado", '>', 0));
     }
 
     // ─── Semáforo ─────────────────────────────────────────────────────
 
+    /**
+     * Presentada sin nada que pagar: un 2593 o un 260 en cero. Se marca
+     * dejándola «Presentada» con valor pagado 0 (no vacío: vacío es «aún no
+     * se sabe»), y queda cumplida igual que una pagada.
+     */
+    public function presentadaEnCero(): bool
+    {
+        return $this->estado === 'presentada'
+            && $this->valor_pagado !== null
+            && (float) $this->valor_pagado === 0.0;
+    }
+
+    /** Cumplida: pagada, no aplica o presentada en cero. */
+    public function cerrada(): bool
+    {
+        return in_array($this->estado, self::ESTADOS_CERRADOS, true) || $this->presentadaEnCero();
+    }
+
     /** verde | amarillo | rojo | gris */
     public function semaforo(): string
     {
-        if (in_array($this->estado, self::ESTADOS_CERRADOS, true)) {
+        if ($this->cerrada()) {
             return 'verde';
         }
 
