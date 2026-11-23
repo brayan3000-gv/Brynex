@@ -135,6 +135,52 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
 - Un año renovable; 30 días de aviso para terminar. Si a los 3 meses no tiene
   ningún aliado activo, BryNex puede terminarlo.
 
+### Usuarios, franquicias y operación propia
+
+- **Usuario** = afiliado activo del mes como lo cuenta `ConteoMensualAliado`:
+  contratos facturados del mes más los que ingresan, menos los traslados de la
+  misma cédula. Dos contratos simultáneos cuentan dos; el que entra y sale en el
+  mes cuenta. Las cuentas de acceso son ilimitadas y no son usuarios.
+- **Franquicias de un aliado del distribuidor**: sus usuarios suman al aliado a
+  $600, el mínimo de $150.000 va una vez por toda la red, y cada franquicia paga
+  su instalación de $200.000 (BryNex le crea a mano la sucursal y el usuario de
+  Enlace). Lo que el aliado les cobre a sus franquicias es libre. Si una se
+  independiza, queda inscrita a nombre del mismo distribuidor.
+- **El distribuidor nunca es una «principal»** (`aliado_padre_id`): la principal
+  entra a los datos de sus franquicias. En el código va en un campo aparte.
+- **Operación propia** (decidido 23-nov-2026): los afiliados del propio
+  distribuidor, de sus franquicias, de empresas suyas, de sus socios o de su
+  familia **no son aliados inscritos** y se cobran a su tarifa de aliado, no a
+  $600. **Quien ya es aliado de BryNex no se puede inscribir a nombre de un
+  distribuidor.** Ejemplo: un aliado con 1.000 usuarios que paga $800
+  ($800.000) y se vuelve distribuidor sigue pagando $800.000 por los suyos; solo
+  los aliados nuevos que traiga van a $600. Si se le bajara todo a $600, BryNex
+  perdería $200.000 al mes ($2,4 millones al año) sin que entre un aliado nuevo.
+
+### Meta para seguir como distribuidor
+
+- A los 3 meses, al menos 1 aliado activo. Al año, 3 aliados activos o 500
+  usuarios entre todos.
+- Si no la cumple **pasa a referido**: sus aliados siguen con BryNex al precio
+  público y él gana el 20 % hasta cumplir 12 meses de cada instalación.
+- Un prospecto registrado dura 90 días; si no hay instalación, queda libre. Entre
+  dos distribuidores gana el que lo registró primero.
+
+### Lo que también quedó en el contrato
+
+- **Suspensión**: el distribuidor puede pedir que se suspenda a un aliado que no
+  le paga; se avisa con 5 días hábiles y se bloquean solo los ingresos nuevos.
+  **Ninguna suspensión bloquea retiros, pago de planillas ni descargar la
+  información**: de eso depende la seguridad social de las personas.
+- **Responsabilidad**: BryNex no responde por lo que digitan los aliados (mora de
+  planillas, UGPP, rechazos). Por una falla de la plataforma, la corrige y
+  responde como máximo por lo pagado por ese aliado en los 3 meses anteriores.
+- **Si cambia el precio público**, el piso cambia con él; el techo sigue siendo
+  el doble del costo del distribuidor.
+- **Capacitación**: [10] horas sin costo antes del primer aliado.
+- **Anexo 1**: tabla de módulos para distribuidores. Solo WhatsApp tiene valor
+  ($120); afiliaciones, Específica, Integral, franquicias e IA están por definir.
+
 ### Ejemplos
 
 | Caso | Aliado paga | BryNex | Distribuidor |
@@ -243,6 +289,8 @@ hay trámite con Meta. Lo que hay que revisar:
 |---|---|---|
 | **Referido** | En el aliado: quién lo refirió y desde cuándo. Un informe del 20 % de la plataforma cobrada en sus 12 meses. | ½ – 1 |
 | **Distribuidor** | El aliado guarda su distribuidor. BryNex le saca **una cuenta de cobro al distribuidor** con el detalle por aliado ($600 por usuario, mínimo $150.000, instalaciones y consumos aparte). A los aliados de un distribuidor **se les oculta** la pantalla de lo que cobra BryNex (`informes/brynex-cobros`), porque mostraría los $600. | 1 – 2 |
+| **Pantalla del distribuidor** | Sin datos de afiliados: sus aliados, los usuarios de cada uno en el mes, instalaciones y su cuenta de cobro. La necesita para facturarle a sus aliados. | 1 – 2 |
+| **Asistente de WhatsApp** | Si escribe un prospecto registrado por un distribuidor, no le ofrece el precio directo. | ½ |
 | **Marca blanca** | Los bloques de abajo. | 5 – 8 |
 
 ### Bloques de la marca blanca
@@ -270,6 +318,8 @@ apuntar el dominio y poner el certificado).
 - [ ] Los valores del referido y de la marca blanca (el distribuidor ya está decidido).
 - [ ] Con el contador: si BryNex factura como Régimen Simple y las retenciones al distribuidor.
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
+- [ ] El arranque del aliado: ¿el primer mes sin mínimo?
+- [ ] Los valores del Anexo 1 (módulos para distribuidores) y las horas de capacitación.
 - [ ] ¿El referido gana 12 meses o mientras el aliado siga activo?
 - [ ] ¿Cuántos afiliados se le piden al distribuidor para pasar a marca blanca,
       o basta con que pague el mínimo?
