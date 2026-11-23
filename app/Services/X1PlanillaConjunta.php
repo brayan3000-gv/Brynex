@@ -245,6 +245,23 @@ class X1PlanillaConjunta
             ->map(fn ($e) => trim(($e['identificacion'] ?? '').' '.($e['idRegla'] ?? '').' '.($e['descripcion'] ?? '')))
             ->filter()->take(15)->values()->all();
 
+        // El vigía solo registra el resumen («El archivo tiene errores»), y sin el
+        // detalle no se sabe qué campo rechazó Simple. Cuando el archivo trae
+        // errores reales (no el 2.655, que deja la lista vacía) se guardan aquí,
+        // con las cédulas, para poder corregir el dato. Ver el caso de LALA
+        // (JOHANA SUA MELO) del hueco del 22-nov.
+        if ($errores) {
+            Log::warning('x1-pagos: planilla conjunta con errores de archivo', [
+                'nit' => $nit,
+                'mod' => $tipoModalidadId,
+                'mes' => $mes,
+                'anio' => $anio,
+                'personas' => $filas->count(),
+                'documentos' => $filas->pluck('no_identifi')->values()->all(),
+                'errores' => $errores,
+            ]);
+        }
+
         return [
             'ok' => false,
             'estado' => $errores ? 'rechazada' : 'transitorio',
