@@ -387,6 +387,11 @@ obligación en BryNex admite máximo 500 caracteres.
   correcciones presentadas y pagadas a más tardar el 19-nov-2026. Pagar menos no sirve (la DIAN
   imputa primero sanción e intereses y deja impuesto vivo); lo de los $328.000 se reclama aparte.
   Después de presentar, el menú del formulario queda en PDF y Pagar (ícono de tarjeta).
+  **Ese 490 no se pagó.** El 23-nov-2026 se generó otro desde `WebDilIngresoFormSimple260/` →
+  Presentados → 2604602285362 → **Pagar** (el «Guardar» del recibo le da número directo, sin
+  confirmar): **490 n.º 4911206496162 por $1.830.000** (impuesto 923.000 + sanción 524.000 +
+  intereses 383.000), **pagado por PSE el 23-nov 11:03**. Esperar 4 días costó $55.000 de intereses.
+  Soportes en BryNex (renglón renta 2025, pagada).
 - **2026-B1 en definitivo n.º 25936616873334 (19-nov-2026); 490 n.º 4911204837435 por $1.064.000**
   (ICA $935.000 + intereses $129.000), **pagado por PSE (Bancolombia) el 19-nov-2026 hacia las
   14:45**; a las 14:47 seguía en «Borradores Definitivos» y el B2 seguía bloqueado. MUISCA cobró
