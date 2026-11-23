@@ -237,8 +237,7 @@ class DataicoConciliar extends Command
         $grupos = DB::select(
             'SELECT f.numero_factura,
                     MIN(f.empresa_id) AS empresa_id,
-                    SUM(ISNULL(CAST(f.admon AS BIGINT), 0)
-                      + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) AS base,
+                    SUM('.\App\Services\Dataico\SeleccionFacturasService::BASE_FE_SQL.') AS base,
                     CONVERT(varchar(10), MIN(f.fecha_pago), 23) AS fecha
              FROM facturas f
              WHERE f.aliado_id = ? AND f.deleted_at IS NULL

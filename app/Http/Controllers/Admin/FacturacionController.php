@@ -3107,6 +3107,8 @@ class FacturacionController extends Controller
                 ->get();
         }
 
+        $esSuperBrynex = $user->es_brynex && $user->hasRole('superadmin');
+
         // ── Protección: planilla ya pagada al operador ────────────────────
         // Se revisan TODAS las facturas que se van a anular (el lote completo
         // cuando viene todo_np) y TODOS los planos de cada una: con el hasOne
@@ -3125,7 +3127,6 @@ class FacturacionController extends Controller
                 return "{$nombre} (CC {$p->no_identifi}) — planilla Nº {$p->numero_planilla}";
             })->values();
 
-            $esSuperBrynex = $user->es_brynex && $user->hasRole('superadmin');
             if (! $esSuperBrynex) {
                 return response()->json([
                     'ok' => false,
@@ -3163,6 +3164,9 @@ class FacturacionController extends Controller
             ->values();
 
         $notasCredito = [];
+        // FE del lote que se deja viva: la fila sale del recibo y su plata queda
+        // como anticipo (ver anticipoPorFilaConFe).
+        $feQueSeQueda = null;
         if ($feVigentes->isNotEmpty()) {
             // La FE cubre el recibo completo: anular una sola fila del lote
             // dejaría a las demás cobradas sin factura.
@@ -3172,15 +3176,58 @@ class FacturacionController extends Controller
                     ->whereNotIn('id', $facturasAnular->pluck('id'))
                     ->count();
 
-                if ($quedan > 0) {
+                if ($quedan === 0) {
+                    continue;
+                }
+
+                // Un superadmin de BryNex puede sacar UNA persona del lote sin
+                // tocar la FE: su plata queda como anticipo con la administración
+                // marcada como ya facturada, para que el mes al que se mueva no
+                // la vuelva a reportar a la DIAN (recibo #14580, nov-2026: el
+                // UPC de Yeiner Montenegro iba en diciembre y Angie ya tenía su
+                // planilla pagada).
+                $impedimento = $facturasAnular->count() === 1
+                    ? $this->impedimentoAnticipoConFe($factura, $planosPagados)
+                    : 'se están anulando varias filas';
+
+                if (! $esSuperBrynex || $impedimento !== null) {
                     return response()->json([
                         'ok' => false,
                         'message' => "El recibo #{$envio->numero_factura} tiene la factura electrónica {$envio->dataico_numero} "
-                                    .'por el lote completo. Para anularla hay que anular todo el recibo (marque «anular todo el NP»).',
+                                    .'por el lote completo. Para anularla hay que anular todo el recibo (marque «anular todo el NP»).'
+                                    .($esSuperBrynex && $impedimento
+                                        ? " Tampoco se puede dejar como anticipo: {$impedimento}."
+                                        : ' Un superadmin de BryNex puede sacar solo esta persona y dejarle la plata como anticipo.'),
                     ], 422);
                 }
-            }
 
+                $feQueSeQueda = $envio;
+            }
+        }
+
+        if ($feQueSeQueda) {
+            if (! $request->boolean('confirmar_anticipo')) {
+                $pagado = (int) $factura->valor_consignado + (int) $factura->valor_efectivo;
+                $admonFe = $this->admonFacturadaDeLaFila($factura);
+                $nombre = trim(($factura->contrato?->cliente?->primer_nombre ?? '').' '.($factura->contrato?->cliente?->primer_apellido ?? ''))
+                    ?: "CC {$factura->cedula}";
+
+                return response()->json([
+                    'ok' => false,
+                    'requiere_confirmacion' => true,
+                    'campo_confirmacion' => 'confirmar_anticipo',
+                    'message' => "El recibo #{$factura->numero_factura} tiene la factura electrónica {$feQueSeQueda->dataico_numero} "
+                                .'por el lote completo. Se anulará SOLO esta fila, la factura electrónica NO se toca y lo que '
+                                .'pagó queda como anticipo a su cédula. ¿Continuar?',
+                    'afectados' => [
+                        "{$nombre} · anticipo de $".number_format($pagado, 0, ',', '.'),
+                        "{$feQueSeQueda->dataico_numero} sigue vigente; $".number_format($admonFe, 0, ',', '.')
+                            .' de su administración quedan marcados como ya facturados',
+                    ],
+                    'aviso' => 'Cuando se facture el mes nuevo con este anticipo, esa administración no vuelve a salir en otra factura electrónica.',
+                ], 409);
+            }
+        } elseif ($feVigentes->isNotEmpty()) {
             if (! $request->boolean('confirmar_fe')) {
                 return response()->json([
                     'ok' => false,
@@ -3209,7 +3256,21 @@ class FacturacionController extends Controller
             }
         }
 
-        DB::transaction(function () use ($facturasAnular, $motivo, $aliadoId, $user, $planosPagados, $notasCredito) {
+        $anticipoCreado = null;
+        DB::transaction(function () use ($facturasAnular, $motivo, $aliadoId, $user, $planosPagados, $notasCredito, $feQueSeQueda, &$anticipoCreado) {
+            // La consignación de un lote es una sola y puede colgar de la fila que
+            // se saca. Se pasa a otra fila del recibo antes de anular, o se
+            // borraba con ella y el banco perdía también la plata de los demás.
+            if ($feQueSeQueda) {
+                $f = $facturasAnular->first();
+                $otra = Factura::where('aliado_id', $aliadoId)
+                    ->where('numero_factura', $f->numero_factura)
+                    ->where('id', '<>', $f->id)
+                    ->orderBy('id')
+                    ->value('id');
+                DB::table('consignaciones')->where('factura_id', $f->id)->update(['factura_id' => $otra]);
+            }
+
             foreach ($facturasAnular as $f) {
                 // Registrar en bitácora ANTES de anular
                 Bitacora::registrar(
@@ -3346,7 +3407,20 @@ class FacturacionController extends Controller
                     ->delete();
                 DB::table('abonos')->where('factura_id', $f->id)->delete();
             }
+
+            if ($feQueSeQueda) {
+                $anticipoCreado = $this->anticipoPorFilaConFe($facturasAnular->first(), $feQueSeQueda, $motivo, $user->id);
+            }
         });
+
+        if ($anticipoCreado) {
+            return response()->json([
+                'ok' => true,
+                'mensaje' => "Se sacó la fila del recibo #{$factura->numero_factura}: quedó el anticipo #{$anticipoCreado->id} por $"
+                            .number_format((int) $anticipoCreado->valor, 0, ',', '.')
+                            ." y la factura electrónica {$feQueSeQueda->dataico_numero} no se tocó.",
+            ]);
+        }
 
         return response()->json([
             'ok' => true,
@@ -3354,6 +3428,124 @@ class FacturacionController extends Controller
                 ? "{$facturasAnular->count()} facturas del recibo #{$factura->numero_factura} anuladas."
                 : "Recibo #{$factura->numero_factura} anulado.",
         ]);
+    }
+
+    /**
+     * Por qué una fila de un lote con FE no se puede sacar dejando su plata como
+     * anticipo, o null si sí se puede. Solo plata que ya entró y nada amarrado
+     * a ella que se pierda al anular.
+     */
+    private function impedimentoAnticipoConFe(Factura $factura, $planosPagados): ?string
+    {
+        if ($factura->estado !== Factura::ESTADO_PAGADA || $factura->es_prestamo || (int) $factura->valor_prestamo > 0) {
+            return 'no es una factura pagada de contado';
+        }
+        if ($planosPagados->isNotEmpty()) {
+            return 'su plano ya tiene planilla pagada al operador';
+        }
+        if ($factura->abonos->isNotEmpty()) {
+            return 'tiene abonos registrados';
+        }
+        if ((int) $factura->valor_consignado + (int) $factura->valor_efectivo <= 0) {
+            return 'no tiene plata pagada que dejar como anticipo';
+        }
+        if ((int) $factura->valor_consignado > 0
+            && ! DB::table('consignaciones as c')
+                ->join('facturas as f', 'f.id', '=', 'c.factura_id')
+                ->where('f.aliado_id', $factura->aliado_id)
+                ->where('f.numero_factura', $factura->numero_factura)
+                ->whereNotNull('c.banco_cuenta_id')
+                ->exists()) {
+            return 'no se encontró la consignación del recibo';
+        }
+
+        return null;
+    }
+
+    /** Lo que de esta fila salió en la FE del lote. */
+    private function admonFacturadaDeLaFila(Factura $factura): int
+    {
+        return max(0, (int) $factura->admon + (int) $factura->afiliacion - (int) ($factura->admon_fe_previa ?? 0));
+    }
+
+    /**
+     * Deja como anticipo lo que pagó una fila que se sacó de un lote cuya FE
+     * sigue vigente. Lleva la misma fecha, usuario y forma de pago del recibo:
+     * así el cuadre de ese día y el banco no cambian (la consignación del lote
+     * no se toca y el anticipo por consignación no crea otra). La
+     * administración de la fila va marcada como ya facturada en esa FE.
+     */
+    private function anticipoPorFilaConFe(Factura $f, $envio, string $motivo, int $usuarioId): \App\Models\Anticipo
+    {
+        $consignado = (int) $f->valor_consignado;
+        $efectivo = (int) $f->valor_efectivo;
+        $admonFe = $this->admonFacturadaDeLaFila($f);
+
+        $bancoCuentaId = $consignado > 0
+            ? DB::table('consignaciones as c')
+                ->join('facturas as fx', 'fx.id', '=', 'c.factura_id')
+                ->where('fx.aliado_id', $f->aliado_id)
+                ->where('fx.numero_factura', $f->numero_factura)
+                ->whereNotNull('c.banco_cuenta_id')
+                ->orderBy('c.id')
+                ->value('c.banco_cuenta_id')
+            : null;
+
+        $base = [
+            'aliado_id' => $f->aliado_id,
+            'cedula' => $f->cedula,
+            'contrato_id' => $f->contrato_id,
+            'empresa_id' => $f->empresa_id,
+            'fecha_pago' => $f->fecha_pago,
+            'valor_aplicado' => 0,
+            'estado' => \App\Models\Anticipo::ESTADO_DISPONIBLE,
+            'origen' => 'individual',
+            // Con esta referencia restaurar() sabe que el recibo ya se volvió anticipo.
+            'referencia' => "ANUL-{$f->id}",
+            'observacion' => "Sale del recibo #{$f->numero_factura} ({$envio->dataico_numero} sigue vigente). Motivo: "
+                            .mb_substr($motivo, 0, 300),
+            'usuario_id' => $f->usuario_id ?: $usuarioId,
+        ];
+
+        $creados = [];
+        if ($consignado > 0) {
+            $creados[] = \App\Models\Anticipo::create($base + [
+                'valor' => $consignado,
+                'forma_pago' => 'consignacion',
+                'banco_cuenta_id' => $bancoCuentaId,
+            ]);
+        }
+        if ($efectivo > 0) {
+            $creados[] = \App\Models\Anticipo::create($base + [
+                'valor' => $efectivo,
+                'forma_pago' => 'efectivo',
+            ]);
+        }
+
+        $principal = $creados[0];
+        $principal->forceFill([
+            'admon_fe_pendiente' => $admonFe,
+            'dataico_envio_id' => $envio->id,
+        ])->save();
+
+        foreach ($creados as $a) {
+            Bitacora::registrar(
+                accion: 'created',
+                modelo: 'Anticipo',
+                registroId: $a->id,
+                descripcion: "Anticipo #{$a->id} por $".number_format((int) $a->valor, 0, ',', '.')
+                            ." al sacar la factura {$f->id} del recibo #{$f->numero_factura} sin tocar {$envio->dataico_numero}.",
+                detalle: [
+                    'factura_id_anulada' => $f->id,
+                    'dataico_envio_id' => $envio->id,
+                    'admon_fe_pendiente' => $a->is($principal) ? $admonFe : 0,
+                    'motivo' => $motivo,
+                ],
+                alidoId: $f->aliado_id
+            );
+        }
+
+        return $principal;
     }
 
     // ─── Listado de facturas anuladas ────────────────────────────────
@@ -3410,6 +3602,20 @@ class FacturacionController extends Controller
                 'ok' => false,
                 'message' => "No se puede restaurar: su factura electrónica {$nota->factura_dataico_numero} ya se anuló ante "
                             ."la DIAN con la nota crédito {$nota->numero}. Si hay que cobrar, haga un recibo nuevo.",
+            ], 422);
+        }
+
+        // Se anuló dejando su plata como anticipo: restaurada, la misma plata
+        // quedaría dos veces (en el recibo y en el anticipo).
+        $anticipo = \App\Models\Anticipo::where('aliado_id', $aliadoId)
+            ->where('referencia', "ANUL-{$factura->id}")
+            ->whereNotIn('estado', [\App\Models\Anticipo::ESTADO_ANULADO, \App\Models\Anticipo::ESTADO_DEVUELTO])
+            ->first();
+        if ($anticipo) {
+            return response()->json([
+                'ok' => false,
+                'message' => "No se puede restaurar: al anularlo, su plata quedó como el anticipo #{$anticipo->id}. "
+                            .'Si hay que cobrarlo de nuevo, facture el mes usando ese anticipo.',
             ], 422);
         }
 

@@ -124,6 +124,14 @@ class NotaCreditoService
             'enviado_at' => now(),
         ])->save();
 
+        // Anticipos que salieron de una fila de este recibo con la administración
+        // marcada como facturada en esta FE: anulada la FE, esa administración
+        // ya no está facturada y la factura que los consuma debe volver a emitirla.
+        \App\Models\Anticipo::where('aliado_id', $envio->aliado_id)
+            ->where('dataico_envio_id', $envio->id)
+            ->where('admon_fe_pendiente', '>', 0)
+            ->update(['admon_fe_pendiente' => 0]);
+
         Log::info('[dataico] nota crédito emitida', [
             'aliado_id' => $envio->aliado_id,
             'numero_factura' => $envio->numero_factura,

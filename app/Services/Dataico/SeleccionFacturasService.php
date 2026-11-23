@@ -27,6 +27,16 @@ class SeleccionFacturasService
     private const ESTADOS = ['pagada', 'abono', 'prestamo'];
 
     /**
+     * Lo que se factura de cada fila `f`: administración + afiliación, menos la
+     * administración que ya salió en otra FE y llegó aquí con un anticipo
+     * (`admon_fe_previa`, ver Anticipo::aplicarAFactura). Una sola definición
+     * para la emisión por API y para el Excel manual.
+     */
+    public const BASE_FE_SQL = 'ISNULL(CAST(f.admon AS BIGINT), 0)
+                           + ISNULL(CAST(f.afiliacion AS BIGINT), 0)
+                           - ISNULL(CAST(f.admon_fe_previa AS BIGINT), 0)';
+
+    /**
      * Grupos de `numero_factura` listos para emitir bajo esta configuración.
      *
      * @param  int|null  $numeroFactura  limita a un solo grupo (modo 'factura')
@@ -136,8 +146,7 @@ class SeleccionFacturasService
                 // El único valor que se factura: administración + afiliación.
                 // Seguridad social, mora, seguro y mensajería quedan fuera por
                 // decisión del dueño — BRYGAR solo factura su servicio.
-                DB::raw('SUM(ISNULL(CAST(f.admon      AS BIGINT), 0)
-                           + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) AS base_admon'),
+                DB::raw('SUM('.self::BASE_FE_SQL.') AS base_admon'),
                 DB::raw('MIN(f.razon_social_id) AS razon_social_afiliacion_id'),
                 // ¿Sigue debiendo? Un préstamo sin pagar sale a crédito.
                 DB::raw("MAX(CASE WHEN f.estado = 'prestamo' THEN 1 ELSE 0 END) AS a_credito"),
@@ -177,8 +186,7 @@ class SeleccionFacturasService
             // viejo: `fe_marcada` es la marca que dejaba ese flujo.
             ->havingRaw('MAX(CAST(f.fe_marcada AS INT)) = 0')
             // Una factura de $0 de administración no tiene qué facturar.
-            ->havingRaw('SUM(ISNULL(CAST(f.admon AS BIGINT), 0)
-                           + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) > 0')
+            ->havingRaw('SUM('.self::BASE_FE_SQL.') > 0')
             // Un grupo tiene que tener UN solo adquiriente.
             //
             // La factura de un lote empresarial sale a nombre de la empresa por
@@ -281,8 +289,7 @@ class SeleccionFacturasService
             ->whereIn('f.estado', ['pagada', 'abono', 'prestamo'])
             ->groupBy('f.numero_factura')
             ->havingRaw("COUNT(DISTINCT ISNULL(CAST(f.empresa_id AS VARCHAR(20)), 'X')) > 1")
-            ->havingRaw('SUM(ISNULL(CAST(f.admon AS BIGINT), 0)
-                           + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) > 0')
+            ->havingRaw('SUM('.self::BASE_FE_SQL.') > 0')
             ->whereNotExists(fn ($s) => $s->select(DB::raw(1))->from('dataico_envios as de')
                 ->whereColumn('de.numero_factura', 'f.numero_factura')
                 ->where('de.aliado_id', $cfg->aliado_id)
@@ -311,8 +318,7 @@ class SeleccionFacturasService
             'f.numero_factura',
             DB::raw('COUNT(*) AS filas'),
             DB::raw("COUNT(DISTINCT ISNULL(CAST(f.empresa_id AS VARCHAR(20)), 'X')) AS adquirientes"),
-            DB::raw('SUM(ISNULL(CAST(f.admon AS BIGINT), 0)
-                      + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) AS base_admon'),
+            DB::raw('SUM('.self::BASE_FE_SQL.') AS base_admon'),
             DB::raw('CONVERT(varchar(10), MIN(f.fecha_pago), 23) AS fecha_pago'),
         ]);
     }

@@ -381,8 +381,7 @@ class FacturacionElectronicaController extends Controller
                 DB::raw('MIN(f.tipo)       AS tipo'),
                 DB::raw('MIN(f.cedula)     AS cedula_muestra'),
                 // Admon = campo admon + campo afiliacion
-                DB::raw('SUM(ISNULL(CAST(f.admon       AS BIGINT), 0)
-                           + ISNULL(CAST(f.afiliacion   AS BIGINT), 0)) AS total_admon'),
+                DB::raw('SUM('.\App\Services\Dataico\SeleccionFacturasService::BASE_FE_SQL.') AS total_admon'),
                 // SS = v_eps + v_arl + v_afp + v_caja + mora
                 DB::raw('SUM(ISNULL(CAST(f.v_eps  AS BIGINT), 0)
                            + ISNULL(CAST(f.v_arl  AS BIGINT), 0)
@@ -437,8 +436,7 @@ class FacturacionElectronicaController extends Controller
         //    lote empresarial sale a nombre de la empresa por la suma de todos
         //    sus afiliados, así que si el `numero_factura` mezcla filas de
         //    empresas distintas se le cargaría a una plata de otra.
-        $q->havingRaw('SUM(ISNULL(CAST(f.admon AS BIGINT), 0)
-                         + ISNULL(CAST(f.afiliacion AS BIGINT), 0)) > 0')
+        $q->havingRaw('SUM('.\App\Services\Dataico\SeleccionFacturasService::BASE_FE_SQL.') > 0')
             ->havingRaw("COUNT(DISTINCT ISNULL(CAST(f.empresa_id AS VARCHAR(20)), 'X')) = 1");
 
         // Filtro por estado de FE (HAVING sobre columnas calculadas)

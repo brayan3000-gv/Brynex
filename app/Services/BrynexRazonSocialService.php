@@ -190,7 +190,7 @@ class BrynexRazonSocialService
     private const TIPO_PLANILLA = 'pago_planilla';
 
     /** Lo único que se le factura a la DIAN: administración más afiliación. */
-    private const BASE = 'ISNULL(CAST(f.admon AS BIGINT), 0) + ISNULL(CAST(f.afiliacion AS BIGINT), 0)';
+    private const BASE = \App\Services\Dataico\SeleccionFacturasService::BASE_FE_SQL;
 
     /**
      * Si la factura ya tiene su electrónica emitida en Dataico.

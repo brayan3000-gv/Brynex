@@ -17,6 +17,9 @@ class Anticipo extends BaseModel
         'motivo_anulacion', 'anulado_por',
         'estado', 'factura_id', 'usuario_id',
         'origen', 'anticipo_padre_id', 'periodo_mes', 'periodo_anio',
+        // Administración que ya salió en una FE (anticipo nacido de anular una
+        // fila de un lote facturado): ver aplicarAFactura().
+        'admon_fe_pendiente', 'dataico_envio_id',
     ];
 
     protected $casts = [
@@ -338,7 +341,41 @@ class Anticipo extends BaseModel
             'factura_id'     => $facturaId,
         ]);
 
+        $this->trasladarAdmonFacturada($facturaId);
+
         return $aplicar;
+    }
+
+    /**
+     * Si este anticipo trae administración que ya salió en una factura
+     * electrónica, la pasa a la factura que lo consume (`admon_fe_previa`) y la
+     * emisión de FE la resta de la base. Sin esto, la misma administración se
+     * reportaba dos veces a la DIAN: en la FE del recibo anulado y en la del mes
+     * al que se movió la plata.
+     *
+     * Pasa hasta lo que la factura tiene de administración + afiliación; lo que
+     * sobre se queda en el anticipo para la siguiente.
+     */
+    private function trasladarAdmonFacturada(int $facturaId): void
+    {
+        $pendiente = (int) ($this->admon_fe_pendiente ?? 0);
+        if ($pendiente <= 0) {
+            return;
+        }
+
+        $factura = Factura::where('aliado_id', $this->aliado_id)->find($facturaId);
+        if (! $factura) {
+            return;
+        }
+
+        $cabe = (int) $factura->admon + (int) $factura->afiliacion - (int) ($factura->admon_fe_previa ?? 0);
+        $pasa = min($pendiente, max(0, $cabe));
+        if ($pasa <= 0) {
+            return;
+        }
+
+        $factura->forceFill(['admon_fe_previa' => (int) ($factura->admon_fe_previa ?? 0) + $pasa])->save();
+        $this->forceFill(['admon_fe_pendiente' => $pendiente - $pasa])->save();
     }
 
     /**
@@ -382,6 +419,11 @@ class Anticipo extends BaseModel
             $porDevolver = (int) $candidatos->sum('valor_aplicado');
         }
 
+        // La administración ya facturada que esta factura recibió de un anticipo
+        // vuelve a él: si no, al anular la factura se perdía la marca y la
+        // siguiente que consuma el anticipo la facturaría otra vez.
+        $admonPorDevolver = (int) ($factura->admon_fe_previa ?? 0);
+
         $devueltos = [];
         foreach ($candidatos as $ant) {
             if ($porDevolver <= 0) {
@@ -404,6 +446,16 @@ class Anticipo extends BaseModel
                 'factura_id' => $resta > 0 ? $ant->factura_id : null,
             ]);
             $porDevolver -= $devuelto;
+        }
+
+        if ($admonPorDevolver > 0) {
+            $origen = $candidatos->first(fn ($a) => (int) ($a->dataico_envio_id ?? 0) > 0);
+            if ($origen) {
+                $origen->forceFill([
+                    'admon_fe_pendiente' => (int) ($origen->admon_fe_pendiente ?? 0) + $admonPorDevolver,
+                ])->save();
+                $factura->forceFill(['admon_fe_previa' => 0])->save();
+            }
         }
 
         return $devueltos;
