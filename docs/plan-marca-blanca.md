@@ -181,8 +181,33 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
 - **Si cambia el precio público**, el piso cambia con él; el techo sigue siendo
   el doble del costo del distribuidor.
 - **Capacitación**: [10] horas sin costo antes del primer aliado.
-- **Anexo 1**: tabla de módulos para distribuidores. Solo WhatsApp tiene valor
-  ($120); afiliaciones, Específica, Integral, franquicias e IA están por definir.
+- **Anexo 1** (propuesto 23-nov-2026): lo que paga el distribuidor por módulo.
+  Lo vende sin bajar del precio público ni pasar del doble de lo que paga.
+
+  | Módulo | Precio público | Paga el distribuidor |
+  |---|---|---|
+  | Plantilla de WhatsApp | $120 | $120 (es costo de Meta) |
+  | Afiliación hecha por el equipo del aliado | $3.000 | $2.250 (−25 %, como la plataforma) |
+  | Afiliación hecha por Brygar | $6.000 | $4.500 |
+  | Alianza Específica | $5.500 por afiliado | $4.500 |
+  | Alianza Integral | $15.000 por afiliado | $13.000 |
+  | Módulo de franquicias | sin cargo mensual; $400.000 de instalación | sin cargo mensual; $200.000 de instalación |
+  | Asistente de IA | costo del proveedor + 50 % | costo del proveedor + 30 % |
+
+  Lo que hace la gente de Brygar lleva menos descuento que la plataforma porque
+  cuesta horas de personas. La afiliación de Brygar queda en $4.500 y no en
+  $5.000 para que el distribuidor conserve margen cuando el aliado llega al
+  precio por volumen ($5.000 desde el contrato 301).
+- **Soporte deficiente** (propuesto 23-nov-2026): el distribuidor responde en 1
+  día hábil, o el mismo día si hay una planilla o una afiliación con fecha en
+  riesgo. Si el aliado llama a BryNex, **BryNex lo atiende** (no se le deja sin
+  servicio), registra el caso y le avisa al distribuidor. Las dudas de uso que
+  debía resolver él: las 2 primeras de cada aliado en el mes van gratis, desde
+  la tercera se le cobran $30.000 por caso. Con 3 quejas de un aliado en un mes
+  (o 5 en 3 meses) se le avisa por escrito y tiene 15 días para corregir; si se
+  repite, BryNex atiende a ese aliado directo al precio público y el
+  distribuidor pasa a referido con él. Si le pasa con 2 o más aliados en un año
+  es incumplimiento y se puede terminar el contrato.
 
 ### Ejemplos
 
@@ -321,7 +346,8 @@ apuntar el dominio y poner el certificado).
 - [ ] Los valores del referido y de la marca blanca (el distribuidor ya está decidido).
 - [ ] Con el contador: si BryNex factura como Régimen Simple y las retenciones al distribuidor.
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
-- [ ] Los valores del Anexo 1 (módulos para distribuidores) y las horas de capacitación.
+- [ ] Confirmar los valores propuestos del Anexo 1 (en especial el precio público de la IA) y el valor de la hora de capacitación adicional.
+- [ ] Confirmar el soporte deficiente: $30.000 por caso desde el tercero y los umbrales de quejas.
 - [ ] ¿El referido gana 12 meses o mientras el aliado siga activo?
 - [ ] ¿Cuántos afiliados se le piden al distribuidor para pasar a marca blanca,
       o basta con que pague el mínimo?
