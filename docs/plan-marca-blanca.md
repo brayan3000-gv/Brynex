@@ -76,6 +76,9 @@ está en Claude Docs: https://claude.ai/artifact/41wtVUfE6LGs5TvkwvVNUr
 - **Usuario** = afiliado activo del aliado en el mes, según `ConteoMensualAliado`.
 - Cada mes, por aliado, BryNex cobra el mayor de dos valores: usuarios × $600, o
   $150.000.
+- **Arranque** (decidido 23-nov-2026): el primer mes de cada aliado va **sin
+  mínimo**, solo los usuarios reales por $600. Desde el segundo mes aplica el
+  mínimo de $150.000.
 - Se descartó la escalera de $600 / $550 / $500 que estaba propuesta: el precio
   es **$600 parejo**.
 - **Piso** (decidido 23-nov-2026): no puede cobrar menos del precio público,
@@ -318,7 +321,6 @@ apuntar el dominio y poner el certificado).
 - [ ] Los valores del referido y de la marca blanca (el distribuidor ya está decidido).
 - [ ] Con el contador: si BryNex factura como Régimen Simple y las retenciones al distribuidor.
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
-- [ ] El arranque del aliado: ¿el primer mes sin mínimo?
 - [ ] Los valores del Anexo 1 (módulos para distribuidores) y las horas de capacitación.
 - [ ] ¿El referido gana 12 meses o mientras el aliado siga activo?
 - [ ] ¿Cuántos afiliados se le piden al distribuidor para pasar a marca blanca,
