@@ -191,6 +191,7 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
   | Afiliación hecha por Brygar | $6.000 | $6.000 |
   | Alianza Específica | $5.500 por afiliado | $5.500 |
   | Alianza Integral | $15.000 por afiliado | $15.000 |
+  | Automatización de portales de EPS, Conciliar y Buzón | sin cargo mensual; $3.000 por afiliación de su equipo, $6.000 si la hace Brygar | igual |
   | Asistente de IA | costo del proveedor + 50 % | costo del proveedor + 30 % |
 
   Por ahora las afiliaciones y las alianzas Específica e Integral van **al
@@ -377,7 +378,6 @@ apuntar el dominio y poner el certificado).
 - [ ] Con el contador: si BryNex factura como Régimen Simple y las retenciones al distribuidor.
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
 - [ ] Si más adelante se da descuento al distribuidor en afiliaciones y alianzas (hoy van al precio público).
-- [ ] El precio de la automatización de portales de EPS (Anexo 1, hoy en [valor]).
 - [ ] BryNex firma como persona natural (Brayan) y no cobra IVA hasta que el contador diga; si crece, pasar a una SAS (el contrato deja ceder a una sociedad suya).
 - [ ] Confirmar el soporte deficiente: $30.000 por caso desde el tercero y los umbrales de quejas.
 - [ ] ¿El referido gana 12 meses o mientras el aliado siga activo?
