@@ -34,7 +34,8 @@ return [
     ],
 
     // Complemento de afiliaciones, una sola vez por contrato nuevo
-    'afiliacion' => ['equipo' => 3000, 'brygar' => 6000, 'brygar_volumen' => 5000, 'tramo' => 300],
+    // Sin precio por volumen desde el 23-nov-2026: siempre $6.000 la de Brygar (antes $5.000 desde el contrato 301).
+    'afiliacion' => ['equipo' => 3000, 'brygar' => 6000],
 
     // Plan Asesor: la escalera de administración vive en config/asesores.php
     'asesor' => [

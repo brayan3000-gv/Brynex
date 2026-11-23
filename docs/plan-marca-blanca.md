@@ -197,8 +197,8 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
   Por ahora las afiliaciones y las alianzas Específica e Integral van **al
   precio público, sin descuento**: el distribuidor gana solo lo que cobre por
   encima, hasta el doble. La IA queda a costo + 50 % de público y + 30 % para él.
-  Ojo: desde el contrato 301 la afiliación de Brygar baja a $5.000 para el
-  aliado, que queda por debajo de los $6.000 que paga el distribuidor.
+  La afiliación de Brygar vale siempre $6.000: el 23-nov-2026 se quitó el precio
+  por volumen ($5.000 desde el contrato 301) también del precio público.
 - **Soporte deficiente** (propuesto 23-nov-2026): el distribuidor responde en 1
   día hábil, o el mismo día si hay una planilla o una afiliación con fecha en
   riesgo. Si el aliado llama a BryNex, **BryNex lo atiende** (no se le deja sin

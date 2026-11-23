@@ -425,7 +425,7 @@
                     <div class="eyebrow" style="margin:0">Nosotros afiliamos por usted</div>
                     <div class="v num">$6.000</div>
                     <div class="u">por contrato, una sola vez</div>
-                    <p>EPS, ARL y caja, con la firma del trabajador. Lo que entre antes de las 4:00 pm queda radicado ese día. Desde el contrato 301 del mes, $5.000.</p>
+                    <p>EPS, ARL y caja, con la firma del trabajador. Lo que entre antes de las 4:00 pm queda radicado ese día.</p>
                 </div>
             </div>
             <div class="acciones">
@@ -639,7 +639,7 @@
 
     // ── Cotizador ──
     var PLANES = { esencial: ['Alianza Esencial', 800], especifica: ['Alianza Específica', 5500], integral: ['Alianza Integral', 15000] };
-    var TRAMO = 300, P_BRYGAR = 6000, P_BRYGAR_VOL = 5000, P_EQUIPO = 3000;
+    var P_BRYGAR = 6000, P_EQUIPO = 3000;
     // Con BryNex el equipo todavía atiende lo que requiere una persona (firmas, rechazos): se libera 3/4 del tiempo.
     var LIBERA = { manual: 0, equipo: 0.75, brygar: 1 };
     var HORAS_PERSONA = 160;
@@ -698,8 +698,8 @@
         if (integral) { etq = 'Afiliaciones (' + nuevos + ')'; }
         else if (afil === 'equipo') { vAfil = nuevos * P_EQUIPO; etq = nuevos + ' afiliaciones × ' + cop(P_EQUIPO); }
         else if (afil === 'brygar') {
-            vAfil = Math.min(nuevos, TRAMO) * P_BRYGAR + Math.max(nuevos - TRAMO, 0) * P_BRYGAR_VOL;
-            etq = nuevos > TRAMO ? TRAMO + ' × ' + cop(P_BRYGAR) + ' + ' + (nuevos - TRAMO) + ' × ' + cop(P_BRYGAR_VOL) : nuevos + ' afiliaciones × ' + cop(P_BRYGAR);
+            vAfil = nuevos * P_BRYGAR;
+            etq = nuevos + ' afiliaciones × ' + cop(P_BRYGAR);
         } else { etq = 'Afiliaciones a mano, con su equipo'; }
         var total = mensual + vAfil;
 
