@@ -334,7 +334,10 @@
             <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(200px, 1fr));gap:0.75rem;">
                 @foreach($todosModulos as $mod)
                     @php
-                        $moduloActivo = !isset($aliado->id) && $mod->id == 1;
+                        // Aliado nuevo: lo que trae el plan base (administración, plantillas de
+                        // WhatsApp y ARL por API). La IA, los portales de EPS y el marketing se
+                        // activan aparte. Ver docs/plan-marca-blanca.md, Anexo 2 del contrato.
+                        $moduloActivo = !isset($aliado->id) && in_array($mod->codigo, ['administracion', 'wa_plantillas', 'arl_api'], true);
                         if (isset($aliado->id)) {
                             $moduloActivo = isset($modulosContratados[$mod->id]) && $modulosContratados[$mod->id] == 1;
                         }

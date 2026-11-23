@@ -199,6 +199,21 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
   encima, hasta el doble. La IA queda a costo + 50 % de público y + 30 % para él.
   La afiliación de Brygar vale siempre $6.000: el 23-nov-2026 se quitó el precio
   por volumen ($5.000 desde el contrato 301) también del precio público.
+- **Anexo 2, lo que incluye la plataforma** (decidido 23-nov-2026), igual en
+  los $600 del distribuidor y en los $800 del precio público:
+  - **Incluido**: afiliados, contratos, afiliaciones y novedades hechas por su
+    equipo, facturación, cobros, cuadre, incapacidades, gestión documental,
+    razones sociales propias, planos PILA, **pago de planillas por API de
+    Enlace y Simple** (con la cuenta del aliado ante el operador), **ARL por
+    API** (Sura y Colmena, módulo `arl_api`), **página web pública** con su
+    cotizador, WhatsApp por la cuenta compartida (conversaciones sin costo,
+    **plantillas a $120**), informes, descarga de datos y accesos ilimitados.
+  - **Aparte**: **asistente de IA (no se habilita por defecto)**,
+    automatización de portales de EPS con Conciliar y Buzón
+    (`automatizacion_portales`), campañas de marketing, afiliaciones de Brygar,
+    Específica, Integral y franquicias.
+  - Al crear un aliado, el formulario ya trae marcados `administracion`,
+    `wa_plantillas` y `arl_api`. Los aliados que ya estaban no cambian.
 - **Soporte deficiente** (propuesto 23-nov-2026): el distribuidor responde en 1
   día hábil, o el mismo día si hay una planilla o una afiliación con fecha en
   riesgo. Si el aliado llama a BryNex, **BryNex lo atiende** (no se le deja sin
@@ -362,6 +377,7 @@ apuntar el dominio y poner el certificado).
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
 - [ ] Si más adelante se da descuento al distribuidor en afiliaciones y alianzas (hoy van al precio público).
 - [ ] El valor de la hora de capacitación adicional.
+- [ ] El precio de la automatización de portales de EPS y el de cada mensaje de marketing (Anexo 1, hoy en [valor]).
 - [ ] Confirmar el soporte deficiente: $30.000 por caso desde el tercero y los umbrales de quejas.
 - [ ] ¿El referido gana 12 meses o mientras el aliado siga activo?
 - [ ] ¿Cuántos afiliados se le piden al distribuidor para pasar a marca blanca,
