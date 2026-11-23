@@ -181,23 +181,24 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
 - **Si cambia el precio público**, el piso cambia con él; el techo sigue siendo
   el doble del costo del distribuidor.
 - **Capacitación**: [10] horas sin costo antes del primer aliado.
-- **Anexo 1** (propuesto 23-nov-2026): lo que paga el distribuidor por módulo.
+- **Anexo 1** (decidido 23-nov-2026): lo que paga el distribuidor por módulo.
   Lo vende sin bajar del precio público ni pasar del doble de lo que paga.
 
   | Módulo | Precio público | Paga el distribuidor |
   |---|---|---|
   | Plantilla de WhatsApp | $120 | $120 (es costo de Meta) |
-  | Afiliación hecha por el equipo del aliado | $3.000 | $2.250 (−25 %, como la plataforma) |
-  | Afiliación hecha por Brygar | $6.000 | $4.500 |
-  | Alianza Específica | $5.500 por afiliado | $4.500 |
-  | Alianza Integral | $15.000 por afiliado | $13.000 |
+  | Afiliación hecha por el equipo del aliado | $3.000 | $3.000 |
+  | Afiliación hecha por Brygar | $6.000 | $6.000 |
+  | Alianza Específica | $5.500 por afiliado | $5.500 |
+  | Alianza Integral | $15.000 por afiliado | $15.000 |
   | Módulo de franquicias | sin cargo mensual; $400.000 de instalación | sin cargo mensual; $200.000 de instalación |
   | Asistente de IA | costo del proveedor + 50 % | costo del proveedor + 30 % |
 
-  Lo que hace la gente de Brygar lleva menos descuento que la plataforma porque
-  cuesta horas de personas. La afiliación de Brygar queda en $4.500 y no en
-  $5.000 para que el distribuidor conserve margen cuando el aliado llega al
-  precio por volumen ($5.000 desde el contrato 301).
+  Por ahora las afiliaciones y las alianzas Específica e Integral van **al
+  precio público, sin descuento**: el distribuidor gana solo lo que cobre por
+  encima, hasta el doble. La IA queda a costo + 50 % de público y + 30 % para él.
+  Ojo: desde el contrato 301 la afiliación de Brygar baja a $5.000 para el
+  aliado, que queda por debajo de los $6.000 que paga el distribuidor.
 - **Soporte deficiente** (propuesto 23-nov-2026): el distribuidor responde en 1
   día hábil, o el mismo día si hay una planilla o una afiliación con fecha en
   riesgo. Si el aliado llama a BryNex, **BryNex lo atiende** (no se le deja sin
@@ -346,7 +347,8 @@ apuntar el dominio y poner el certificado).
 - [ ] Los valores del referido y de la marca blanca (el distribuidor ya está decidido).
 - [ ] Con el contador: si BryNex factura como Régimen Simple y las retenciones al distribuidor.
 - [ ] Con un abogado: el contrato del distribuidor, en especial que no sea agencia comercial.
-- [ ] Confirmar los valores propuestos del Anexo 1 (en especial el precio público de la IA) y el valor de la hora de capacitación adicional.
+- [ ] Si más adelante se da descuento al distribuidor en afiliaciones y alianzas (hoy van al precio público).
+- [ ] El valor de la hora de capacitación adicional.
 - [ ] Confirmar el soporte deficiente: $30.000 por caso desde el tercero y los umbrales de quejas.
 - [ ] ¿El referido gana 12 meses o mientras el aliado siga activo?
 - [ ] ¿Cuántos afiliados se le piden al distribuidor para pasar a marca blanca,
