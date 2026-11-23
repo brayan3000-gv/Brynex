@@ -31,6 +31,8 @@ return [
         'afiliaciones y novedades', 'salud, pensión, riesgos laborales y parafiscales', 'gestión documental',
         'incapacidades y licencias', 'cambios de salario', 'traslados, inclusiones y reingresos',
         'razones sociales', 'reportes y seguimiento',
+        'planillas por API de Enlace y Simple', 'ARL por API (Sura y Colmena)',
+        'página web con su cotizador', 'WhatsApp con bandeja de chats (cada plantilla enviada, $120)',
     ],
 
     // Complemento de afiliaciones, una sola vez por contrato nuevo

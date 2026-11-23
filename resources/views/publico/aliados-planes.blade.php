@@ -348,6 +348,10 @@
             <li class="reveal" style="--i:2">Traslados, inclusiones y reingresos</li>
             <li class="reveal" style="--i:3">Razones sociales</li>
             <li class="reveal" style="--i:4">Reportes y seguimiento</li>
+            <li class="reveal" style="--i:1">Planillas por API de Enlace y Simple</li>
+            <li class="reveal" style="--i:2">ARL por API: Sura y Colmena</li>
+            <li class="reveal" style="--i:3">Página web con su cotizador</li>
+            <li class="reveal" style="--i:4">WhatsApp con bandeja de chats</li>
         </ul>
     </div>
 </section>
@@ -387,6 +391,10 @@
                 <header><h3>Alianza Esencial</h3><div class="precio"><b class="num">$800</b><small>por afiliado al mes</small></div></header>
                 <ul>
                     <li>Acceso a la plataforma BryNex, con sus propias razones sociales</li>
+                    <li>Planillas por API de Enlace y Simple</li>
+                    <li>ARL por API: afiliar, anular y renovar en Sura y Colmena</li>
+                    <li>Página web con su cotizador</li>
+                    <li>WhatsApp: cada plantilla enviada, $120</li>
                     <li>Plataforma dedicada, con su logo y a su nombre: mínimo $180.000 al mes</li>
                 </ul>
                 <div class="nota">Una puerta de entrada a la digitalización.</div>
