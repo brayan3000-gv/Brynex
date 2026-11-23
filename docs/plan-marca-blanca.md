@@ -180,7 +180,7 @@ Va a pasar, porque el precio es público. **No se esconde: se explica.**
   responde como máximo por lo pagado por ese aliado en los 3 meses anteriores.
 - **Si cambia el precio público**, el piso cambia con él; el techo sigue siendo
   el doble del costo del distribuidor.
-- **Capacitación**: [10] horas sin costo antes del primer aliado; las siguientes a $80.000 la hora.
+- **Capacitación**: 6 horas sin costo antes del primer aliado; las siguientes a $80.000 la hora.
 - **Anexo 1** (decidido 23-nov-2026): lo que paga el distribuidor por módulo.
   Lo vende sin bajar del precio público ni pasar del doble de lo que paga.
 
