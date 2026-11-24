@@ -357,6 +357,20 @@ crear el cliente y el producto reales.
   la próxima nota sale con 1). Con 0 da «datos no válidos».
 - Rutinas guardadas en `localStorage` de `gratis-vpfe` (producción): `bxProdDatos(NIT,RESP,TRIB,CIIU)`
   y `bxProdFolios()` (abrir antes «Rangos de numeración manual» con un clic real en el encabezado).
+**Primera factura real con el gratuito: AVAPP FE7 (24-nov-2026)** al colegio Libardo Madrid
+Valderrama (NIT 800212580), $10.664.000 + IVA 19 % = $12.690.160, crédito 30 días, transferencia
+débito bancaria (47) → «Aprobado con notificación» en la DIAN. Lo aprendido:
+- Cliente: en «Crear nuevo» poner NIT 31 y pulsar la **lupa**: trae de la DIAN el nombre, R-99-PN/ZZ
+  y el **correo de recepción registrado** (mejor que el del RUT viejo). Dirección, teléfono y municipio
+  vienen de relleno («Calle 000», Bogotá): corregirlos. Guardar con el check «Confirmo…» y
+  `#btn-save-client`.
+- Producto: la descripción admite 250 caracteres y **rechaza comas, puntos y guiones** («caracteres
+  especiales»); las tildes sí pasan. U/M 94 (unidad); IVA 01 al 19 %. Lo largo va en «8. Notas»
+  (`Personalizados.DocPersonalizado.campoString[0].Value`, 3.000 caracteres, ahí sí con puntuación).
+- **Crédito exige «Plazo» en días** (y fecha de vencimiento); sin él no previsualiza.
+- La cantidad hay que escribirla (viene en 0) para que calcule totales.
+- La previsualización dice «FE-0» y un CUFE de prueba: el número real se asigna al «Firmar y Guardar».
+
 - CONSTRUTECH tiene además en la lista el rango viejo FEC 1–2500 de Siigo (vencido 10-08-2023); no se
   quitó porque es otro prefijo.
 
