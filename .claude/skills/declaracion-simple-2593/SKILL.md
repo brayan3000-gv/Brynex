@@ -332,6 +332,13 @@ obligación en BryNex admite máximo 500 caracteres.
   42 = 2.145.000, ICA 1.139.000, nacional 1.006.000 cubierto por pensión, 48 = **$1.675.000** al B5.
   490 **4911206247607** por $1.197.000 (1.139.000 + 58.000 de intereses), **pagado por PSE el
   21-nov ~16:40**. El B5 se abre cuando aplique (contar ~2 días).
+- **El B4 apareció en Presentados el 24-nov-2026 a las 12:00** (pagado el 21-nov ~16:40, un viernes:
+  dos días hábiles). El B5 abre con casilla 46 = $1.675.000.
+- **FE2397–FE2400 están rechazadas por la DIAN** (22-sep, se reemitieron como FE2401 en adelante):
+  no suman. El B5 es el de BryNex, **$35.726.000** → 1,6 % = 572.000, ICA 379.000, nacional 193.000.
+- **2026-B5 presentado el 24-nov-2026** (25936617050306): 28 = 35.726.000, 45 = 1.261.000, 46 =
+  1.675.000, 47 = 193.000, 48 = **$2.743.000** al B6. 490 **4911207121486** por **$382.000** (379.000
+  de ICA + 3.000 de intereses; el formulario mostraba 54 = 0, los intereses los pone el 490).
 - Pensión: contratos de las razones sociales 42 (aliado BRYGAR: 9 vigentes y 6 retirados al 17-nov) y
   11282 (aliado BryNex: 1). Solo el 12 % del empleador, de planillas **pagadas** dentro del bimestre.
 
@@ -416,7 +423,10 @@ obligación en BryNex admite máximo 500 caracteres.
   anterior (463.000 Mega / 1.005.000 Brygar): presentado así, ese saldo se pierde.** El B1 (PSE
   19-nov ~14:45) apareció aplicado el 21-nov a las 16:41. **B2 presentado el 21-nov-2026**
   (25936616966494) con los valores de la tabla, 46 = 463.000, 48 = 15.000; 490 **4911206247741** por
-  $1.509.000 (ICA 1.349.000 + 160.000 de intereses), **pagado por PSE el 21-nov ~16:50**. Sin notas crédito en 2026 (NC1 y NC2 se
+  $1.509.000 (ICA 1.349.000 + 160.000 de intereses), **pagado por PSE el 21-nov ~16:50**. El B2 apareció
+  en Presentados el 24-nov a las 12:13. **B3 presentado el 24-nov-2026** (25936617050875) con los valores
+  de la tabla (46 = 15.000, 48 = 36.000); 490 **4911207128509** por **$1.248.000** (ICA 1.135.000 +
+  113.000 de intereses). Sin notas crédito en 2026 (NC1 y NC2 se
   emitieron el 19-nov-2026 y caen en el B6). Pensión 45 = $2.521.000 en cada uno (6
   trabajadores a $210.109 × 2 planillas; cada mes de feb a sep hay al menos 6 con 30 días: usar los
   de 30 días, no los de 1 día). Planillas que cuentan: B2 = planos feb+mar, B3 = abr+may,
@@ -461,8 +471,8 @@ El bimestre 5 vence en noviembre según el último dígito del NIT: 1→11, 2→
 
 | Empresa | NIT | Desde | Estado al 17-nov-2026 |
 |---|---|---|---|
-| BRYGAR | 901918923 | B1 | B1 presentado en 0 (27-ago, form. 25936614962304). B2: definitivo 25936616614861, $962k de ingresos, pensión 420k; **490 n.º 4911202382625 por $11.000 pagado por PSE el 17-nov**, presentado (visto el 19-nov). **B3: definitivo 25936616858676 (19-nov)** con $47.587.000, pensión de 3 trabajadores ($1.261.000), ICA Cali 8211 $505.000; 490 n.º 4911204511080 por $552.000 generado en la mañana y reemplazado a las 14:52 por el **490 n.º 4911204864601** (ICA $505.000 + intereses $47.000 = $552.000), que el dueño decidió pagar el mismo 19-nov sin esperar al contador (Decreto 1419: el B3 vencía antes del 10-ago). Criterio del dueño: declarar solo la pensión de 3 trabajadores por mes, para no acumular excedente que se pierde. **B4 presentado y pagado el 21-nov** (ver «Brygar: de dónde salen los números»). B5–B6 pendientes. Soportes de 2025-B2 a B6 y 2026-B1/B2 subidos a BryNex; **21-nov: 490+PSE de B3 y B4 subidos y marcados pagados** (faltan los PDF de sus 2593 presentados); el 2025-B1 (25936605170005) no tiene renglón porque la ficha arranca en abril de 2025 |
-| MEGA TRANSPORTES JUAMVI | 901856351 | B3 | 2026-B1 y B2 presentados y pagados (ver sección JUAMVI). Soportes 2024-B4 y 2025-B1 a B6 subidos a BryNex; faltan 2024-B5/B6. **21-nov-2026:** subidos 2593+490+PSE del 2026-B1, 490+PSE del B2 (falta su 2593 presentado) y el 260 corregido con su 490 sin pagar (renglón renta 2025, observación actualizada) |
+| BRYGAR | 901918923 | B1 | B1 presentado en 0 (27-ago, form. 25936614962304). B2: definitivo 25936616614861, $962k de ingresos, pensión 420k; **490 n.º 4911202382625 por $11.000 pagado por PSE el 17-nov**, presentado (visto el 19-nov). **B3: definitivo 25936616858676 (19-nov)** con $47.587.000, pensión de 3 trabajadores ($1.261.000), ICA Cali 8211 $505.000; 490 n.º 4911204511080 por $552.000 generado en la mañana y reemplazado a las 14:52 por el **490 n.º 4911204864601** (ICA $505.000 + intereses $47.000 = $552.000), que el dueño decidió pagar el mismo 19-nov sin esperar al contador (Decreto 1419: el B3 vencía antes del 10-ago). Criterio del dueño: declarar solo la pensión de 3 trabajadores por mes, para no acumular excedente que se pierde. **B4 presentado y pagado el 21-nov** (ver «Brygar: de dónde salen los números»). B5–B6 pendientes. Soportes de 2025-B2 a B6 y 2026-B1/B2 subidos a BryNex; **21-nov: 490+PSE de B3 y B4 subidos y marcados pagados** (faltan los PDF de sus 2593 presentados); **24-nov: B5 presentado y pagado ($382.000), PSE subido y renglón pagado (falta el PDF del 490 y del 2593)**; el 2025-B1 (25936605170005) no tiene renglón porque la ficha arranca en abril de 2025 |
+| MEGA TRANSPORTES JUAMVI | 901856351 | B3 | 2026-B1 y B2 presentados y pagados (ver sección JUAMVI). Soportes 2024-B4 y 2025-B1 a B6 subidos a BryNex; faltan 2024-B5/B6. **21-nov-2026:** subidos 2593+490+PSE del 2026-B1, 490+PSE del B2 (falta su 2593 presentado) y el 260 corregido con su 490 sin pagar (renglón renta 2025, observación actualizada). **24-nov:** 2593 del B2 subido; B3 presentado y pagado ($1.248.000), 490+PSE subidos y renglón pagado (falta su 2593 presentado). Siguen B4 y B5 cuando aplique el B3 |
 | GLOBAL CONTACT | 901709476 | B1 | **Checklist completo al 17-nov** (2593 2023-2026, 260 2023-2025, cámara; IVA, retención y exógena «no aplica»). **B1–B5 presentados el 14-nov** (25936616624019, …624610, …624818, …624950, …625056). Los presentó Angela, en cero con ICA Cali CIIU 8220. Soportes subidos a BryNex. Falta B6 |
 | HOMENURSE | 901753748 | B1 | **Checklist completo al 17-nov**: 2593 de 2023-B5 a 2026-B5 y 260 de 2023-2025, todo en cero (CIIU 8699), subidos; IVA y exógena «no aplica». Falta B6 |
 | STRATEGY | 901711321 | B1 | **Checklist completo al 17-nov**: 2593 de 2023-B3 a 2026-B5 y 260 de 2023-2025, todo en cero, subidos; IVA, exógena, retención (33 meses) y 2023-B2 «no aplica». No existe app 350 en MUISCA (`WebDilIngresoForm350` da 404). Falta B6 |
