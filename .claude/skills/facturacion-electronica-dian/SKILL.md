@@ -332,7 +332,7 @@ Datos por empresa (BryNex `responsabilidades_rut` y `razones_sociales.actividad_
 | LOGIC CENTER | R-99-PN | 01 | 5612 |
 | LOGISTICS HOUSE | R-99-PN | ZZ | 8699 |
 | CONSTRUTECH | R-99-PN | 01 | 4330 |
-| AVAPP | R-99-PN | 01 | 7320 |
+| AVAPP | R-99-PN | 01 | ~~7320~~ → **6201** (9511 para facturas de mantenimiento, ver «CIIU de la factura») |
 
 (Los CIIU de ELITES, ELITEX, GLOBAL CONTACT, HOMENURSE y WORK AT HOME salieron del RUT guardado en
 el servidor: `storage/app/documentos_razones/2/<NIT>/rut_*.pdf`, casilla 46.)
@@ -370,6 +370,55 @@ débito bancaria (47) → «Aprobado con notificación» en la DIAN. Lo aprendid
 - **Crédito exige «Plazo» en días** (y fecha de vencimiento); sin él no previsualiza.
 - La cantidad hay que escribirla (viene en 0) para que calcule totales.
 - La previsualización dice «FE-0» y un CUFE de prueba: el número real se asigna al «Firmar y Guardar».
+
+**La FE7 salió con el CIIU equivocado y se rehízo (24-nov-2026).** El contador avisó que la DIAN
+objeta facturar mantenimiento de computadores con el **7320** (estudios de mercado), que era la
+actividad principal del RUT de AVAPP. Quedó así:
+- **NC1** anula la FE7 (tipo de operación 20, concepto **2 – Anulación de factura electrónica**,
+  medio 47, contado) y **FE8** la reemplaza idéntica con **9511**. Las dos «Distribuido»; la DIAN
+  las manda sola al correo de recepción del cliente. Una factura aprobada **no se edita**: siempre
+  nota crédito de anulación + factura nueva.
+- Nota crédito en producción (`/IoFacturo/Documents/NotaCreditoElectronica`): el prefijo
+  `NC_1_99999999` ya viene elegido; en «Referencia a documentos» va serie `FE`, número `7` y la
+  **fecha de la factura** en `Documento_Referencia_0__FechaRef` (dd/mm/aaaa), y la lupa
+  (`[onclick*="searchCufe"]`) carga el CUFE en `Documento_Referencia_0__ECB01` (96 caracteres).
+  Cliente y producto por `showClientsTable()` / `showProductsTable`, cantidad 1, igual que la factura.
+- Las rutinas `bxFill`/`bxSave` viven en `localStorage` de **gratis-vpfe-hab** (se leen entrando a
+  `gratis-vpfe-hab.dian.gov.co/Account/LogOff`, aunque responda «Acceso denegado»); sirven de guía
+  para producción cambiando serie, medio de pago y el chequeo de nombre del receptor.
+- PDF: en Documentos Enviados, el tercer botón de la fila («Archivos por descargar») abre el visor →
+  «PDF Original» baja `<CUFE>.pdf` y «Attachment» `AttachmentDocument.zip` (solo el XML). El
+  `XML-PDF-<NIT>-<doc>.zip` llega solo a Descargas al firmar.
+
+**CIIU de la factura = el del emisor, no por factura.** Se cambia en
+`/main/mostrarinfoempresa` → «Editar Información» → `select[name=CIIU]` (también hay que volver a
+poner `Responsabilidad`, que el formulario trae vacía; `bxProdDatos` lo hace). Toda factura sale con
+el que esté puesto: si AVAPP factura **mantenimiento**, cambiar a **9511** antes de emitir y
+devolverlo a **6201** (software, la actividad principal) al terminar. Hoy quedó en 6201.
+
+**Enlace de Julia (CC 66905291, AVAPP):** no llega a seguridadsocial.brygar, así que
+`brynex:enlace-dian` responde «No llegó un enlace». Llega a Gmail `u/2`
+(megatransportesjuamvi.1@gmail.com) con asunto «Token Acceso DIAN»: abrir el correo y navegar al
+link `catalogo-vpfe.dian.gov.co` por JS sin leerlo.
+
+**RUT de AVAPP actualizado en MUISCA (24-nov-2026)**, formularios 141293480122 (9512 → 9511) y
+141293483159 (principal y secundaria): principal **6201** y secundaria **9511**, las dos desde el
+14-01-2023; otras 7310 y 7320. Trampas del visor del RUT (`DefActualizarRut2.faces`, todo dentro
+del iframe `Iframe1`):
+- Las casillas de actividad (`cas46`, `cas48`, `cas50_1`, `cas50_2`) son de solo lectura: un clic
+  real abre la ayuda (`iframe[name=frameAyuda]`), se pulsa «Elija un valor para Actividad
+  Económica», y en el iframe interno se busca por **Código** y se pulsa el enlace del resultado.
+- **Cambiar la principal borra todas las demás** y no deja repetir códigos («No puede seleccionar dos
+  Actividades iguales»): si la nueva principal ya está en otra casilla, «Limpiar» esa casilla primero
+  y luego llenar en orden 46 → 47 → 48 → 49 → 50.
+- Las fechas (`cas47`, `cas49`) no se escriben: **doble clic** abre un calendario (mes y año en
+  desplegables). «Otras actividades» (casilla 50) no lleva fecha.
+- «Borrador» guarda y asigna el número de formulario; «Firmar Documento» no responde a los clics del
+  agente: firma el usuario con la clave de Julia. **No volver a editar un formulario ya firmado**: da
+  `50309 … no pudo registrar el log para el Estado final 6` y el cambio no entra. Para un segundo
+  cambio, «Actualizar RUT» de nuevo (abre un borrador nuevo con lo vigente).
+- Revisar lo vigente = abrir la actualización y leer las casillas; eso deja un borrador vacío que se
+  anula solo a los 30 días.
 
 - CONSTRUTECH tiene además en la lista el rango viejo FEC 1–2500 de Siigo (vencido 10-08-2023); no se
   quitó porque es otro prefijo.
