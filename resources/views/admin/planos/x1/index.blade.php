@@ -49,7 +49,7 @@
     <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
         <form method="GET" action="{{ route('admin.planos.x1.index') }}" style="display:flex;gap:.4rem;align-items:center">
             <select name="anio" onchange="this.form.submit()" style="border:1px solid #cbd5e1;border-radius:8px;padding:.25rem .4rem;font-weight:700;font-size:.78rem">
-                @for($y = now()->year; $y >= now()->year - 2; $y--)
+                @for($y = now()->year + 1; $y >= now()->year - 2; $y--)
                 <option value="{{ $y }}" @selected($anio == $y)>{{ $y }}</option>
                 @endfor
             </select>

@@ -647,7 +647,7 @@
         <div class="filtro-inline" style="background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:.2rem .45rem;display:flex;align-items:center;gap:.3rem;box-shadow:0 1px 3px rgba(0,0,0,.05)">
             <span style="font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.04em">Año</span>
             <select name="anio" form="frm-filtros" onchange="autoSubmit()" style="border:none;background:transparent;font-size:.78rem;font-weight:700;color:#1e293b;outline:none;cursor:pointer;padding:0 .1rem">
-                @for($y = now()->year; $y >= now()->year - 3; $y--)
+                @for($y = now()->year + 1; $y >= now()->year - 3; $y--)
                 <option value="{{ $y }}" {{ $anio == $y ? 'selected' : '' }}>{{ $y }}</option>
                 @endfor
             </select>
