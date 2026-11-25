@@ -239,6 +239,9 @@
                 <div class="x1-meta">SS {{ $fmt($s->valor_ss) }} · admon {{ $fmt($s->valor_admon) }}@if($s->valor_mora > 0) · mora {{ $fmt($s->valor_mora) }}@endif</div>
             </div>
         </div>
+        @if($s->observacion)
+        <div class="x1-meta" style="margin:.2rem 0 .4rem;color:#9a3412">BryNex: {{ $s->observacion }}</div>
+        @endif
         <div style="overflow-x:auto">
         <table class="x1-tabla">
             <thead>

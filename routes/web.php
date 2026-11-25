@@ -924,6 +924,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/x1-pagos/verificar', [$bx1, 'verificar'])->name('x1.verificar');
         Route::post('/x1-pagos/cola-brygar', [$bx1, 'colaBrygar'])->name('x1.cola_brygar');
         Route::post('/x1-pagos/admon', [$bx1, 'admon'])->name('x1.admon');
+        Route::post('/x1-pagos/devolver', [$bx1, 'devolver'])->name('x1.devolver');
 
         // Conciliación de afiliados contra ARL Sura. Vive en BryNex y no en los
         // informes del aliado porque cruza una póliza contra los contratos de

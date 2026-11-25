@@ -37,7 +37,7 @@ class BrynexController extends Controller
         // Pagos X1: solicitudes de los aliados que BryNex todavía no termina.
         $x1Puede = \App\Services\X1LiquidacionBrynex::puedeOperar($user);
         $x1Abiertas = $x1Puede
-            ? DB::table('x1_solicitudes')->where('estado', '!=', 'pagada')->count()
+            ? DB::table('x1_solicitudes')->whereNotIn('estado', ['pagada', 'devuelta'])->count()
             : 0;
 
         return view('brynex.hub', compact(

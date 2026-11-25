@@ -180,6 +180,19 @@ class BrynexX1PagosController extends Controller
             ->with($resultado['ok'] ? 'success' : 'warning', $resultado['mensaje']);
     }
 
+    /**
+     * Devuelve una persona sin planilla al aliado (sale de la solicitud y su
+     * plata queda a favor), p. ej. para cambiarle la razón social.
+     */
+    public function devolver(Request $request)
+    {
+        $v = $request->validate(['solicitud_plano_id' => 'required|integer']);
+
+        $r = X1LiquidacionBrynex::devolver((int) $v['solicitud_plano_id']);
+
+        return back()->with($r['ok'] ? 'success' : 'warning', $r['mensaje']);
+    }
+
     public function admon(Request $request)
     {
         $v = $request->validate([

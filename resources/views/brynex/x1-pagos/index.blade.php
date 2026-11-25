@@ -51,7 +51,8 @@
 @php
     $mesesNombre = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     $fmt = fn ($v) => '$'.number_format((float) $v, 0, ',', '.');
-    $estadoSolicitud = ['solicitada' => 'Solicitada', 'en_proceso' => 'En proceso', 'parcial' => 'Parcial', 'pagada' => 'Pagada'];
+    $estadoSolicitud = ['solicitada' => 'Solicitada', 'en_proceso' => 'En proceso', 'parcial' => 'Parcial', 'pagada' => 'Pagada', 'devuelta' => 'Devuelta'];
+    $devolvibles = \App\Services\X1LiquidacionBrynex::ESTADOS_DEVOLVIBLES;
 @endphp
 
 <div class="modulo-header">
@@ -222,7 +223,7 @@
                 <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start">
                     <div style="flex:1 1 520px;min-width:0;overflow-x:auto">
                         <table class="bx1-detalle">
-                            <thead><tr><th>Persona</th><th>Aliado</th><th class="num">Días</th><th class="num">EPS</th><th class="num">ARL</th><th class="num">Caja</th><th class="num">Pensión</th><th class="num">SS</th><th>Estado</th></tr></thead>
+                            <thead><tr><th>Persona</th><th>Aliado</th><th class="num">Días</th><th class="num">EPS</th><th class="num">ARL</th><th class="num">Caja</th><th class="num">Pensión</th><th class="num">SS</th><th>Estado</th><th></th></tr></thead>
                             <tbody>
                             @foreach($g->filas as $f)
                             <tr>
@@ -235,6 +236,14 @@
                                 <td class="num">{{ $fmt($f->valor_afp) }}</td>
                                 <td class="num"><strong>{{ $fmt($f->valor_ss) }}</strong></td>
                                 <td><span class="bx1-chip {{ $f->estado }}">{{ $etiquetasEstado[$f->estado] ?? $f->estado }}</span>@if($f->numero_planilla) <span style="font-family:monospace;font-size:.66rem">{{ $f->numero_planilla }}</span>@endif</td>
+                                <td>@if(in_array($f->estado, $devolvibles, true) && empty($f->numero_planilla))
+                                <form method="POST" action="{{ route('brynex.x1.devolver') }}" style="margin:0;display:inline"
+                                      onsubmit="return confirm('¿Devolver a {{ $f->no_identifi }} al aliado? Sale de la solicitud y lo que consignó por esta persona le queda a favor.')">
+                                    @csrf
+                                    <input type="hidden" name="solicitud_plano_id" value="{{ $f->id }}">
+                                    <button class="bx1-btn suave" type="submit" style="padding:.1rem .4rem;font-size:.66rem" title="Para cambiarle la razón social u otro dato y que el aliado la vuelva a solicitar">Devolver</button>
+                                </form>
+                                @endif</td>
                             </tr>
                             @endforeach
                             </tbody>
@@ -292,6 +301,7 @@
                 <div class="bx1-meta">SS {{ $fmt($s->valor_ss) }} · admon {{ $fmt($s->valor_admon) }}@if($s->valor_mora > 0) · mora {{ $fmt($s->valor_mora) }}@endif</div>
             </div>
         </div>
+        @if($s->observacion)<div class="bx1-meta" style="margin:.2rem 0 .4rem;color:#9a3412">{{ $s->observacion }}</div>@endif
         <table class="bx1-detalle">
             <thead><tr><th>Empresa</th><th class="num">Personas</th><th class="num">SS</th><th>Estado</th></tr></thead>
             <tbody>
@@ -396,6 +406,7 @@
                 <div class="bx1-meta">SS {{ $fmt($s->valor_ss) }} · admon {{ $fmt($s->valor_admon) }} ({{ $fmt($s->admon_por_persona) }}/persona)@if($s->valor_mora > 0) · mora {{ $fmt($s->valor_mora) }}@endif</div>
             </div>
         </div>
+        @if($s->observacion)<div class="bx1-meta" style="margin:.2rem 0 .4rem;color:#9a3412">{{ $s->observacion }}</div>@endif
 
         <div style="overflow-x:auto">
         <table class="bx1-tabla">
@@ -438,6 +449,7 @@
                                     <th class="num">Admon BryNex</th>
                                     <th class="num">Total</th>
                                     <th>Estado</th>
+                                    <th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -452,6 +464,14 @@
                                     <td class="num">{{ $fmt($s->admon_por_persona) }}</td>
                                     <td class="num"><strong>{{ $fmt($f->valor_ss + $s->admon_por_persona) }}</strong></td>
                                     <td><span class="bx1-chip {{ $f->estado }}">{{ $etiquetasEstado[$f->estado] ?? $f->estado }}</span></td>
+                                    <td>@if(in_array($f->estado, $devolvibles, true) && empty($f->numero_planilla))
+                                    <form method="POST" action="{{ route('brynex.x1.devolver') }}" style="margin:0;display:inline"
+                                          onsubmit="return confirm('¿Devolver a {{ $f->no_identifi }} al aliado? Sale de la solicitud y lo que consignó por esta persona le queda a favor.')">
+                                        @csrf
+                                        <input type="hidden" name="solicitud_plano_id" value="{{ $f->id }}">
+                                        <button class="bx1-btn suave" type="submit" style="padding:.1rem .4rem;font-size:.66rem" title="Para cambiarle la razón social u otro dato y que el aliado la vuelva a solicitar">Devolver</button>
+                                    </form>
+                                    @endif</td>
                                 </tr>
                                 @endforeach
                             </tbody>
@@ -465,6 +485,7 @@
                                     <td class="num">{{ $fmt($t->filas->sum('valor_afp')) }}</td>
                                     <td class="num">{{ $fmt($s->admon_por_persona * $t->personas) }}</td>
                                     <td class="num">{{ $fmt($t->valor_ss + $s->admon_por_persona * $t->personas) }}</td>
+                                    <td></td>
                                     <td></td>
                                 </tr>
                             </tfoot>

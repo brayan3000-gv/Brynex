@@ -749,6 +749,89 @@ class X1LiquidacionBrynex
         self::recalcularSolicitudes($filas->pluck('x1_solicitud_id')->unique()->all());
     }
 
+    /** Estados de la persona que todavía se pueden devolver: sin planilla en Simple. */
+    public const ESTADOS_DEVOLVIBLES = ['en_solicitud', 'esperando_ventana'];
+
+    /**
+     * Devuelve una persona al aliado: sale de la solicitud y vuelve a quedar
+     * «por solicitar» en su plano X1, para que el aliado le cambie la razón
+     * social (o lo que necesite) y la mande otra vez.
+     *
+     * Solo sin planilla: ni en `x1_solicitud_planos` ni en el plano. Una
+     * «Liquidada, por pagar» ya tiene planilla en Simple y se podría pagar
+     * mientras tanto; esa no se devuelve.
+     *
+     * La solicitud baja su SS, su admon y su total en lo de esa persona, y lo
+     * deja escrito en la observación: el aliado ya consignó esa plata, así que
+     * le queda a favor para la próxima solicitud. La mora no se toca: se
+     * calcula por solicitud, no por persona.
+     *
+     * @return array{ok: bool, mensaje: string}
+     */
+    public static function devolver(int $solicitudPlanoId): array
+    {
+        if (! self::puedeOperar(Auth::user())) {
+            return ['ok' => false, 'mensaje' => 'Solo el superadmin de BryNex.'];
+        }
+
+        try {
+            $mensaje = DB::transaction(function () use ($solicitudPlanoId) {
+                $xp = DB::table('x1_solicitud_planos')->where('id', $solicitudPlanoId)->lockForUpdate()->first();
+                if (! $xp) {
+                    throw new \RuntimeException('Esa persona ya no está en ninguna solicitud.');
+                }
+
+                $plano = DB::table('planos')->where('id', $xp->plano_id)->where('aliado_id', $xp->aliado_id)
+                    ->first(['id', 'tipo_doc', 'no_identifi', 'primer_nombre', 'primer_ape', 'numero_planilla']);
+
+                if (! in_array($xp->estado, self::ESTADOS_DEVOLVIBLES, true)
+                    || ! empty($xp->numero_planilla) || ! empty($plano?->numero_planilla)) {
+                    throw new \RuntimeException('Solo se devuelven personas sin planilla (en solicitud o esperando ventana).');
+                }
+
+                $solicitud = DB::table('x1_solicitudes')->where('id', $xp->x1_solicitud_id)->lockForUpdate()->first();
+                $admon = (int) round((float) $solicitud->admon_por_persona);
+                $valorSs = (int) round((float) $xp->valor_ss);
+                $devuelto = $valorSs + $admon;
+
+                $nombre = trim(($plano->primer_nombre ?? '').' '.($plano->primer_ape ?? ''));
+                $rs = DB::table('razones_sociales')->where('id', $xp->razon_social_id)->value('razon_social');
+                $nota = now()->format('d/m').' devuelta '.trim(($plano->tipo_doc ?? '').' '.($plano->no_identifi ?? ''))
+                    .' '.$nombre.' ('.\Illuminate\Support\Str::limit(trim((string) $rs), 30, '…').') $'.number_format($devuelto, 0, ',', '.').' a favor';
+                $observacion = trim(($solicitud->observacion ? $solicitud->observacion.' · ' : '').$nota);
+
+                DB::table('x1_solicitud_planos')->where('id', $xp->id)->delete();
+
+                $quedan = DB::table('x1_solicitud_planos')->where('x1_solicitud_id', $solicitud->id)->count();
+                DB::table('x1_solicitudes')->where('id', $solicitud->id)->update([
+                    'personas' => max(0, (int) $solicitud->personas - 1),
+                    'valor_ss' => max(0, (float) $solicitud->valor_ss - $valorSs),
+                    'valor_admon' => max(0, (float) $solicitud->valor_admon - $admon),
+                    'total' => max(0, (float) $solicitud->total - $devuelto),
+                    'observacion' => mb_substr($observacion, -500),
+                    'estado' => $quedan === 0 ? 'devuelta' : $solicitud->estado,
+                    'updated_at' => now(),
+                ]);
+
+                Log::info('x1-pagos: persona devuelta al aliado', [
+                    'solicitud' => $solicitud->id, 'aliado' => $xp->aliado_id, 'plano' => $xp->plano_id,
+                    'valor' => $devuelto, 'usuario' => Auth::id(),
+                ]);
+
+                if ($quedan > 0) {
+                    self::recalcularSolicitudes([(int) $solicitud->id]);
+                }
+
+                return ($nombre !== '' ? nombre_oracion($nombre) : 'La persona').' volvió al aliado (P'.$xp->n_plano.', por solicitar).'
+                    .' La solicitud #'.$solicitud->id.' bajó $'.number_format($devuelto, 0, ',', '.').', que le quedan a favor.';
+            });
+        } catch (\RuntimeException $e) {
+            return ['ok' => false, 'mensaje' => $e->getMessage()];
+        }
+
+        return ['ok' => true, 'mensaje' => $mensaje];
+    }
+
     /** solicitada → en_proceso → parcial / pagada, según cómo van sus personas. */
     public static function recalcularSolicitudes(array $ids): void
     {
