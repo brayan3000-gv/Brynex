@@ -6,7 +6,7 @@
  * Lee `referencias[]` del proyecto.json y deja refs/<id>.jpg. Si ya existe, no la rehace
  * (bórrala para pedir otra). Cuesta ~US$0,07.
  */
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ff, gasto, PRECIOS, post, proyecto } from './gemini.mjs'
 
@@ -18,7 +18,9 @@ const salida = join(pr.media, 'refs', `${id}.jpg`)
 if (existsSync(salida)) { console.log(`Ya existe ${salida} (bórrala para pedir otra).`); process.exit(0) }
 
 const j = await post('models/gemini-3.1-flash-image:generateContent', {
-  contents: [{ parts: [{ text: `${ref.prompt} Photorealistic reference photo, natural soft light, plain background, full body visible, real people, documentary style, no text.` }] }],
+  // `literal: true` (formato presentadora): la foto ya trae el set y el encuadre, sin fondo neutro.
+  // `base`: otra referencia del proyecto que se manda como imagen (otro ángulo de la misma persona y set).
+  contents: [{ parts: [...(ref.base ? [{ inlineData: { mimeType: 'image/jpeg', data: readFileSync(join(pr.media, 'refs', `${ref.base}.jpg`)).toString('base64') } }] : []), { text: ref.literal ? ref.prompt : `${ref.prompt} Photorealistic reference photo, natural soft light, plain background, full body visible, real people, documentary style, no text.` }] }],
   generationConfig: { responseModalities: ['IMAGE'], imageConfig: { aspectRatio: ref.aspecto ?? '9:16' } },
 })
 const parte = j.candidates?.[0]?.content?.parts?.find((p) => p.inlineData)

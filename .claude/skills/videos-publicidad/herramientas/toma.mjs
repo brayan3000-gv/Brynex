@@ -29,7 +29,10 @@ const prompt = [
   refs.length ? `Use the people from the reference image${refs.length > 1 ? 's' : ''} as the exact same characters (same faces, hair, body and clothes).` : '',
   esc.toma.prompt,
   pr.estiloVisual ?? '',
-  `Sound design: ${esc.toma.sonido ?? 'soft natural ambience'}. No dialogue, no speech, no singing, no music. No text, no subtitles, no logos, no watermarks.`,
+  // Formato presentadora: la toma trae la voz de ella diciendo `habla` (Omni hace el labio).
+  esc.toma.habla
+    ? `${esc.toma.mira ?? 'She looks straight into the camera'} and speaks naturally in Spanish with a warm Cali, Colombia accent, ${pr.vozPresentadora ?? 'friendly and confident'}, with expressive hand gestures, saying exactly: "${esc.toma.habla}" Clean close-mic voice, quiet room, no music, no other voices. No text, no subtitles, no logos, no watermarks.`
+    : `Sound design: ${esc.toma.sonido ?? 'soft natural ambience'}. No dialogue, no speech, no singing, no music. No text, no subtitles, no logos, no watermarks.`,
 ].filter(Boolean).join(' ')
 const costo = PRECIOS.omniSeg[res] * dur
 

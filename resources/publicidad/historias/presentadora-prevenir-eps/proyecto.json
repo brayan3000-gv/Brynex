@@ -1,0 +1,395 @@
+{
+  "titulo": "Presentadora — Más vale prevenir (EPS sin pensión $125.000)",
+  "formato": "presentadora",
+  "marca": "BRYGAR",
+  "aliado_id": 2,
+  "aspecto": "9:16",
+  "resolucion": "360p",
+  "vozPresentadora": "her voice is warm, medium-pitched, friendly and confident, at a lively conversational pace",
+  "estiloVisual": "Vertical talking-head video shot on an iPhone on a tripod, eye level, medium shot, same cozy office set as the reference image, warm LED strip lights on wooden slat panels, shallow depth of field, natural skin texture.",
+  "referencias": [
+    {
+      "id": "presentadora",
+      "literal": true,
+      "prompt": "Vertical 9:16 photo shot on an iPhone, eye level, medium shot from the knees up. A friendly Colombian woman, about 30 years old, from Cali, warm tan skin, long dark-brown wavy hair with soft caramel highlights, natural makeup, small gold hoop earrings, wearing a plain navy-blue polo shirt with no logos and dark jeans. She sits on a cream armchair in a cozy modern office: vertical wooden slat panels lit by warm LED strips, a green plant, a small shelf with books. A black podcast microphone on a boom arm sits at her chest height, slightly to her left, never covering her face. She smiles softly at the camera. Photorealistic, natural light and skin texture, no text, no logos."
+    },
+    {
+      "id": "ang-cerca",
+      "literal": true,
+      "base": "presentadora",
+      "prompt": "The same woman, same navy-blue polo, jeans, hair and earrings, in the exact same cozy office set as in the image. New photo of her taken from a DIFFERENT camera position: a close-up from the front at eye level framing only her face, neck and shoulders, the black podcast microphone entering from the lower left edge, the wooden slat wall softly blurred behind her. She is talking, natural expression. Photorealistic, vertical 9:16, natural light, no text, no logos."
+    },
+    {
+      "id": "ang-perfil",
+      "literal": true,
+      "base": "presentadora",
+      "prompt": "The same woman, same navy-blue polo, jeans, hair and earrings, in the exact same cozy office set as in the image. New photo of her taken from a DIFFERENT camera position: the camera is placed at 45 degrees to her right side, so we see her in three-quarter profile, a medium close-up from the chest up; she looks to the side toward an interviewer off-camera, the microphone in front of her mouth seen from the side, the plant and the slat wall behind her. She is talking, natural expression. Photorealistic, vertical 9:16, natural light, no text, no logos."
+    },
+    {
+      "id": "ang-abierto",
+      "literal": true,
+      "base": "presentadora",
+      "prompt": "The same woman, same navy-blue polo, jeans, hair and earrings, in the exact same cozy office set as in the image. New photo of her taken from a DIFFERENT camera position: a wide establishing shot from the far left corner of the room, showing the whole room: the armchair, the plant, the shelves with books, the window and the microphone; she is seated and occupies about a third of the frame height. She is talking, natural expression. Photorealistic, vertical 9:16, natural light, no text, no logos."
+    },
+    {
+      "id": "ang-lado",
+      "literal": true,
+      "base": "presentadora",
+      "prompt": "The same woman, same navy-blue polo, jeans, hair and earrings, in the exact same cozy office set as in the image. New photo taken from a different camera position: the camera stands at 45 degrees to her left, so her body and the armchair are seen in three-quarter view, but she has turned her face fully toward the camera and looks DIRECTLY INTO THE LENS, making eye contact with the viewer, smiling confidently. Medium shot from the waist up, the microphone and the plant visible. Photorealistic, vertical 9:16, natural light, no text, no logos."
+    }
+  ],
+  "escenas": [
+    {
+      "id": "b1",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 9,
+        "habla": "¿Se acuerdan que la abuela decía: más vale prevenir que lamentar? Pues con la EPS, a mucha gente no le alcanza pa' prevenir.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair, same office set and microphone position, medium shot."
+      }
+    },
+    {
+      "id": "b2",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 11,
+        "habla": "Como la pensión está carísima, se salen de todo… y quedan sin EPS. Y cuando llega la cita, el examen, el medicamento… ahí sí se lamenta.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair, same office set and microphone position, medium shot."
+      }
+    },
+    {
+      "id": "b3a",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 3,
+        "habla": "Pero vení, una cosita.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair, same office set and microphone position, medium shot. She leans in slightly with a playful, knowing smile and raises one finger."
+      }
+    },
+    {
+      "id": "b3",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 14,
+        "habla": "Con BRYGAR podés tener EPS sin pagar pensión. Ciento veinticinco mil pesos al mes, con ARL incluida, y tu pareja y tus hijos pueden entrar sin pagar más.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair, same office set and microphone position, medium shot."
+      }
+    },
+    {
+      "id": "b4",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 9,
+        "habla": "Si estás al día y por tu afiliación no te dan la cita o los medicamentos, te devolvemos el mes completo.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair, same office set and microphone position, medium shot."
+      }
+    },
+    {
+      "id": "b5",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 8,
+        "habla": "Así que ya sabés: mejor prevenir que lamentar. Escribinos y hablamos.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair, same office set and microphone position, medium shot."
+      }
+    },
+    {
+      "id": "n1",
+      "toma": {
+        "refs": [
+          "ang-cerca"
+        ],
+        "dur": 3,
+        "habla": "Más vale prevenir que lamentar.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone. Close-up shot from the front at eye level, framing her face and shoulders, the set softly blurred behind her.",
+        "angulo": "cerca"
+      }
+    },
+    {
+      "id": "n2",
+      "toma": {
+        "refs": [
+          "ang-perfil"
+        ],
+        "dur": 5,
+        "habla": "Pues con la EPS, a mucha gente no le alcanza pa' prevenir.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone. Camera placed at a 45-degree angle to her right side (three-quarter profile view), medium close-up, like a podcast interview.",
+        "angulo": "perfil",
+        "mira": "She looks at an interviewer sitting off-camera to her side (not at the lens)"
+      }
+    },
+    {
+      "id": "n3",
+      "toma": {
+        "refs": [
+          "ang-abierto"
+        ],
+        "dur": 5,
+        "habla": "Y cuando llega la cita, el examen, el medicamento…",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone. Wide shot from the left corner of the room showing the whole cozy office set, the armchair, the plant and the microphone, she is smaller in the frame.",
+        "angulo": "abierto"
+      }
+    },
+    {
+      "id": "n4",
+      "toma": {
+        "refs": [
+          "ang-cerca"
+        ],
+        "dur": 3,
+        "habla": "Ahí sí se lamenta.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone. Close-up shot from the front at eye level, framing her face and shoulders, the set softly blurred behind her.",
+        "angulo": "cerca"
+      }
+    },
+    {
+      "id": "n5",
+      "toma": {
+        "refs": [
+          "ang-lado"
+        ],
+        "dur": 5,
+        "habla": "Con Brigar podés tener EPS sin pagar pensión.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone, same camera angle and framing as the reference image."
+      }
+    },
+    {
+      "id": "n6",
+      "toma": {
+        "refs": [
+          "ang-cerca"
+        ],
+        "dur": 5,
+        "habla": "Si estás al día y por tu afiliación no te dan la cita o los medicamentos,",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone. Close-up shot from the front at eye level, framing her face and shoulders, the set softly blurred behind her.",
+        "angulo": "cerca"
+      }
+    },
+    {
+      "id": "n7",
+      "toma": {
+        "refs": [
+          "ang-cerca"
+        ],
+        "dur": 5,
+        "habla": "Así que ya sabés: mejor prevenir que lamentar.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone, same camera angle and framing as the reference image."
+      }
+    },
+    {
+      "id": "n8",
+      "toma": {
+        "refs": [
+          "presentadora"
+        ],
+        "dur": 6,
+        "habla": "Ciento veinticinco mil pesos al mes, con a ere ele incluida,",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone, same camera angle and framing as the reference image."
+      }
+    },
+    {
+      "id": "n9",
+      "toma": {
+        "refs": [
+          "ang-abierto"
+        ],
+        "dur": 5,
+        "habla": "y tu pareja y tus hijos pueden entrar sin pagar más.",
+        "prompt": "The same woman from the reference image, same navy-blue polo, same cream armchair and the same cozy office set with wooden slat panels, plant and podcast microphone, same camera angle and framing as the reference image."
+      }
+    },
+    {
+      "id": "i-cita",
+      "inserto": {
+        "en": "la cita,",
+        "dur": 2.2
+      },
+      "toma": {
+        "dur": 4,
+        "prompt": "Close-up of a friendly doctor's hands writing on a medical form on a clipboard across a desk in a bright, clean clinic in Cali, a patient's hands resting on the desk. Slow gentle push-in, shallow depth of field. No faces, no brand names, no logos.",
+        "sonido": "soft clinic ambience, pen on paper"
+      }
+    },
+    {
+      "id": "i-farmacia",
+      "inserto": {
+        "en": "el medicamento…",
+        "dur": 2.2
+      },
+      "toma": {
+        "dur": 4,
+        "prompt": "Close-up at a bright neighborhood pharmacy counter in Colombia: a pharmacist's hands slide a small plain white medicine box and a paper bag across the counter to a customer's hands. Shallow depth of field, slow push-in. No faces, no brand names, no logos, no readable text.",
+        "sonido": "small pharmacy ambience, paper bag rustle"
+      }
+    },
+    {
+      "id": "i-familia",
+      "inserto": {
+        "en": "tu pareja",
+        "dur": 2.2
+      },
+      "toma": {
+        "dur": 4,
+        "prompt": "A young Colombian couple in their early 30s and their two kids (about 6 and 9) laughing together on a sofa in a bright, humble living room in Cali, warm morning light, the kids hugging their mom. Handheld, natural, joyful. No text, no logos.",
+        "sonido": "family laughing softly, home ambience",
+        "desde": 1.3
+      }
+    },
+    {
+      "id": "i-celular",
+      "inserto": {
+        "en": "escribinos",
+        "dur": 2.2
+      },
+      "toma": {
+        "dur": 4,
+        "prompt": "Close-up of a woman's hands typing a message on a smartphone, the screen softly out of focus and unreadable, warm cozy light, shallow depth of field. No logos, no readable text.",
+        "sonido": "soft phone tapping"
+      }
+    }
+  ],
+  "etiqueta": "Creado con IA",
+  "gancho": {
+    "arriba": "Más vale prevenir…",
+    "titulo": [
+      "EPS SIN PAGAR",
+      "PENSIÓN"
+    ],
+    "hasta": "lamentar.",
+    "y": 1060
+  },
+  "centro": [
+    0.55,
+    0.35
+  ],
+  "cierre": {
+    "dir": "resources/publicidad/video-brynex-3",
+    "desde": 24.375,
+    "hasta": 28.6
+  },
+  "musica": {
+    "prompt": "Light, warm, modern background track for a 50-second Colombian social media video of a woman talking to camera: soft upbeat lo-fi pop with gentle guitar, light claps and a relaxed groove around 100 BPM, positive and friendly, steady energy from start to end with no big drops, ending on a clean final chord.",
+    "volumen": 0.16
+  },
+  "logoArriba": false,
+  "montaje": [
+    {
+      "de": "b1",
+      "hasta": "decía:"
+    },
+    {
+      "de": "n1",
+      "bn": true,
+      "claves": [
+        "prevenir que lamentar."
+      ]
+    },
+    {
+      "de": "n2",
+      "claves": [
+        "no le alcanza"
+      ]
+    },
+    {
+      "de": "b2",
+      "hasta": "EPS.",
+      "claves": [
+        "carísima,",
+        "sin EPS."
+      ]
+    },
+    {
+      "de": "n3"
+    },
+    {
+      "de": "n4",
+      "claves": [
+        "Ahí sí se lamenta."
+      ]
+    },
+    {
+      "de": "b3a",
+      "destello": true,
+      "claves": [
+        "una cosita."
+      ]
+    },
+    {
+      "de": "n5",
+      "pantalla": {
+        "Brigar": "BRYGAR"
+      },
+      "claves": [
+        "EPS sin pagar pensión."
+      ]
+    },
+    {
+      "de": "n8",
+      "pantalla": {
+        "Ciento veinticinco mil pesos": "$125.000",
+        "a ere ele": "ARL"
+      },
+      "claves": [
+        "ARL incluida,"
+      ],
+      "tarjetas": [
+        {
+          "tipo": "precio",
+          "en": "Ciento",
+          "hasta": "más.",
+          "pie": "al mes · ARL incluida"
+        }
+      ]
+    },
+    {
+      "de": "n9",
+      "claves": [
+        "sin pagar más."
+      ]
+    },
+    {
+      "de": "n6",
+      "destello": true,
+      "tarjetas": [
+        {
+          "tipo": "garantia",
+          "en": "Si",
+          "hasta": "completo.",
+          "pie": "Estando al día · Reactivación gratis"
+        }
+      ]
+    },
+    {
+      "de": "b4",
+      "desde": "te devolvemos",
+      "claves": [
+        "te devolvemos el mes completo."
+      ]
+    },
+    {
+      "de": "n7",
+      "claves": [
+        "mejor prevenir que lamentar."
+      ]
+    },
+    {
+      "de": "b5",
+      "desde": "Escribinos",
+      "claves": [
+        "Escribinos"
+      ]
+    }
+  ]
+}

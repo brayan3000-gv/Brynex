@@ -25,6 +25,7 @@ El cierre de las historias se saca de una animación por código (`cierre` en el
 
 - [guiones.md](guiones.md): cómo escribir el guion y las reglas de la casa. Son obligatorias.
 - [produccion.md](produccion.md): tomas, voz, música, armado, qué bloquea Omni y trampas conocidas.
+- [presentadora.md](presentadora.md): formato «persona a cámara» estilo creador (cortes cada 1,5 s, subtítulos palabra por palabra, destellos). Aprendido de 3 referencias.
 - La memoria del producto que se anuncia (p. ej. `plan-eps-sin-pension-125`). El video y el bot
   de WhatsApp deben decir lo mismo.
 
@@ -67,6 +68,7 @@ node toma.mjs <slug> <escena> --si           # genera (~US$0,07/s en 720p) → t
 node voz.mjs <slug> [--solo <escena>]        # voz por escena (centavos)
 node musica.mjs <slug> [--otra]              # música con Lyria
 node armar.mjs <slug> [--rapido]             # video final (--rapido: sin textos, para revisar el corte)
+node armar-presentadora.mjs <slug> [--rapido] # formato presentadora a cámara (ver presentadora.md)
 ```
 
 La llave de Gemini sale de `.env.videos` y nunca del `.env` de Brynex. Cada gasto queda en
