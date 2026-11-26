@@ -44,7 +44,7 @@
                 </h1>
                 <div style="color:#64748b;font-size:0.83rem;margin-top:0.25rem;">
                     NIT {{ $ficha->nitFormateado() }} ·
-                    {{ $ficha->regimen === 'RST' ? 'Régimen Simple' : 'Régimen Ordinario' }} ·
+                    {{ match ($ficha->regimen) { 'RST' => 'Régimen Simple', 'ORDINARIO' => 'Régimen Ordinario', default => 'Régimen sin definir' } }} ·
                     {{ \App\Models\BrynexRazonSocial::PERIODICIDAD_IVA[$ficha->periodicidad_iva] ?? 'IVA sin definir' }}
                     @if($ficha->contador)
                         · Contador: {{ $ficha->contador->nombre }}

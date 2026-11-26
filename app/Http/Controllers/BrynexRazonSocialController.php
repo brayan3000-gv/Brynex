@@ -77,16 +77,25 @@ class BrynexRazonSocialController extends Controller
         // 3) Las fichas que ya existen.
         $fichas = BrynexRazonSocial::all()->keyBy('nit');
 
-        // 4) Qué aliados tienen registrada cada razón social, para pintar su
-        //    logo en vez de solo contarlos.
-        $aliadosPorNit = DB::table('razones_sociales')
-            ->whereNotNull('nit')
-            ->where('nit', '>=', 100000000)
-            ->when($alidoId, fn ($q) => $q->where('aliado_id', $alidoId))
-            ->distinct()
-            ->get(['nit', 'aliado_id'])
+        // 4) Qué aliados usan cada razón social, para pintar su logo en vez de
+        //    solo contarlos. Solo cuenta donde está Activa Y tiene afiliados
+        //    vigentes: muchas quedaron registradas en un aliado por la
+        //    migración legacy con un contrato viejo (CALL SERVICE CENTER en
+        //    BRYGAR: uno retirado en 2021), y mostrarlas ahí haría creer que
+        //    ese aliado la usa.
+        $aliadosPorNit = DB::table('contratos as c')
+            ->join('razones_sociales as rs', 'rs.id', '=', 'c.razon_social_id')
+            ->where('c.estado', 'vigente')
+            ->where('rs.estado', 'Activa')
+            ->whereNotNull('rs.nit')
+            ->where('rs.nit', '>=', 100000000)
+            ->when($alidoId, fn ($q) => $q->where('rs.aliado_id', $alidoId))
+            ->groupBy('rs.nit', 'rs.aliado_id')
+            ->get(['rs.nit', 'rs.aliado_id', DB::raw('COUNT(*) as total')])
             ->groupBy(fn ($f) => (string) $f->nit)
-            ->map(fn ($g) => $g->pluck('aliado_id')->map(fn ($id) => (int) $id)->unique()->values()->all());
+            // Primero el aliado con más afiliados en esa razón social.
+            ->map(fn ($g) => $g->sortByDesc(fn ($f) => (int) $f->total)
+                ->mapWithKeys(fn ($f) => [(int) $f->aliado_id => (int) $f->total])->all());
 
         // 5) Personas activas que deben cotizar este mes y todavía no tienen
         //    plano: el mismo cálculo de la Validación de cierre, para que las
@@ -110,7 +119,8 @@ class BrynexRazonSocialController extends Controller
                 'n_aliados' => (int) $g->n_aliados,
                 'n_activas' => (int) $g->n_activas,
                 'afiliados' => (int) ($vigentes[$g->nit] ?? 0),
-                'aliado_ids' => $aliadosPorNit->get((string) $g->nit, []),
+                // aliado_id => afiliados vigentes en ese aliado.
+                'aliados_uso' => $aliadosPorNit->get((string) $g->nit, []),
                 'sin_planilla' => (int) ($cierre->pendientes ?? 0),
                 'cierre_rs_id' => $cierre->razon_social_id ?? null,
                 'ficha' => $ficha,
@@ -141,7 +151,7 @@ class BrynexRazonSocialController extends Controller
                     'n_aliados' => 0,
                     'n_activas' => 0,
                     'afiliados' => 0,
-                    'aliado_ids' => [],
+                    'aliados_uso' => [],
                     'sin_planilla' => 0,
                     'cierre_rs_id' => null,
                     'ficha' => $ficha,

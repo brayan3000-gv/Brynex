@@ -165,22 +165,26 @@
                         </td>
                         <td style="padding:0.65rem 0.7rem;color:#475569;font-variant-numeric:tabular-nums;">{{ number_format($r->nit, 0, ',', '.') }}</td>
                         <td style="padding:0.65rem 0.7rem;text-align:center;">
-                            @if($r->n_aliados === 0)
-                                {{-- Tiene ficha pero ningún aliado la registró: se sigue
-                                     solo por la DIAN, sin afiliados ni movimientos. --}}
-                                <span title="Ningún aliado tiene registrada esta razón social. La ficha vigila la DIAN, pero no va a mostrar afiliados ni movimientos."
+                            @if(empty($r->aliados_uso))
+                                {{-- Ningún aliado la tiene activa con afiliados vigentes
+                                     (o solo se sigue por la DIAN). --}}
+                                <span title="{{ $r->n_aliados === 0 ? 'Ningún aliado tiene registrada esta razón social. La ficha vigila la DIAN, pero no va a mostrar afiliados ni movimientos.' : 'Ningún aliado la tiene activa con afiliados vigentes.' }}"
                                       style="color:#cbd5e1;font-size:0.75rem;">—</span>
                             @else
-                                {{-- Un logo pequeño por aliado; el nombre sale al pasar el mouse. --}}
+                                {{-- Un logo pequeño por aliado donde está activa y con
+                                     vigentes; al pasar el mouse, el nombre y cuántos. --}}
                                 <div style="display:inline-flex;gap:0.25rem;flex-wrap:wrap;justify-content:center;align-items:center;max-width:9rem;">
-                                    @foreach($r->aliado_ids as $aid)
-                                        @php $al = $aliadosPorId->get($aid); @endphp
+                                    @foreach($r->aliados_uso as $aid => $nVig)
+                                        @php
+                                            $al = $aliadosPorId->get($aid);
+                                            $nombreAl = ($al->nombre ?? 'Aliado '.$aid).' · '.number_format($nVig, 0, ',', '.').' vigente'.($nVig === 1 ? '' : 's');
+                                        @endphp
                                         @if($al && $al->logo)
-                                            <img src="{{ asset('storage/'.$al->logo) }}" alt="{{ $al->nombre }}" title="{{ $al->nombre }}"
+                                            <img src="{{ asset('storage/'.$al->logo) }}" alt="{{ $nombreAl }}" title="{{ $nombreAl }}"
                                                  style="width:26px;height:26px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff;padding:1px;">
                                         @else
                                             {{-- Sin logo cargado: las iniciales, con el mismo tamaño. --}}
-                                            <span title="{{ $al->nombre ?? 'Aliado '.$aid }}"
+                                            <span title="{{ $nombreAl }}"
                                                   style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:#f1f5f9;color:#475569;font-size:0.6rem;font-weight:800;border:1px solid #e2e8f0;">
                                                 {{ mb_strtoupper(collect(preg_split('/\s+/', trim($al->nombre ?? '?')))->take(2)->map(fn ($w) => mb_substr($w, 0, 1))->implode('')) }}
                                             </span>
