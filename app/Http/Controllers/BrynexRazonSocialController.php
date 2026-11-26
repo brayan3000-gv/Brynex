@@ -8,6 +8,7 @@ use App\Models\BrynexRazonSocial;
 use App\Models\RazonSocialCredencial;
 use App\Models\User;
 use App\Services\BrynexRazonSocialService;
+use App\Services\CierrePeriodoService;
 use App\Services\LectorDocumentoRazonSocialService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -76,8 +77,28 @@ class BrynexRazonSocialController extends Controller
         // 3) Las fichas que ya existen.
         $fichas = BrynexRazonSocial::all()->keyBy('nit');
 
-        $filas = $grupos->map(function ($g) use ($vigentes, $fichas) {
+        // 4) Qué aliados tienen registrada cada razón social, para pintar su
+        //    logo en vez de solo contarlos.
+        $aliadosPorNit = DB::table('razones_sociales')
+            ->whereNotNull('nit')
+            ->where('nit', '>=', 100000000)
+            ->when($alidoId, fn ($q) => $q->where('aliado_id', $alidoId))
+            ->distinct()
+            ->get(['nit', 'aliado_id'])
+            ->groupBy(fn ($f) => (string) $f->nit)
+            ->map(fn ($g) => $g->pluck('aliado_id')->map(fn ($id) => (int) $id)->unique()->values()->all());
+
+        // 5) Personas activas que deben cotizar este mes y todavía no tienen
+        //    plano: el mismo cálculo de la Validación de cierre, para que las
+        //    dos pantallas den la misma cifra.
+        $sinPlanilla = (new CierrePeriodoService())
+            ->resumen($alidoId ? (int) $alidoId : null, now()->month, now()->year)
+            ->filter(fn ($g) => str_starts_with($g->clave, 'nit:'))
+            ->keyBy(fn ($g) => substr($g->clave, 4));
+
+        $filas = $grupos->map(function ($g) use ($vigentes, $fichas, $aliadosPorNit, $sinPlanilla) {
             $ficha = $fichas->get($g->nit);
+            $cierre = $sinPlanilla->get((string) $g->nit);
 
             return (object) [
                 'nit' => $g->nit,
@@ -89,10 +110,12 @@ class BrynexRazonSocialController extends Controller
                 'n_aliados' => (int) $g->n_aliados,
                 'n_activas' => (int) $g->n_activas,
                 'afiliados' => (int) ($vigentes[$g->nit] ?? 0),
+                'aliado_ids' => $aliadosPorNit->get((string) $g->nit, []),
+                'sin_planilla' => (int) ($cierre->pendientes ?? 0),
+                'cierre_rs_id' => $cierre->razon_social_id ?? null,
                 'ficha' => $ficha,
                 'seguida' => (bool) $ficha?->en_seguimiento,
                 'propiedad' => $ficha->propiedad ?? null,
-                'regimen' => $ficha->regimen ?? null,
             ];
         });
 
@@ -118,10 +141,12 @@ class BrynexRazonSocialController extends Controller
                     'n_aliados' => 0,
                     'n_activas' => 0,
                     'afiliados' => 0,
+                    'aliado_ids' => [],
+                    'sin_planilla' => 0,
+                    'cierre_rs_id' => null,
                     'ficha' => $ficha,
                     'seguida' => (bool) $ficha->en_seguimiento,
                     'propiedad' => $ficha->propiedad,
-                    'regimen' => $ficha->regimen,
                 ]);
             }
         }
@@ -164,7 +189,7 @@ class BrynexRazonSocialController extends Controller
             'buscar' => $buscar,
             'filtro' => $filtro,
             'alidoId' => $alidoId,
-            'aliados' => DB::table('aliados')->orderBy('nombre')->get(['id', 'nombre']),
+            'aliados' => DB::table('aliados')->orderBy('nombre')->get(['id', 'nombre', 'logo']),
             'resumen' => $this->resumenGeneral($filas),
         ]);
     }

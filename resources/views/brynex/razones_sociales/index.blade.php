@@ -142,18 +142,21 @@
             <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
                 <thead>
                     <tr style="background:#f8fafc;text-align:left;color:#475569;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">
+                        <th style="padding:0.7rem 0.5rem 0.7rem 0.9rem;font-weight:700;text-align:right;">#</th>
                         <th style="padding:0.7rem 0.9rem;font-weight:700;">Razón social</th>
                         <th style="padding:0.7rem;font-weight:700;">NIT</th>
                         <th style="padding:0.7rem;font-weight:700;text-align:center;">Aliados</th>
-                        <th style="padding:0.7rem;font-weight:700;text-align:right;">Afiliados vigentes</th>
-                        <th style="padding:0.7rem;font-weight:700;">Régimen</th>
+                        <th style="padding:0.7rem;font-weight:700;text-align:right;" title="Afiliados vigentes">Cant.</th>
+                        <th style="padding:0.7rem;font-weight:700;text-align:right;" title="Activos que deben cotizar este mes y todavía no tienen planilla">Sin planilla</th>
                         <th style="padding:0.7rem;font-weight:700;">Estado</th>
                         <th style="padding:0.7rem;font-weight:700;"></th>
                     </tr>
                 </thead>
                 <tbody>
+                @php $aliadosPorId = $aliados->keyBy('id'); @endphp
                 @forelse($razones as $r)
                     <tr style="border-top:1px solid #f1f5f9;">
+                        <td style="padding:0.65rem 0.5rem 0.65rem 0.9rem;text-align:right;color:#94a3b8;font-size:0.75rem;font-variant-numeric:tabular-nums;">{{ $razones->firstItem() + $loop->index }}</td>
                         <td style="padding:0.65rem 0.9rem;font-weight:600;color:#0f172a;">
                             {{ $r->razon_social }}
                             @if($r->propiedad === 'brynex')
@@ -168,10 +171,22 @@
                                 <span title="Ningún aliado tiene registrada esta razón social. La ficha vigila la DIAN, pero no va a mostrar afiliados ni movimientos."
                                       style="color:#cbd5e1;font-size:0.75rem;">—</span>
                             @else
-                                <span title="{{ $r->n_activas }} fila(s) activa(s) de {{ $r->n_aliados }} aliado(s)"
-                                      style="background:{{ $r->n_aliados > 1 ? '#fef3c7' : '#f1f5f9' }};color:{{ $r->n_aliados > 1 ? '#92400e' : '#475569' }};font-weight:700;font-size:0.75rem;padding:0.15rem 0.5rem;border-radius:20px;">
-                                    {{ $r->n_aliados }}
-                                </span>
+                                {{-- Un logo pequeño por aliado; el nombre sale al pasar el mouse. --}}
+                                <div style="display:inline-flex;gap:0.25rem;flex-wrap:wrap;justify-content:center;align-items:center;max-width:9rem;">
+                                    @foreach($r->aliado_ids as $aid)
+                                        @php $al = $aliadosPorId->get($aid); @endphp
+                                        @if($al && $al->logo)
+                                            <img src="{{ asset('storage/'.$al->logo) }}" alt="{{ $al->nombre }}" title="{{ $al->nombre }}"
+                                                 style="width:26px;height:26px;object-fit:contain;border-radius:6px;border:1px solid #e2e8f0;background:#fff;padding:1px;">
+                                        @else
+                                            {{-- Sin logo cargado: las iniciales, con el mismo tamaño. --}}
+                                            <span title="{{ $al->nombre ?? 'Aliado '.$aid }}"
+                                                  style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:6px;background:#f1f5f9;color:#475569;font-size:0.6rem;font-weight:800;border:1px solid #e2e8f0;">
+                                                {{ mb_strtoupper(collect(preg_split('/\s+/', trim($al->nombre ?? '?')))->take(2)->map(fn ($w) => mb_substr($w, 0, 1))->implode('')) }}
+                                            </span>
+                                        @endif
+                                    @endforeach
+                                </div>
                             @endif
                         </td>
                         <td style="padding:0.65rem 0.7rem;text-align:right;font-weight:700;color:{{ $r->afiliados > 0 ? '#0f172a' : '#cbd5e1' }};font-variant-numeric:tabular-nums;white-space:nowrap;">
@@ -183,8 +198,18 @@
                                    style="text-decoration:none;margin-left:0.35rem;font-size:0.85rem;">📥</a>
                             @endif
                         </td>
-                        <td style="padding:0.65rem 0.7rem;color:#475569;font-size:0.78rem;">
-                            {{ $r->regimen ? ($r->regimen === 'RST' ? 'Simple' : 'Ordinario') : '—' }}
+                        <td style="padding:0.65rem 0.7rem;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;">
+                            @if($r->sin_planilla > 0)
+                                @can('brynex_cierre.ver')
+                                    <a href="{{ route('admin.informes.validacion_cierre', ['razon_social_id' => $r->cierre_rs_id]) }}#detalle"
+                                       title="Ver quiénes son en la Validación de cierre"
+                                       style="color:#b91c1c;text-decoration:none;">{{ number_format($r->sin_planilla, 0, ',', '.') }}</a>
+                                @else
+                                    <span style="color:#b91c1c;">{{ number_format($r->sin_planilla, 0, ',', '.') }}</span>
+                                @endcan
+                            @else
+                                <span style="color:#cbd5e1;">0</span>
+                            @endif
                         </td>
                         <td style="padding:0.65rem 0.7rem;">
                             @if($r->seguida)
@@ -216,7 +241,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" style="padding:2rem;text-align:center;color:#94a3b8;">No hay razones sociales que coincidan con el filtro.</td></tr>
+                    <tr><td colspan="8" style="padding:2rem;text-align:center;color:#94a3b8;">No hay razones sociales que coincidan con el filtro.</td></tr>
                 @endforelse
                 </tbody>
             </table>
