@@ -13,6 +13,7 @@ use App\Services\SuaporteApiService;
 use Illuminate\Console\Command;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -145,6 +146,16 @@ class PlanillaVigilarSubtipo4 extends Command
 
     /** Cédulas que se vigilan siempre, aunque no tengan plano pendiente. */
     private const CONFIG_CEDULAS = 'vigia_subtipo4_cedulas';
+
+    /**
+     * Caché (file, persiste entre procesos) del conjunto de pendientes que
+     * estaban limpias en el sondeo anterior. Sirve para detectar el PASO
+     * (bloqueada→limpia) y no disparar por una que lleva limpia desde siempre.
+     */
+    private const CACHE_LIMPIAS_PREV = 'vigia_subtipo4_limpias_prev';
+
+    /** Vida de ese estado: cubre de sobra el hueco entre sondeos (5-60 s). */
+    private const CACHE_LIMPIAS_TTL_MIN = 15;
 
     /**
      * Minutos entre sondeos programados. Vive en configuración y no en el
@@ -353,15 +364,16 @@ class PlanillaVigilarSubtipo4 extends Command
 
         $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
 
-        // El disparo mira SOLO las cédulas pendientes de verdad (planos X1 sin
-        // planilla), más el hueco GLOBAL. Una cédula testigo configurada que
-        // pase limpia por su ficha —Duvan Cortes, 1147952653, el 27-nov— no abre
-        // la ventana para las tandas: liquidarlas gastaría intentos contra
-        // Simple y mandaría una alerta de "ventana abierta" que al liquidar
-        // rebota con 2.655. El hueco global (alguna rs con 2.655×0, en
-        // $aportantesAbiertos) sí dispara aunque no haya pendientes limpias.
+        // El disparo mira el PASO de una cédula pendiente: la que estaba
+        // bloqueada (2.655) y en este sondeo aparece limpia. Una pendiente que
+        // lleva limpia desde siempre —Duvan Cortes, 1147952653, plano trabado de
+        // ELITEX que no se puede liquidar por otras validaciones— no es un paso
+        // y no dispara, aunque cuente como pendiente. El estado anterior vive en
+        // caché entre sondeos. El hueco GLOBAL (alguna rs con 2.655×0, en
+        // $aportantesAbiertos) dispara aparte, sin depender del historial.
         $limpiasPend = $this->limpiasPendientes($limpias);
-        $abierto = $limpiasPend || $this->aportantesAbiertos;
+        $nuevas = $this->pendientesQuePasaron($limpiasPend);
+        $abierto = $nuevas || $this->aportantesAbiertos;
 
         // Antes del aviso y antes de medir: los dos se llevan segundos que el
         // hueco puede no tener, y medir además le toma la sesión al operador.
@@ -384,7 +396,7 @@ class PlanillaVigilarSubtipo4 extends Command
 
             $mensaje = "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
                 .($abiertos ? "Aportante(s) con hueco: {$abiertos}\n" : '')
-                .($limpiasPend ? 'Cédulas que pasaron limpias: '.implode(', ', $limpiasPend)."\n" : '')
+                .($nuevas ? 'Cédulas que pasaron limpias: '.implode(', ', $nuevas)."\n" : '')
                 ."Período {$mes}/{$anio}.\n\n"
                 .($resultados
                     ? "Liquidación automática:\n\n".implode("\n\n", array_map(
@@ -413,7 +425,7 @@ class PlanillaVigilarSubtipo4 extends Command
                 // rato después. La llave incluye los aportantes que abrieron: un
                 // hueco en ELITES y otro en Construtech son avisos distintos.
                 $alertas->enviarUnaVez(
-                    'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $limpiasPend),
+                    'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $nuevas),
                     'Vigía subtipo 4',
                     $mensaje,
                     360
@@ -423,7 +435,9 @@ class PlanillaVigilarSubtipo4 extends Command
         }
 
         if ($abierto && ! $this->option('sin-medir')) {
-            $this->medirVentana($alertas, $cedulas, $mes, $anio, $limpiasPend ?: $limpias);
+            // Mide la ventana de las que ABRIERON (el paso), o de las pendientes
+            // limpias si fue un hueco global sin paso nuevo.
+            $this->medirVentana($alertas, $cedulas, $mes, $anio, $nuevas ?: $limpiasPend);
         }
 
         return (bool) $abierto;
@@ -1134,6 +1148,38 @@ class PlanillaVigilarSubtipo4 extends Command
     }
 
     /**
+     * De las pendientes limpias AHORA, las que PASARON desde el sondeo anterior:
+     * estaban bloqueadas (o sin registro) y ahora aparecen sin 2.655. Guarda el
+     * estado actual en caché para el próximo sondeo.
+     *
+     * Una pendiente que lleva limpia desde siempre (un plano trabado que no se
+     * puede liquidar) nunca "pasa", así que no dispara. En la primera corrida o
+     * si la caché expiró no hay con qué comparar: devuelve vacío y solo siembra
+     * el estado —el hueco global dispara aparte y no depende de esto—.
+     *
+     * @param  string[]  $limpiasPend
+     * @return string[]
+     */
+    private function pendientesQuePasaron(array $limpiasPend): array
+    {
+        $prev = Cache::get(self::CACHE_LIMPIAS_PREV);
+
+        Cache::put(
+            self::CACHE_LIMPIAS_PREV,
+            array_values($limpiasPend),
+            now()->addMinutes(self::CACHE_LIMPIAS_TTL_MIN)
+        );
+
+        if (! is_array($prev)) {
+            return [];
+        }
+
+        $antes = array_flip($prev);
+
+        return array_values(array_filter($limpiasPend, fn ($c) => ! isset($antes[$c])));
+    }
+
+    /**
      * Las razones sociales a sondear, cada una bajo su propio NIT.
      *
      * @return int[]
@@ -1204,11 +1250,14 @@ class PlanillaVigilarSubtipo4 extends Command
             sleep($cadaSeg);
             $sondeos++;
 
-            // Igual que el disparo: la ventana sigue abierta solo si una cédula
-            // PENDIENTE pasa limpia o hay hueco global; una testigo suelta no la
-            // mantiene abierta (si no, Duvan la deja "abierta" los 2 min enteros).
+            // La ventana sigue abierta mientras alguna de las que ABRIERON
+            // ($primeras, el paso que la disparó) siga limpia, o mientras haya
+            // hueco global. Una pendiente trabada limpia desde siempre no entra
+            // en $primeras, así que no la mantiene abierta (si no, Duvan la
+            // dejaría "abierta" los 2 min enteros).
             $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
-            if (! ($this->limpiasPendientes($limpias) || $this->aportantesAbiertos)) {
+            $siguen = array_intersect($primeras, $this->limpiasPendientes($limpias));
+            if (! ($siguen || $this->aportantesAbiertos)) {
                 $cerrada = true;
                 break;
             }
