@@ -243,7 +243,11 @@ para que todas quepan en pantalla; luego clic real en cada ícono, con 4 s de es
   rentas 2023 y 2025 en $0 (patrimonio $1.000.000, sin ingresos); **falta la renta AG2024 en las
   dos**. Ningún 300 ni 350. Checklist puesto al día: IVA, retención (Independientes, ene-2023 a
   oct-2026), exógena 2023–2025 y cuotas 2 en «no aplica»; cámara 2023 no aplica y 2024–2026 pagada
-  (certificado del 17-nov). Queda el ICA de Cali (municipal, sin revisar).
+  (certificado del 17-nov). Queda el ICA de Cali (municipal, sin revisar; **pendiente por decisión del
+  dueño, 27-nov-2026**). El ICA de Cali se ve solo en Autodeclaraciones de Hacienda
+  (`servicios.cali.gov.co:9090/FormulariosAD/autodeclaraciones.html`), con usuario y clave; no hay
+  consulta pública por NIT y BryNex no tiene esa clave para nadie (Chrome sí tiene guardado un
+  usuario de Yuly). Alternativa: pedir estado de cuenta a rentas.municipales@cali.gov.co.
   **Rentas AG2024 presentadas el 27-nov-2026**, en $0 con sanción mínima 10 UVT 2026 = **$524.000**
   cada una (sin reducción del art. 640): MEGATRANSPORTES 1117633707525 / 490 4911208091841 (PSE CUS
   864723402); INDEPENDIENTES 1117633707492 / 490 4911208098071 (PSE CUS 864764088). Subidas a BryNex
