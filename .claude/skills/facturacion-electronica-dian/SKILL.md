@@ -522,6 +522,39 @@ CENTER 901915931-8 y AML CONSTRUCCIONES 901916894-8 (Yulli Vanessa López Izquie
 **Fuera de este trámite:** BRYGAR SAS y MEGA TRANSPORTES JUAMVI ya tienen factura electrónica
 (dicho por el dueño, 13-nov).
 
+**Las GAVI de Yuly (constituidas 15-sep-2026, RST, CL 12 N 6 N 8), 27-nov-2026:**
+
+| Empresa | NIT | Contributor | Solicitud DIAN | GSE | Estado |
+|---|---|---|---|---|---|
+| CONFECCIONES GAVI | 902106065-7 | 28004517 | b94cd7ab… | 01095086 | Registrado + gratuito «En proceso» · GSE «Identidad Validada – Pendiente de Verificación» |
+| GAVI HOME CARE | 902105993-2 | 28003028 | 65c7ede1… | 01095102 | igual |
+
+Falta: que GSE emita → set de pruebas → numeración en MUISCA (firma Yuly). Cámaras compradas el
+27-nov (referencia 38197651, código C6FDB3B, $24.200). Datos de la cámara para GSE: correo
+`yuligarciaempresarial@gmail.com`, teléfono 3117762689. RUT de cada una en BryNex
+(`documentos_cliente` con `cc_cliente` = NIT, aliado 2).
+
+Trampas de ese día:
+- **`brynex:enlace-dian` desde el Mac se colgó dos veces** (túnel). Funcionó el endpoint web desde una
+  pestaña de brynex.co en Representantes: `fetch('/brynex/razones-sociales/representantes/{id}/enlace-dian?nit=…&desde=…')`
+  y `location.href = j.enlace` (rutina `bxEnlace` en localStorage de brynex.co). El `desde` debe ser
+  **anterior** a la hora del correo: con un minuto de más espera 90 s y no encuentra nada.
+- **Cada +NIT es una cuenta GSE distinta** y nace sin activar: entrar con `+902106065` dio «Para
+  ingresar por primera vez, debes activar tu usuario». El enlace `changepassword?…` está en el correo
+  «GSE S.A. - Registro de usuario». Una vez dentro, la cuenta muestra **todas** las solicitudes de Yuly
+  (las dos GAVI y las de ELITES/ELITEX). Chrome autocompleta la cuenta de otra empresa (salió la de CIT).
+- **Leer el buzón desde el servidor:** `ssh netcup 'cd /var/www/brynex && sudo -u www-data php artisan
+  tinker --execute="$(cat)"' < script.php` con `CorreoDianRepresentante::buzonDe($rep)['buzon']->recibidos(...)`.
+  `tinker` por stdin sin `--execute` se queda colgado. En la búsqueda de Gmail **nada entre comillas** y
+  el remitente de GSE es `correogse.com` (con `from:gse.com.co subject:Registro` no salió nada).
+- **El OTP de «Validar Email» llega de `firmaya.co`** con asunto «GSE S.A. - Este es tu código OTP»
+  (el otro número de 4 cifras del correo es CSS). El primero dio «Ocurrió un error validando el correo
+  electrónico»: se pidió otro y pasó.
+- **«Finalizar» a veces no se aplica al primer clic**: confirmar en el listado que diga «Identidad
+  Validada»; si sigue en el formulario, pulsarlo otra vez.
+- En la Cámara la casilla de términos se desmarca en **cada** «Agregar certificado» (la marca la persona).
+  Chrome bloquea la segunda descarga automática desde brynex.co: traer archivos con `ssh netcup "sudo cat …"`.
+
 **CIT TECHNOLOGY CENTER 901175588-8 (Julia, CC 66905291), de Dataico al gratuito el 20-nov-2026,
 conservando su numeración:** ya era facturador (habilitado 2021 con Siigo, Dataico desde 7-mar-2026,
 producción desde 25-08-2022) con **FVE 8–500, resolución 18764106885901, vence 06-03-2027**; solo
