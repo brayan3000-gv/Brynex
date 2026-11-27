@@ -125,6 +125,16 @@ class PlanillaVigilarSubtipo4 extends Command
     private array $aportantesAbiertos = [];
 
     /**
+     * Cédulas que son trabajo PENDIENTE de verdad (planos X1 sin planilla),
+     * SIN las testigo configuradas en vigia_subtipo4_cedulas. Las llena
+     * cedulasAVigilar() y el disparo del hueco solo mira estas: una testigo que
+     * pase limpia por su ficha no abre la ventana para las tandas.
+     *
+     * @var string[]
+     */
+    private array $cedulasPendientes = [];
+
+    /**
      * Tandas que ya tienen planilla liquidada y siguen sin pagar, con su
      * registro. Las llena tandasEnEspera() y liquidarPendientes() les pide a
      * Simple un enlace de pago nuevo mientras el hueco está abierto.
@@ -343,6 +353,16 @@ class PlanillaVigilarSubtipo4 extends Command
 
         $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
 
+        // El disparo mira SOLO las cédulas pendientes de verdad (planos X1 sin
+        // planilla), más el hueco GLOBAL. Una cédula testigo configurada que
+        // pase limpia por su ficha —Duvan Cortes, 1147952653, el 27-nov— no abre
+        // la ventana para las tandas: liquidarlas gastaría intentos contra
+        // Simple y mandaría una alerta de "ventana abierta" que al liquidar
+        // rebota con 2.655. El hueco global (alguna rs con 2.655×0, en
+        // $aportantesAbiertos) sí dispara aunque no haya pendientes limpias.
+        $limpiasPend = $this->limpiasPendientes($limpias);
+        $abierto = $limpiasPend || $this->aportantesAbiertos;
+
         // Antes del aviso y antes de medir: los dos se llevan segundos que el
         // hueco puede no tener, y medir además le toma la sesión al operador.
         //
@@ -352,19 +372,19 @@ class PlanillaVigilarSubtipo4 extends Command
         // primera ejecución de la vida sería a ciegas y de madrugada. El
         // archivo que sale es el real: si el hueco está cerrado el operador lo
         // rechaza con 2.655 y no se crea ninguna planilla.
-        $resultados = ($limpias || $this->option('simular-ventana'))
+        $resultados = ($abierto || $this->option('simular-ventana'))
             ? $this->liquidarPendientes($tandas)
             : [];
 
         $hechas = array_filter($resultados, fn ($r) => $r['estado'] === 'liquidada');
         $enlaces = array_filter($resultados, fn ($r) => $r['estado'] === 'enlace');
 
-        if (($limpias || $hechas || $enlaces) && ! $this->option('sin-aviso')) {
+        if (($abierto || $hechas || $enlaces) && ! $this->option('sin-aviso')) {
             $abiertos = $this->nombresRs($this->aportantesAbiertos);
 
             $mensaje = "✅ El operador ya deja pasar el subtipo de cotizante 03/04.\n\n"
                 .($abiertos ? "Aportante(s) con hueco: {$abiertos}\n" : '')
-                .($limpias ? 'Cédulas que pasaron limpias: '.implode(', ', $limpias)."\n" : '')
+                .($limpiasPend ? 'Cédulas que pasaron limpias: '.implode(', ', $limpiasPend)."\n" : '')
                 ."Período {$mes}/{$anio}.\n\n"
                 .($resultados
                     ? "Liquidación automática:\n\n".implode("\n\n", array_map(
@@ -393,7 +413,7 @@ class PlanillaVigilarSubtipo4 extends Command
                 // rato después. La llave incluye los aportantes que abrieron: un
                 // hueco en ELITES y otro en Construtech son avisos distintos.
                 $alertas->enviarUnaVez(
-                    'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $limpias),
+                    'vigia-subtipo4-'.implode('-', $this->aportantesAbiertos).'-'.implode('-', $limpiasPend),
                     'Vigía subtipo 4',
                     $mensaje,
                     360
@@ -402,11 +422,11 @@ class PlanillaVigilarSubtipo4 extends Command
             $this->info('Aviso enviado por WhatsApp.');
         }
 
-        if ($limpias && ! $this->option('sin-medir')) {
-            $this->medirVentana($alertas, $cedulas, $mes, $anio, $limpias);
+        if ($abierto && ! $this->option('sin-medir')) {
+            $this->medirVentana($alertas, $cedulas, $mes, $anio, $limpiasPend ?: $limpias);
         }
 
-        return (bool) $limpias;
+        return (bool) $abierto;
     }
 
     /**
@@ -845,7 +865,7 @@ class PlanillaVigilarSubtipo4 extends Command
             return "💳 {$r['etiqueta']}\n"
                 ."Planilla {$r['planilla']}"
                 .($r['valor'] ? ' · $'.number_format((float) $r['valor'], 0, ',', '.') : '')
-                ." — liquidada antes y sin pagar. Simple volvió a dar el enlace: págala YA, "
+                .' — liquidada antes y sin pagar. Simple volvió a dar el enlace: págala YA, '
                 ."fuera del hueco no deja pagarla.\n"
                 ."Pagar con PSE: {$r['enlace']}";
         }
@@ -1095,6 +1115,25 @@ class PlanillaVigilarSubtipo4 extends Command
     }
 
     /**
+     * De las cédulas que pasaron limpias, las que son trabajo PENDIENTE de
+     * verdad (planos X1 sin planilla), descartando las testigo configuradas en
+     * vigia_subtipo4_cedulas. El disparo y la medición de la ventana solo miran
+     * estas: una testigo limpia por su propia ficha no abre nada para las tandas.
+     *
+     * @param  array<int|string>  $limpias
+     * @return string[]
+     */
+    private function limpiasPendientes(array $limpias): array
+    {
+        $pendSet = array_flip(array_map('strval', $this->cedulasPendientes));
+
+        return array_values(array_filter(
+            array_map('strval', $limpias),
+            fn ($c) => isset($pendSet[$c])
+        ));
+    }
+
+    /**
      * Las razones sociales a sondear, cada una bajo su propio NIT.
      *
      * @return int[]
@@ -1165,7 +1204,11 @@ class PlanillaVigilarSubtipo4 extends Command
             sleep($cadaSeg);
             $sondeos++;
 
-            if (! $this->sondeoConLog($cedulas, $mes, $anio)) {
+            // Igual que el disparo: la ventana sigue abierta solo si una cédula
+            // PENDIENTE pasa limpia o hay hueco global; una testigo suelta no la
+            // mantiene abierta (si no, Duvan la deja "abierta" los 2 min enteros).
+            $limpias = $this->sondeoConLog($cedulas, $mes, $anio);
+            if (! ($this->limpiasPendientes($limpias) || $this->aportantesAbiertos)) {
                 $cerrada = true;
                 break;
             }
@@ -1216,7 +1259,11 @@ class PlanillaVigilarSubtipo4 extends Command
     private function cedulasAVigilar(int $mes, int $anio): array
     {
         if ($sueltas = (string) $this->option('cedulas')) {
-            return array_values(array_filter(array_map('trim', explode(',', $sueltas))));
+            $manual = array_values(array_filter(array_map('trim', explode(',', $sueltas))));
+            // A mano se prueba justo lo que se pasa: todas cuentan como pendientes.
+            $this->cedulasPendientes = $manual;
+
+            return $manual;
         }
 
         $configuradas = array_filter(array_map('trim', explode(',',
@@ -1242,6 +1289,10 @@ class PlanillaVigilarSubtipo4 extends Command
             ->pluck('p.no_identifi')
             ->map(fn ($c) => trim((string) $c))
             ->all();
+
+        // Solo los planos pendientes son "pendientes" para el disparo; las
+        // configuradas son testigo y no deben abrir la ventana por sí solas.
+        $this->cedulasPendientes = array_values(array_unique(array_map('strval', $pendientes)));
 
         return array_values(array_unique(array_merge($configuradas, $pendientes)));
     }
