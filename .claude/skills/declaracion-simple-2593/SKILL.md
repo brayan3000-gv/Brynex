@@ -241,10 +241,27 @@ para que todas quepan en pantalla; luego clic real en cada ícono, con 4 s de es
   consola, 27-nov-2026): abrirla con `?t=<Date.now()>` para saltar la caché y carga a la primera.
 - **MEGATRANSPORTES BYG y INDEPENDIENTES BYG (Sebastián, revisadas el 27-nov-2026):** solo tienen
   rentas 2023 y 2025 en $0 (patrimonio $1.000.000, sin ingresos); **falta la renta AG2024 en las
-  dos** (omisa, con sanción mínima). Ningún 300 ni 350. Checklist puesto al día: IVA, retención
-  (Independientes, ene-2023 a oct-2026), exógena 2023/2025 y cuotas 2 en «no aplica»; cámara 2023
-  no aplica y 2024–2026 pagada (certificado del 17-nov). Quedan la renta/exógena 2024 y el ICA de
-  Cali (municipal, sin revisar).
+  dos**. Ningún 300 ni 350. Checklist puesto al día: IVA, retención (Independientes, ene-2023 a
+  oct-2026), exógena 2023–2025 y cuotas 2 en «no aplica»; cámara 2023 no aplica y 2024–2026 pagada
+  (certificado del 17-nov). Queda el ICA de Cali (municipal, sin revisar).
+  **Rentas AG2024 presentadas el 27-nov-2026**, en $0 con sanción mínima 10 UVT 2026 = **$524.000**
+  cada una (sin reducción del art. 640): MEGATRANSPORTES 1117633707525 / 490 4911208091841 (PSE CUS
+  864723402); INDEPENDIENTES 1117633707492 / 490 4911208098071 (PSE CUS 864764088). Subidas a BryNex
+  (en MEGATRANSPORTES va el PDF del borrador: falta bajar el 110 presentado).
+- **Renta 110 extemporánea, paso a paso (27-nov-2026):** Año 2024 → Crear → preguntas ESAL/obras
+  vienen en No → Enviar. Casillas `cs_id_36` (efectivo) y `cs_id_112` (sanciones) con clic real +
+  cmd+a + escribir + Tab; 44/46/113 se calculan solos. Guardar → «Mensaje de Extemporaneidad» →
+  Confirmar (a veces sale dos veces). Menú → **lápiz «Firmar»** → Confirmar extemporaneidad → tarjeta
+  del representante «Autorizar» → «Firmar» → código de seguridad («aquí») + contraseña de la firma
+  (la persona). Sale «El documento fue firmado exitosamente» y el menú suma el **avión de papel
+  = Presentar** → «Documento presentado». En la lista queda «Estado: Firmando» hasta presentar.
+  Pagar: tarjeta en Presentados → Pagar → «¿Pago en Colombia?» Sí → `select#numCuota` = 1 (cuota 1
+  de 2) → menú → guardar → 490 → PDF y pago electrónico.
+- **La clave dinámica sirve para UN documento**: con la de Megatransportes, Independientes dijo
+  «firmado» pero quedó sin firma y Presentar respondió «Error Firmas de Documento». Pedir otra con
+  «aquí» (ahora deja pedirla pasado **1 minuto**, hay contador). El código llega al buzón central:
+  `from:dian.gov.co subject:clave`, el texto trae «…para realizar el trámite: <CÓDIGO>Tu clave…»
+  (alfanumérico, p. ej. `AMzQ4OTQ0`). Al firmar se abre sola una pestaña de Comunicados: cerrarla.
 - Una DEUDA VENCIDA no siempre es plata que se debe: si la declaración imputó el saldo a favor del
   período anterior (casilla 84 del 300) y la DIAN no lo cruzó, el período anterior queda como SALDO A
   FAVOR y este como deuda por el mismo valor. Comparar con las casillas 84/88/89 del PDF antes de
