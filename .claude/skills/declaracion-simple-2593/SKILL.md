@@ -237,6 +237,14 @@ para que todas quepan en pantalla; luego clic real en cada ícono, con 4 s de es
   con otra empresa de la sesión: **recargar hasta que el encabezado diga la empresa correcta y
   volver a mirarlo después de cada clic**. Con LOGIC CENTER/LOGISTICS se rindió antes de saber esto.
   **Verificar el NIT dentro del PDF** de cada documento antes de subirlo (casilla 5).
+- **`WebDilIngresoFormRenta110/` se queda en «Cargando la aplicación…»** (error de webpack en la
+  consola, 27-nov-2026): abrirla con `?t=<Date.now()>` para saltar la caché y carga a la primera.
+- **MEGATRANSPORTES BYG y INDEPENDIENTES BYG (Sebastián, revisadas el 27-nov-2026):** solo tienen
+  rentas 2023 y 2025 en $0 (patrimonio $1.000.000, sin ingresos); **falta la renta AG2024 en las
+  dos** (omisa, con sanción mínima). Ningún 300 ni 350. Checklist puesto al día: IVA, retención
+  (Independientes, ene-2023 a oct-2026), exógena 2023/2025 y cuotas 2 en «no aplica»; cámara 2023
+  no aplica y 2024–2026 pagada (certificado del 17-nov). Quedan la renta/exógena 2024 y el ICA de
+  Cali (municipal, sin revisar).
 - Una DEUDA VENCIDA no siempre es plata que se debe: si la declaración imputó el saldo a favor del
   período anterior (casilla 84 del 300) y la DIAN no lo cruzó, el período anterior queda como SALDO A
   FAVOR y este como deuda por el mismo valor. Comparar con las casillas 84/88/89 del PDF antes de
