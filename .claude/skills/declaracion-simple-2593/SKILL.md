@@ -459,7 +459,7 @@ obligación en BryNex admite máximo 500 caracteres.
 | Brayan García (1143944458) | BRYGAR |
 | Julia Amparo Vidal Pérez | MEGA TRANSPORTES JUAMVI |
 | Sebastián (1006168815) | GLOBAL CONTACT, HOMENURSE, STRATEGY, WORK AT HOME |
-| Yuly (1143961945) | ELITES CREACIONES, CONSTRUCTORA ELITEX |
+| Yuly (1143961945) | ELITES CREACIONES, CONSTRUCTORA ELITEX, CONFECCIONES GAVI, GAVI HOME CARE |
 | Luis (1130666712) | LALA GROUP, LALA CONFECCIONES, LALA CONSTRUCCIONES, LALA EXPRESS |
 | Yesenia (1144132276) | YEVI CONSTRUCCIONES, YEVI EXPRESS |
 
@@ -485,6 +485,8 @@ El bimestre 5 vence en noviembre según el último dígito del NIT: 1→11, 2→
 | LALA EXPRESS | 902062055 | B2 | **2026 B2–B5 hechos por Claude y presentados el 17-nov** en cero (ICA Cali CIIU 4923): 25936616717566, …717907, …718066, …718231, PDF subidos |
 | LALA GROUP | 902103391 | B5 | **2026-B5 hecho por Claude y presentado el 17-nov** en cero (ICA Cali CIIU 4791): 25936616719870 (extemporáneo, vencía el 11-nov), PDF subido |
 | LALA CONFECCIONES | 902103184 | B5 | **2026-B5 hecho por Claude y presentado el 17-nov** (día del vencimiento): 25936616716013 en cero, ICA Cali CIIU 1410, PDF subido |
+| CONFECCIONES GAVI | 902106065 | B5 | Ficha creada el 26-nov-2026. **2026-B5 ya presentado el 23-nov** por otra persona (25936616984838, en cero, ICA Cali; CIIU del RUT 1410), extemporáneo (vencía el 18-nov). PDF subido el 26-nov. 27-nov: sin ninguna 350 en MUISCA → retención sep/oct y cámara 2026 «no aplica». Pendientes: facturación electrónica (sin habilitar), B6 |
+| GAVI HOME CARE | 902105993 | B5 | Ficha creada el 26-nov-2026. **2026-B5 ya presentado el 23-nov** por otra persona (25936616986264, en cero, ICA Cali; CIIU del RUT 8699), extemporáneo (vencía el 13-nov). PDF subido el 26-nov. 27-nov: sin ninguna 350 en MUISCA → retención sep/oct y cámara 2026 «no aplica». Pendientes: facturación electrónica (sin habilitar), B6 |
 
 **Desde qué bimestre presenta una empresa nueva**: desde el bimestre de su **inscripción en el RUT con
 la responsabilidad 47** (casilla 76 «Fecha de registro» del RUT; códigos en la casilla 53), no desde la
@@ -497,6 +499,8 @@ que revisarlo antes de crear (pedido del dueño, 17-nov-2026). Verificado con lo
 | LALA CONSTRUCCIONES | 14-abr-2026 | 30-abr-2026 | sí (47, 48, 42) | **B2** |
 | LALA CONFECCIONES | 05-sep-2026 | 07-sep-2026 | sí | **B5** |
 | LALA GROUP | 05-sep-2026 | 08-sep-2026 | sí | **B5** |
+| CONFECCIONES GAVI | 13-sep-2026 | registro RUT 15-sep-2026 | sí (9, 14, 42, 47, 48) | **B5** |
+| GAVI HOME CARE | 13-sep-2026 | registro RUT 15-sep-2026 | sí (9, 14, 42, 47, 48) | **B5** |
 | YEVI CONSTRUCCIONES | 16-abr-2026 | 30-abr-2026 (RUT sin actualizaciones) | sí (47, 48, 42) | **B2** |
 | YEVI EXPRESS | 16-abr-2026 | registro 30-abr-2026, pero **RUT actualizado el 18-jun-2026** (6 folios) | sí desde junio (7, 14, 16, 42, 47, 55) | **B3**: la DIAN rechazó el B2 |
 
