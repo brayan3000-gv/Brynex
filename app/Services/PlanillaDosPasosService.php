@@ -155,6 +155,54 @@ class PlanillaDosPasosService
         return $yaSinFiltro ? [] : $modalidades;
     }
 
+    /**
+     * ¿Dos filtros de modalidades del mismo plano alcanzan a la misma gente?
+     *
+     * El filtro separa tandas, pero no siempre a personas distintas: en un
+     * plano que solo tiene Tipo E - Extras, liquidar "EXTRAS" y después
+     * "EXTRAS + E + Ing-Ret" saca dos planillas por pagar con la misma gente,
+     * y como los filtros no coinciden nada avisaba. Le pasó a GLOBAL CONTACT
+     * BYG (plano 12, nov-2026): se pagó una y la corrección salió sobre la
+     * otra. Cada fila tiene una sola modalidad, así que comparten gente si
+     * comparten alguna modalidad presente en el plano.
+     *
+     * @param  string  $filtroA  Modalidades separadas por coma, como se guardan; '' = todas
+     * @param  string  $filtroB  Ídem
+     */
+    public static function compartenGente(
+        int $aliadoId,
+        int $razonSocialId,
+        int $mes,
+        int $anio,
+        int $nPlano,
+        string $filtroA,
+        string $filtroB
+    ): bool {
+        $a = self::modalidadesDeLaTanda($aliadoId, $razonSocialId, $mes, $anio, $nPlano, self::filtroDeCsv($filtroA));
+
+        if ($a->isEmpty()) {
+            return false;
+        }
+
+        $b = self::modalidadesDeLaTanda($aliadoId, $razonSocialId, $mes, $anio, $nPlano, self::filtroDeCsv($filtroB));
+
+        return $a->intersect($b)->isNotEmpty();
+    }
+
+    /**
+     * El filtro guardado ("-12,0,12") como lista de ids. La modalidad 0 es un
+     * id válido, así que se descartan solo las cadenas vacías, no los ceros.
+     *
+     * @return int[]
+     */
+    private static function filtroDeCsv(string $csv): array
+    {
+        return array_values(array_map(
+            'intval',
+            array_filter(array_map('trim', explode(',', $csv)), 'strlen')
+        ));
+    }
+
     /** Las modalidades de la gente de la tanda, dentro del filtro si lo hay. */
     private static function modalidadesDeLaTanda(
         int $aliadoId,
@@ -353,9 +401,28 @@ class PlanillaDosPasosService
      */
     public static function faltaElPago(array $errores): bool
     {
+        return self::tieneRegla($errores, self::REGLAS_SIN_PAGAR);
+    }
+
+    /**
+     * ¿El operador dice que el número de la planilla del paso 1 "no registra"
+     * entre las pagadas (`eo.val.1.171`)?
+     *
+     * Casi siempre es que el pago no ha entrado, pero también sale cuando el
+     * plano tiene otra planilla del paso 1 y fue esa la que se pagó.
+     *
+     * @param  array  $errores  `erroresEmpresaPlanilla` de la validación
+     */
+    public static function planillaNoRegistrada(array $errores): bool
+    {
+        return self::tieneRegla($errores, ['eo.val.1.171']);
+    }
+
+    private static function tieneRegla(array $errores, array $reglas): bool
+    {
         foreach ($errores as $error) {
             $error = (array) $error;
-            if (in_array($error['idRegla'] ?? '', self::REGLAS_SIN_PAGAR, true)) {
+            if (in_array($error['idRegla'] ?? '', $reglas, true)) {
                 return true;
             }
         }

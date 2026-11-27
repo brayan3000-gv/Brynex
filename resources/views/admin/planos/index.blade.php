@@ -3510,7 +3510,15 @@ async function liquidarEnEnlace(operadorId, operadorNombre, paso = 1) {
                 ? 'Si continúa, ese número se reemplaza por el de la nueva liquidación y Brynex deja de tener la referencia anterior.'
                 : 'Esa planilla se liquidó con otro filtro. Si la gente de este archivo ya está incluida ahí, quedaría pagada dos veces en el operador.';
 
-            const ok = paso === 2
+            // Otra planilla del plano, de otro filtro, que ya lleva a esta
+            // gente: no es "esta tanda", y liquidar deja dos por pagar.
+            const ok = data.misma_gente
+                ? confirm(
+                    `Este plano ya tiene la planilla ${data.numero_planilla}${total}, liquidada el ${data.fecha || ''} con otro filtro de modalidades, y lleva a gente de este archivo.\n\n` +
+                    `Si continúa, quedan DOS planillas por pagar en ${operadorNombre} con las mismas personas: pague solo una. ` +
+                    `En dos pasos, la corrección sale sobre la planilla que BryNex tenga para este filtro, así que pagar la otra deja el paso 2 sin poder salir.\n\n` +
+                    `¿Liquidar de todas formas?`)
+                : paso === 2
                 ? confirm(
                     `Ya existe la corrección ${data.numero_planilla}${total}, liquidada el ${data.fecha || ''} y pendiente de pago.\n\n` +
                     `Si continúa, se crea OTRA corrección en ${operadorNombre} y hay que pagar la nueva, no la anterior.\n\n` +

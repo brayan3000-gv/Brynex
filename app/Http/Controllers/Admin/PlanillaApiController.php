@@ -608,6 +608,36 @@ class PlanillaApiController extends Controller
             ->latest('id')
             ->first();
 
+        // Una planilla del mismo plano liquidada con OTRO filtro también puede
+        // llevar a esta gente (EXTRAS y luego EXTRAS + E + Ing-Ret, en un plano
+        // que solo tiene EXTRAS): son dos planillas por pagar con las mismas
+        // personas. Se avisa igual que con otro filtro de los de arriba. Ver
+        // PlanillaDosPasosService::compartenGente.
+        $mismaGente = false;
+
+        if (! $previo) {
+            $previo = OperadorPlanillaApi::where('aliado_id', $aliadoId)
+                ->where('razon_social_id', $rs->id)
+                ->where('operador_planilla_id', $operador->id)
+                ->where('anio', $validated['anio'])
+                ->where('mes', $validated['mes'])
+                ->where('n_plano', $validated['n_plano'])
+                ->where('paso', $paso)
+                ->where('estado', 'validada')
+                ->whereNotNull('numero_planilla')
+                ->whereNotNull('tipos_modalidad')
+                ->where('tipos_modalidad', '<>', $filtro)
+                ->orderByDesc('id')
+                ->get()
+                ->first(fn ($f) => PlanillaDosPasosService::compartenGente(
+                    (int) $aliadoId, (int) $rs->id,
+                    (int) $validated['mes'], (int) $validated['anio'], (int) $validated['n_plano'],
+                    (string) $f->tipos_modalidad, $filtro
+                ));
+
+            $mismaGente = (bool) $previo;
+        }
+
         if ($previo && !($validated['reliquidar'] ?? false)) {
             // Solo se pisa el registro si el filtro coincide exactamente. Si el
             // anterior es de otro filtro —o es uno viejo, sin filtro guardado—
@@ -619,14 +649,20 @@ class PlanillaApiController extends Controller
                 'success'               => false,
                 'requiere_confirmacion' => true,
                 'reemplaza'             => $reemplaza,
+                'misma_gente'           => $mismaGente,
                 'numero_planilla'       => $previo->numero_planilla,
                 'valor_total'           => $previo->valor_total,
                 'fecha'                 => optional($previo->updated_at)->format('Y-m-d H:i'),
                 'message'               => $reemplaza
                     ? "Esta tanda ya tiene la planilla {$previo->numero_planilla} liquidada. "
                       ."Si vuelve a liquidar, ese número se reemplaza."
+                    : ($mismaGente
+                    ? "La planilla {$previo->numero_planilla} de este plano se liquidó con otro filtro, pero lleva "
+                      ."a gente de este archivo. Si liquida otra vez, quedan dos planillas por pagar con las mismas "
+                      .'personas: hay que pagar solo una, y la corrección del paso 2 sale sobre la que BryNex tenga '
+                      .'registrada para este filtro.'
                     : "Esta tanda ya tiene la planilla {$previo->numero_planilla} liquidada con otro filtro. "
-                      ."Si la gente que va en este archivo ya está en esa planilla, quedaría duplicada en el operador.",
+                      ."Si la gente que va en este archivo ya está en esa planilla, quedaría duplicada en el operador."),
             ], 409);
         }
 
@@ -858,6 +894,30 @@ class PlanillaApiController extends Controller
                 // minutos en pasar a pagada, y "pague el paso 1" confundía a
                 // quien ya lo había pagado (LALA CONFECCIONES, 30-oct-2026).
                 $yaConfirmado = $numero !== '' && PlanillaE1Service::pagoConfirmado((int) $aliadoId, (string) $numero);
+
+                // Si el plano tiene otra planilla del paso 1 con esta misma
+                // gente, lo más probable es que se haya pagado esa y no la que
+                // BryNex tiene para el filtro: esperar no arregla nada. Le pasó
+                // a GLOBAL CONTACT BYG (1087060568 vs 1087061464, 27-nov-2026).
+                $otras = PlanillaDosPasosService::planillaNoRegistrada($resultado['errores_empresa'] ?? [])
+                    ? $this->otrasPlanillasPaso1($llave, $numero)
+                    : [];
+
+                if ($otras !== []) {
+                    $lista = implode(', ', $otras);
+
+                    return response()->json([
+                        'success'      => false,
+                        'falta_pago'   => false,
+                        'otra_pagada'  => true,
+                        'message'      => "{$operador->nombre} no tiene registrada como pagada la planilla {$numero}, "
+                            ."que es la que BryNex tiene como paso 1 de este filtro. Este plano también tiene "
+                            .(count($otras) > 1 ? "las planillas {$lista}, liquidadas" : "la planilla {$lista}, liquidada")
+                            .' con otro filtro y con la misma gente: si fue esa la que se pagó, el pago '
+                            .'y la corrección quedaron apuntando al número equivocado. Esperar no lo arregla: '
+                            .'avise a BryNex para pasar el paso 1 a la planilla que de verdad se pagó.',
+                    ], 422);
+                }
 
                 return response()->json([
                     'success'    => false,
@@ -1707,6 +1767,41 @@ class PlanillaApiController extends Controller
 
         // Un id que no esté en el catálogo se muestra crudo antes que perderse.
         return implode(', ', array_map(fn ($id) => $nombres[$id] ?? "#$id", $ids));
+    }
+
+    /**
+     * Los números de las otras planillas del paso 1 de este plano, en el mismo
+     * operador, que llevan a la gente de esta tanda aunque se hayan liquidado
+     * con otro filtro. Ver PlanillaDosPasosService::compartenGente.
+     *
+     * @return string[]
+     */
+    private function otrasPlanillasPaso1(array $llave, string $numero): array
+    {
+        $filtro = (string) $llave['tipos_modalidad'];
+
+        return OperadorPlanillaApi::where('aliado_id', $llave['aliado_id'])
+            ->where('razon_social_id', $llave['razon_social_id'])
+            ->where('operador_planilla_id', $llave['operador_planilla_id'])
+            ->where('anio', $llave['anio'])
+            ->where('mes', $llave['mes'])
+            ->where('n_plano', $llave['n_plano'])
+            ->where('paso', 1)
+            ->where('estado', 'validada')
+            ->whereNotNull('numero_planilla')
+            ->where('numero_planilla', '<>', $numero)
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($f) => PlanillaDosPasosService::compartenGente(
+                (int) $llave['aliado_id'], (int) $llave['razon_social_id'],
+                (int) $llave['mes'], (int) $llave['anio'], (int) $llave['n_plano'],
+                (string) $f->tipos_modalidad, $filtro
+            ))
+            ->pluck('numero_planilla')
+            ->map(fn ($n) => (string) $n)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
