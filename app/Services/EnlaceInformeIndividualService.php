@@ -165,9 +165,9 @@ class EnlaceInformeIndividualService
         $conCredenciales = [];
 
         foreach ($operadores as $operador) {
-            $cred = OperadorCredencial::paraOperador(
-                (int) $plano->aliado_id, (int) $operador->id, $plano->razon_social_id ? (int) $plano->razon_social_id : null
-            )->first();
+            $cred = OperadorCredencial::paraPlanilla(
+                (int) $plano->aliado_id, (int) $operador->id, $plano->razon_social_id ? (int) $plano->razon_social_id : null, $plano->numero_planilla
+            );
 
             if ($cred) {
                 $conCredenciales[] = [$operador, $cred];
@@ -860,9 +860,9 @@ class EnlaceInformeIndividualService
 
         $mensajes = [];
         foreach ($operadores as $operador) {
-            $cred = OperadorCredencial::paraOperador(
-                (int) $plano->aliado_id, (int) $operador->id, $plano->razon_social_id ? (int) $plano->razon_social_id : null
-            )->first();
+            $cred = OperadorCredencial::paraPlanilla(
+                (int) $plano->aliado_id, (int) $operador->id, $plano->razon_social_id ? (int) $plano->razon_social_id : null, $plano->numero_planilla
+            );
 
             if (! $cred) {
                 $mensajes[] = "{$operador->nombre}: sin credenciales.";

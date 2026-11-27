@@ -120,9 +120,9 @@ class PlanillasSincronizarTotales extends Command
             throw new \RuntimeException('El operador no corre sobre Enlace Operativo.');
         }
 
-        $cred = OperadorCredencial::paraOperador(
-            (int) $registro->aliado_id, (int) $registro->operador_planilla_id, (int) $rs->id
-        )->first() ?? throw new \RuntimeException("Faltan credenciales de {$operador->nombre}.");
+        $cred = OperadorCredencial::paraPlanilla(
+            (int) $registro->aliado_id, (int) $registro->operador_planilla_id, (int) $rs->id, $registro->numero_planilla
+        ) ?? throw new \RuntimeException("Faltan credenciales de {$operador->nombre}.");
 
         $api = new SuaporteApiService([
             'operador'      => $operador->codigo,
