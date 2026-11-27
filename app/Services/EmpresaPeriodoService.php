@@ -479,8 +479,8 @@ class EmpresaPeriodoService
         $factRetiroPreview = (! $fact && ($c->tiene_retiro_facturable ?? false)) ? ($c->factura_retiro_0 ?? null) : null;
         // Para retiro facturable usamos la factura_0 como fuente de valores de preview
         $yaP = $fact && in_array($fact->estado, ['pagada', 'prestamo']);
-        // Nombre: primer nombre + inicial del segundo + primer apellido (Candida R. Sierra)
-        $nombre = nombre_con_inicial($c->cliente?->primer_nombre, $c->cliente?->segundo_nombre, $c->cliente?->primer_apellido);
+        // Nombre: nombres completos + primer apellido + inicial del segundo (Fabio Fernando Arroyave R.)
+        $nombre = nombre_con_inicial_apellido($c->cliente?->primer_nombre, $c->cliente?->segundo_nombre, $c->cliente?->primer_apellido, $c->cliente?->segundo_apellido);
         if (! $nombre) {
             $nombre = $c->cliente?->nombre_completo ?? '—';
         }

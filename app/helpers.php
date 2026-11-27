@@ -78,3 +78,19 @@ if (!function_exists('nombre_con_inicial')) {
         ], fn ($x) => $x !== '')));
     }
 }
+
+if (!function_exists('nombre_con_inicial_apellido')) {
+    /**
+     * Nombres completos + primer apellido + inicial del segundo, en tipo oración:
+     * ("FABIO", "FERNANDO", "ARROYAVE", "RAMIREZ") → "Fabio Fernando Arroyave R.".
+     */
+    function nombre_con_inicial_apellido($primerNombre, $segundoNombre, $primerApellido, $segundoApellido): string
+    {
+        $segundoAp = trim((string) $segundoApellido);
+        $inicial = $segundoAp !== '' ? mb_strtoupper(mb_substr($segundoAp, 0, 1, 'UTF-8'), 'UTF-8') . '.' : '';
+        $nombre = nombre_oracion(implode(' ', array_filter([
+            trim((string) $primerNombre), trim((string) $segundoNombre), trim((string) $primerApellido),
+        ], fn ($x) => $x !== '')));
+        return trim($nombre . ' ' . $inicial);
+    }
+}
